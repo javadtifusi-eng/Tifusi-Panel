@@ -15,19 +15,37 @@ A proxy management panel — unified web UI + REST API, built with FastAPI and R
 - **Settings**: change the panel's public URL and the admin password at runtime, plus one-click database backup/restore — all from the dashboard, no redeploy.
 - **Docker**: `docker-compose.yml` runs the panel + dashboard. The node agent (`backend/node_agent/`) is built and run separately, once per node — see below.
 
-Not built yet: RBAC/multi-admin, a Telegram bot, node-side WireGuard interface management (`wg-quick`) — see `ROADMAP.md` for the full list and some bigger ideas being considered.
+Not built yet: per-admin permission scoping, node-side WireGuard interface management (`wg-quick`) — see `ROADMAP.md` for the full list and some bigger ideas being considered.
 
-## The first-run flow
+## Quick install
+
+**Panel** (the server that'll run the dashboard/API):
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
+```
+Clones the repo, brings the panel up with Docker Compose, then — right there in the same terminal — offers to create the admin account and, optionally, a node, so there's no separate trip to the browser or a second command for a quick single-server setup. (Running a node on the same machine as the panel isn't the recommended setup — keep Xray traffic off the management server when you can — but the installer still offers it, since it's a fine way to get started.)
+
+**Node** (any server that'll actually run Xray-core — create the node from the panel's Nodes page first to get its API key):
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- <API_KEY> [PORT]
+```
+Builds and runs just the node agent — no full panel, no database, nothing else on that machine.
+
+Both scripts check for Docker first and tell you how to install it (`curl -fsSL https://get.docker.com | sh`) rather than doing it themselves.
+
+## The first-run flow (manual / no install.sh)
 
 Instead of sending you to documentation to find a CLI command, the login page shows it directly, with a copy button:
 
 1. Start the stack: `docker compose up -d`
-2. Open the panel — since no admin exists yet, it shows the **first-time setup** card with the exact command to run.
-3. Run the shown command in your server's terminal:
+2. Open the panel — since no admin exists yet, it shows the **first-time setup** card with a button that copies the exact command to run (hover it to see the command itself).
+3. Run the copied command in your server's terminal:
    ```bash
    docker exec -it tifusi-panel tifusi-cli generate-admin-key
    ```
 4. Paste the printed key back into the same card, pick a username/password, and the owner admin account is created — no separate page, no leaving the browser.
+
+(`install.sh` above does steps 2-4 for you from the same terminal instead, if you'd rather not switch to the browser at all.)
 
 ## Nodes & the node agent
 
