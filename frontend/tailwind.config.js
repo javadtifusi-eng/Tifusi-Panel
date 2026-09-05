@@ -12,7 +12,7 @@ export default {
       },
       fontFamily: {
         display: ['"Chakra Petch"', 'sans-serif'],
-        body: ['"Manrope"', 'system-ui', 'sans-serif'],
+        body: ['"Vazirmatn"', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace'],
       },
     },
