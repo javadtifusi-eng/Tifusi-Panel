@@ -1,17 +1,12 @@
-from datetime import datetime, timezone
-
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_admin
-from app.models.host import Host
-from app.models.node import Node, NodeStatus
-from app.models.user import ProxyUser
+from app.models.node import Node
+from app.nodes.sync import sync_node
 from app.schemas.node import NodeCreate, NodeList, NodeResponse, NodeSyncResult, NodeUpdate
-from app.xray_config.builder import build_xray_config
 
 router = APIRouter(prefix="/api/nodes", tags=["nodes"], dependencies=[Depends(get_current_admin)])
 
@@ -65,43 +60,6 @@ async def delete_node(node_id: int, db: AsyncSession = Depends(get_db)) -> None:
 
 
 @router.post("/{node_id}/sync", response_model=NodeSyncResult)
-async def sync_node(node_id: int, db: AsyncSession = Depends(get_db)) -> NodeSyncResult:
+async def trigger_sync(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     node = await _get_node_or_404(node_id, db)
-
-    hosts = list((await db.execute(select(Host))).scalars().all())
-    users = list((await db.execute(select(ProxyUser))).scalars().all())
-    config = build_xray_config(hosts, users)
-
-    base_url = f"http://{node.address}:{node.port}"
-    headers = {"X-Node-Api-Key": node.api_key}
-
-    health: dict | None = None
-    error: str | None = None
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.post(f"{base_url}/config", json=config, headers=headers)
-            resp.raise_for_status()
-            health_resp = await client.get(f"{base_url}/health", headers=headers)
-            health_resp.raise_for_status()
-            health = health_resp.json()
-    except httpx.HTTPStatusError as exc:
-        error = f"{exc.response.status_code}: {exc.response.text[:200]}"
-    except httpx.HTTPError as exc:
-        error = str(exc)[:500]
-
-    if health is None:
-        node.status = NodeStatus.error
-        node.last_error = error
-    else:
-        node.status = NodeStatus.connected if health.get("running") else NodeStatus.error
-        node.xray_version = health.get("xray_version")
-        node.last_error = None if health.get("running") else "xray reported not running"
-        node.last_synced_at = datetime.now(timezone.utc)
-
-    await db.commit()
-    return NodeSyncResult(
-        status=node.status,
-        xray_version=node.xray_version,
-        error=node.last_error,
-        inbound_count=len(config["inbounds"]),
-    )
+    return await sync_node(node, db)

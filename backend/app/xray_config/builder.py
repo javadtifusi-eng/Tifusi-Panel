@@ -65,6 +65,11 @@ _BUILDERS = {
     HostProtocol.trojan: _trojan_inbound,
 }
 
+# node_agent/main.py's STATS_API_ADDR must point at this same port — it's
+# how the node agent reads real per-user traffic back out of Xray (see
+# app/traffic/sync.py), so the two sides have to agree on it independently.
+STATS_API_PORT = 10085
+
 
 def build_xray_config(hosts: list[Host], users: list[ProxyUser]) -> dict:
     active_users = [u for u in users if u.status == UserStatus.active]
@@ -75,8 +80,28 @@ def build_xray_config(hosts: list[Host], users: list[ProxyUser]) -> dict:
         if builder is not None:
             inbounds.append(builder(host, users_for_host(host, active_users)))
 
+    # A loopback-only inbound exposing Xray's own StatsService — this is
+    # what makes real traffic accounting possible instead of used_traffic
+    # sitting there unused forever. It's always present, even with zero
+    # hosts, since app/traffic/sync.py expects api statsquery to work
+    # against every connected node.
+    api_inbound = {
+        "tag": "api",
+        "listen": "127.0.0.1",
+        "port": STATS_API_PORT,
+        "protocol": "dokodemo-door",
+        "settings": {"address": "127.0.0.1"},
+    }
+
     return {
         "log": {"loglevel": "warning"},
-        "inbounds": inbounds,
-        "outbounds": [{"protocol": "freedom", "tag": "direct"}],
+        "api": {"tag": "api", "services": ["StatsService"]},
+        "stats": {},
+        "policy": {"levels": {"0": {"statsUserUplink": True, "statsUserDownlink": True}}},
+        "inbounds": [api_inbound, *inbounds],
+        "routing": {"rules": [{"type": "field", "inboundTag": ["api"], "outboundTag": "api"}]},
+        "outbounds": [
+            {"protocol": "freedom", "tag": "direct"},
+            {"protocol": "freedom", "tag": "api"},
+        ],
     }

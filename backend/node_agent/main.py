@@ -20,6 +20,10 @@ API_KEY = os.environ.get("TIFUSI_NODE_API_KEY", "")
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
 CONFIG_PATH = Path(os.environ.get("XRAY_CONFIG_PATH", "./data/xray-config.json"))
 
+# Must match app/xray_config/builder.py's STATS_API_PORT — that's the port
+# the pushed config tells Xray to expose its StatsService on.
+STATS_API_ADDR = "127.0.0.1:10085"
+
 app = FastAPI(title="Tifusi Node Agent")
 
 _process: subprocess.Popen | None = None
@@ -79,3 +83,40 @@ async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
         "uptime_seconds": uptime,
         "xray_version": _get_xray_version(),
     }
+
+
+@app.get("/stats")
+async def stats(x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Per-user traffic since the last call — `-reset` makes Xray zero each
+    counter out as it's read, so the panel (app/traffic/sync.py) can just
+    add whatever comes back onto used_traffic without tracking a baseline
+    itself or ever double-counting a byte."""
+    _check_key(x_node_api_key)
+    if _process is None or _process.poll() is not None:
+        return {"users": {}}
+
+    try:
+        result = subprocess.run(
+            [XRAY_BIN, "api", "statsquery", f"-server={STATS_API_ADDR}", "-pattern=user>>>", "-reset"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        data = json.loads(result.stdout or "{}")
+    except Exception:
+        return {"users": {}}
+
+    users: dict[str, dict[str, int]] = {}
+    for entry in data.get("stat", []):
+        # Xray names each counter "user>>>{email}>>>traffic>>>{uplink|downlink}".
+        parts = entry.get("name", "").split(">>>")
+        if len(parts) != 4:
+            continue
+        _, username, _, direction = parts
+        bucket = users.setdefault(username, {"uplink": 0, "downlink": 0})
+        try:
+            bucket[direction] = bucket.get(direction, 0) + int(entry.get("value", 0))
+        except ValueError:
+            continue
+
+    return {"users": users}

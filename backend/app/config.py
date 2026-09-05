@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     # that header is an internal hostname the client can't reach.
     public_url: str | None = None
 
+    # How often the panel pulls traffic deltas from every connected node and
+    # checks expire/data_limit. Real usage tracking depends on this loop —
+    # see app/traffic/sync.py.
+    traffic_sync_interval_seconds: int = 30
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TIFUSI_")
 
 
