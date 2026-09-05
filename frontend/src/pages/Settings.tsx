@@ -2,11 +2,15 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ApiError,
   changePassword,
+  createAdminAccount,
+  deleteAdminAccount,
   downloadBackup,
   getAdminProfile,
   getSettings,
+  listAdmins,
   restoreBackup,
   updateSettings,
+  type AdminListItem,
   type AdminProfile,
 } from '../lib/api'
 
@@ -39,8 +43,26 @@ export default function SettingsPage() {
   const [backupError, setBackupError] = useState<string | null>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
 
+  const [admins, setAdmins] = useState<AdminListItem[] | null>(null)
+  const [newAdminUsername, setNewAdminUsername] = useState('')
+  const [newAdminPassword, setNewAdminPassword] = useState('')
+  const [adminSubmitting, setAdminSubmitting] = useState(false)
+  const [adminError, setAdminError] = useState<string | null>(null)
+
+  async function refreshAdmins() {
+    try {
+      const res = await listAdmins()
+      setAdmins(res.admins)
+    } catch {
+      // Non-owner admins get a 403 here — that's expected, just leave the list unset.
+    }
+  }
+
   useEffect(() => {
-    getAdminProfile().then(setProfile).catch(() => undefined)
+    getAdminProfile().then((p) => {
+      setProfile(p)
+      if (p.is_owner) refreshAdmins()
+    }).catch(() => undefined)
     getSettings()
       .then((s) => setPublicUrl(s.public_url ?? ''))
       .catch(() => undefined)
@@ -118,6 +140,32 @@ export default function SettingsPage() {
     } finally {
       setRestoring(false)
       if (restoreInputRef.current) restoreInputRef.current.value = ''
+    }
+  }
+
+  async function handleCreateAdmin(e: FormEvent) {
+    e.preventDefault()
+    setAdminSubmitting(true)
+    setAdminError(null)
+    try {
+      await createAdminAccount({ username: newAdminUsername, password: newAdminPassword })
+      setNewAdminUsername('')
+      setNewAdminPassword('')
+      await refreshAdmins()
+    } catch (err) {
+      setAdminError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+    } finally {
+      setAdminSubmitting(false)
+    }
+  }
+
+  async function handleDeleteAdmin(a: AdminListItem) {
+    if (!window.confirm(`حساب ادمین «${a.username}» حذف بشه؟`)) return
+    try {
+      await deleteAdminAccount(a.id)
+      await refreshAdmins()
+    } catch (err) {
+      setAdminError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
     }
   }
 
@@ -250,6 +298,64 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {profile?.is_owner && (
+          <div className={cardClass}>
+            <h2 className="mb-1 text-sm font-bold text-slate-100">مدیریت ادمین‌ها</h2>
+            <p className="mb-3 text-xs text-slate-500">
+              فقط مالک پنل (owner) می‌تونه ادمین جدید بسازه یا حذف کنه. ادمین‌های دیگه دسترسی کامل به پنل دارن،
+              به‌جز مدیریت خودِ حساب‌های ادمین.
+            </p>
+
+            <form onSubmit={handleCreateAdmin} className="mb-4 flex flex-wrap items-end gap-3">
+              <div>
+                <label className={labelClass}>نام کاربری</label>
+                <input
+                  value={newAdminUsername}
+                  onChange={(e) => setNewAdminUsername(e.target.value)}
+                  required
+                  pattern="[a-zA-Z0-9_-]+"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>رمز عبور</label>
+                <input
+                  type="password"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  className={inputClass}
+                />
+              </div>
+              <button type="submit" disabled={adminSubmitting} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+                {adminSubmitting ? 'در حال ساخت…' : '+ ادمین جدید'}
+              </button>
+            </form>
+            {adminError && <div className="mb-3 text-xs text-red-400">{adminError}</div>}
+
+            <div className="flex flex-col gap-2">
+              {admins?.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-100">{a.username}</span>
+                    {a.is_owner && (
+                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-slate-400">
+                        owner
+                      </span>
+                    )}
+                  </div>
+                  {!a.is_owner && (
+                    <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-red-400 hover:underline">
+                      حذف
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

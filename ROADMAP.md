@@ -15,12 +15,13 @@
 - Database backup/restore from the Settings page — download the live SQLite file, or upload one to atomically replace it (disposes the connection pool first so no in-flight connection keeps writing to the file being replaced)
 - Direct TLS: `run.py` terminates HTTPS in uvicorn itself when `TIFUSI_SSL_CERTFILE`/`TIFUSI_SSL_KEYFILE` are set, for a deployment with no nginx/Caddy in front — unset (the default) keeps plain HTTP exactly as before
 - Real database migrations (Alembic): `Base.metadata.create_all()` is gone — `app/migrate.py` runs `alembic upgrade head` on every startup instead, so a schema change (a new column, a new table) ships as a versioned migration instead of requiring the database to be dropped
+- Multi-admin: the owner (the account created during first-run setup) can create and delete additional admin accounts from the Settings page. Every admin has full access to the panel — the only owner-only actions are managing admin accounts themselves and the owner account can't be deleted. Not a granular-permissions system, deliberately: just enough to hand someone else access without handing them your own password
 
 ## Known gaps (scoped out on purpose, not overlooked)
 
 - Node-side WireGuard interface management (`wg-quick`) — this panel generates the client config and the peer block to paste, but doesn't touch the kernel interface itself (needs `NET_ADMIN` on the node)
 - Real Xray-core binary was never fetchable in the sandbox this was built in (GitHub releases blocked) — the panel↔node-agent lifecycle was proven with a stub binary; a real deployment still needs its first real-world verification
-- Single admin account, no roles
+- No per-admin permission scoping (e.g. read-only, or restricted to certain hosts/groups) — every non-owner admin has full access
 - No notifications (e.g. a Telegram bot pinging users near their expire date/limit)
 - No database backup/restore from the dashboard
 - Mobile viewport edge case reported once, never confirmed fixed or broken

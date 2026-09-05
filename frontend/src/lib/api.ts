@@ -366,6 +366,32 @@ export async function changePassword(payload: { current_password: string; new_pa
   await authorizedFetch('/admin/password', { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+export interface AdminListItem {
+  id: number
+  username: string
+  is_owner: boolean
+  created_at: string
+}
+
+export interface AdminListResponse {
+  total: number
+  admins: AdminListItem[]
+}
+
+export async function listAdmins(): Promise<AdminListResponse> {
+  const res = await authorizedFetch('/admin')
+  return res.json()
+}
+
+export async function createAdminAccount(payload: { username: string; password: string }): Promise<AdminListItem> {
+  const res = await authorizedFetch('/admin', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteAdminAccount(id: number): Promise<void> {
+  await authorizedFetch(`/admin/${id}`, { method: 'DELETE' })
+}
+
 export async function downloadBackup(): Promise<void> {
   const res = await authorizedFetch('/settings/backup')
   const blob = await res.blob()
