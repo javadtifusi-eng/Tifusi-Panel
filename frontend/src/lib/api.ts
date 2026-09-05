@@ -118,3 +118,32 @@ export async function updateUser(
 export async function deleteUser(id: number): Promise<void> {
   await authorizedFetch(`/users/${id}`, { method: 'DELETE' })
 }
+
+export interface RealityScanResult {
+  host: string
+  reachable: boolean
+  tls_version: string | null
+  alpn: string | null
+  latency_ms: number | null
+  error: string | null
+  recommended: boolean
+}
+
+export interface RealityScanResponse {
+  scanned: number
+  usable: number
+  results: RealityScanResult[]
+}
+
+export async function getRealityTargetCount(): Promise<number> {
+  const res = await authorizedFetch('/reality/targets')
+  return (await res.json()).count
+}
+
+export async function scanReality(sampleSize?: number): Promise<RealityScanResponse> {
+  const res = await authorizedFetch('/reality/scan', {
+    method: 'POST',
+    body: JSON.stringify(sampleSize ? { sample_size: sampleSize } : {}),
+  })
+  return res.json()
+}

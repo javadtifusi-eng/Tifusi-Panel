@@ -1,18 +1,22 @@
 import { useState } from 'react'
 import { Logo } from '../components/Logo'
+import RealityScanPage from './RealityScan'
 import UsersPage from './Users'
 
 const ACCENT = '#22D3EE'
 
 const navItems = [
   { id: 'users', label: 'کاربران', enabled: true },
+  { id: 'reality', label: 'اسکنر REALITY', enabled: true },
   { id: 'nodes', label: 'نودها', enabled: false },
   { id: 'groups', label: 'گروه‌ها', enabled: false },
   { id: 'settings', label: 'تنظیمات', enabled: false },
 ] as const
 
+type ActiveTab = 'users' | 'reality'
+
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
-  const [active, setActive] = useState<'users'>('users')
+  const [active, setActive] = useState<ActiveTab>('users')
 
   return (
     <div dir="rtl" className="flex min-h-screen w-full bg-panel-950 font-body text-slate-100">
@@ -32,7 +36,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
             <button
               key={item.id}
               disabled={!item.enabled}
-              onClick={() => item.enabled && setActive(item.id as 'users')}
+              onClick={() => item.enabled && setActive(item.id as ActiveTab)}
               className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-right text-sm transition-colors ${
                 item.enabled
                   ? active === item.id
@@ -55,7 +59,10 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         </button>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8">{active === 'users' && <UsersPage />}</main>
+      <main className="flex-1 overflow-y-auto p-8">
+        {active === 'users' && <UsersPage />}
+        {active === 'reality' && <RealityScanPage />}
+      </main>
     </div>
   )
 }
