@@ -1,0 +1,20 @@
+services:
+  panel:
+    build: ./backend
+    container_name: tifusi-panel
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+
+  dashboard:
+    build: ./frontend
+    container_name: tifusi-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - panel
