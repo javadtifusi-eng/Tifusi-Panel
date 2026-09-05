@@ -333,3 +333,31 @@ export async function updateGroup(
 export async function deleteGroup(id: number): Promise<void> {
   await authorizedFetch(`/groups/${id}`, { method: 'DELETE' })
 }
+
+export interface PanelSettings {
+  public_url: string | null
+}
+
+export async function getSettings(): Promise<PanelSettings> {
+  const res = await authorizedFetch('/settings')
+  return res.json()
+}
+
+export async function updateSettings(payload: Partial<PanelSettings>): Promise<PanelSettings> {
+  const res = await authorizedFetch('/settings', { method: 'PUT', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export interface AdminProfile {
+  username: string
+  is_owner: boolean
+}
+
+export async function getAdminProfile(): Promise<AdminProfile> {
+  const res = await authorizedFetch('/admin/me')
+  return res.json()
+}
+
+export async function changePassword(payload: { current_password: string; new_password: string }): Promise<void> {
+  await authorizedFetch('/admin/password', { method: 'PUT', body: JSON.stringify(payload) })
+}

@@ -10,6 +10,7 @@
 - Per-user WireGuard peers: lazy keypair + IP allocation, client `.conf` generation
 - Real traffic accounting: the node agent reads Xray's own StatsService (`xray api statsquery`), the panel polls it on an interval and adds the deltas onto `used_traffic`
 - Automatic `expired`/`limited` status transitions once a user passes their expire date or data limit, with an automatic node resync so it actually takes effect
+- Settings page: admin can change the panel's public URL and their own password at runtime, no redeploy or `.env` edit needed
 
 ## Known gaps (scoped out on purpose, not overlooked)
 
@@ -19,6 +20,8 @@
 - Schema managed by `create_all`, not a real migration tool (Alembic) — fine pre-1.0, not fine once the schema needs to change without wiping data
 - No periodic node health polling — a node's status only updates when someone (or the traffic job, after an enforcement change) actually syncs it
 - No notifications (e.g. a Telegram bot pinging users near their expire date/limit)
+- No database backup/restore from the dashboard
+- Mobile viewport edge case reported once, never confirmed fixed or broken
 
 ## Ideas worth building (bigger, riskier, not started)
 

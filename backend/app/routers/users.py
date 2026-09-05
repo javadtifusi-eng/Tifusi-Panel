@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.groups.access import hosts_for_user, resolve_groups
@@ -10,6 +9,7 @@ from app.links.generator import build_links_for_user
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser
 from app.schemas.user import ProxyUserCreate, ProxyUserList, ProxyUserResponse, ProxyUserUpdate
+from app.settings_store import get_public_url
 from app.wireguard.allocate import get_or_create_peer
 from app.wireguard.config import build_client_config
 
@@ -97,7 +97,8 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
     user = await _get_user_or_404(user_id, db)
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
-    base = settings.public_url.rstrip("/") + "/" if settings.public_url else str(request.base_url)
+    public_url = await get_public_url(db)
+    base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
 
     # WireGuard isn't a URI-scheme protocol like the others, so it can't join
     # the base64 link list — it gets its own field, one full .conf per host.

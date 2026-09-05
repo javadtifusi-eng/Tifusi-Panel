@@ -76,7 +76,7 @@ docker compose up -d --build
 - Dashboard: `http://localhost:8080`
 - SQLite data persists in `./data`
 
-Set `TIFUSI_PUBLIC_URL` (e.g. `https://your-domain.example:8000`) once the panel sits behind Docker/a proxy — without it, subscription URLs are built from the request's Host header, which is an internal container hostname there, not something a client can reach.
+Set `TIFUSI_PUBLIC_URL` (e.g. `https://your-domain.example:8000`) once the panel sits behind Docker/a proxy — without it, subscription URLs are built from the request's Host header, which is an internal container hostname there, not something a client can reach. This env var is only the bootstrap default: an admin can view and change it any time from the panel's own Settings page (also where the admin password gets changed), no redeploy needed.
 
 ## Design references
 
