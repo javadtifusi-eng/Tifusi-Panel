@@ -4,16 +4,18 @@ A proxy management panel — unified web UI + REST API, built with FastAPI and R
 
 ## What's here right now
 
-- **Backend** (`backend/`): FastAPI + SQLAlchemy (async, SQLite by default), JWT auth.
+- **Backend** (`backend/`): FastAPI + SQLAlchemy (async, SQLite by default), JWT auth, Alembic migrations.
 - **Frontend** (`frontend/`): React + Vite + Tailwind, "Obsidian Glow" visual direction, bilingual (fa/en) login.
-- **Users**: create/list/enable-disable/delete proxy users, with a traffic cap and usage tracking.
-- **Hosts**: VLESS/Trojan/WireGuard/Hysteria2 endpoints. For VLESS/Trojan you pick the transport (tcp/ws/grpc) and security (none/tls/reality).
+- **Users**: create/list/enable-disable/delete proxy users, with a traffic cap and usage tracking, and automatic `expired`/`limited` transitions once a user passes their expire date or data limit.
+- **Hosts**: VLESS/Trojan/WireGuard/Hysteria2 endpoints. For VLESS/Trojan you pick the transport (tcp/ws/grpc) and security (none/tls/reality); WireGuard hosts get a server keypair + tunnel subnet.
+- **Groups**: real access control, not just organization — a host with no group is global (every user sees it), once it joins a group only users sharing that group can see or use it. The same rule applies to link generation and to the actual Xray config pushed to nodes.
 - **REALITY scanner**: latency-tests ~160 candidate domains and recommends the fastest one as a REALITY target, right from the Hosts form.
-- **Subscription links**: every user gets a `vless://`/`trojan://`/`hysteria2://` link per host plus one subscription URL (`/sub/<secret>`, base64-encoded, no admin auth needed — client apps hit it directly) with a QR code.
-- **Nodes**: register a server, get a `docker run` command to launch the node agent there, then "sync" to push the generated Xray config to it and see it come back **connected** with its Xray version. See [Nodes & the node agent](#nodes--the-node-agent) below for what that agent actually does and its current limits.
+- **Subscription links**: every user gets a `vless://`/`trojan://`/`hysteria2://` link per host, a WireGuard `.conf` per WireGuard host (lazily provisioned with its own keypair + IP), plus one subscription URL (`/sub/<secret>`, no admin auth needed — client apps hit it directly) with a QR code.
+- **Nodes**: register a server, get a `docker run` command to launch the node agent there, then "sync" to push the generated Xray config to it and see it come back **connected** with its Xray version. Health is polled automatically afterward, and real per-user traffic is pulled from Xray's own stats API on an interval. See [Nodes & the node agent](#nodes--the-node-agent) below for what that agent actually does and its current limits.
+- **Settings**: change the panel's public URL and the admin password at runtime, plus one-click database backup/restore — all from the dashboard, no redeploy.
 - **Docker**: `docker-compose.yml` runs the panel + dashboard. The node agent (`backend/node_agent/`) is built and run separately, once per node — see below.
 
-Not built yet: groups, RBAC/multi-admin, settings page, Telegram bot, per-user WireGuard keys (see below).
+Not built yet: RBAC/multi-admin, a Telegram bot, node-side WireGuard interface management (`wg-quick`) — see `ROADMAP.md` for the full list and some bigger ideas being considered.
 
 ## The first-run flow
 
@@ -40,7 +42,7 @@ docker run -d --name tifusi-node --restart unless-stopped \
 
 The node agent's Dockerfile downloads the real Xray-core binary from its GitHub releases at build time — that step couldn't be verified inside the sandboxed session this project was built in (outbound GitHub access was blocked there), so **build and run it on a real machine before trusting it in production**. Everything else (config generation, the panel↔agent HTTP contract, status reporting) was verified end-to-end there using a stand-in binary.
 
-Only VLESS and Trojan hosts get pushed into the Xray config — Hysteria2 isn't part of Xray-core at all (it's a separate server), and WireGuard needs a per-user keypair + allocated tunnel IP that nothing generates yet. Both are skipped rather than given a broken config.
+Only VLESS and Trojan hosts get pushed into the Xray config itself — Hysteria2 isn't part of Xray-core at all (it's a separate server) and WireGuard is a kernel/`wg-quick` affair, neither of which this starts. Both are skipped there rather than given a broken inbound; WireGuard is still fully supported at the link-generation level (see above), just not by this node agent.
 
 ## Local development
 
@@ -64,6 +66,17 @@ The Vite dev server proxies `/api` to `http://localhost:8000`.
 cd backend
 python -m cli.main generate-admin-key
 ```
+
+## Database migrations
+
+Schema changes go through Alembic (`backend/alembic/`), not `Base.metadata.create_all()` — the app runs `alembic upgrade head` automatically on every startup (`app/migrate.py`, called from `init_db()`), so a normal deploy always ends up on the latest schema without a manual step and without ever needing to drop the database.
+
+When a model changes, generate the migration and commit it alongside the model change:
+```bash
+cd backend
+alembic revision --autogenerate -m "add whatever column"
+```
+Always read the generated file before committing — autogenerate is a good first draft, not a guarantee, especially for anything SQLite handles awkwardly (e.g. altering an existing column may need `op.batch_alter_table(...)`).
 
 ## Docker deployment
 

@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -20,7 +21,10 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 
 
 async def init_db() -> None:
-    # MVP schema bootstrap. A real migration tool (Alembic) replaces this
-    # once the schema needs to evolve without dropping data.
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Runs Alembic's migrations up to "head" instead of Base.metadata.create_all()
+    # — the schema can now evolve (a new column, a new table) without ever
+    # having to drop and recreate the database. See app/migrate.py for why
+    # this needs its own thread.
+    from app.migrate import upgrade_to_head  # deferred: avoids importing alembic on every app import
+
+    await asyncio.to_thread(upgrade_to_head)

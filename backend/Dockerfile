@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY cli ./cli
+COPY alembic ./alembic
+COPY alembic.ini .
 COPY run.py .
 COPY cli_wrapper.sh /usr/local/bin/tifusi-cli
 RUN chmod +x /usr/local/bin/tifusi-cli

@@ -14,13 +14,13 @@
 - Periodic node health polling: a background job GETs `/health` on every already-synced node so status recovers/degrades on its own — deliberately read-only, it never pushes `/config`, so checking on a node can't restart its live Xray process the way a real sync does
 - Database backup/restore from the Settings page — download the live SQLite file, or upload one to atomically replace it (disposes the connection pool first so no in-flight connection keeps writing to the file being replaced)
 - Direct TLS: `run.py` terminates HTTPS in uvicorn itself when `TIFUSI_SSL_CERTFILE`/`TIFUSI_SSL_KEYFILE` are set, for a deployment with no nginx/Caddy in front — unset (the default) keeps plain HTTP exactly as before
+- Real database migrations (Alembic): `Base.metadata.create_all()` is gone — `app/migrate.py` runs `alembic upgrade head` on every startup instead, so a schema change (a new column, a new table) ships as a versioned migration instead of requiring the database to be dropped
 
 ## Known gaps (scoped out on purpose, not overlooked)
 
 - Node-side WireGuard interface management (`wg-quick`) — this panel generates the client config and the peer block to paste, but doesn't touch the kernel interface itself (needs `NET_ADMIN` on the node)
 - Real Xray-core binary was never fetchable in the sandbox this was built in (GitHub releases blocked) — the panel↔node-agent lifecycle was proven with a stub binary; a real deployment still needs its first real-world verification
 - Single admin account, no roles
-- Schema managed by `create_all`, not a real migration tool (Alembic) — fine pre-1.0, not fine once the schema needs to change without wiping data
 - No notifications (e.g. a Telegram bot pinging users near their expire date/limit)
 - No database backup/restore from the dashboard
 - Mobile viewport edge case reported once, never confirmed fixed or broken
