@@ -199,6 +199,14 @@ export async function createHost(payload: Omit<Host, 'id' | 'created_at'>): Prom
   return res.json()
 }
 
+export async function updateHost(
+  id: number,
+  payload: Partial<Omit<Host, 'id' | 'protocol' | 'created_at'>>,
+): Promise<Host> {
+  const res = await authorizedFetch(`/hosts/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  return res.json()
+}
+
 export async function deleteHost(id: number): Promise<void> {
   await authorizedFetch(`/hosts/${id}`, { method: 'DELETE' })
 }
@@ -242,6 +250,14 @@ export async function listNodes(): Promise<NodeList> {
 
 export async function createNode(payload: { name: string; address: string; port: number }): Promise<Node> {
   const res = await authorizedFetch('/nodes', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function updateNode(
+  id: number,
+  payload: Partial<{ name: string; address: string; port: number }>,
+): Promise<Node> {
+  const res = await authorizedFetch(`/nodes/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
 }
 

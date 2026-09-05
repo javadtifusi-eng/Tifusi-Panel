@@ -5,6 +5,7 @@ import {
   deleteNode,
   listNodes,
   syncNode,
+  updateNode,
   type Node,
   type NodeStatus,
 } from '../lib/api'
@@ -37,6 +38,7 @@ export default function NodesPage() {
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [port, setPort] = useState('62050')
@@ -58,17 +60,35 @@ export default function NodesPage() {
     refresh()
   }, [])
 
-  async function handleCreate(e: FormEvent) {
+  function resetForm() {
+    setEditingId(null)
+    setName('')
+    setAddress('')
+    setPort('62050')
+    setShowForm(false)
+  }
+
+  function startEdit(node: Node) {
+    setEditingId(node.id)
+    setName(node.name)
+    setAddress(node.address)
+    setPort(String(node.port))
+    setShowForm(true)
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
     try {
-      const created = await createNode({ name, address, port: parseInt(port, 10) })
-      setName('')
-      setAddress('')
-      setPort('62050')
-      setShowForm(false)
-      setSetupNodeId(created.id)
+      if (editingId) {
+        await updateNode(editingId, { name, address, port: parseInt(port, 10) })
+        resetForm()
+      } else {
+        const created = await createNode({ name, address, port: parseInt(port, 10) })
+        resetForm()
+        setSetupNodeId(created.id)
+      }
       await refresh()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
@@ -115,7 +135,7 @@ export default function NodesPage() {
       <div className="mb-2 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-50">نودها</h1>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
           style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
         >
@@ -130,7 +150,7 @@ export default function NodesPage() {
 
       {showForm && (
         <form
-          onSubmit={handleCreate}
+          onSubmit={handleSubmit}
           className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
         >
           <div>
@@ -166,7 +186,7 @@ export default function NodesPage() {
             className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
-            ثبت نود
+            {editingId ? 'ذخیره تغییرات' : 'ثبت نود'}
           </button>
         </form>
       )}
@@ -228,6 +248,9 @@ export default function NodesPage() {
                       className="ml-3 text-xs text-slate-400 hover:underline"
                     >
                       دستور نصب
+                    </button>
+                    <button onClick={() => startEdit(node)} className="ml-3 text-xs text-slate-400 hover:underline">
+                      ویرایش
                     </button>
                     <button onClick={() => handleDelete(node)} className="text-xs text-red-400 hover:underline">
                       حذف

@@ -11,6 +11,12 @@ class NodeCreate(BaseModel):
     port: int = Field(default=62050, ge=1, le=65535)
 
 
+class NodeUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    address: str | None = Field(default=None, min_length=1, max_length=255)
+    port: int | None = Field(default=None, ge=1, le=65535)
+
+
 class NodeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

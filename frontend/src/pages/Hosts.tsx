@@ -6,6 +6,7 @@ import {
   getRealityKeypair,
   listHosts,
   scanReality,
+  updateHost,
   type Host,
   type HostNetwork,
   type HostProtocol,
@@ -44,6 +45,7 @@ export default function HostsPage() {
   const [hosts, setHosts] = useState<Host[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm())
   const [submitting, setSubmitting] = useState(false)
   const [findingTarget, setFindingTarget] = useState(false)
@@ -103,25 +105,52 @@ export default function HostsPage() {
     }
   }
 
-  async function handleCreate(e: FormEvent) {
+  function resetForm() {
+    setEditingId(null)
+    setForm(emptyForm())
+    setShowForm(false)
+    setShowPrivateKey(false)
+  }
+
+  function startEdit(host: Host) {
+    setEditingId(host.id)
+    setForm({
+      remark: host.remark,
+      protocol: host.protocol,
+      address: host.address,
+      port: String(host.port),
+      network: host.network ?? 'tcp',
+      security: host.security ?? 'none',
+      sni: host.sni ?? '',
+      reality_public_key: host.reality_public_key ?? '',
+      reality_private_key: host.reality_private_key ?? '',
+      reality_short_id: host.reality_short_id ?? '',
+    })
+    setShowForm(true)
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
+    const payload = {
+      remark: form.remark,
+      address: form.address,
+      port: parseInt(form.port, 10),
+      network: usesTransport ? form.network : null,
+      security: usesTransport ? form.security : null,
+      sni: usesReality ? form.sni : null,
+      reality_public_key: usesReality ? form.reality_public_key : null,
+      reality_private_key: usesReality ? form.reality_private_key : null,
+      reality_short_id: usesReality ? form.reality_short_id : null,
+    }
     try {
-      await createHost({
-        remark: form.remark,
-        protocol: form.protocol,
-        address: form.address,
-        port: parseInt(form.port, 10),
-        network: usesTransport ? form.network : null,
-        security: usesTransport ? form.security : null,
-        sni: usesReality ? form.sni : null,
-        reality_public_key: usesReality ? form.reality_public_key : null,
-        reality_private_key: usesReality ? form.reality_private_key : null,
-        reality_short_id: usesReality ? form.reality_short_id : null,
-      })
-      setForm(emptyForm())
-      setShowForm(false)
+      if (editingId) {
+        await updateHost(editingId, payload)
+      } else {
+        await createHost({ ...payload, protocol: form.protocol })
+      }
+      resetForm()
       await refresh()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
@@ -145,7 +174,7 @@ export default function HostsPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-50">هاست‌ها</h1>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
           style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
         >
@@ -154,7 +183,7 @@ export default function HostsPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
+        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
           <div className="flex flex-wrap gap-3">
             <div>
               <label className={labelClass}>نام نمایشی</label>
@@ -170,7 +199,8 @@ export default function HostsPage() {
               <select
                 value={form.protocol}
                 onChange={(e) => update('protocol', e.target.value as HostProtocol)}
-                className={inputClass}
+                disabled={editingId !== null}
+                className={`${inputClass} disabled:opacity-50`}
               >
                 {Object.entries(protocolLabels).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -178,6 +208,9 @@ export default function HostsPage() {
                   </option>
                 ))}
               </select>
+              {editingId !== null && (
+                <div className="mt-1 text-[10px] text-slate-500">پروتکل بعد از ساخت قابل تغییر نیست</div>
+              )}
             </div>
             <div>
               <label className={labelClass}>آدرس</label>
@@ -313,7 +346,7 @@ export default function HostsPage() {
             className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
-            ساخت هاست
+            {editingId ? 'ذخیره تغییرات' : 'ساخت هاست'}
           </button>
         </form>
       )}
@@ -367,6 +400,12 @@ export default function HostsPage() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-left">
+                  <button
+                    onClick={() => startEdit(h)}
+                    className="ml-3 text-xs text-slate-400 hover:underline"
+                  >
+                    ویرایش
+                  </button>
                   <button onClick={() => handleDelete(h)} className="text-xs text-red-400 hover:underline">
                     حذف
                   </button>

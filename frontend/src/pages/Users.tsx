@@ -42,8 +42,11 @@ export default function UsersPage() {
   const [users, setUsers] = useState<ProxyUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [username, setUsername] = useState('')
   const [dataLimitGb, setDataLimitGb] = useState('')
+  const [expire, setExpire] = useState('')
+  const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [linksUser, setLinksUser] = useState<ProxyUser | null>(null)
 
@@ -60,16 +63,37 @@ export default function UsersPage() {
     refresh()
   }, [])
 
-  async function handleCreate(e: FormEvent) {
+  function resetForm() {
+    setEditingId(null)
+    setUsername('')
+    setDataLimitGb('')
+    setExpire('')
+    setNote('')
+    setShowForm(false)
+  }
+
+  function startEdit(user: ProxyUser) {
+    setEditingId(user.id)
+    setUsername(user.username)
+    setDataLimitGb(user.data_limit ? String(user.data_limit / 1024 ** 3) : '')
+    setExpire(user.expire ? user.expire.slice(0, 10) : '')
+    setNote(user.note ?? '')
+    setShowForm(true)
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
+    const data_limit = dataLimitGb ? Math.round(parseFloat(dataLimitGb) * 1024 ** 3) : null
+    const expireIso = expire ? new Date(`${expire}T23:59:59`).toISOString() : null
     try {
-      const data_limit = dataLimitGb ? Math.round(parseFloat(dataLimitGb) * 1024 ** 3) : null
-      await createUser({ username, data_limit })
-      setUsername('')
-      setDataLimitGb('')
-      setShowForm(false)
+      if (editingId) {
+        await updateUser(editingId, { data_limit, expire: expireIso, note: note || null })
+      } else {
+        await createUser({ username, data_limit, expire: expireIso, note: note || null })
+      }
+      resetForm()
       await refresh()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
@@ -103,7 +127,7 @@ export default function UsersPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-50">کاربران</h1>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
           style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
         >
@@ -113,7 +137,7 @@ export default function UsersPage() {
 
       {showForm && (
         <form
-          onSubmit={handleCreate}
+          onSubmit={handleSubmit}
           className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
         >
           <div>
@@ -122,8 +146,9 @@ export default function UsersPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              disabled={editingId !== null}
               pattern="[a-zA-Z0-9_-]+"
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60 disabled:opacity-50"
             />
           </div>
           <div>
@@ -137,13 +162,30 @@ export default function UsersPage() {
               className="w-44 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
             />
           </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-slate-400">تاریخ انقضا (خالی = بدون انقضا)</label>
+            <input
+              value={expire}
+              onChange={(e) => setExpire(e.target.value)}
+              type="date"
+              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-slate-400">یادداشت</label>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-48 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+            />
+          </div>
           <button
             type="submit"
             disabled={submitting}
             className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
-            ساخت
+            {editingId ? 'ذخیره تغییرات' : 'ساخت'}
           </button>
         </form>
       )}
@@ -196,6 +238,9 @@ export default function UsersPage() {
                     style={{ color: ACCENT }}
                   >
                     لینک‌ها
+                  </button>
+                  <button onClick={() => startEdit(u)} className="ml-3 text-xs text-slate-400 hover:underline">
+                    ویرایش
                   </button>
                   <button onClick={() => handleDelete(u)} className="text-xs text-red-400 hover:underline">
                     حذف

@@ -10,7 +10,7 @@ from app.dependencies import get_current_admin
 from app.models.host import Host
 from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser
-from app.schemas.node import NodeCreate, NodeList, NodeResponse, NodeSyncResult
+from app.schemas.node import NodeCreate, NodeList, NodeResponse, NodeSyncResult, NodeUpdate
 from app.xray_config.builder import build_xray_config
 
 router = APIRouter(prefix="/api/nodes", tags=["nodes"], dependencies=[Depends(get_current_admin)])
@@ -42,6 +42,19 @@ async def _get_node_or_404(node_id: int, db: AsyncSession) -> Node:
 @router.get("/{node_id}", response_model=NodeResponse)
 async def get_node(node_id: int, db: AsyncSession = Depends(get_db)) -> Node:
     return await _get_node_or_404(node_id, db)
+
+
+@router.put("/{node_id}", response_model=NodeResponse)
+async def update_node(node_id: int, payload: NodeUpdate, db: AsyncSession = Depends(get_db)) -> Node:
+    node = await _get_node_or_404(node_id, db)
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(node, field, value)
+
+    db.add(node)
+    await db.commit()
+    await db.refresh(node)
+    return node
 
 
 @router.delete("/{node_id}", status_code=204)
