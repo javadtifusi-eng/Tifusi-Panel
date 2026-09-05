@@ -80,6 +80,7 @@ export interface ProxyUser {
   id: number
   username: string
   status: UserStatus
+  secret: string
   data_limit: number | null
   used_traffic: number
   expire: string | null
@@ -117,6 +118,16 @@ export async function updateUser(
 
 export async function deleteUser(id: number): Promise<void> {
   await authorizedFetch(`/users/${id}`, { method: 'DELETE' })
+}
+
+export interface UserLinks {
+  subscription_url: string
+  links: string[]
+}
+
+export async function getUserLinks(id: number): Promise<UserLinks> {
+  const res = await authorizedFetch(`/users/${id}/links`)
+  return res.json()
 }
 
 export interface RealityScanResult {

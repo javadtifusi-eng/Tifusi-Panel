@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_admin
+from app.links.generator import build_links_for_user
+from app.models.host import Host
 from app.models.user import ProxyUser
 from app.schemas.user import ProxyUserCreate, ProxyUserList, ProxyUserResponse, ProxyUserUpdate
 
@@ -79,3 +82,14 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)) -> None:
     user = await _get_user_or_404(user_id, db)
     await db.delete(user)
     await db.commit()
+
+
+@router.get("/{user_id}/links")
+async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    user = await _get_user_or_404(user_id, db)
+    hosts = list((await db.execute(select(Host))).scalars().all())
+    base = settings.public_url.rstrip("/") + "/" if settings.public_url else str(request.base_url)
+    return {
+        "subscription_url": f"{base}sub/{user.secret}",
+        "links": build_links_for_user(user, hosts),
+    }

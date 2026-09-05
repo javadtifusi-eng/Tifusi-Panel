@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import UserLinksModal from '../components/UserLinksModal'
 import {
   ApiError,
   createUser,
@@ -44,6 +45,7 @@ export default function UsersPage() {
   const [username, setUsername] = useState('')
   const [dataLimitGb, setDataLimitGb] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [linksUser, setLinksUser] = useState<ProxyUser | null>(null)
 
   async function refresh() {
     try {
@@ -188,6 +190,13 @@ export default function UsersPage() {
                   {formatUsed(u.used_traffic)} / {formatLimit(u.data_limit)}
                 </td>
                 <td className="px-4 py-3 text-left">
+                  <button
+                    onClick={() => setLinksUser(u)}
+                    className="ml-3 text-xs hover:underline"
+                    style={{ color: ACCENT }}
+                  >
+                    لینک‌ها
+                  </button>
                   <button onClick={() => handleDelete(u)} className="text-xs text-red-400 hover:underline">
                     حذف
                   </button>
@@ -197,6 +206,10 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {linksUser && (
+        <UserLinksModal userId={linksUser.id} username={linksUser.username} onClose={() => setLinksUser(null)} />
+      )}
     </div>
   )
 }

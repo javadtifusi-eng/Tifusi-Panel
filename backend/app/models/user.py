@@ -1,4 +1,5 @@
 import enum
+import uuid as uuid_lib
 from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, DateTime, Enum, String, Text
@@ -20,6 +21,12 @@ class ProxyUser(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[UserStatus] = mapped_column(Enum(UserStatus), default=UserStatus.active)
+
+    # Doubles as the VLESS UUID, the Trojan/Hysteria2 password, and the
+    # unguessable token in this user's subscription URL.
+    secret: Mapped[str] = mapped_column(
+        String(36), unique=True, index=True, default=lambda: str(uuid_lib.uuid4())
+    )
 
     # None/0 means unlimited.
     data_limit: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

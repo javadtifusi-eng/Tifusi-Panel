@@ -25,6 +25,7 @@ class ProxyUserResponse(BaseModel):
     id: int
     username: str
     status: UserStatus
+    secret: str
     data_limit: int | None
     used_traffic: int
     expire: datetime | None
