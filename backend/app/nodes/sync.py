@@ -69,3 +69,48 @@ async def resync_connected_nodes(db: AsyncSession) -> None:
             await sync_node(node, db)
         except Exception:
             continue
+
+
+async def check_node_health(node: Node, db: AsyncSession) -> None:
+    """A read-only probe — GETs /health only, never /config — so checking on
+    a node can never restart its live Xray process (sync_node's POST /config
+    does that deliberately, which is exactly what a periodic background
+    check must NOT do to something actively serving connections)."""
+    base_url = f"http://{node.address}:{node.port}"
+    headers = {"X-Node-Api-Key": node.api_key}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(f"{base_url}/health", headers=headers)
+            resp.raise_for_status()
+            health = resp.json()
+    except httpx.HTTPError as exc:
+        node.status = NodeStatus.error
+        node.last_error = str(exc)[:500]
+        await db.commit()
+        return
+
+    node.status = NodeStatus.connected if health.get("running") else NodeStatus.error
+    node.xray_version = health.get("xray_version")
+    node.last_error = None if health.get("running") else "xray reported not running"
+    await db.commit()
+
+
+async def check_all_node_health(db: AsyncSession) -> None:
+    """Keeps status fresh for every node that's been synced at least once,
+    without anyone having to click sync again just to find out a node went
+    down (or came back). A node still 'pending' its very first sync is left
+    alone — it's never had a config pushed, so /health would correctly (but
+    confusingly) report "not running" there, and that's the admin's
+    explicit first-sync step to take, not something to auto-flip to error."""
+    nodes = list(
+        (
+            await db.execute(select(Node).where(Node.status.in_([NodeStatus.connected, NodeStatus.error])))
+        )
+        .scalars()
+        .all()
+    )
+    for node in nodes:
+        try:
+            await check_node_health(node, db)
+        except Exception:
+            continue

@@ -11,6 +11,7 @@
 - Real traffic accounting: the node agent reads Xray's own StatsService (`xray api statsquery`), the panel polls it on an interval and adds the deltas onto `used_traffic`
 - Automatic `expired`/`limited` status transitions once a user passes their expire date or data limit, with an automatic node resync so it actually takes effect
 - Settings page: admin can change the panel's public URL and their own password at runtime, no redeploy or `.env` edit needed
+- Periodic node health polling: a background job GETs `/health` on every already-synced node so status recovers/degrades on its own — deliberately read-only, it never pushes `/config`, so checking on a node can't restart its live Xray process the way a real sync does
 
 ## Known gaps (scoped out on purpose, not overlooked)
 
@@ -18,7 +19,6 @@
 - Real Xray-core binary was never fetchable in the sandbox this was built in (GitHub releases blocked) — the panel↔node-agent lifecycle was proven with a stub binary; a real deployment still needs its first real-world verification
 - Single admin account, no roles
 - Schema managed by `create_all`, not a real migration tool (Alembic) — fine pre-1.0, not fine once the schema needs to change without wiping data
-- No periodic node health polling — a node's status only updates when someone (or the traffic job, after an enforcement change) actually syncs it
 - No notifications (e.g. a Telegram bot pinging users near their expire date/limit)
 - No database backup/restore from the dashboard
 - Mobile viewport edge case reported once, never confirmed fixed or broken

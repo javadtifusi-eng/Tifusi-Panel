@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser, UserStatus
-from app.nodes.sync import resync_connected_nodes
+from app.nodes.sync import check_all_node_health, resync_connected_nodes
 
 
 async def _fetch_node_stats(node: Node) -> dict[str, dict[str, int]]:
@@ -77,6 +77,10 @@ async def enforce_limits(db: AsyncSession) -> bool:
 
 
 async def run_traffic_cycle(db: AsyncSession) -> None:
+    # Health first: a node that died since the last cycle should drop out of
+    # collect_traffic's "connected" query instead of failing it silently,
+    # and one that recovered should start counting again right away.
+    await check_all_node_health(db)
     await collect_traffic(db)
     if await enforce_limits(db):
         await resync_connected_nodes(db)
