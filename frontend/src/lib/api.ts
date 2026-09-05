@@ -207,3 +207,49 @@ export async function getRealityKeypair(): Promise<RealityKeypair> {
   const res = await authorizedFetch('/hosts/reality-keypair')
   return res.json()
 }
+
+export type NodeStatus = 'pending' | 'connected' | 'error'
+
+export interface Node {
+  id: number
+  name: string
+  address: string
+  port: number
+  api_key: string
+  status: NodeStatus
+  xray_version: string | null
+  last_error: string | null
+  last_synced_at: string | null
+  created_at: string
+}
+
+export interface NodeList {
+  total: number
+  nodes: Node[]
+}
+
+export interface NodeSyncResult {
+  status: NodeStatus
+  xray_version: string | null
+  error: string | null
+  inbound_count: number
+}
+
+export async function listNodes(): Promise<NodeList> {
+  const res = await authorizedFetch('/nodes')
+  return res.json()
+}
+
+export async function createNode(payload: { name: string; address: string; port: number }): Promise<Node> {
+  const res = await authorizedFetch('/nodes', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteNode(id: number): Promise<void> {
+  await authorizedFetch(`/nodes/${id}`, { method: 'DELETE' })
+}
+
+export async function syncNode(id: number): Promise<NodeSyncResult> {
+  const res = await authorizedFetch(`/nodes/${id}/sync`, { method: 'POST' })
+  return res.json()
+}
