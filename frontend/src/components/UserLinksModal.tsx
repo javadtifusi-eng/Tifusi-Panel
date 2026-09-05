@@ -77,7 +77,7 @@ export default function UserLinksModal({
               </button>
             </div>
 
-            {data.links.length === 0 ? (
+            {data.links.length === 0 && data.wireguard_configs.length === 0 ? (
               <div className="text-sm text-slate-500">هنوز هاستی برای ساخت لینک وجود نداره.</div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -95,6 +95,33 @@ export default function UserLinksModal({
                     <button onClick={() => copy(link)} className="flex-shrink-0 text-xs" style={{ color: ACCENT }}>
                       {copied === link ? 'کپی شد' : 'کپی'}
                     </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {data.wireguard_configs.length > 0 && (
+              <div className="mt-4 flex flex-col gap-3">
+                {data.wireguard_configs.map((wg) => (
+                  <div key={wg.remark} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="rounded-full border border-white/15 px-2 py-1 text-[10px] text-slate-300">
+                        WIREGUARD · {wg.remark}
+                      </span>
+                      <button
+                        onClick={() => copy(wg.config)}
+                        className="text-xs font-bold"
+                        style={{ color: ACCENT }}
+                      >
+                        {copied === wg.config ? 'کپی شد' : 'کپی کانفیگ'}
+                      </button>
+                    </div>
+                    <pre
+                      dir="ltr"
+                      className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-slate-400"
+                    >
+                      {wg.config}
+                    </pre>
                   </div>
                 ))}
               </div>

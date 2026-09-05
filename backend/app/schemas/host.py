@@ -16,6 +16,9 @@ class HostCreate(BaseModel):
     reality_public_key: str | None = None
     reality_private_key: str | None = None
     reality_short_id: str | None = None
+    wireguard_public_key: str | None = None
+    wireguard_private_key: str | None = None
+    wireguard_subnet: str | None = None
     group_ids: list[int] = Field(default_factory=list)
 
 
@@ -29,6 +32,9 @@ class HostUpdate(BaseModel):
     reality_public_key: str | None = None
     reality_private_key: str | None = None
     reality_short_id: str | None = None
+    wireguard_public_key: str | None = None
+    wireguard_private_key: str | None = None
+    wireguard_subnet: str | None = None
     group_ids: list[int] | None = None
 
 
@@ -46,6 +52,9 @@ class HostResponse(BaseModel):
     reality_public_key: str | None
     reality_private_key: str | None
     reality_short_id: str | None
+    wireguard_public_key: str | None
+    wireguard_private_key: str | None
+    wireguard_subnet: str | None
     created_at: datetime
     group_ids: list[int]
 
@@ -59,3 +68,8 @@ class RealityKeypairResponse(BaseModel):
     private_key: str
     public_key: str
     short_id: str
+
+
+class WireGuardKeypairResponse(BaseModel):
+    private_key: str
+    public_key: str

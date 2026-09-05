@@ -4,6 +4,7 @@ from app.models.host import Host, HostNetwork, HostProtocol, HostSecurity
 from app.models.node import Node, NodeStatus
 from app.models.setup_key import SetupKey
 from app.models.user import ProxyUser, UserStatus
+from app.models.wireguard_peer import WireGuardPeer
 
 __all__ = [
     "Admin",
@@ -17,4 +18,5 @@ __all__ = [
     "Node",
     "NodeStatus",
     "Group",
+    "WireGuardPeer",
 ]

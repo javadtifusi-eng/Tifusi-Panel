@@ -4,6 +4,7 @@ import {
   createHost,
   deleteHost,
   getRealityKeypair,
+  getWireGuardKeypair,
   listHosts,
   scanReality,
   updateHost,
@@ -38,6 +39,9 @@ function emptyForm() {
     reality_public_key: '',
     reality_private_key: '',
     reality_short_id: '',
+    wireguard_public_key: '',
+    wireguard_private_key: '',
+    wireguard_subnet: '10.66.66.0/24',
   }
 }
 
@@ -51,9 +55,12 @@ export default function HostsPage() {
   const [findingTarget, setFindingTarget] = useState(false)
   const [generatingKeys, setGeneratingKeys] = useState(false)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
+  const [generatingWgKeys, setGeneratingWgKeys] = useState(false)
+  const [showWgPrivateKey, setShowWgPrivateKey] = useState(false)
 
   const usesTransport = form.protocol === 'vless' || form.protocol === 'trojan'
   const usesReality = usesTransport && form.security === 'reality'
+  const usesWireguard = form.protocol === 'wireguard'
 
   async function refresh() {
     try {
@@ -105,11 +112,29 @@ export default function HostsPage() {
     }
   }
 
+  async function generateWgKeys() {
+    setGeneratingWgKeys(true)
+    setError(null)
+    try {
+      const keys = await getWireGuardKeypair()
+      setForm((f) => ({
+        ...f,
+        wireguard_public_key: keys.public_key,
+        wireguard_private_key: keys.private_key,
+      }))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'ساخت کلید با خطا مواجه شد')
+    } finally {
+      setGeneratingWgKeys(false)
+    }
+  }
+
   function resetForm() {
     setEditingId(null)
     setForm(emptyForm())
     setShowForm(false)
     setShowPrivateKey(false)
+    setShowWgPrivateKey(false)
   }
 
   function startEdit(host: Host) {
@@ -125,6 +150,9 @@ export default function HostsPage() {
       reality_public_key: host.reality_public_key ?? '',
       reality_private_key: host.reality_private_key ?? '',
       reality_short_id: host.reality_short_id ?? '',
+      wireguard_public_key: host.wireguard_public_key ?? '',
+      wireguard_private_key: host.wireguard_private_key ?? '',
+      wireguard_subnet: host.wireguard_subnet ?? '10.66.66.0/24',
     })
     setShowForm(true)
   }
@@ -143,6 +171,9 @@ export default function HostsPage() {
       reality_public_key: usesReality ? form.reality_public_key : null,
       reality_private_key: usesReality ? form.reality_private_key : null,
       reality_short_id: usesReality ? form.reality_short_id : null,
+      wireguard_public_key: usesWireguard ? form.wireguard_public_key : null,
+      wireguard_private_key: usesWireguard ? form.wireguard_private_key : null,
+      wireguard_subnet: usesWireguard ? form.wireguard_subnet : null,
     }
     try {
       if (editingId) {
@@ -338,6 +369,64 @@ export default function HostsPage() {
             </div>
           )}
 
+          {usesWireguard && (
+            <div className="mt-4 rounded-lg border border-cyan-400/15 bg-black/25 p-3">
+              <div className="mb-3">
+                <label className={labelClass}>سابنت تونل (برای تخصیص IP به هر کاربر)</label>
+                <input
+                  dir="ltr"
+                  value={form.wireguard_subnet}
+                  onChange={(e) => update('wireguard_subnet', e.target.value)}
+                  placeholder="10.66.66.0/24"
+                  className={`${inputClass} w-48 text-left font-mono text-xs`}
+                />
+              </div>
+
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs text-slate-400">کلید سرور WireGuard</span>
+                <button
+                  type="button"
+                  onClick={generateWgKeys}
+                  disabled={generatingWgKeys}
+                  className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+                  style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                >
+                  {generatingWgKeys ? 'در حال ساخت…' : 'تولید کلید تازه'}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  dir="ltr"
+                  readOnly
+                  value={form.wireguard_public_key}
+                  placeholder="Public Key"
+                  className={`${inputClass} text-left font-mono text-xs`}
+                />
+                <div className="relative">
+                  <input
+                    dir="ltr"
+                    readOnly
+                    type={showWgPrivateKey ? 'text' : 'password'}
+                    value={form.wireguard_private_key}
+                    placeholder="Private Key"
+                    className={`${inputClass} w-full text-left font-mono text-xs`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowWgPrivateKey((v) => !v)}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400"
+                  >
+                    {showWgPrivateKey ? 'مخفی' : 'نمایش'}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2 text-[10px] text-slate-500">
+                این کلید عمومی و پورت را باید دستی روی اینترفیس wg0 خود سرور هم تنظیم کنی؛ تیفوسی فقط کانفیگ سمت
+                کاربر و بلاک Peer را می‌سازه.
+              </div>
+            </div>
+          )}
+
           {error && <div className="mt-3 text-xs text-red-400">{error}</div>}
 
           <button
@@ -394,6 +483,10 @@ export default function HostsPage() {
                   {h.security === 'reality' ? (
                     <span dir="ltr" className="font-mono text-xs" style={{ color: ACCENT }}>
                       REALITY · {h.sni}
+                    </span>
+                  ) : h.protocol === 'wireguard' ? (
+                    <span dir="ltr" className="font-mono text-xs text-slate-400">
+                      {h.wireguard_subnet ?? '—'}
                     </span>
                   ) : (
                     (h.security ?? '—')

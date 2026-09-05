@@ -45,6 +45,13 @@ class Host(Base):
     reality_private_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reality_short_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
+    # Only meaningful for protocol=wireguard. These are the *server's* own
+    # keypair; each user additionally gets their own peer keypair + IP,
+    # allocated lazily and stored in WireGuardPeer (see app/wireguard/).
+    wireguard_public_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wireguard_private_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wireguard_subnet: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

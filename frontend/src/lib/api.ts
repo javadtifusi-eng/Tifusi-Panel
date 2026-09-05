@@ -121,9 +121,15 @@ export async function deleteUser(id: number): Promise<void> {
   await authorizedFetch(`/users/${id}`, { method: 'DELETE' })
 }
 
+export interface WireGuardConfig {
+  remark: string
+  config: string
+}
+
 export interface UserLinks {
   subscription_url: string
   links: string[]
+  wireguard_configs: WireGuardConfig[]
 }
 
 export async function getUserLinks(id: number): Promise<UserLinks> {
@@ -176,6 +182,9 @@ export interface Host {
   reality_public_key: string | null
   reality_private_key: string | null
   reality_short_id: string | null
+  wireguard_public_key: string | null
+  wireguard_private_key: string | null
+  wireguard_subnet: string | null
   created_at: string
   group_ids: number[]
 }
@@ -189,6 +198,11 @@ export interface RealityKeypair {
   private_key: string
   public_key: string
   short_id: string
+}
+
+export interface WireGuardKeypair {
+  private_key: string
+  public_key: string
 }
 
 export async function listHosts(): Promise<HostList> {
@@ -217,6 +231,11 @@ export async function deleteHost(id: number): Promise<void> {
 
 export async function getRealityKeypair(): Promise<RealityKeypair> {
   const res = await authorizedFetch('/hosts/reality-keypair')
+  return res.json()
+}
+
+export async function getWireGuardKeypair(): Promise<WireGuardKeypair> {
+  const res = await authorizedFetch('/hosts/wireguard-keypair')
   return res.json()
 }
 
