@@ -147,3 +147,52 @@ export async function scanReality(sampleSize?: number): Promise<RealityScanRespo
   })
   return res.json()
 }
+
+export type HostProtocol = 'vless' | 'trojan' | 'wireguard' | 'hysteria2'
+export type HostNetwork = 'tcp' | 'ws' | 'grpc'
+export type HostSecurity = 'none' | 'tls' | 'reality'
+
+export interface Host {
+  id: number
+  remark: string
+  protocol: HostProtocol
+  address: string
+  port: number
+  network: HostNetwork | null
+  security: HostSecurity | null
+  sni: string | null
+  reality_public_key: string | null
+  reality_private_key: string | null
+  reality_short_id: string | null
+  created_at: string
+}
+
+export interface HostList {
+  total: number
+  hosts: Host[]
+}
+
+export interface RealityKeypair {
+  private_key: string
+  public_key: string
+  short_id: string
+}
+
+export async function listHosts(): Promise<HostList> {
+  const res = await authorizedFetch('/hosts')
+  return res.json()
+}
+
+export async function createHost(payload: Omit<Host, 'id' | 'created_at'>): Promise<Host> {
+  const res = await authorizedFetch('/hosts', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteHost(id: number): Promise<void> {
+  await authorizedFetch(`/hosts/${id}`, { method: 'DELETE' })
+}
+
+export async function getRealityKeypair(): Promise<RealityKeypair> {
+  const res = await authorizedFetch('/hosts/reality-keypair')
+  return res.json()
+}

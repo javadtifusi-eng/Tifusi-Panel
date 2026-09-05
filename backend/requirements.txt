@@ -7,3 +7,4 @@ bcrypt>=4.2
 pyjwt>=2.9
 typer>=0.12
 python-multipart>=0.0.9
+cryptography>=42
