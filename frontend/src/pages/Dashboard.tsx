@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
+import GroupsPage from './Groups'
 import HostsPage from './Hosts'
 import NodesPage from './Nodes'
 import RealityScanPage from './RealityScan'
@@ -11,13 +12,13 @@ const ACCENT = '#22D3EE'
 const navItems = [
   { id: 'users', label: 'کاربران', enabled: true },
   { id: 'hosts', label: 'هاست‌ها', enabled: true },
+  { id: 'groups', label: 'گروه‌ها', enabled: true },
   { id: 'nodes', label: 'نودها', enabled: true },
   { id: 'reality', label: 'اسکنر REALITY', enabled: true },
-  { id: 'groups', label: 'گروه‌ها', enabled: false },
   { id: 'settings', label: 'تنظیمات', enabled: false },
 ] as const
 
-type ActiveTab = 'users' | 'hosts' | 'nodes' | 'reality'
+type ActiveTab = 'users' | 'hosts' | 'groups' | 'nodes' | 'reality'
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [active, setActive] = useState<ActiveTab>('users')
@@ -69,6 +70,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         </div>
         {active === 'users' && <UsersPage />}
         {active === 'hosts' && <HostsPage />}
+        {active === 'groups' && <GroupsPage />}
         {active === 'nodes' && <NodesPage />}
         {active === 'reality' && <RealityScanPage />}
       </main>

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_admin
+from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_links_for_user
 from app.models.host import Host
 from app.models.user import ProxyUser
@@ -44,6 +45,7 @@ async def create_user(
         expire=payload.expire,
         note=payload.note,
     )
+    user.groups = await resolve_groups(payload.group_ids, db) or []
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -68,8 +70,12 @@ async def update_user(
 ) -> ProxyUser:
     user = await _get_user_or_404(user_id, db)
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    for field, value in payload.model_dump(exclude_unset=True, exclude={"group_ids"}).items():
         setattr(user, field, value)
+
+    new_groups = await resolve_groups(payload.group_ids, db)
+    if new_groups is not None:
+        user.groups = new_groups
 
     db.add(user)
     await db.commit()
@@ -88,8 +94,9 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)) -> None:
 async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     user = await _get_user_or_404(user_id, db)
     hosts = list((await db.execute(select(Host))).scalars().all())
+    allowed_hosts = hosts_for_user(user, hosts)
     base = settings.public_url.rstrip("/") + "/" if settings.public_url else str(request.base_url)
     return {
         "subscription_url": f"{base}sub/{user.secret}",
-        "links": build_links_for_user(user, hosts),
+        "links": build_links_for_user(user, allowed_hosts),
     }

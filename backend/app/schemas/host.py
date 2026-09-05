@@ -16,6 +16,7 @@ class HostCreate(BaseModel):
     reality_public_key: str | None = None
     reality_private_key: str | None = None
     reality_short_id: str | None = None
+    group_ids: list[int] = Field(default_factory=list)
 
 
 class HostUpdate(BaseModel):
@@ -28,6 +29,7 @@ class HostUpdate(BaseModel):
     reality_public_key: str | None = None
     reality_private_key: str | None = None
     reality_short_id: str | None = None
+    group_ids: list[int] | None = None
 
 
 class HostResponse(BaseModel):
@@ -45,6 +47,7 @@ class HostResponse(BaseModel):
     reality_private_key: str | None
     reality_short_id: str | None
     created_at: datetime
+    group_ids: list[int]
 
 
 class HostList(BaseModel):

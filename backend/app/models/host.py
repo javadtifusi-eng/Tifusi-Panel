@@ -2,9 +2,10 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Enum, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.group import group_hosts
 
 
 class HostProtocol(str, enum.Enum):
@@ -47,3 +48,12 @@ class Host(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+    # Empty = global/ungrouped, visible and usable by every user. See app/groups/access.py.
+    groups: Mapped[list["Group"]] = relationship(  # noqa: F821
+        "Group", secondary=group_hosts, back_populates="hosts", lazy="selectin"
+    )
+
+    @property
+    def group_ids(self) -> list[int]:
+        return [g.id for g in self.groups]

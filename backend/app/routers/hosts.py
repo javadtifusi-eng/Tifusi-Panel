@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_admin
+from app.groups.access import resolve_groups
 from app.models.host import Host, HostSecurity
 from app.reality.keys import generate_reality_keypair
 from app.schemas.host import HostCreate, HostList, HostResponse, HostUpdate, RealityKeypairResponse
@@ -42,7 +43,9 @@ async def create_host(payload: HostCreate, db: AsyncSession = Depends(get_db)) -
         if missing:
             raise HTTPException(status_code=400, detail=f"REALITY requires: {', '.join(missing)}")
 
-    host = Host(**payload.model_dump())
+    data = payload.model_dump(exclude={"group_ids"})
+    host = Host(**data)
+    host.groups = await resolve_groups(payload.group_ids, db) or []
     db.add(host)
     await db.commit()
     await db.refresh(host)
@@ -64,7 +67,7 @@ async def get_host(host_id: int, db: AsyncSession = Depends(get_db)) -> Host:
 @router.put("/{host_id}", response_model=HostResponse)
 async def update_host(host_id: int, payload: HostUpdate, db: AsyncSession = Depends(get_db)) -> Host:
     host = await _get_host_or_404(host_id, db)
-    updates = payload.model_dump(exclude_unset=True)
+    updates = payload.model_dump(exclude_unset=True, exclude={"group_ids"})
 
     merged_security = updates.get("security", host.security)
     if merged_security == HostSecurity.reality:
@@ -79,6 +82,10 @@ async def update_host(host_id: int, payload: HostUpdate, db: AsyncSession = Depe
 
     for field, value in updates.items():
         setattr(host, field, value)
+
+    new_groups = await resolve_groups(payload.group_ids, db)
+    if new_groups is not None:
+        host.groups = new_groups
 
     db.add(host)
     await db.commit()

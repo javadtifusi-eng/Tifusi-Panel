@@ -86,6 +86,7 @@ export interface ProxyUser {
   expire: string | null
   note: string | null
   created_at: string
+  group_ids: number[]
 }
 
 export interface ProxyUserList {
@@ -176,6 +177,7 @@ export interface Host {
   reality_private_key: string | null
   reality_short_id: string | null
   created_at: string
+  group_ids: number[]
 }
 
 export interface HostList {
@@ -194,7 +196,9 @@ export async function listHosts(): Promise<HostList> {
   return res.json()
 }
 
-export async function createHost(payload: Omit<Host, 'id' | 'created_at'>): Promise<Host> {
+export async function createHost(
+  payload: Omit<Host, 'id' | 'created_at' | 'group_ids'> & { group_ids?: number[] },
+): Promise<Host> {
   const res = await authorizedFetch('/hosts', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }
@@ -268,4 +272,45 @@ export async function deleteNode(id: number): Promise<void> {
 export async function syncNode(id: number): Promise<NodeSyncResult> {
   const res = await authorizedFetch(`/nodes/${id}/sync`, { method: 'POST' })
   return res.json()
+}
+
+export interface Group {
+  id: number
+  name: string
+  note: string | null
+  created_at: string
+  host_ids: number[]
+  user_ids: number[]
+}
+
+export interface GroupList {
+  total: number
+  groups: Group[]
+}
+
+export async function listGroups(): Promise<GroupList> {
+  const res = await authorizedFetch('/groups')
+  return res.json()
+}
+
+export async function createGroup(payload: {
+  name: string
+  note?: string | null
+  host_ids?: number[]
+  user_ids?: number[]
+}): Promise<Group> {
+  const res = await authorizedFetch('/groups', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function updateGroup(
+  id: number,
+  payload: Partial<{ name: string; note: string | null; host_ids: number[]; user_ids: number[] }>,
+): Promise<Group> {
+  const res = await authorizedFetch(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteGroup(id: number): Promise<void> {
+  await authorizedFetch(`/groups/${id}`, { method: 'DELETE' })
 }

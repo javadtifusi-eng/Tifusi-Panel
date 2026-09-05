@@ -10,6 +10,7 @@ class ProxyUserCreate(BaseModel):
     data_limit: int | None = Field(default=None, ge=0)
     expire: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
+    group_ids: list[int] = Field(default_factory=list)
 
 
 class ProxyUserUpdate(BaseModel):
@@ -17,6 +18,7 @@ class ProxyUserUpdate(BaseModel):
     data_limit: int | None = Field(default=None, ge=0)
     expire: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
+    group_ids: list[int] | None = None
 
 
 class ProxyUserResponse(BaseModel):
@@ -31,6 +33,7 @@ class ProxyUserResponse(BaseModel):
     expire: datetime | None
     note: str | None
     created_at: datetime
+    group_ids: list[int]
 
 
 class ProxyUserList(BaseModel):

@@ -7,6 +7,7 @@ using either are skipped here for the same reason they're skipped in
 app/links/generator.py: no half-working inbound is better than a real one.
 """
 
+from app.groups.access import users_for_host
 from app.models.host import Host, HostProtocol, HostSecurity
 from app.models.user import ProxyUser, UserStatus
 
@@ -72,7 +73,7 @@ def build_xray_config(hosts: list[Host], users: list[ProxyUser]) -> dict:
     for host in hosts:
         builder = _BUILDERS.get(host.protocol)
         if builder is not None:
-            inbounds.append(builder(host, active_users))
+            inbounds.append(builder(host, users_for_host(host, active_users)))
 
     return {
         "log": {"loglevel": "warning"},
