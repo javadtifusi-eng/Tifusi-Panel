@@ -6,6 +6,23 @@ import { ApiError, createAdmin, getSetupStatus, login as loginApi } from '../lib
 const ACCENT = '#22D3EE'
 const COMMAND = 'docker exec -it tifusi-panel tifusi-cli generate-admin-key'
 
+function CopyIcon() {
+  return (
+    <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="8" width="13" height="13" rx="2" />
+      <path d="M4.5 15.5H4a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 4 2.5h10A1.5 1.5 0 0 1 15.5 4v.5" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
 type Screen = 'setup' | 'login'
 
 const fieldClass =
@@ -99,20 +116,36 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
       <div className="pointer-events-none absolute -top-36 left-1/2 h-[620px] w-[620px] -translate-x-1/2 rounded-full border border-cyan-400/10" />
       <div className="pointer-events-none absolute -top-16 left-1/2 h-[440px] w-[440px] -translate-x-1/2 rounded-full border border-cyan-400/15" />
 
-      <div className="relative z-10">
+      <div className="relative z-10 animate-scale-in">
         <Logo accent={ACCENT} size={116} />
       </div>
-      <div className="relative z-10 mt-1.5 font-display text-3xl font-bold tracking-[4px] text-slate-50">
+      <div
+        className="relative z-10 mt-1.5 bg-clip-text font-display text-3xl font-bold tracking-[4px] text-transparent [background-image:linear-gradient(110deg,#f8fafc_35%,#22D3EE_50%,#f8fafc_65%)] [background-size:250%_100%]"
+        style={{
+          animation: 'fade-up 0.7s cubic-bezier(0.16,1,0.3,1) 150ms both, shimmer 3s ease-in-out 1.2s infinite',
+        }}
+      >
         TIFUSI
       </div>
-      <div className="relative z-10 mt-0.5 font-display text-xs font-semibold tracking-[9px]" style={{ color: ACCENT }}>
+      <div
+        className="relative z-10 mt-0.5 animate-fade-up font-display text-xs font-semibold tracking-[9px] [animation-delay:250ms]"
+        style={{ color: ACCENT }}
+      >
         PANEL
       </div>
-      <div className="relative z-10 my-3.5 h-0.5 w-14 opacity-55" style={{ backgroundColor: ACCENT }} />
-      <div className="relative z-10 mb-6 max-w-xs text-center text-xs text-slate-400">{t.tagline}</div>
+      <div
+        className="relative z-10 my-3.5 h-0.5 w-14 origin-center animate-grow-x opacity-55 [animation-delay:400ms]"
+        style={{ backgroundColor: ACCENT }}
+      />
+      <div className="relative z-10 mb-1 animate-fade-up text-center text-sm font-bold text-slate-100 [animation-delay:500ms]">
+        {t.welcome}
+      </div>
+      <div className="relative z-10 mb-6 max-w-xs animate-fade-up text-center text-xs text-slate-400 [animation-delay:600ms]">
+        {t.tagline}
+      </div>
 
       <div
-        className="relative z-10 w-full max-w-sm rounded-[20px] border border-cyan-400/20 bg-slate-950/70 px-6 py-7 backdrop-blur-xl"
+        className="relative z-10 w-full max-w-sm animate-fade-up rounded-[20px] border border-cyan-400/20 bg-slate-950/70 px-6 py-7 backdrop-blur-xl [animation-delay:700ms]"
         style={{ boxShadow: '0 0 44px rgba(34,211,238,0.07), 0 20px 40px rgba(0,0,0,0.35)' }}
       >
         {screen === 'setup' ? (
@@ -125,18 +158,20 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
             </div>
             <div className={`mb-4 text-lg font-bold text-slate-50 ${align}`}>{t.headingSetup}</div>
 
-            <div className={`mb-2 text-xs text-slate-400 ${align}`}>{t.step1}</div>
-            <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-cyan-400/25 bg-black/35 p-3">
-              <code dir="ltr" className="flex-1 break-all text-left font-mono text-[11px] text-cyan-200">
-                {COMMAND}
-              </code>
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-cyan-400/25 bg-black/35 px-3.5 py-3">
+              <span className={`text-xs text-slate-400 ${align}`}>{t.step1}</span>
               <button
                 type="button"
                 onClick={handleCopy}
-                className="flex-shrink-0 rounded-md px-3 py-1.5 text-[11.5px] font-bold text-slate-950"
-                style={{ backgroundColor: ACCENT }}
+                title={COMMAND}
+                aria-label={copied ? t.copied : t.copy}
+                className="flex-shrink-0 rounded-md p-1.5 transition-colors"
+                style={{
+                  color: copied ? '#34d399' : ACCENT,
+                  backgroundColor: copied ? 'rgba(52,211,153,0.12)' : 'rgba(34,211,238,0.12)',
+                }}
               >
-                {copied ? `${t.copied} ✓` : t.copy}
+                {copied ? <CheckIcon /> : <CopyIcon />}
               </button>
             </div>
 

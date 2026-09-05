@@ -2,6 +2,7 @@ export type Lang = 'fa' | 'en'
 
 export const dict = {
   fa: {
+    welcome: 'به پنل تیفوسی خوش اومدی',
     tagline: 'کنترل یکپارچه و امن زیرساخت پروکسی',
     badgeSetup: 'راه‌اندازی اولیه',
     headingSetup: 'بسازیم حساب مدیر رو',
@@ -30,6 +31,7 @@ export const dict = {
     errorGeneric: 'مشکلی پیش اومد، دوباره امتحان کن.',
   },
   en: {
+    welcome: 'Welcome to Tifusi Panel',
     tagline: 'Unified, secure control over your proxy infrastructure',
     badgeSetup: 'FIRST-TIME SETUP',
     headingSetup: "Let's create your admin account",
