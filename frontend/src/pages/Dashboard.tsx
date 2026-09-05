@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
 import HostsPage from './Hosts'
 import NodesPage from './Nodes'
@@ -63,6 +64,9 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-8">
+        <div className="mb-6 flex items-center justify-end">
+          <LiveClock />
+        </div>
         {active === 'users' && <UsersPage />}
         {active === 'hosts' && <HostsPage />}
         {active === 'nodes' && <NodesPage />}
