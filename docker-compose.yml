@@ -7,6 +7,10 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+      # Uncomment to run the panel with direct TLS (no reverse proxy in
+      # front of it) — mount your cert/key in, then set TIFUSI_SSL_CERTFILE
+      # and TIFUSI_SSL_KEYFILE to their in-container paths in .env.
+      # - ./certs:/app/certs:ro
     env_file:
       - .env
 

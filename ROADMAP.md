@@ -13,6 +13,7 @@
 - Settings page: admin can change the panel's public URL and their own password at runtime, no redeploy or `.env` edit needed
 - Periodic node health polling: a background job GETs `/health` on every already-synced node so status recovers/degrades on its own — deliberately read-only, it never pushes `/config`, so checking on a node can't restart its live Xray process the way a real sync does
 - Database backup/restore from the Settings page — download the live SQLite file, or upload one to atomically replace it (disposes the connection pool first so no in-flight connection keeps writing to the file being replaced)
+- Direct TLS: `run.py` terminates HTTPS in uvicorn itself when `TIFUSI_SSL_CERTFILE`/`TIFUSI_SSL_KEYFILE` are set, for a deployment with no nginx/Caddy in front — unset (the default) keeps plain HTTP exactly as before
 
 ## Known gaps (scoped out on purpose, not overlooked)
 
@@ -21,7 +22,6 @@
 - Single admin account, no roles
 - Schema managed by `create_all`, not a real migration tool (Alembic) — fine pre-1.0, not fine once the schema needs to change without wiping data
 - No notifications (e.g. a Telegram bot pinging users near their expire date/limit)
-- No direct-TLS option (cert/key file paths) for running the panel without a reverse proxy in front of it — currently HTTPS is assumed to terminate at nginx/Caddy, matching the existing docker-compose setup
 - No database backup/restore from the dashboard
 - Mobile viewport edge case reported once, never confirmed fixed or broken
 
@@ -41,3 +41,8 @@ Needs verifying case by case: some CDNs enforce SNI/Host-header matching at the 
 A lot of users currently run a separate tunnel script (GRE/IPIP/etc., or a dedicated tool like this account's own Tifusi-Tunnel) to bridge an Iran-side server to a foreign one, entirely outside the panel. Folding that into Tifusi Panel itself — as a first-class "Tunnel" section — would mean one tool instead of two disconnected ones.
 
 Same honest caveat as WireGuard: this is kernel/interface-level work on the node (needs `NET_ADMIN`), not just config generation, so it's a genuinely bigger lift than anything else on this list.
+
+### Multi-exit IP rotation
+Instead of one fixed foreign server IP per host, rotate a user's traffic across several exit IPs (DNS with a short TTL, a load balancer, or — going further — short-lived relays the way Tor's Snowflake does with WebRTC) so there's no single stable IP for a censor to blacklist long enough for it to matter.
+
+This is the same "nodes" model already built here, just automated one step further: instead of an admin manually adding nodes and assigning hosts to them, the panel would rotate a user between nodes itself. Tradeoff is infrastructure cost and keeping config in sync across every exit at once — more moving parts than a single server, by design.

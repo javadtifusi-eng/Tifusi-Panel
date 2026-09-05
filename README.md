@@ -78,6 +78,18 @@ docker compose up -d --build
 
 Set `TIFUSI_PUBLIC_URL` (e.g. `https://your-domain.example:8000`) once the panel sits behind Docker/a proxy — without it, subscription URLs are built from the request's Host header, which is an internal container hostname there, not something a client can reach. This env var is only the bootstrap default: an admin can view and change it any time from the panel's own Settings page (also where the admin password gets changed), no redeploy needed.
 
+### Direct TLS (no reverse proxy)
+
+By default the panel container runs plain HTTP, same as before — put nginx/Caddy in front of it for TLS. If you'd rather have uvicorn terminate TLS itself:
+
+```bash
+# in .env
+TIFUSI_SSL_CERTFILE=/app/certs/fullchain.pem
+TIFUSI_SSL_KEYFILE=/app/certs/privkey.pem
+```
+
+and mount your certs into the container (uncomment the `./certs:/app/certs:ro` line in `docker-compose.yml`). The container's entrypoint (`run.py`) picks these up automatically — nothing else changes. Both vars must be set together, or neither; setting only one fails fast at startup instead of silently falling back to HTTP.
+
 ## Design references
 
 - Three visual directions were explored before settling on "Obsidian Glow" (the one implemented here) — see the design canvas in the project history for the alternates.

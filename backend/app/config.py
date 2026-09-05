@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     # see app/traffic/sync.py.
     traffic_sync_interval_seconds: int = 30
 
+    # Only read by run.py, not by uvicorn's own CLI — if you start the panel
+    # with `uvicorn app.main:app` directly, these are ignored and you pass
+    # --host/--port/--ssl-certfile/--ssl-keyfile yourself instead. Setting
+    # both ssl_certfile and ssl_keyfile makes run.py terminate TLS directly
+    # in uvicorn, for a deployment with no reverse proxy in front of it.
+    uvicorn_host: str = "0.0.0.0"
+    uvicorn_port: int = 8000
+    ssl_certfile: str | None = None
+    ssl_keyfile: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TIFUSI_")
 
 
