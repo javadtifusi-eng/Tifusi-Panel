@@ -9,6 +9,7 @@ import {
   getSettings,
   listAdmins,
   restoreBackup,
+  testTelegram,
   updateSettings,
   type AdminListItem,
   type AdminProfile,
@@ -49,6 +50,14 @@ export default function SettingsPage() {
   const [adminSubmitting, setAdminSubmitting] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
 
+  const [botToken, setBotToken] = useState('')
+  const [chatId, setChatId] = useState('')
+  const [telegramSaving, setTelegramSaving] = useState(false)
+  const [telegramSaved, setTelegramSaved] = useState(false)
+  const [telegramTesting, setTelegramTesting] = useState(false)
+  const [telegramTestOk, setTelegramTestOk] = useState(false)
+  const [telegramError, setTelegramError] = useState<string | null>(null)
+
   async function refreshAdmins() {
     try {
       const res = await listAdmins()
@@ -64,7 +73,11 @@ export default function SettingsPage() {
       if (p.is_owner) refreshAdmins()
     }).catch(() => undefined)
     getSettings()
-      .then((s) => setPublicUrl(s.public_url ?? ''))
+      .then((s) => {
+        setPublicUrl(s.public_url ?? '')
+        setBotToken(s.telegram_bot_token ?? '')
+        setChatId(s.telegram_chat_id ?? '')
+      })
       .catch(() => undefined)
   }, [])
 
@@ -169,6 +182,43 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveTelegram(e: FormEvent) {
+    e.preventDefault()
+    setTelegramSaving(true)
+    setTelegramError(null)
+    setTelegramSaved(false)
+    setTelegramTestOk(false)
+    try {
+      const res = await updateSettings({
+        telegram_bot_token: botToken.trim() || null,
+        telegram_chat_id: chatId.trim() || null,
+      })
+      setBotToken(res.telegram_bot_token ?? '')
+      setChatId(res.telegram_chat_id ?? '')
+      setTelegramSaved(true)
+      window.setTimeout(() => setTelegramSaved(false), 2000)
+    } catch (err) {
+      setTelegramError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+    } finally {
+      setTelegramSaving(false)
+    }
+  }
+
+  async function handleTestTelegram() {
+    setTelegramTesting(true)
+    setTelegramError(null)
+    setTelegramTestOk(false)
+    try {
+      await testTelegram()
+      setTelegramTestOk(true)
+      window.setTimeout(() => setTelegramTestOk(false), 3000)
+    } catch (err) {
+      setTelegramError(err instanceof ApiError ? err.message : 'ارسال پیام تستی با خطا مواجه شد')
+    } finally {
+      setTelegramTesting(false)
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -252,6 +302,57 @@ export default function SettingsPage() {
           >
             {pwSubmitting ? 'در حال ذخیره…' : pwSaved ? 'رمز عوض شد ✓' : 'تغییر رمز'}
           </button>
+        </form>
+
+        <form onSubmit={handleSaveTelegram} className={cardClass}>
+          <h2 className="mb-1 text-sm font-bold text-slate-100">اعلان‌های تلگرام</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            وقتی یه کاربر منقضی/محدود بشه یا یه نود قطع/وصل بشه، پنل یه پیام به همین چت تلگرام می‌فرسته. توکن رو
+            از{' '}
+            <span dir="ltr" className="font-mono">
+              @BotFather
+            </span>{' '}
+            بگیر، و chat id رو از خود بات یا یه بات مثل{' '}
+            <span dir="ltr" className="font-mono">
+              @userinfobot
+            </span>
+            .
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelClass}>توکن بات</label>
+              <input
+                dir="ltr"
+                value={botToken}
+                onChange={(e) => setBotToken(e.target.value)}
+                placeholder="123456:ABC-def..."
+                className={`${inputClass} w-64 text-left font-mono text-xs`}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Chat ID</label>
+              <input
+                dir="ltr"
+                value={chatId}
+                onChange={(e) => setChatId(e.target.value)}
+                placeholder="123456789"
+                className={`${inputClass} w-40 text-left font-mono text-xs`}
+              />
+            </div>
+            <button type="submit" disabled={telegramSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {telegramSaving ? 'در حال ذخیره…' : telegramSaved ? 'ذخیره شد ✓' : 'ذخیره'}
+            </button>
+            <button
+              type="button"
+              onClick={handleTestTelegram}
+              disabled={telegramTesting}
+              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
+              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+            >
+              {telegramTesting ? 'در حال ارسال…' : telegramTestOk ? 'ارسال شد ✓' : 'ارسال پیام تستی'}
+            </button>
+          </div>
+          {telegramError && <div className="mt-3 text-xs text-red-400">{telegramError}</div>}
         </form>
 
         <div className={cardClass}>

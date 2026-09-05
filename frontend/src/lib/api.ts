@@ -340,6 +340,8 @@ export async function deleteGroup(id: number): Promise<void> {
 
 export interface PanelSettings {
   public_url: string | null
+  telegram_bot_token: string | null
+  telegram_chat_id: string | null
 }
 
 export async function getSettings(): Promise<PanelSettings> {
@@ -350,6 +352,10 @@ export async function getSettings(): Promise<PanelSettings> {
 export async function updateSettings(payload: Partial<PanelSettings>): Promise<PanelSettings> {
   const res = await authorizedFetch('/settings', { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
+}
+
+export async function testTelegram(): Promise<void> {
+  await authorizedFetch('/settings/telegram/test', { method: 'POST' })
 }
 
 export interface AdminProfile {

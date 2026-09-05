@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.host import Host
 from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser
+from app.notifications.telegram import send_telegram_message
 from app.xray_config.builder import build_xray_config
 
 
@@ -76,6 +77,7 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
     a node can never restart its live Xray process (sync_node's POST /config
     does that deliberately, which is exactly what a periodic background
     check must NOT do to something actively serving connections)."""
+    previous_status = node.status
     base_url = f"http://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
     try:
@@ -87,12 +89,20 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
         node.status = NodeStatus.error
         node.last_error = str(exc)[:500]
         await db.commit()
+        if previous_status != NodeStatus.error:
+            await send_telegram_message(db, f"🔴 نود «{node.name}» از دسترس خارج شد.")
         return
 
     node.status = NodeStatus.connected if health.get("running") else NodeStatus.error
     node.xray_version = health.get("xray_version")
     node.last_error = None if health.get("running") else "xray reported not running"
     await db.commit()
+
+    if node.status != previous_status:
+        if node.status == NodeStatus.connected:
+            await send_telegram_message(db, f"🟢 نود «{node.name}» دوباره متصل شد.")
+        else:
+            await send_telegram_message(db, f"🔴 نود «{node.name}» از دسترس خارج شد.")
 
 
 async def check_all_node_health(db: AsyncSession) -> None:

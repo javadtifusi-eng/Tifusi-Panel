@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings as env_settings
 from app.database import engine, get_db
 from app.dependencies import get_current_admin
+from app.notifications.telegram import send_telegram_message
 from app.schemas.settings import PanelSettingsResponse, PanelSettingsUpdate
 from app.settings_store import get_settings_row
 
@@ -37,6 +38,17 @@ async def update_settings(payload: PanelSettingsUpdate, db: AsyncSession = Depen
     await db.commit()
     await db.refresh(row)
     return row
+
+
+@router.post("/telegram/test", status_code=204)
+async def test_telegram(db: AsyncSession = Depends(get_db)) -> None:
+    row = await get_settings_row(db)
+    if not row.telegram_bot_token or not row.telegram_chat_id:
+        raise HTTPException(status_code=400, detail="Set both the bot token and chat ID first")
+
+    ok = await send_telegram_message(db, "✅ این یه پیام تستی از پنل Tifusi هست.")
+    if not ok:
+        raise HTTPException(status_code=502, detail="Failed to reach Telegram — check the token and chat ID")
 
 
 @router.get("/backup")

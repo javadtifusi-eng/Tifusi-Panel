@@ -14,3 +14,9 @@ class PanelSetting(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, default=1)
     public_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Both required together for notifications to actually send — see
+    # app/notifications/telegram.py. The chat ID is whatever Telegram gives
+    # your bot for the target chat (a user, group, or channel it's in).
+    telegram_bot_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

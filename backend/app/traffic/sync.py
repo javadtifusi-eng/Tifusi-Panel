@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser, UserStatus
 from app.nodes.sync import check_all_node_health, resync_connected_nodes
+from app.notifications.telegram import send_telegram_message
 
 
 async def _fetch_node_stats(node: Node) -> dict[str, dict[str, int]]:
@@ -63,16 +64,21 @@ async def enforce_limits(db: AsyncSession) -> bool:
     users = list((await db.execute(select(ProxyUser).where(ProxyUser.status == UserStatus.active))).scalars().all())
 
     changed = False
+    notifications: list[str] = []
     for user in users:
         if user.expire is not None and _as_utc(user.expire) <= now:
             user.status = UserStatus.expired
             changed = True
+            notifications.append(f"⏰ کاربر «{user.username}» منقضی شد.")
         elif user.data_limit and user.used_traffic >= user.data_limit:
             user.status = UserStatus.limited
             changed = True
+            notifications.append(f"📊 کاربر «{user.username}» به سقف حجم مصرفی‌اش رسید.")
 
     if changed:
         await db.commit()
+        for text in notifications:
+            await send_telegram_message(db, text)
     return changed
 
 
