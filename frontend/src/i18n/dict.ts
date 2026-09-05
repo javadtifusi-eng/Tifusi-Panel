@@ -4,7 +4,7 @@ export const dict = {
   fa: {
     tagline: 'کنترل یکپارچه و امن زیرساخت پروکسی',
     badgeSetup: 'راه‌اندازی اولیه',
-    headingSetup: 'اولین باره؟ بسازیم حساب مدیر رو',
+    headingSetup: 'بسازیم حساب مدیر رو',
     step1: 'این دستور رو داخل ترمینال سرورت اجرا کن:',
     step2Label: 'کلید یک‌بارمصرف',
     step2Placeholder: 'کلید رو همینجا وارد کن',
@@ -32,7 +32,7 @@ export const dict = {
   en: {
     tagline: 'Unified, secure control over your proxy infrastructure',
     badgeSetup: 'FIRST-TIME SETUP',
-    headingSetup: "First time here? Let's create your admin",
+    headingSetup: "Let's create your admin account",
     step1: "Run this in your server's terminal:",
     step2Label: 'One-time key',
     step2Placeholder: 'Paste the key here',
