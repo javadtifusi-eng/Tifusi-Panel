@@ -2,6 +2,15 @@
 
 A proxy management panel — unified web UI + REST API, built with FastAPI and React. Same architectural pattern as PasarGuard (Python/FastAPI backend, React dashboard, Docker deployment), original UI and onboarding flow. Supported protocols: **VLESS, Trojan, WireGuard, Hysteria2** (no VMess or Shadowsocks).
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Login](docs/screenshots/login.png) | ![Users](docs/screenshots/users.png) |
+| ![Hosts](docs/screenshots/hosts.png) | ![Groups](docs/screenshots/groups.png) |
+| ![Nodes](docs/screenshots/nodes.png) | ![REALITY scanner](docs/screenshots/reality-scanner.png) |
+| ![Settings](docs/screenshots/settings.png) | ![User links & QR code](docs/screenshots/user-links.png) |
+
 ## What's here right now
 
 - **Backend** (`backend/`): FastAPI + SQLAlchemy (async, SQLite by default), JWT auth, Alembic migrations.
