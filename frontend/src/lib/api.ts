@@ -22,10 +22,14 @@ async function parseErrorDetail(res: Response): Promise<string> {
 
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = getToken()
+  // A FormData body (file uploads) must NOT get an explicit Content-Type —
+  // the browser sets one itself with the multipart boundary baked in, and
+  // overriding it here would break the boundary and the upload with it.
+  const isFormData = init.body instanceof FormData
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
@@ -360,4 +364,23 @@ export async function getAdminProfile(): Promise<AdminProfile> {
 
 export async function changePassword(payload: { current_password: string; new_password: string }): Promise<void> {
   await authorizedFetch('/admin/password', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function downloadBackup(): Promise<void> {
+  const res = await authorizedFetch('/settings/backup')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'tifusi-panel-backup.db'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+export async function restoreBackup(file: File): Promise<void> {
+  const form = new FormData()
+  form.append('file', file)
+  await authorizedFetch('/settings/restore', { method: 'POST', body: form })
 }

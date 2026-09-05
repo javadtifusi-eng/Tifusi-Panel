@@ -12,6 +12,7 @@
 - Automatic `expired`/`limited` status transitions once a user passes their expire date or data limit, with an automatic node resync so it actually takes effect
 - Settings page: admin can change the panel's public URL and their own password at runtime, no redeploy or `.env` edit needed
 - Periodic node health polling: a background job GETs `/health` on every already-synced node so status recovers/degrades on its own — deliberately read-only, it never pushes `/config`, so checking on a node can't restart its live Xray process the way a real sync does
+- Database backup/restore from the Settings page — download the live SQLite file, or upload one to atomically replace it (disposes the connection pool first so no in-flight connection keeps writing to the file being replaced)
 
 ## Known gaps (scoped out on purpose, not overlooked)
 
@@ -20,6 +21,7 @@
 - Single admin account, no roles
 - Schema managed by `create_all`, not a real migration tool (Alembic) — fine pre-1.0, not fine once the schema needs to change without wiping data
 - No notifications (e.g. a Telegram bot pinging users near their expire date/limit)
+- No direct-TLS option (cert/key file paths) for running the panel without a reverse proxy in front of it — currently HTTPS is assumed to terminate at nginx/Caddy, matching the existing docker-compose setup
 - No database backup/restore from the dashboard
 - Mobile viewport edge case reported once, never confirmed fixed or broken
 

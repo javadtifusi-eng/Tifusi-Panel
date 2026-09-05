@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ApiError,
   changePassword,
+  downloadBackup,
   getAdminProfile,
   getSettings,
+  restoreBackup,
   updateSettings,
   type AdminProfile,
 } from '../lib/api'
@@ -30,6 +32,12 @@ export default function SettingsPage() {
   const [pwSubmitting, setPwSubmitting] = useState(false)
   const [pwSaved, setPwSaved] = useState(false)
   const [pwError, setPwError] = useState<string | null>(null)
+
+  const [backupDownloading, setBackupDownloading] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreDone, setRestoreDone] = useState(false)
+  const [backupError, setBackupError] = useState<string | null>(null)
+  const restoreInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     getAdminProfile().then(setProfile).catch(() => undefined)
@@ -75,6 +83,41 @@ export default function SettingsPage() {
       setPwError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
     } finally {
       setPwSubmitting(false)
+    }
+  }
+
+  async function handleDownloadBackup() {
+    setBackupDownloading(true)
+    setBackupError(null)
+    try {
+      await downloadBackup()
+    } catch (err) {
+      setBackupError(err instanceof ApiError ? err.message : 'دانلود بک‌آپ با خطا مواجه شد')
+    } finally {
+      setBackupDownloading(false)
+    }
+  }
+
+  async function handleRestoreFile(file: File) {
+    if (
+      !window.confirm(
+        'با بازیابی این بک‌آپ، تمام کاربرها، هاست‌ها، نودها و تنظیمات فعلی پاک و با محتوای فایل جایگزین می‌شن. مطمئنی؟',
+      )
+    ) {
+      if (restoreInputRef.current) restoreInputRef.current.value = ''
+      return
+    }
+    setRestoring(true)
+    setBackupError(null)
+    setRestoreDone(false)
+    try {
+      await restoreBackup(file)
+      setRestoreDone(true)
+    } catch (err) {
+      setBackupError(err instanceof ApiError ? err.message : 'بازیابی با خطا مواجه شد')
+    } finally {
+      setRestoring(false)
+      if (restoreInputRef.current) restoreInputRef.current.value = ''
     }
   }
 
@@ -162,6 +205,51 @@ export default function SettingsPage() {
             {pwSubmitting ? 'در حال ذخیره…' : pwSaved ? 'رمز عوض شد ✓' : 'تغییر رمز'}
           </button>
         </form>
+
+        <div className={cardClass}>
+          <h2 className="mb-1 text-sm font-bold text-slate-100">بک‌آپ و بازیابی</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            یه نسخه از کل دیتابیس پنل (کاربرها، هاست‌ها، نودها، تنظیمات) دانلود کن، یا از یه بک‌آپ قبلی بازیابی
+            کن. بازیابی همه‌چیزِ فعلی رو با محتوای فایل جایگزین می‌کنه — برگشت‌ناپذیره.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDownloadBackup}
+              disabled={backupDownloading}
+              className={buttonClass}
+              style={{ backgroundColor: ACCENT }}
+            >
+              {backupDownloading ? 'در حال دانلود…' : 'دانلود بک‌آپ'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => restoreInputRef.current?.click()}
+              disabled={restoring}
+              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
+              style={{ borderColor: 'rgba(248,113,113,0.4)', color: '#f87171' }}
+            >
+              {restoring ? 'در حال بازیابی…' : restoreDone ? 'بازیابی شد ✓' : 'بازیابی از فایل بک‌آپ'}
+            </button>
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept=".db"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleRestoreFile(file)
+              }}
+            />
+          </div>
+          {backupError && <div className="mt-3 text-xs text-red-400">{backupError}</div>}
+          {restoreDone && (
+            <div className="mt-3 text-xs text-slate-400">
+              بازیابی انجام شد. اگه رمز یا نام‌کاربری ادمین تو بک‌آپ فرق داشت، ممکنه لازم بشه دوباره وارد بشی.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
