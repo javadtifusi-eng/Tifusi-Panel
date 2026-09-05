@@ -1,0 +1,81 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.dependencies import get_current_admin
+from app.models.user import ProxyUser
+from app.schemas.user import ProxyUserCreate, ProxyUserList, ProxyUserResponse, ProxyUserUpdate
+
+router = APIRouter(
+    prefix="/api/users",
+    tags=["users"],
+    dependencies=[Depends(get_current_admin)],
+)
+
+
+@router.get("", response_model=ProxyUserList)
+async def list_users(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> ProxyUserList:
+    total = await db.scalar(select(func.count()).select_from(ProxyUser))
+    result = await db.execute(
+        select(ProxyUser).order_by(ProxyUser.id.desc()).offset(offset).limit(limit)
+    )
+    return ProxyUserList(total=total or 0, users=list(result.scalars().all()))
+
+
+@router.post("", response_model=ProxyUserResponse, status_code=201)
+async def create_user(
+    payload: ProxyUserCreate, db: AsyncSession = Depends(get_db)
+) -> ProxyUser:
+    existing = await db.scalar(select(ProxyUser).where(ProxyUser.username == payload.username))
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="A user with this username already exists")
+
+    user = ProxyUser(
+        username=payload.username,
+        data_limit=payload.data_limit,
+        expire=payload.expire,
+        note=payload.note,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def _get_user_or_404(user_id: int, db: AsyncSession) -> ProxyUser:
+    user = await db.get(ProxyUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.get("/{user_id}", response_model=ProxyUserResponse)
+async def get_user(user_id: int, db: AsyncSession = Depends(get_db)) -> ProxyUser:
+    return await _get_user_or_404(user_id, db)
+
+
+@router.put("/{user_id}", response_model=ProxyUserResponse)
+async def update_user(
+    user_id: int, payload: ProxyUserUpdate, db: AsyncSession = Depends(get_db)
+) -> ProxyUser:
+    user = await _get_user_or_404(user_id, db)
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.delete("/{user_id}", status_code=204)
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)) -> None:
+    user = await _get_user_or_404(user_id, db)
+    await db.delete(user)
+    await db.commit()

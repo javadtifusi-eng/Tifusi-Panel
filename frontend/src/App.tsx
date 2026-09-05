@@ -1,8 +1,32 @@
+import { useEffect, useState } from 'react'
+import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+import { clearToken, getToken, setToken } from './lib/auth'
 
-// The login/first-run-setup screen is the only real page so far — the
-// dashboard behind it (users, nodes, groups, settings...) is the next
-// phase of the project, built once the panel's core API grows to match.
 export default function App() {
-  return <Login />
+  const [token, setTokenState] = useState<string | null>(() => getToken())
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      setTokenState(null)
+    }
+    window.addEventListener('tifusi:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('tifusi:unauthorized', handleUnauthorized)
+  }, [])
+
+  function handleAuthenticated(newToken: string) {
+    setToken(newToken)
+    setTokenState(newToken)
+  }
+
+  function handleLogout() {
+    clearToken()
+    setTokenState(null)
+  }
+
+  if (!token) {
+    return <Login onAuthenticated={handleAuthenticated} />
+  }
+
+  return <Dashboard onLogout={handleLogout} />
 }

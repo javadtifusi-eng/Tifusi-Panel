@@ -13,7 +13,7 @@ const fieldClass =
 const labelClass = 'block text-xs text-slate-400 mb-1.5'
 const linkClass = 'text-xs text-cyan-300 hover:underline'
 
-export default function Login() {
+export default function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }) {
   const [lang, setLang] = useState<Lang>('fa')
   const [screen, setScreen] = useState<Screen>('setup')
   const [loadingStatus, setLoadingStatus] = useState(true)
@@ -57,8 +57,7 @@ export default function Login() {
     setSubmitting(true)
     try {
       const res = await createAdmin({ key, username, password })
-      localStorage.setItem('tifusi_token', res.access_token)
-      window.location.reload()
+      onAuthenticated(res.access_token)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric)
     } finally {
@@ -72,8 +71,7 @@ export default function Login() {
     setSubmitting(true)
     try {
       const res = await loginApi({ username, password })
-      localStorage.setItem('tifusi_token', res.access_token)
-      window.location.reload()
+      onAuthenticated(res.access_token)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric)
     } finally {

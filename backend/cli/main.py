@@ -7,8 +7,20 @@ import typer
 from app.config import settings
 from app.database import async_session, init_db
 from app.models.setup_key import SetupKey
+from app.version import __version__
 
+# Typer collapses a Typer() app down to a single bare command (dropping the
+# subcommand name entirely) whenever exactly one command is registered — so
+# with only generate-admin-key here, `tifusi-cli generate-admin-key` would
+# fail with "unexpected extra argument". The `version` command keeps Typer
+# in normal multi-command dispatch mode as more admin commands are added.
 cli = typer.Typer(help="Tifusi Panel command line interface")
+
+
+@cli.command("version")
+def show_version() -> None:
+    """Print the installed Tifusi Panel version."""
+    typer.echo(__version__)
 
 
 @cli.command("generate-admin-key")
