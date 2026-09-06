@@ -229,6 +229,11 @@ def _restart_xl2tpd() -> None:
             _xl2tpd_process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             _xl2tpd_process.kill()
+    # xl2tpd expects /var/run/xl2tpd to already exist so it can create its
+    # control fifo there — on Debian this comes from a systemd tmpfiles.d
+    # rule we don't have, so xl2tpd otherwise fails with "Unable to open
+    # /var/run/xl2tpd/l2tp-control for reading" (confirmed live).
+    Path("/var/run/xl2tpd").mkdir(parents=True, exist_ok=True)
     _xl2tpd_process = subprocess.Popen(["xl2tpd", "-D"])
 
 
