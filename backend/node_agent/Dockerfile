@@ -1,12 +1,28 @@
 FROM python:3.12-slim
 
+# policy-rc.d: the standard Debian trick for a container/chroot build —
+# strongswan-starter's postinst tries to start the strongswan service via
+# invoke-rc.d, which fails the whole `apt-get install` (and so the whole
+# `docker build`) because there's no systemd/init here to actually start
+# it against. Returning 101 tells invoke-rc.d "don't start it, and that's
+# fine" instead of erroring. We manage the daemon ourselves via subprocess
+# (see node_agent/ipsec.py), so nothing needs the package to auto-start it.
+RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
+    && chmod +x /usr/sbin/policy-rc.d
+
 # strongswan/xl2tpd/ppp/iptables: only actually used when the panel assigns
 # this node an l2tp or ikev2 Core (see node_agent/ipsec.py) — installed
 # unconditionally here so a node never needs a second install/rebuild just
-# to switch which kind of core it serves.
+# to switch which kind of core it serves. strongSwan 6 split its control
+# plane into two pieces we both need explicitly rather than trusting the
+# strongswan metapackage to pull them in: strongswan-starter (the
+# /usr/sbin/ipsec CLI, used only to get charon itself running) and
+# strongswan-swanctl (the vici-based tool that actually loads connections
+# and reports status now that the old stroke interface is gone).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl unzip ca-certificates \
-      strongswan strongswan-pki libcharon-extra-plugins libstrongswan-extra-plugins \
+      strongswan strongswan-starter strongswan-swanctl strongswan-pki \
+      libcharon-extra-plugins libstrongswan-extra-plugins \
       xl2tpd ppp iptables \
     && rm -rf /var/lib/apt/lists/*
 

@@ -1,11 +1,17 @@
 """Generates and applies real strongSwan/xl2tpd config for l2tp/ikev2 cores.
 
 Only ever touched when the panel assigns this node an l2tp or ikev2 Core —
-a plain Xray node never calls anything here. The conn stanzas below mirror
-the well-established public reference for PSK-based IPsec VPN servers
-(hwdsl2/setup-ipsec-vpn), not something invented from scratch, since a
-wrong IPsec conn silently fails to negotiate in ways that are miserable to
-debug from a client.
+a plain Xray node never calls anything here.
+
+strongSwan 6 dropped its legacy stroke control interface (the classic
+`ipsec.conf` conn blocks + `ipsec status`) entirely in favor of `swanctl`
+talking to charon over vici — confirmed live on a real node while building
+this: charon starts fine via `ipsec restart` (strongswan-starter still
+provides that much), but `ipsec status` can't connect at all since there's
+no stroke socket anymore, only /var/run/charon.vici. So `ipsec restart` is
+kept only as "make sure charon itself is running"; actual connections are
+loaded via `swanctl --load-all` from swanctl.conf, and status is read via
+`swanctl` too.
 
 Everything here (the daemons *and* their config) lives inside this node's
 own container — only the network namespace is shared with the host (via
@@ -19,7 +25,7 @@ import subprocess
 from pathlib import Path
 
 IPSEC_CONF = Path("/etc/ipsec.conf")
-IPSEC_SECRETS = Path("/etc/ipsec.secrets")
+SWANCTL_CONF = Path("/etc/swanctl/swanctl.conf")
 XL2TPD_CONF = Path("/etc/xl2tpd/xl2tpd.conf")
 PPP_OPTIONS = Path("/etc/ppp/options.xl2tpd")
 CHAP_SECRETS = Path("/etc/ppp/chap-secrets")
@@ -42,56 +48,78 @@ def _write(path: Path, content: str, mode: int | None = None) -> None:
         path.chmod(mode)
 
 
-def _ipsec_conf(core_type: str, remote_id: str | None = None) -> str:
-    header = "config setup\n  uniqueids=no\n\n"
+def _ipsec_conf() -> str:
+    # Just enough for `ipsec restart` (strongswan-starter) to boot charon
+    # with a sane baseline — no conn blocks here anymore, since starter's
+    # stroke-based loading path doesn't exist in strongSwan 6. Actual
+    # connections are loaded separately via swanctl (see _swanctl_conf).
+    return "config setup\n  uniqueids=no\n"
+
+
+def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None) -> str:
+    escaped_psk = psk.replace('"', '\\"')
     if core_type == "l2tp":
-        return header + (
-            "conn l2tp-psk\n"
-            "  auto=add\n"
-            "  keyexchange=ikev1\n"
-            "  authby=secret\n"
-            "  type=transport\n"
-            "  left=%defaultroute\n"
-            "  leftprotoport=17/1701\n"
-            "  right=%any\n"
-            "  rightprotoport=17/%any\n"
-            "  ike=aes256-sha2;modp2048,aes128-sha2;modp2048,aes256-sha1;modp2048,aes128-sha1;modp2048\n"
-            "  phase2alg=aes_gcm-null,aes128-sha1,aes256-sha1,aes256-sha2_512,aes128-sha2,aes256-sha2\n"
-            "  ikelifetime=8h\n"
-            "  keylife=1h\n"
-            "  rekey=no\n"
-            "  dpddelay=30\n"
-            "  dpdtimeout=300\n"
+        return (
+            "connections {\n"
+            "  l2tp-psk {\n"
+            "    version = 1\n"
+            "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,"
+            "aes256-sha1-modp2048,aes128-sha1-modp2048,3des-sha1-modp2048\n"
+            "    local_addrs = %any\n"
+            "    remote_addrs = %any\n"
+            "    local { auth = psk }\n"
+            "    remote { auth = psk }\n"
+            "    children {\n"
+            "      l2tp {\n"
+            "        mode = transport\n"
+            "        local_ts = dynamic[/1701]\n"
+            "        remote_ts = dynamic[/%any]\n"
+            "        esp_proposals = aes256-sha1,aes128-sha1,aes256gcm16,3des-sha1\n"
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "}\n"
+            "secrets {\n"
+            f'  ike-l2tp {{ secret = "{escaped_psk}" }}\n'
+            "}\n"
         )
     # ikev2 — raw PSK auth, no certs/EAP: matches this panel's one-shared-
-    # secret design for this core type. leftid only matters if the admin
-    # set a Remote ID — clients that fill in a "Remote ID" field must match
-    # whatever this is, so it needs to be a real identity (the server's own
-    # domain/IP), not left for strongSwan to default silently.
-    leftid_line = f"  leftid={remote_id}\n" if remote_id else ""
-    return header + (
-        "conn ikev2-psk\n"
-        "  auto=add\n"
-        "  keyexchange=ikev2\n"
-        "  left=%defaultroute\n"
-        f"{leftid_line}"
-        "  leftauth=psk\n"
-        "  leftsubnet=0.0.0.0/0,::/0\n"
-        "  right=%any\n"
-        "  rightauth=psk\n"
-        f"  rightsourceip={_IKEV2_POOL}\n"
-        f"  rightdns={','.join(_DNS_SERVERS)}\n"
-        "  ike=aes256-sha2;modp2048,aes128-sha2;modp2048,aes256gcm16-prfsha384-ecp384\n"
-        "  dpddelay=30\n"
-        "  dpdtimeout=300\n"
+    # secret design for this core type. local.id only matters if the admin
+    # set a Remote ID — a client that fills in a "Remote ID" field must
+    # match whatever this is, so it needs to be a real identity (the
+    # server's own domain/IP), not left for strongSwan to default silently.
+    local_id_line = f"      id = {remote_id}\n" if remote_id else ""
+    return (
+        "connections {\n"
+        "  ikev2-psk {\n"
+        "    version = 2\n"
+        "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384\n"
+        "    local_addrs = %any\n"
+        "    remote_addrs = %any\n"
+        "    local {\n"
+        "      auth = psk\n"
+        f"{local_id_line}"
+        "    }\n"
+        "    remote { auth = psk }\n"
+        "    children {\n"
+        "      net {\n"
+        "        local_ts = 0.0.0.0/0,::/0\n"
+        "        esp_proposals = aes256gcm16-prfsha384-ecp384,aes256-sha256-modp2048,aes128-sha256-modp2048\n"
+        "      }\n"
+        "    }\n"
+        f"    pools = ikev2-pool\n"
+        "  }\n"
+        "}\n"
+        "pools {\n"
+        "  ikev2-pool {\n"
+        f"    addrs = {_IKEV2_POOL}\n"
+        f"    dns = {','.join(_DNS_SERVERS)}\n"
+        "  }\n"
+        "}\n"
+        "secrets {\n"
+        f'  ike-ikev2 {{ secret = "{escaped_psk}" }}\n'
+        "}\n"
     )
-
-
-def _ipsec_secrets(psk: str) -> str:
-    # A blanket identity, not tied to any particular server/client id — the
-    # standard shape for a single PSK shared by every client.
-    escaped = psk.replace('"', '\\"')
-    return f'%any %any : PSK "{escaped}"\n'
 
 
 def _xl2tpd_conf() -> str:
@@ -178,26 +206,32 @@ def _restart_xl2tpd() -> None:
     _xl2tpd_process = subprocess.Popen(["xl2tpd", "-D"])
 
 
+def _load_swanctl_config(core_type: str, psk: str, remote_id: str | None = None) -> None:
+    _write(IPSEC_CONF, _ipsec_conf())
+    _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id), mode=0o600)
+    _restart_ipsec()  # ensures charon itself is up before swanctl talks to it
+    _run(["swanctl", "--load-all"])
+
+
 def apply_l2tp(psk: str, users: list[dict]) -> None:
-    _write(IPSEC_CONF, _ipsec_conf("l2tp"))
-    _write(IPSEC_SECRETS, _ipsec_secrets(psk), mode=0o600)
+    _load_swanctl_config("l2tp", psk)
     _write(XL2TPD_CONF, _xl2tpd_conf())
     _write(PPP_OPTIONS, _ppp_options())
     _write(CHAP_SECRETS, _chap_secrets(users), mode=0o600)
     _ensure_forwarding_and_nat(_L2TP_SUBNET)
-    _restart_ipsec()
     _restart_xl2tpd()
 
 
 def apply_ikev2(psk: str, remote_id: str | None) -> None:
-    _write(IPSEC_CONF, _ipsec_conf("ikev2", remote_id))
-    _write(IPSEC_SECRETS, _ipsec_secrets(psk), mode=0o600)
+    _load_swanctl_config("ikev2", psk, remote_id)
     _ensure_forwarding_and_nat(_IKEV2_SUBNET)
-    _restart_ipsec()
 
 
 def is_ipsec_running() -> bool:
-    return _run(["ipsec", "status"]).returncode == 0
+    # strongSwan 6 dropped the stroke interface `ipsec status` used to
+    # query — swanctl talks to charon over vici instead, and returns
+    # nonzero if it can't even reach it (charon down, or never started).
+    return _run(["swanctl", "--list-conns"]).returncode == 0
 
 
 def is_xl2tpd_running() -> bool:
