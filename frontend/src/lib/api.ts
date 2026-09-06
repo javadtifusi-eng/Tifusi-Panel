@@ -467,3 +467,20 @@ export async function uploadTls(cert: File, key: File): Promise<void> {
 export async function removeTls(): Promise<void> {
   await authorizedFetch('/settings/tls', { method: 'DELETE' })
 }
+
+export interface SystemStats {
+  cpu_percent: number
+  cpu_count: number
+  memory_percent: number
+  memory_used: number
+  memory_total: number
+  disk_percent: number
+  disk_used: number
+  disk_total: number
+  uptime_seconds: number
+}
+
+export async function getSystemStats(): Promise<SystemStats> {
+  const res = await authorizedFetch('/system/stats')
+  return res.json()
+}

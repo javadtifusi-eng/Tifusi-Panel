@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
+import SystemStatsBar from '../components/SystemStats'
 import { useLang } from '../i18n/LangContext'
 import CoresPage from './Cores'
 import GroupsPage from './Groups'
@@ -77,7 +78,8 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-8">
-        <div className="mb-6 flex items-center justify-end">
+        <div className="mb-6 flex items-center justify-between">
+          <SystemStatsBar />
           <LiveClock />
         </div>
         {active === 'users' && <UsersPage />}

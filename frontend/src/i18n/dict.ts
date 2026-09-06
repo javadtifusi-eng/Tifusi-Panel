@@ -41,6 +41,13 @@ export const dict = {
       logout: 'خروج',
     },
 
+    dashboardStats: {
+      cpu: 'پردازنده',
+      ram: 'رم',
+      disk: 'دیسک',
+      cores: 'هسته',
+    },
+
     common: {
       edit: 'ویرایش',
       delete: 'حذف',
@@ -302,6 +309,13 @@ export const dict = {
       cores: 'Cores',
       settings: 'Settings',
       logout: 'Sign Out',
+    },
+
+    dashboardStats: {
+      cpu: 'CPU',
+      ram: 'RAM',
+      disk: 'Disk',
+      cores: 'cores',
     },
 
     common: {
