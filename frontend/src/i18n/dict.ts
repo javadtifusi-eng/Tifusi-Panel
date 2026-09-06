@@ -232,6 +232,20 @@ export const dict = {
       restoreConfirm:
         'با بازیابی این بک‌آپ، تمام کاربرها، هاست‌ها، نودها و تنظیمات فعلی پاک و با محتوای فایل جایگزین می‌شن. مطمئنی؟',
       restoreDoneNote: 'بازیابی انجام شد. اگه رمز یا نام‌کاربری ادمین تو بک‌آپ فرق داشت، ممکنه لازم بشه دوباره وارد بشی.',
+      tlsTitle: 'گواهی SSL',
+      tlsDesc:
+        'فایل‌های گواهی و کلید خصوصی (فرمت PEM) رو اینجا آپلود کن تا داشبورد مستقیم روی پورت ۴۴۳ با HTTPS سرو بشه — نیازی به دستور نصب یا ریورس‌پروکسی جدا نیست. تا ۱۵ ثانیه بعد از آپلود فعال می‌شه.',
+      tlsCertLabel: 'گواهی (fullchain.pem)',
+      tlsKeyLabel: 'کلید خصوصی (privkey.pem)',
+      tlsEnabled: 'HTTPS فعاله ✓',
+      tlsDisabled: 'HTTPS غیرفعاله',
+      tlsUploadBtn: 'آپلود و فعال‌سازی',
+      tlsUploading: 'در حال آپلود…',
+      tlsUploaded: 'آپلود شد ✓',
+      tlsUploadFailed: 'آپلود با خطا مواجه شد',
+      tlsRemoveBtn: 'غیرفعال‌سازی HTTPS',
+      tlsRemoveConfirm: 'گواهی فعلی حذف بشه؟ داشبورد به HTTP ساده برمی‌گرده.',
+      tlsRemoveFailed: 'حذف گواهی با خطا مواجه شد',
       adminsTitle: 'مدیریت ادمین‌ها',
       adminsDesc:
         'فقط مالک پنل (owner) می‌تونه ادمین جدید بسازه یا حذف کنه. ادمین‌های دیگه دسترسی کامل به پنل دارن، به‌جز مدیریت خودِ حساب‌های ادمین.',
@@ -482,6 +496,20 @@ export const dict = {
       restoreConfirm:
         'Restoring this backup will erase all current users, hosts, nodes and settings and replace them with the file\'s contents. Are you sure?',
       restoreDoneNote: "Restore complete. If the admin username or password in the backup differs, you may need to sign in again.",
+      tlsTitle: 'SSL Certificate',
+      tlsDesc:
+        'Upload a certificate and private key (PEM format) here to have the dashboard serve HTTPS directly on port 443 — no install command or separate reverse proxy needed. Takes effect within about 15 seconds of uploading.',
+      tlsCertLabel: 'Certificate (fullchain.pem)',
+      tlsKeyLabel: 'Private Key (privkey.pem)',
+      tlsEnabled: 'HTTPS is on ✓',
+      tlsDisabled: 'HTTPS is off',
+      tlsUploadBtn: 'Upload & Enable',
+      tlsUploading: 'Uploading…',
+      tlsUploaded: 'Uploaded ✓',
+      tlsUploadFailed: 'Upload failed',
+      tlsRemoveBtn: 'Disable HTTPS',
+      tlsRemoveConfirm: 'Remove the current certificate? The dashboard will fall back to plain HTTP.',
+      tlsRemoveFailed: 'Removing the certificate failed',
       adminsTitle: 'Manage Admins',
       adminsDesc:
         "Only the panel owner can create or delete admin accounts. Other admins have full access to the panel, except managing admin accounts themselves.",

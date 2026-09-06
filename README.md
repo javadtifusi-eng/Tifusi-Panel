@@ -148,7 +148,12 @@ Set `TIFUSI_PUBLIC_URL` (e.g. `https://your-domain.example`) once the panel sits
 
 ### HTTPS on the dashboard (recommended, no separate reverse proxy needed)
 
-The `dashboard` container (the one you actually open in a browser) can terminate TLS itself on port 443 and proxy `/api/` and `/sub/` through to the panel internally — this is exactly what `install.sh`'s domain/Let's Encrypt step sets up for you. To do it by hand: drop `fullchain.pem`/`privkey.pem` into `./certs`, uncomment the `./certs:/etc/nginx/certs:ro` line under the `dashboard` service in `docker-compose.yml`, and restart. The container picks the cert up automatically at startup (no `nginx.conf` edits) and starts redirecting port 80 to 443.
+The `dashboard` container (the one you actually open in a browser) can terminate TLS itself on port 443 and proxy `/api/` and `/sub/` through to the panel internally — this is exactly what `install.sh`'s domain/Let's Encrypt step sets up for you. Two other ways to turn it on without reinstalling:
+
+- **From the panel itself**: Settings → SSL Certificate → upload your `fullchain.pem`/`privkey.pem`. Takes effect within ~15 seconds, no restart needed.
+- **By hand**: drop `fullchain.pem`/`privkey.pem` into `./certs` on the host and restart (`./certs` is already mounted into both containers).
+
+Either way, `./certs` is watched continuously — the container picks up a new (or removed) cert on its own and reloads nginx, no `nginx.conf` edits or manual restarts required.
 
 ### Direct TLS on the panel (advanced, no dashboard/reverse proxy in front)
 

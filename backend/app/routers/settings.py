@@ -16,6 +16,14 @@ router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depe
 _SQLITE_PREFIX = "sqlite+aiosqlite:///"
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 
+# Shared with the dashboard container (mounted read-only there at
+# /etc/nginx/certs — same host directory, different in-container path).
+# Dropping files here is how the dashboard's nginx picks up HTTPS; see
+# frontend/docker-entrypoint-tls.sh for the side that watches for them.
+_CERTS_DIR = Path("/app/certs")
+_CERT_FILE = _CERTS_DIR / "fullchain.pem"
+_KEY_FILE = _CERTS_DIR / "privkey.pem"
+
 
 def _sqlite_path() -> Path | None:
     url = env_settings.database_url
@@ -79,3 +87,40 @@ async def restore_backup(file: UploadFile = File(...)) -> None:
     tmp_path = path.with_suffix(".restore-tmp")
     tmp_path.write_bytes(header + rest)
     tmp_path.replace(path)
+
+
+@router.get("/tls")
+async def get_tls_status() -> dict:
+    return {"enabled": _CERT_FILE.exists() and _KEY_FILE.exists()}
+
+
+@router.post("/tls", status_code=204)
+async def upload_tls(
+    cert: UploadFile = File(...),
+    key: UploadFile = File(...),
+) -> None:
+    cert_bytes = await cert.read()
+    key_bytes = await key.read()
+    if not cert_bytes or not key_bytes:
+        raise HTTPException(status_code=400, detail="Both the certificate and the private key are required")
+    if b"BEGIN CERTIFICATE" not in cert_bytes:
+        raise HTTPException(status_code=400, detail="That doesn't look like a PEM certificate file")
+    if b"PRIVATE KEY" not in key_bytes:
+        raise HTTPException(status_code=400, detail="That doesn't look like a PEM private key file")
+
+    _CERTS_DIR.mkdir(parents=True, exist_ok=True)
+    # Write to temp files first and rename into place, so the dashboard's
+    # reload watcher (polling on a timer, not locked in step with this
+    # request) never sees a half-written cert or key.
+    cert_tmp = _CERT_FILE.with_suffix(".tmp")
+    key_tmp = _KEY_FILE.with_suffix(".tmp")
+    cert_tmp.write_bytes(cert_bytes)
+    key_tmp.write_bytes(key_bytes)
+    cert_tmp.replace(_CERT_FILE)
+    key_tmp.replace(_KEY_FILE)
+
+
+@router.delete("/tls", status_code=204)
+async def remove_tls() -> None:
+    _CERT_FILE.unlink(missing_ok=True)
+    _KEY_FILE.unlink(missing_ok=True)

@@ -451,3 +451,19 @@ export async function restoreBackup(file: File): Promise<void> {
   form.append('file', file)
   await authorizedFetch('/settings/restore', { method: 'POST', body: form })
 }
+
+export async function getTlsStatus(): Promise<{ enabled: boolean }> {
+  const res = await authorizedFetch('/settings/tls')
+  return res.json()
+}
+
+export async function uploadTls(cert: File, key: File): Promise<void> {
+  const form = new FormData()
+  form.append('cert', cert)
+  form.append('key', key)
+  await authorizedFetch('/settings/tls', { method: 'POST', body: form })
+}
+
+export async function removeTls(): Promise<void> {
+  await authorizedFetch('/settings/tls', { method: 'DELETE' })
+}

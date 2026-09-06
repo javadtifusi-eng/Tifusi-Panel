@@ -8,10 +8,13 @@ import {
   downloadBackup,
   getAdminProfile,
   getSettings,
+  getTlsStatus,
   listAdmins,
+  removeTls,
   restoreBackup,
   testTelegram,
   updateSettings,
+  uploadTls,
   type AdminListItem,
   type AdminProfile,
 } from '../lib/api'
@@ -45,6 +48,13 @@ export default function SettingsPage() {
   const [restoreDone, setRestoreDone] = useState(false)
   const [backupError, setBackupError] = useState<string | null>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
+
+  const [tlsEnabled, setTlsEnabled] = useState<boolean | null>(null)
+  const [tlsCertFile, setTlsCertFile] = useState<File | null>(null)
+  const [tlsKeyFile, setTlsKeyFile] = useState<File | null>(null)
+  const [tlsUploading, setTlsUploading] = useState(false)
+  const [tlsUploaded, setTlsUploaded] = useState(false)
+  const [tlsError, setTlsError] = useState<string | null>(null)
 
   const [admins, setAdmins] = useState<AdminListItem[] | null>(null)
   const [newAdminUsername, setNewAdminUsername] = useState('')
@@ -80,6 +90,9 @@ export default function SettingsPage() {
         setBotToken(s.telegram_bot_token ?? '')
         setChatId(s.telegram_chat_id ?? '')
       })
+      .catch(() => undefined)
+    getTlsStatus()
+      .then((s) => setTlsEnabled(s.enabled))
       .catch(() => undefined)
   }, [])
 
@@ -151,6 +164,37 @@ export default function SettingsPage() {
     } finally {
       setRestoring(false)
       if (restoreInputRef.current) restoreInputRef.current.value = ''
+    }
+  }
+
+  async function handleUploadTls(e: FormEvent) {
+    e.preventDefault()
+    if (!tlsCertFile || !tlsKeyFile) return
+    setTlsUploading(true)
+    setTlsError(null)
+    setTlsUploaded(false)
+    try {
+      await uploadTls(tlsCertFile, tlsKeyFile)
+      setTlsCertFile(null)
+      setTlsKeyFile(null)
+      setTlsEnabled(true)
+      setTlsUploaded(true)
+      window.setTimeout(() => setTlsUploaded(false), 3000)
+    } catch (err) {
+      setTlsError(err instanceof ApiError ? err.message : t.settingsPage.tlsUploadFailed)
+    } finally {
+      setTlsUploading(false)
+    }
+  }
+
+  async function handleRemoveTls() {
+    if (!window.confirm(t.settingsPage.tlsRemoveConfirm)) return
+    setTlsError(null)
+    try {
+      await removeTls()
+      setTlsEnabled(false)
+    } catch (err) {
+      setTlsError(err instanceof ApiError ? err.message : t.settingsPage.tlsRemoveFailed)
     }
   }
 
@@ -385,6 +429,66 @@ export default function SettingsPage() {
           {backupError && <div className="mt-3 text-xs text-red-400">{backupError}</div>}
           {restoreDone && <div className="mt-3 text-xs text-slate-400">{t.settingsPage.restoreDoneNote}</div>}
         </div>
+
+        <form onSubmit={handleUploadTls} className={cardClass}>
+          <div className={`mb-1 flex items-center justify-between ${align}`}>
+            <h2 className="text-sm font-bold text-slate-100">{t.settingsPage.tlsTitle}</h2>
+            {tlsEnabled !== null && (
+              <span
+                className="rounded-full border px-2.5 py-1 text-[11px]"
+                style={
+                  tlsEnabled
+                    ? { borderColor: 'rgba(52,211,153,0.35)', color: '#34d399', backgroundColor: 'rgba(52,211,153,0.1)' }
+                    : { borderColor: 'rgba(148,163,184,0.3)', color: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.08)' }
+                }
+              >
+                {tlsEnabled ? t.settingsPage.tlsEnabled : t.settingsPage.tlsDisabled}
+              </span>
+            )}
+          </div>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.tlsDesc}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelClass}>{t.settingsPage.tlsCertLabel}</label>
+              <input
+                type="file"
+                accept=".pem,.crt,.cer"
+                onChange={(e) => setTlsCertFile(e.target.files?.[0] ?? null)}
+                required
+                className="block text-xs text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-slate-200"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t.settingsPage.tlsKeyLabel}</label>
+              <input
+                type="file"
+                accept=".pem,.key"
+                onChange={(e) => setTlsKeyFile(e.target.files?.[0] ?? null)}
+                required
+                className="block text-xs text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-slate-200"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={tlsUploading || !tlsCertFile || !tlsKeyFile}
+              className={buttonClass}
+              style={{ backgroundColor: ACCENT }}
+            >
+              {tlsUploading ? t.settingsPage.tlsUploading : tlsUploaded ? t.settingsPage.tlsUploaded : t.settingsPage.tlsUploadBtn}
+            </button>
+            {tlsEnabled && (
+              <button
+                type="button"
+                onClick={handleRemoveTls}
+                className="rounded-lg border px-4 py-2 text-sm font-bold"
+                style={{ borderColor: 'rgba(248,113,113,0.4)', color: '#f87171' }}
+              >
+                {t.settingsPage.tlsRemoveBtn}
+              </button>
+            )}
+          </div>
+          {tlsError && <div className="mt-3 text-xs text-red-400">{tlsError}</div>}
+        </form>
 
         {profile?.is_owner && (
           <div className={cardClass}>
