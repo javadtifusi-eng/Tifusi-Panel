@@ -1,6 +1,23 @@
-# Tifusi Panel
+<p align="center">
+  <img src="frontend/public/logo-tifusi.png" width="180" alt="Логотип Tifusi Panel" />
+</p>
 
-[🇬🇧 English](README.md) | [🇮🇷 فارسی](README.fa.md) | 🇷🇺 Русский
+<h1 align="center">TIFUSI PANEL</h1>
+
+<p align="center"><b>Единое и безопасное управление прокси-инфраструктурой</b></p>
+
+<hr>
+
+<p align="center">
+  <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=22D3EE" alt="GitHub stars" /></a>
+  <img src="https://img.shields.io/badge/protocols-VLESS%20%7C%20Trojan%20%7C%20WireGuard%20%7C%20Hysteria2-22D3EE?style=flat-square" alt="Поддерживаемые протоколы" />
+</p>
+
+<p align="center">
+  🇬🇧 <a href="README.md">English</a> / 🇮🇷 <a href="README.fa.md">فارسی</a> / 🇷🇺 <b>Русский</b>
+</p>
+
+<hr>
 
 Панель управления прокси — единый веб-интерфейс + REST API, построен на FastAPI и React. Та же архитектура, что и у PasarGuard (бэкенд на Python/FastAPI, дашборд на React, развёртывание через Docker), но с полностью оригинальным интерфейсом и процессом первого запуска. Поддерживаемые протоколы: **VLESS, Trojan, WireGuard, Hysteria2** (без VMess и Shadowsocks).
 

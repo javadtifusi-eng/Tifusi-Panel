@@ -1,6 +1,23 @@
-# Tifusi Panel
+<p align="center">
+  <img src="frontend/public/logo-tifusi.png" width="180" alt="لوگوی Tifusi Panel" />
+</p>
 
-[🇬🇧 English](README.md) | 🇮🇷 فارسی | [🇷🇺 Русский](README.ru.md)
+<h1 align="center">TIFUSI PANEL</h1>
+
+<p align="center"><b>کنترل یکپارچه و امن زیرساخت پروکسی</b></p>
+
+<hr>
+
+<p align="center">
+  <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=22D3EE" alt="GitHub stars" /></a>
+  <img src="https://img.shields.io/badge/protocols-VLESS%20%7C%20Trojan%20%7C%20WireGuard%20%7C%20Hysteria2-22D3EE?style=flat-square" alt="پروتکل‌های پشتیبانی‌شده" />
+</p>
+
+<p align="center">
+  🇬🇧 <a href="README.md">English</a> / 🇮🇷 <b>فارسی</b> / 🇷🇺 <a href="README.ru.md">Русский</a>
+</p>
+
+<hr>
 
 پنل مدیریت پروکسی — رابط وب یکپارچه + REST API، ساخته‌شده با FastAPI و React. همون الگوی معماری PasarGuard (بک‌اند Python/FastAPI، داشبورد React، دیپلوی با Docker)، ولی با ظاهر و روند راه‌اندازی کاملاً اختصاصی. پروتکل‌های پشتیبانی‌شده: **VLESS، Trojan، WireGuard، Hysteria2** (بدون VMess یا Shadowsocks).
 
