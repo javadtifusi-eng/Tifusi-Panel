@@ -56,7 +56,18 @@ def _ipsec_conf() -> str:
     return "config setup\n  uniqueids=no\n"
 
 
-def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None) -> str:
+def _eap_secrets(users: list[dict]) -> str:
+    blocks = []
+    for i, u in enumerate(users):
+        username = str(u.get("username", "")).replace('"', '\\"')
+        password = str(u.get("password", "")).replace('"', '\\"')
+        if not username or not password:
+            continue
+        blocks.append(f'  eap-{i} {{\n    id = "{username}"\n    secret = "{password}"\n  }}\n')
+    return "".join(blocks)
+
+
+def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users: list[dict] | None = None) -> str:
     escaped_psk = psk.replace('"', '\\"')
     if core_type == "l2tp":
         return (
@@ -83,15 +94,19 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None) -> str
             f'  ike-l2tp {{ secret = "{escaped_psk}" }}\n'
             "}\n"
         )
-    # ikev2 — raw PSK auth, no certs/EAP: matches this panel's one-shared-
-    # secret design for this core type. local.id only matters if the admin
-    # set a Remote ID — a client that fills in a "Remote ID" field must
-    # match whatever this is, so it needs to be a real identity (the
-    # server's own domain/IP), not left for strongSwan to default silently.
+    # ikev2 — the Core's PSK authenticates the SERVER to the client (IKE
+    # local auth, `local.auth = psk`); each ProxyUser then authenticates
+    # to the server over EAP-MSCHAPv2 with their own username/password
+    # (`remote.auth = eap-mschapv2`), the same per-user login model as
+    # l2tp instead of one shared secret nobody can be told apart by.
+    # local.id only matters if the admin set a Remote ID — a client that
+    # fills in a "Remote ID" field must match whatever this is, so it
+    # needs to be a real identity (the server's own domain/IP), not left
+    # for strongSwan to default silently.
     local_id_line = f"      id = {remote_id}\n" if remote_id else ""
     return (
         "connections {\n"
-        "  ikev2-psk {\n"
+        "  ikev2-eap {\n"
         "    version = 2\n"
         "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384\n"
         "    local_addrs = %any\n"
@@ -100,7 +115,7 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None) -> str
         "      auth = psk\n"
         f"{local_id_line}"
         "    }\n"
-        "    remote { auth = psk }\n"
+        "    remote { auth = eap-mschapv2 }\n"
         "    children {\n"
         "      net {\n"
         "        local_ts = 0.0.0.0/0,::/0\n"
@@ -118,6 +133,7 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None) -> str
         "}\n"
         "secrets {\n"
         f'  ike-ikev2 {{ secret = "{escaped_psk}" }}\n'
+        f"{_eap_secrets(users or [])}"
         "}\n"
     )
 
@@ -206,9 +222,11 @@ def _restart_xl2tpd() -> None:
     _xl2tpd_process = subprocess.Popen(["xl2tpd", "-D"])
 
 
-def _load_swanctl_config(core_type: str, psk: str, remote_id: str | None = None) -> None:
+def _load_swanctl_config(
+    core_type: str, psk: str, remote_id: str | None = None, users: list[dict] | None = None
+) -> None:
     _write(IPSEC_CONF, _ipsec_conf())
-    _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id), mode=0o600)
+    _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users), mode=0o600)
     _restart_ipsec()  # ensures charon itself is up before swanctl talks to it
     _run(["swanctl", "--load-all"])
 
@@ -222,8 +240,8 @@ def apply_l2tp(psk: str, users: list[dict]) -> None:
     _restart_xl2tpd()
 
 
-def apply_ikev2(psk: str, remote_id: str | None) -> None:
-    _load_swanctl_config("ikev2", psk, remote_id)
+def apply_ikev2(psk: str, remote_id: str | None, users: list[dict]) -> None:
+    _load_swanctl_config("ikev2", psk, remote_id, users)
     _ensure_forwarding_and_nat(_IKEV2_SUBNET)
 
 

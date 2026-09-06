@@ -140,6 +140,8 @@ export interface Ikev2Config {
   remark: string
   server: string
   psk: string | null
+  username: string
+  password: string
 }
 
 export interface L2tpConfig {

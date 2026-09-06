@@ -15,8 +15,9 @@ from app.xray_config.builder import build_xray_config
 
 
 async def _ipsec_allowed_users(core: Core, db: AsyncSession) -> list[ProxyUser]:
-    """Every ProxyUser allowed on any Host built on this l2tp Core — same
-    group-access rule as everything else (a Host in no group is global)."""
+    """Every ProxyUser allowed on any Host built on this l2tp/ikev2 Core —
+    same group-access rule as everything else (a Host in no group is
+    global)."""
     hosts = list((await db.execute(select(Host).where(Host.core_id == core.id))).scalars().all())
     users = list((await db.execute(select(ProxyUser))).scalars().all())
     allowed: dict[int, ProxyUser] = {}
@@ -39,18 +40,23 @@ async def _build_xray_payload(core: Core | None, db: AsyncSession) -> dict:
 
 
 async def _build_ipsec_payload(core: Core, db: AsyncSession) -> dict:
+    users = await _ipsec_allowed_users(core, db)
+    user_payload = [{"username": u.username, "password": u.secret} for u in users]
     if core.core_type == CoreType.l2tp:
-        users = await _ipsec_allowed_users(core, db)
         return {
             "core_type": "l2tp",
             "psk": core.l2tp_psk,
-            "users": [{"username": u.username, "password": u.secret} for u in users],
+            "users": user_payload,
         }
-    # ikev2 — shared PSK only, no per-user identity in this panel's design
+    # ikev2 — the Core's PSK authenticates the server to the client (IKE
+    # local auth); each ProxyUser's own username/secret authenticates the
+    # client to the server via EAP-MSCHAPv2, same per-user login model as
+    # l2tp instead of one shared secret with no way to tell users apart.
     return {
         "core_type": "ikev2",
         "psk": core.ikev2_psk,
         "remote_id": core.ikev2_remote_id,
+        "users": user_payload,
     }
 
 

@@ -101,7 +101,7 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
         if core_type == "l2tp":
             ipsec.apply_l2tp(payload.get("psk") or "", payload.get("users") or [])
         else:
-            ipsec.apply_ikev2(payload.get("psk") or "", payload.get("remote_id"))
+            ipsec.apply_ikev2(payload.get("psk") or "", payload.get("remote_id"), payload.get("users") or [])
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=f"required binary not found: {exc}") from exc
 

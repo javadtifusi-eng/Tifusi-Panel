@@ -135,7 +135,7 @@ export default function UserLinksModal({
             {data.ikev2_configs.length > 0 && (
               <div className="mt-4 flex flex-col gap-3">
                 {data.ikev2_configs.map((ike, idx) => {
-                  const text = `Server: ${ike.server}\nPSK: ${ike.psk ?? '—'}`
+                  const text = `Server: ${ike.server}\nPSK: ${ike.psk ?? '—'}\nUsername: ${ike.username}\nPassword: ${ike.password}`
                   return (
                     <div key={`${idx}-${ike.remark}`} className="rounded-lg border border-white/10 bg-white/5 p-3">
                       <div className="mb-2 flex items-center justify-between">

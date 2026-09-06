@@ -113,11 +113,18 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
         wireguard_configs.append({"remark": render_remark(host, user), "config": build_client_config(peer, host)})
 
     # ikev2/l2tp have no URI scheme either — iOS/Android/strongSwan set them
-    # up from plain fields (server, PSK, and for l2tp a username/password),
-    # not an importable link, so each gets its own field of raw connection
-    # info instead of joining the base64 link list.
+    # up from plain fields (server, PSK, and a per-user username/password
+    # for EAP-MSCHAPv2/CHAP login), not an importable link, so each gets
+    # its own field of raw connection info instead of joining the base64
+    # link list.
     ikev2_configs = [
-        {"remark": render_remark(host, user), "server": host.address, "psk": host.core.ikev2_psk if host.core else None}
+        {
+            "remark": render_remark(host, user),
+            "server": host.address,
+            "psk": host.core.ikev2_psk if host.core else None,
+            "username": user.username,
+            "password": user.secret,
+        }
         for host in allowed_hosts
         if host.protocol == HostProtocol.ikev2
     ]
