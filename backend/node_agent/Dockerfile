@@ -23,7 +23,7 @@ RUN curl -fsSL -o /tmp/strongswan.tar.bz2 \
     && cd /tmp/strongswan-src \
     && ./configure --prefix=/usr --sysconfdir=/etc \
          --enable-eap-mschapv2 --enable-eap-identity --enable-md4 \
-         --enable-swanctl --enable-vici --enable-starter \
+         --enable-swanctl --enable-vici \
     && make -j"$(nproc)" \
     && make DESTDIR=/build install
 

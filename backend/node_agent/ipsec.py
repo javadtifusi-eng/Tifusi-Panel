@@ -3,15 +3,17 @@
 Only ever touched when the panel assigns this node an l2tp or ikev2 Core —
 a plain Xray node never calls anything here.
 
-strongSwan 6 dropped its legacy stroke control interface (the classic
-`ipsec.conf` conn blocks + `ipsec status`) entirely in favor of `swanctl`
-talking to charon over vici — confirmed live on a real node while building
-this: charon starts fine via `ipsec restart` (strongswan-starter still
-provides that much), but `ipsec status` can't connect at all since there's
-no stroke socket anymore, only /var/run/charon.vici. So `ipsec restart` is
-kept only as "make sure charon itself is running"; actual connections are
-loaded via `swanctl --load-all` from swanctl.conf, and status is read via
-`swanctl` too.
+strongSwan is built from source in this node's own Dockerfile (Debian's
+packaged build ships no eap-mschapv2 — needs MD4, which modern OpenSSL
+dropped, so distros just leave it out — and native iOS/Windows IKEv2
+"Username" auth hard-requires exactly that method). That build also
+doesn't produce the classic `ipsec`/starter tool at all (confirmed live:
+`find` for it across the built tree comes up empty, and strongSwan 6
+dropped the stroke interface starter depended on anyway) — so charon is
+launched directly here, the same way xl2tpd already is, rather than
+through `ipsec start`. Everything is driven through `swanctl` (vici)
+instead: it loads connections/secrets/pools from swanctl.conf, and its
+exit code is how health is judged, since there's no `ipsec status` to ask.
 
 Everything here (the daemons *and* their config) lives inside this node's
 own container — only the network namespace is shared with the host (via
@@ -25,7 +27,7 @@ import subprocess
 import time
 from pathlib import Path
 
-IPSEC_CONF = Path("/etc/ipsec.conf")
+CHARON_BIN = "/usr/libexec/ipsec/charon"
 SWANCTL_CONF = Path("/etc/swanctl/swanctl.conf")
 XL2TPD_CONF = Path("/etc/xl2tpd/xl2tpd.conf")
 PPP_OPTIONS = Path("/etc/ppp/options.xl2tpd")
@@ -47,14 +49,6 @@ def _write(path: Path, content: str, mode: int | None = None) -> None:
     path.write_text(content)
     if mode is not None:
         path.chmod(mode)
-
-
-def _ipsec_conf() -> str:
-    # Just enough for `ipsec restart` (strongswan-starter) to boot charon
-    # with a sane baseline — no conn blocks here anymore, since starter's
-    # stroke-based loading path doesn't exist in strongSwan 6. Actual
-    # connections are loaded separately via swanctl (see _swanctl_conf).
-    return "config setup\n  uniqueids=no\n"
 
 
 def _eap_secrets(users: list[dict]) -> str:
@@ -205,8 +199,23 @@ def _ensure_forwarding_and_nat(subnet_cidr: str) -> None:
         _run(["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", subnet_cidr, "-j", "MASQUERADE"])
 
 
-def _restart_ipsec() -> None:
-    _run(["ipsec", "restart"])
+_charon_process: subprocess.Popen | None = None
+
+
+def _restart_charon() -> None:
+    """No `ipsec restart` here — this build has no starter/ipsec CLI (see
+    module docstring), so charon is managed directly, the same way
+    xl2tpd is below. A missing charon binary raises FileNotFoundError,
+    same as xray's own Popen call in main.py, so callers can report it
+    the same way instead of silently doing nothing."""
+    global _charon_process
+    if _charon_process is not None and _charon_process.poll() is None:
+        _charon_process.terminate()
+        try:
+            _charon_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _charon_process.kill()
+    _charon_process = subprocess.Popen([CHARON_BIN])
 
 
 _xl2tpd_process: subprocess.Popen | None = None
@@ -226,21 +235,18 @@ def _restart_xl2tpd() -> None:
 def _load_swanctl_config(
     core_type: str, psk: str, remote_id: str | None = None, users: list[dict] | None = None
 ) -> None:
-    _write(IPSEC_CONF, _ipsec_conf())
     _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users), mode=0o600)
-    _restart_ipsec()  # ensures charon itself is up before swanctl talks to it
+    _restart_charon()
 
-    # `ipsec restart` returns as soon as it has forked charon, not once
-    # charon has actually finished starting up and opened its vici socket
-    # — confirmed live: calling --load-all immediately after often hits
-    # that socket before it exists, fails silently (we don't surface a
-    # subprocess's exit code anywhere), and leaves charon running with
-    # zero connections loaded, so every real handshake gets rejected with
-    # NO_PROPOSAL_CHOSEN. Retry for a few seconds instead of once.
-    # Bounded well under sync_node's 8s httpx timeout (app/nodes/sync.py) —
-    # charon's vici socket is normally ready in a second or two, so this
-    # only ever runs long on a genuinely broken node, and even then the
-    # panel should hear back "not running" rather than time out entirely.
+    # charon takes a moment after being spawned to actually open its vici
+    # socket — calling --load-all immediately can hit that window, fail
+    # silently (nothing checked its exit code before), and leave charon
+    # running with zero connections loaded, so every real handshake gets
+    # rejected with NO_PROPOSAL_CHOSEN. Retry for a few seconds instead of
+    # once. Bounded well under sync_node's 8s httpx timeout
+    # (app/nodes/sync.py) — vici is normally ready in a second or two, so
+    # this only ever runs long on a genuinely broken node, and even then
+    # the panel should hear back "not running" rather than time out.
     for attempt in range(5):
         if _run(["swanctl", "--load-all"]).returncode == 0:
             break
