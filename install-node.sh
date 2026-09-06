@@ -49,6 +49,15 @@ if docker ps -a --format '{{.Names}}' | grep -qx tifusi-node; then
   docker rm -f tifusi-node >/dev/null
 fi
 
+# l2tp_ppp/pppol2tp: xl2tpd needs these loaded into the HOST kernel to
+# actually create L2TP/PPP sessions — a container can't load kernel
+# modules into a kernel it doesn't own, so this has to happen out here,
+# not inside the Dockerfile/container. `|| true` because a kernel that
+# already has L2TP built in (not as a module) has nothing to modprobe,
+# and that's not a failure.
+modprobe l2tp_ppp 2>/dev/null || true
+modprobe pppol2tp 2>/dev/null || true
+
 info "Starting the node on the host's real network (agent on port $PORT)..."
 # --network host, not -p per port: Xray binds to whatever proxy ports the
 # panel's pushed config gives it, decided AFTER this container starts, and
