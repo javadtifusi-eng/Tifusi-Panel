@@ -217,64 +217,41 @@ export default function UsersPage() {
 
       {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className={`w-full text-sm ${align}`}>
-          <thead>
-            <tr className="border-b border-white/10 text-xs text-slate-400">
-              <th className="px-4 py-3 font-medium">{t.usersPage.colUsername}</th>
-              <th className="px-4 py-3 font-medium">{t.usersPage.colStatus}</th>
-              <th className="px-4 py-3 font-medium">{t.usersPage.colTraffic}</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users === null && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                  {t.loading}
-                </td>
-              </tr>
-            )}
-            {users !== null && users.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                  {t.usersPage.noUsersYet}
-                </td>
-              </tr>
-            )}
-            {users?.map((u) => (
-              <tr key={u.id} className="border-b border-white/5 last:border-0">
-                <td className="px-4 py-3 text-slate-100">{u.username}</td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggleStatus(u)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles[u.status]}`}
-                  >
-                    {t.usersPage.status[u.status]}
-                  </button>
-                </td>
-                <td className="px-4 py-3 text-slate-400">
-                  {formatUsed(u.used_traffic)} / {formatLimit(u.data_limit)}
-                </td>
-                <td className="px-4 py-3 text-left">
-                  <button
-                    onClick={() => setLinksUser(u)}
-                    className="ml-3 text-xs hover:underline"
-                    style={{ color: ACCENT }}
-                  >
-                    {t.usersPage.linksBtn}
-                  </button>
-                  <button onClick={() => startEdit(u)} className="ml-3 text-xs text-slate-400 hover:underline">
-                    {t.common.edit}
-                  </button>
-                  <button onClick={() => handleDelete(u)} className="text-xs text-red-400 hover:underline">
-                    {t.common.delete}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {users === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {users !== null && users.length === 0 && (
+        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+          {t.usersPage.noUsersYet}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {users?.map((u) => (
+          <div key={u.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-bold text-slate-100">{u.username}</span>
+              <button
+                onClick={() => toggleStatus(u)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles[u.status]}`}
+              >
+                {t.usersPage.status[u.status]}
+              </button>
+            </div>
+            <div dir="ltr" className="mb-3 text-left text-xs text-slate-400">
+              {formatUsed(u.used_traffic)} / {formatLimit(u.data_limit)}
+            </div>
+            <div className="flex gap-3 border-t border-white/5 pt-3">
+              <button onClick={() => setLinksUser(u)} className="text-xs hover:underline" style={{ color: ACCENT }}>
+                {t.usersPage.linksBtn}
+              </button>
+              <button onClick={() => startEdit(u)} className="text-xs text-slate-400 hover:underline">
+                {t.common.edit}
+              </button>
+              <button onClick={() => handleDelete(u)} className="text-xs text-red-400 hover:underline">
+                {t.common.delete}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
       {linksUser && (
