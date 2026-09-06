@@ -43,7 +43,7 @@ Not built yet: per-admin permission scoping, node-side WireGuard interface manag
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
-Installs Docker automatically if it's missing (via the official `get.docker.com` script), clones the repo, optionally gets a free Let's Encrypt certificate if you have a domain pointing at the server (so the panel serves HTTPS directly, no reverse proxy needed), brings the panel up with Docker Compose, then — right there in the same terminal — offers to create the admin account and, optionally, a node, so there's no separate trip to the browser or a second command for a quick single-server setup. (Running a node on the same machine as the panel isn't the recommended setup — keep Xray traffic off the management server when you can — but the installer still offers it, since it's a fine way to get started.)
+Installs Docker automatically if it's missing (via the official `get.docker.com` script), clones the repo, optionally gets a free Let's Encrypt certificate if you have a domain pointing at the server (so the panel serves HTTPS directly, no reverse proxy needed), and brings the panel up with Docker Compose. The admin account itself is created afterward from the browser's login page — see the first-run flow below.
 
 **Node** (any server that'll actually run Xray-core — create the node from the panel's Nodes page first to get its API key):
 ```bash
@@ -65,7 +65,7 @@ Instead of sending you to documentation to find a CLI command, the login page sh
    ```
 4. Paste the printed key back into the same card, pick a username/password, and the owner admin account is created — no separate page, no leaving the browser.
 
-(`install.sh` above does steps 2-4 for you from the same terminal instead, if you'd rather not switch to the browser at all.)
+`install.sh` above brings the panel up through step 1 for you; from there it's steps 2-4 in your browser.
 
 ## Nodes & the node agent
 

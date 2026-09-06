@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Tifusi Panel installer — clones the repo, brings the panel up with Docker
-# Compose, then optionally creates the first admin account and a node right
-# from this same terminal session, instead of a separate trip to the browser.
+# Tifusi Panel installer — clones the repo and brings the panel up with
+# Docker Compose. The admin account itself is created from the browser's
+# login page, using a one-time key from `tifusi-cli generate-admin-key` —
+# this script just gets the panel running and hands you that command.
 #
 # Usage:
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
@@ -15,23 +16,6 @@ PANEL_URL="http://localhost:8000"
 info() { printf '\033[1;36m[Tifusi]\033[0m %s\n' "$1"; }
 warn() { printf '\033[1;33m[Warning]\033[0m %s\n' "$1"; }
 fail() { printf '\033[1;31m[Error]\033[0m %s\n' "$1"; exit 1; }
-
-# Minimal JSON string escaping (backslash and double-quote) — enough for the
-# values this script actually sends (usernames, passwords, node names), not
-# a general-purpose JSON encoder.
-json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
-# Pulls one top-level field's value out of a JSON response — tolerant of
-# whether the server puts a space after the colon (grep -o '"field":"..."'
-# with no space allowance silently returns nothing the moment that varies,
-# which is exactly the kind of thing that only shows up once against a real
-# server, not a hand-typed test payload).
-json_field() {
-  printf '%s' "$1" | grep -oE "\"$2\"[[:space:]]*:[[:space:]]*(\"[^\"]*\"|[0-9]+)" | head -n1 \
-    | sed -E "s/^\"$2\"[[:space:]]*:[[:space:]]*//; s/^\"//; s/\"\$//"
-}
 
 if ! command -v docker >/dev/null 2>&1; then
   info "Docker isn't installed — installing it with the official script (curl -fsSL https://get.docker.com | sh)..."
@@ -130,78 +114,8 @@ else
   info "  Panel API:  http://${HOST_IP}:8000"
 fi
 info "  Dashboard:  http://${HOST_IP}:8080"
-
-TOKEN=""
-read -r -p "Create the admin account right now, from this terminal? [Y/n] " make_admin
-make_admin=${make_admin:-Y}
-if [[ "$make_admin" =~ ^[Yy]$ ]]; then
-  KEY_OUTPUT=$(docker exec tifusi-panel tifusi-cli generate-admin-key)
-  SETUP_KEY=$(printf '%s\n' "$KEY_OUTPUT" | grep -Ev '^(Setup|Paste|$)' | tail -n1 | tr -d '[:space:]')
-
-  read -r -p "Admin username: " admin_user
-  read -r -s -p "Admin password (min 8 characters): " admin_pass
-  echo
-
-  RESPONSE=$(curl -fsSk -X POST "$PANEL_URL/api/setup/create-admin" \
-    -H "Content-Type: application/json" \
-    -d @- <<JSON
-{"key": "$(json_escape "$SETUP_KEY")", "username": "$(json_escape "$admin_user")", "password": "$(json_escape "$admin_pass")"}
-JSON
-  ) || fail "Creating the admin account failed — try it from the browser instead."
-  unset admin_pass
-
-  TOKEN=$(json_field "$RESPONSE" access_token)
-  [ -n "$TOKEN" ] || fail "Unexpected response from the panel: $RESPONSE"
-  info "Admin account created."
-else
-  info "OK — later, from the browser: docker exec -it tifusi-panel tifusi-cli generate-admin-key"
-fi
-
-if [ -n "$TOKEN" ]; then
-  warn "Running a node on the same server as the panel usually isn't recommended — keep panel and nodes separate when you can. But the installer offers it anyway, since it's a fine way to get started quickly."
-  read -r -p "Install a node on this same server too? [y/N] " make_node
-  make_node=${make_node:-N}
-  if [[ "$make_node" =~ ^[Yy]$ ]]; then
-    read -r -p "Node name [Local Node]: " node_name
-    node_name=${node_name:-"Local Node"}
-    read -r -p "Node port [62050]: " node_port
-    node_port=${node_port:-62050}
-
-    NODE_RESPONSE=$(curl -fsSk -X POST "$PANEL_URL/api/nodes" \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer $TOKEN" \
-      -d @- <<JSON
-{"name": "$(json_escape "$node_name")", "address": "127.0.0.1", "port": $node_port}
-JSON
-    ) || fail "Creating the node failed."
-    NODE_ID=$(json_field "$NODE_RESPONSE" id)
-    NODE_KEY=$(json_field "$NODE_RESPONSE" api_key)
-    [ -n "$NODE_ID" ] && [ -n "$NODE_KEY" ] || fail "Unexpected response from the panel: $NODE_RESPONSE"
-
-    info "Building the node image..."
-    BUILD_LOG="$(mktemp)"
-    if ! docker build -t tifusi-node-agent -f backend/node_agent/Dockerfile backend > "$BUILD_LOG" 2>&1; then
-      warn "Node image build failed — full output:"
-      cat "$BUILD_LOG"
-      rm -f "$BUILD_LOG"
-      exit 1
-    fi
-    rm -f "$BUILD_LOG"
-
-    if docker ps -a --format '{{.Names}}' | grep -qx tifusi-node; then
-      docker rm -f tifusi-node >/dev/null
-    fi
-    info "Starting the node..."
-    docker run -d --name tifusi-node --restart unless-stopped \
-      -p "${node_port}:62050" -e "TIFUSI_NODE_API_KEY=${NODE_KEY}" tifusi-node-agent
-
-    info "Running the initial sync..."
-    sleep 2
-    curl -fsSk -X POST "$PANEL_URL/api/nodes/${NODE_ID}/sync" -H "Authorization: Bearer $TOKEN" >/dev/null \
-      || warn "The initial sync failed — trigger it manually from the panel's Nodes tab."
-
-    info "Node created and running. Check its status from the panel's Nodes tab."
-  fi
-fi
-
+info ""
+info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
+info "  docker exec -it tifusi-panel tifusi-cli generate-admin-key"
+info "Paste that key into the login page along with the username/password you want, and you're in."
 info "Done."
