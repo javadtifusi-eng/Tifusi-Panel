@@ -5,8 +5,10 @@ import {
   ApiError,
   createUser,
   deleteUser,
+  listGroups,
   listUsers,
   updateUser,
+  type Group,
   type ProxyUser,
   type UserStatus,
 } from '../lib/api'
@@ -23,6 +25,7 @@ const statusStyles: Record<UserStatus, string> = {
 export default function UsersPage() {
   const { t, align } = useLang()
   const [users, setUsers] = useState<ProxyUser[] | null>(null)
+  const [groups, setGroups] = useState<Group[]>([])
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -30,6 +33,7 @@ export default function UsersPage() {
   const [dataLimitGb, setDataLimitGb] = useState('')
   const [expire, setExpire] = useState('')
   const [note, setNote] = useState('')
+  const [groupIds, setGroupIds] = useState<Set<number>>(new Set())
   const [submitting, setSubmitting] = useState(false)
   const [linksUser, setLinksUser] = useState<ProxyUser | null>(null)
 
@@ -47,8 +51,9 @@ export default function UsersPage() {
 
   async function refresh() {
     try {
-      const res = await listUsers()
-      setUsers(res.users)
+      const [usersRes, groupsRes] = await Promise.all([listUsers(), listGroups()])
+      setUsers(usersRes.users)
+      setGroups(groupsRes.groups)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.usersPage.fetchError)
     }
@@ -64,6 +69,7 @@ export default function UsersPage() {
     setDataLimitGb('')
     setExpire('')
     setNote('')
+    setGroupIds(new Set())
     setShowForm(false)
   }
 
@@ -73,7 +79,17 @@ export default function UsersPage() {
     setDataLimitGb(user.data_limit ? String(user.data_limit / 1024 ** 3) : '')
     setExpire(user.expire ? user.expire.slice(0, 10) : '')
     setNote(user.note ?? '')
+    setGroupIds(new Set(user.group_ids))
     setShowForm(true)
+  }
+
+  function toggleGroup(id: number) {
+    setGroupIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -82,11 +98,12 @@ export default function UsersPage() {
     setError(null)
     const data_limit = dataLimitGb ? Math.round(parseFloat(dataLimitGb) * 1024 ** 3) : null
     const expireIso = expire ? new Date(`${expire}T23:59:59`).toISOString() : null
+    const group_ids = Array.from(groupIds)
     try {
       if (editingId) {
-        await updateUser(editingId, { data_limit, expire: expireIso, note: note || null })
+        await updateUser(editingId, { data_limit, expire: expireIso, note: note || null, group_ids })
       } else {
-        await createUser({ username, data_limit, expire: expireIso, note: note || null })
+        await createUser({ username, data_limit, expire: expireIso, note: note || null, group_ids })
       }
       resetForm()
       await refresh()
@@ -174,6 +191,19 @@ export default function UsersPage() {
               className="w-48 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
             />
           </div>
+          <div className="w-full">
+            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.groupsLabel}</label>
+            <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
+              {groups.length === 0 && <div className="px-1 py-1 text-xs text-slate-500">{t.usersPage.noGroups}</div>}
+              {groups.map((g) => (
+                <label key={g.id} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={groupIds.has(g.id)} onChange={() => toggleGroup(g.id)} />
+                  <span className="text-slate-200">{g.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={submitting}
