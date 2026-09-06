@@ -7,18 +7,20 @@ import CoresPage from './Cores'
 import GroupsPage from './Groups'
 import HostsPage from './Hosts'
 import NodesPage from './Nodes'
+import OverviewPage from './Overview'
 import SettingsPage from './Settings'
 import UsersPage from './Users'
 
 const ACCENT = '#22D3EE'
 
-type ActiveTab = 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'settings'
+type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'settings'
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { lang, setLang, t, dir } = useLang()
-  const [active, setActive] = useState<ActiveTab>('users')
+  const [active, setActive] = useState<ActiveTab>('overview')
 
   const navItems: { id: ActiveTab; label: string }[] = [
+    { id: 'overview', label: t.nav.dashboard },
     { id: 'users', label: t.nav.users },
     { id: 'hosts', label: t.nav.hosts },
     { id: 'groups', label: t.nav.groups },
@@ -82,6 +84,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
           <SystemStatsBar />
           <LiveClock />
         </div>
+        {active === 'overview' && <OverviewPage />}
         {active === 'users' && <UsersPage />}
         {active === 'hosts' && <HostsPage />}
         {active === 'groups' && <GroupsPage />}

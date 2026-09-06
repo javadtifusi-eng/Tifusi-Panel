@@ -32,6 +32,7 @@ export const dict = {
     errorGeneric: 'مشکلی پیش اومد، دوباره امتحان کن.',
 
     nav: {
+      dashboard: 'داشبورد',
       users: 'کاربران',
       hosts: 'هاست‌ها',
       groups: 'گروه‌ها',
@@ -46,6 +47,20 @@ export const dict = {
       ram: 'رم',
       disk: 'دیسک',
       cores: 'هسته',
+    },
+
+    overviewPage: {
+      title: 'داشبورد',
+      totalUsers: 'کاربران',
+      totalHosts: 'هاست‌ها',
+      totalGroups: 'گروه‌ها',
+      totalNodes: 'نودها',
+      totalCores: 'هسته‌ها',
+      usersByStatusTitle: 'کاربران بر اساس وضعیت',
+      hostsByProtocolTitle: 'هاست‌ها بر اساس پروتکل',
+      nodesStatusTitle: 'وضعیت نودها',
+      coresByTypeTitle: 'هسته‌ها بر اساس نوع',
+      noneYet: 'هنوز چیزی نیست',
     },
 
     common: {
@@ -397,6 +412,7 @@ export const dict = {
     errorGeneric: 'Something went wrong. Please try again.',
 
     nav: {
+      dashboard: 'Dashboard',
       users: 'Users',
       hosts: 'Hosts',
       groups: 'Groups',
@@ -411,6 +427,20 @@ export const dict = {
       ram: 'RAM',
       disk: 'Disk',
       cores: 'cores',
+    },
+
+    overviewPage: {
+      title: 'Dashboard',
+      totalUsers: 'Users',
+      totalHosts: 'Hosts',
+      totalGroups: 'Groups',
+      totalNodes: 'Nodes',
+      totalCores: 'Cores',
+      usersByStatusTitle: 'Users by Status',
+      hostsByProtocolTitle: 'Hosts by Protocol',
+      nodesStatusTitle: 'Node Status',
+      coresByTypeTitle: 'Cores by Type',
+      noneYet: 'Nothing yet',
     },
 
     common: {
