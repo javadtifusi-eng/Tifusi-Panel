@@ -17,6 +17,11 @@ info() { printf '\033[1;36m[Tifusi]\033[0m %s\n' "$1"; }
 warn() { printf '\033[1;33m[Warning]\033[0m %s\n' "$1"; }
 fail() { printf '\033[1;31m[Error]\033[0m %s\n' "$1"; exit 1; }
 
+if command -v apt-get >/dev/null 2>&1; then
+  info "Updating the system's package list (apt-get update)..."
+  apt-get update -y >/dev/null 2>&1 || warn "apt-get update failed — continuing anyway."
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   info "Docker isn't installed — installing it with the official script (curl -fsSL https://get.docker.com | sh)..."
   curl -fsSL https://get.docker.com | sh
