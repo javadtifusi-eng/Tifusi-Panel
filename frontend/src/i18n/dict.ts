@@ -335,6 +335,23 @@ export const dict = {
       newAdminBtn: '+ ادمین جدید',
       creating: 'در حال ساخت…',
       confirmDeleteAdmin: (name: string) => `حساب ادمین «${name}» حذف بشه؟`,
+      aiTitle: 'دستیار هوش مصنوعی',
+      aiDesc:
+        'یه کلید API از Anthropic بذار تا دستیار داخل پنل فعال بشه — می‌تونه هسته/هاست/گروه/نود/کاربر بسازه و ویرایش کنه، کلید REALITY/WireGuard بسازه و SNI اسکن کنه، فقط با گفتن چی می‌خوای.',
+      aiApiKeyLabel: 'کلید API آنتروپیک',
+    },
+
+    aiChat: {
+      buttonLabel: 'دستیار هوش مصنوعی',
+      title: 'دستیار پنل',
+      placeholder: 'مثلاً: یه هاست ولس با ریلیتی روی پورت ۴۴۳ بساز',
+      send: 'ارسال',
+      thinking: 'در حال فکر کردن…',
+      emptyState: 'هر کاری با پنل داری بگو — می‌تونم هسته/هاست/گروه/نود/کاربر بسازم و ویرایش کنم.',
+      notConfigured: 'اول باید یه کلید API آنتروپیک توی تنظیمات بذاری تا دستیار فعال بشه.',
+      genericError: 'مشکلی پیش اومد، دوباره امتحان کن.',
+      actionsLabel: 'کارهایی که انجام شد:',
+      clearChat: 'شروع دوباره',
     },
 
     userLinksModal: {
@@ -682,6 +699,23 @@ export const dict = {
       newAdminBtn: '+ New Admin',
       creating: 'Creating…',
       confirmDeleteAdmin: (name: string) => `Delete admin account "${name}"?`,
+      aiTitle: 'AI Assistant',
+      aiDesc:
+        "Set an Anthropic API key to turn on the panel's built-in assistant — it can create and edit cores/hosts/groups/nodes/users, generate REALITY/WireGuard keys and scan SNIs, just by being asked.",
+      aiApiKeyLabel: 'Anthropic API Key',
+    },
+
+    aiChat: {
+      buttonLabel: 'AI Assistant',
+      title: 'Panel Assistant',
+      placeholder: 'e.g. Create a vless host with REALITY on port 443',
+      send: 'Send',
+      thinking: 'Thinking…',
+      emptyState: "Tell me anything you need done in the panel — I can create and edit cores/hosts/groups/nodes/users.",
+      notConfigured: 'Set an Anthropic API key in Settings first to turn the assistant on.',
+      genericError: 'Something went wrong, try again.',
+      actionsLabel: 'What I did:',
+      clearChat: 'Start over',
     },
 
     userLinksModal: {

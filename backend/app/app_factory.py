@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import async_session, init_db
-from app.routers import admin, auth, cores, groups, hosts, nodes, reality, settings as settings_router, setup, subscription, system, users
+from app.routers import admin, ai, auth, cores, groups, hosts, nodes, reality, settings as settings_router, setup, subscription, system, users
 from app.traffic.sync import run_traffic_cycle
 
 
@@ -60,5 +60,6 @@ def create_app() -> FastAPI:
     app.include_router(cores.router)
     app.include_router(settings_router.router)
     app.include_router(system.router)
+    app.include_router(ai.router)
 
     return app

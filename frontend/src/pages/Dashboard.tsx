@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import AiAssistant from '../components/AiAssistant'
 import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
 import SystemStatsBar from '../components/SystemStats'
@@ -89,6 +90,8 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         {active === 'cores' && <CoresPage />}
         {active === 'settings' && <SettingsPage />}
       </main>
+
+      <AiAssistant />
     </div>
   )
 }

@@ -467,6 +467,7 @@ export interface PanelSettings {
   public_url: string | null
   telegram_bot_token: string | null
   telegram_chat_id: string | null
+  ai_api_key: string | null
 }
 
 export async function getSettings(): Promise<PanelSettings> {
@@ -572,5 +573,20 @@ export interface SystemStats {
 
 export async function getSystemStats(): Promise<SystemStats> {
   const res = await authorizedFetch('/system/stats')
+  return res.json()
+}
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface AiChatResponse {
+  reply: string
+  actions: string[]
+}
+
+export async function sendAiChat(messages: AiChatMessage[]): Promise<AiChatResponse> {
+  const res = await authorizedFetch('/ai/chat', { method: 'POST', body: JSON.stringify({ messages }) })
   return res.json()
 }

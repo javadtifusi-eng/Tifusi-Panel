@@ -70,6 +70,11 @@ export default function SettingsPage() {
   const [telegramTestOk, setTelegramTestOk] = useState(false)
   const [telegramError, setTelegramError] = useState<string | null>(null)
 
+  const [aiApiKey, setAiApiKey] = useState('')
+  const [aiSaving, setAiSaving] = useState(false)
+  const [aiSaved, setAiSaved] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
   async function refreshAdmins() {
     try {
       const res = await listAdmins()
@@ -89,6 +94,7 @@ export default function SettingsPage() {
         setPublicUrl(s.public_url ?? '')
         setBotToken(s.telegram_bot_token ?? '')
         setChatId(s.telegram_chat_id ?? '')
+        setAiApiKey(s.ai_api_key ?? '')
       })
       .catch(() => undefined)
     getTlsStatus()
@@ -246,6 +252,23 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveAi(e: FormEvent) {
+    e.preventDefault()
+    setAiSaving(true)
+    setAiError(null)
+    setAiSaved(false)
+    try {
+      const res = await updateSettings({ ai_api_key: aiApiKey.trim() || null })
+      setAiApiKey(res.ai_api_key ?? '')
+      setAiSaved(true)
+      window.setTimeout(() => setAiSaved(false), 2000)
+    } catch (err) {
+      setAiError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setAiSaving(false)
+    }
+  }
+
   async function handleTestTelegram() {
     setTelegramTesting(true)
     setTelegramError(null)
@@ -390,6 +413,28 @@ export default function SettingsPage() {
             </button>
           </div>
           {telegramError && <div className="mt-3 text-xs text-red-400">{telegramError}</div>}
+        </form>
+
+        <form onSubmit={handleSaveAi} className={cardClass}>
+          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.aiTitle}</h2>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.aiDesc}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelClass}>{t.settingsPage.aiApiKeyLabel}</label>
+              <input
+                dir="ltr"
+                type="password"
+                value={aiApiKey}
+                onChange={(e) => setAiApiKey(e.target.value)}
+                placeholder="sk-ant-..."
+                className={`${inputClass} w-72 text-left font-mono text-xs`}
+              />
+            </div>
+            <button type="submit" disabled={aiSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {aiSaving ? t.common.saving : aiSaved ? t.common.saved : t.common.save}
+            </button>
+          </div>
+          {aiError && <div className="mt-3 text-xs text-red-400">{aiError}</div>}
         </form>
 
         <div className={cardClass}>

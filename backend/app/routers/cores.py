@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.cores.sync import sync_inbounds
 from app.database import get_db
@@ -16,8 +17,18 @@ router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(ge
 
 async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None = None) -> CoreResponse:
     node_count = await db.scalar(select(func.count()).select_from(Node).where(Node.core_id == core.id))
+    # core.inbounds can be expired (e.g. right after db.commit()/db.refresh(core)
+    # in create/update below), and each inbound's own .groups is a separate
+    # lazy="selectin" relationship that was never chained into that refresh —
+    # touching it as a bare attribute here would try a real lazy load outside
+    # of any awaited call and crash with MissingGreenlet. Re-fetch explicitly
+    # with .groups eager-loaded instead of trusting whatever core.inbounds
+    # currently holds.
+    inbounds_result = await db.execute(
+        select(Inbound).options(selectinload(Inbound.groups)).where(Inbound.core_id == core.id).order_by(Inbound.id)
+    )
     inbound_responses = []
-    for inbound in core.inbounds:
+    for inbound in inbounds_result.scalars().all():
         host_count = await db.scalar(
             select(func.count()).select_from(Host).where(Host.inbound_id == inbound.id)
         )
