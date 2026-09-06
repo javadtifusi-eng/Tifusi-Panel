@@ -4,6 +4,7 @@ import {
   ApiError,
   createCore,
   deleteCore,
+  FINGERPRINTS,
   getRealityKeypair,
   listCores,
   scanReality,
@@ -24,6 +25,80 @@ function emptyForm() {
   return { name: '', note: '', configText: '' }
 }
 
+type WizardProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks'
+
+function emptyWizard() {
+  return {
+    protocol: '' as WizardProtocol | '',
+    network: '' as 'tcp' | 'ws' | 'grpc' | '',
+    security: '' as 'none' | 'tls' | 'reality' | '',
+    tag: '',
+    port: '',
+    sni: '',
+    fingerprint: '',
+    alpn: '',
+    path: '',
+    hostHeader: '',
+    method: '',
+    realityPrivateKey: '',
+    realityShortId: '',
+  }
+}
+
+function randomPort(): string {
+  return String(10000 + Math.floor(Math.random() * 50000))
+}
+
+function buildInboundJson(w: ReturnType<typeof emptyWizard>): Record<string, unknown> {
+  const isTransport = w.protocol !== 'shadowsocks'
+  const settings: Record<string, unknown> = { clients: [] }
+  if (w.protocol === 'vless') {
+    settings.decryption = 'none'
+    if (w.security === 'reality' && w.network === 'tcp') settings.flow = 'xtls-rprx-vision'
+  } else if (w.protocol === 'shadowsocks') {
+    settings.method = w.method
+  }
+
+  const streamSettings: Record<string, unknown> = isTransport ? { network: w.network, security: w.security } : {}
+
+  if (isTransport && w.security === 'reality') {
+    const realitySettings: Record<string, unknown> = {
+      show: false,
+      dest: `${w.sni}:443`,
+      serverNames: [w.sni],
+      privateKey: w.realityPrivateKey,
+      shortIds: [w.realityShortId],
+    }
+    if (w.fingerprint) realitySettings.fingerprint = w.fingerprint
+    streamSettings.realitySettings = realitySettings
+  } else if (isTransport && w.security === 'tls') {
+    const tlsSettings: Record<string, unknown> = {}
+    if (w.sni) tlsSettings.serverName = w.sni
+    if (w.alpn) tlsSettings.alpn = w.alpn.split(',').map((s) => s.trim()).filter(Boolean)
+    if (w.fingerprint) tlsSettings.fingerprint = w.fingerprint
+    streamSettings.tlsSettings = tlsSettings
+  }
+
+  if (isTransport && w.network === 'ws') {
+    const wsSettings: Record<string, unknown> = {}
+    if (w.path) wsSettings.path = w.path
+    if (w.hostHeader) wsSettings.headers = { Host: w.hostHeader }
+    streamSettings.wsSettings = wsSettings
+  } else if (isTransport && w.network === 'grpc') {
+    streamSettings.grpcSettings = { serviceName: w.path || '' }
+  }
+
+  const inbound: Record<string, unknown> = {
+    tag: w.tag,
+    listen: '0.0.0.0',
+    port: Number(w.port),
+    protocol: w.protocol,
+    settings,
+  }
+  if (isTransport) inbound.streamSettings = streamSettings
+  return inbound
+}
+
 export default function CoresPage() {
   const { t } = useLang()
   const protocolLabels = t.coresPage.protocolLabels
@@ -36,6 +111,19 @@ export default function CoresPage() {
   const [lastWarnings, setLastWarnings] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [wizard, setWizard] = useState(emptyWizard())
+  const [addedFlash, setAddedFlash] = useState(false)
+  const isTransportProtocol = wizard.protocol !== '' && wizard.protocol !== 'shadowsocks'
+
+  const wizardCanAdd =
+    !!wizard.tag &&
+    !!wizard.port &&
+    !!wizard.protocol &&
+    (!isTransportProtocol ||
+      (!!wizard.network &&
+        !!wizard.security &&
+        (wizard.security !== 'reality' || (!!wizard.sni && !!wizard.realityPrivateKey && !!wizard.realityShortId))))
+
   const [scanning, setScanning] = useState(false)
   const [scanResults, setScanResults] = useState<RealityScanResult[] | null>(null)
   const [generatingKeys, setGeneratingKeys] = useState(false)
@@ -43,6 +131,34 @@ export default function CoresPage() {
     null,
   )
   const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  function updateWizard<K extends keyof ReturnType<typeof emptyWizard>>(
+    key: K,
+    value: ReturnType<typeof emptyWizard>[K],
+  ) {
+    setWizard((w) => ({ ...w, [key]: value }))
+  }
+
+  function addWizardToJson() {
+    if (!wizardCanAdd) return
+    let config: Record<string, unknown>
+    try {
+      config = form.configText.trim() ? JSON.parse(form.configText) : { inbounds: [] }
+    } catch {
+      setError(t.coresPage.invalidJson)
+      return
+    }
+    if (!Array.isArray(config.inbounds)) config.inbounds = []
+    const inbounds = config.inbounds as Record<string, unknown>[]
+    const newInbound = buildInboundJson(wizard)
+    const idx = inbounds.findIndex((i) => i.tag === wizard.tag)
+    if (idx >= 0) inbounds[idx] = newInbound
+    else inbounds.push(newInbound)
+    setForm((f) => ({ ...f, configText: JSON.stringify(config, null, 2) }))
+    setError(null)
+    setAddedFlash(true)
+    window.setTimeout(() => setAddedFlash(false), 1500)
+  }
 
   async function refresh() {
     try {
@@ -60,6 +176,9 @@ export default function CoresPage() {
   function resetForm() {
     setEditingId(null)
     setForm(emptyForm())
+    setWizard(emptyWizard())
+    setScanResults(null)
+    setGeneratedKey(null)
     setShowForm(false)
     setLastWarnings([])
     setError(null)
@@ -68,6 +187,7 @@ export default function CoresPage() {
   function startEdit(core: Core) {
     setEditingId(core.id)
     setForm({ name: core.name, note: core.note ?? '', configText: JSON.stringify(core.config, null, 2) })
+    setWizard(emptyWizard())
     setLastWarnings([])
     setShowForm(true)
   }
@@ -109,7 +229,9 @@ export default function CoresPage() {
     setGeneratingKeys(true)
     setError(null)
     try {
-      setGeneratedKey(await getRealityKeypair())
+      const keys = await getRealityKeypair()
+      setGeneratedKey(keys)
+      setWizard((w) => ({ ...w, realityPrivateKey: keys.private_key, realityShortId: keys.short_id }))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
     } finally {
@@ -251,11 +373,11 @@ export default function CoresPage() {
                           {r.reachable && (
                             <button
                               type="button"
-                              onClick={() => copy(r.host, `scan-${r.host}`)}
+                              onClick={() => updateWizard('sni', r.host)}
                               className="text-[11px] hover:underline"
                               style={{ color: ACCENT }}
                             >
-                              {copiedField === `scan-${r.host}` ? t.coresPage.copied : t.coresPage.copyValue}
+                              {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
                             </button>
                           )}
                         </td>
@@ -265,6 +387,198 @@ export default function CoresPage() {
                 </table>
               </div>
             )}
+          </div>
+
+          <div className="mb-4 rounded-lg border border-white/10 bg-black/20 p-3">
+            <div className="mb-1 text-xs font-bold text-slate-300">{t.coresPage.wizardTitle}</div>
+            <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.wizardHint}</div>
+
+            <div className="flex flex-wrap gap-3">
+              <div>
+                <label className={labelClass}>{t.coresPage.tagLabel}</label>
+                <input
+                  dir="ltr"
+                  value={wizard.tag}
+                  onChange={(e) => updateWizard('tag', e.target.value)}
+                  placeholder="vless-reality-1"
+                  className={`${inputClass} w-40 text-left`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>{t.coresPage.protocolLabel}</label>
+                <select
+                  value={wizard.protocol}
+                  onChange={(e) => updateWizard('protocol', e.target.value as WizardProtocol)}
+                  className={inputClass}
+                >
+                  <option value="" disabled>
+                    {t.coresPage.selectPlaceholder}
+                  </option>
+                  <option value="vless">{protocolLabels.vless}</option>
+                  <option value="vmess">{protocolLabels.vmess}</option>
+                  <option value="trojan">{protocolLabels.trojan}</option>
+                  <option value="shadowsocks">{protocolLabels.shadowsocks}</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>{t.coresPage.portLabel}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="65535"
+                    value={wizard.port}
+                    onChange={(e) => updateWizard('port', e.target.value)}
+                    className={`${inputClass} w-24`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateWizard('port', randomPort())}
+                    className="rounded-lg border px-2.5 py-2 text-xs font-bold"
+                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                  >
+                    🎲
+                  </button>
+                </div>
+              </div>
+
+              {isTransportProtocol && (
+                <>
+                  <div>
+                    <label className={labelClass}>{t.coresPage.networkLabel}</label>
+                    <select
+                      value={wizard.network}
+                      onChange={(e) => updateWizard('network', e.target.value as typeof wizard.network)}
+                      className={inputClass}
+                    >
+                      <option value="" disabled>
+                        {t.coresPage.selectPlaceholder}
+                      </option>
+                      <option value="tcp">{t.coresPage.networkTcp}</option>
+                      <option value="ws">{t.coresPage.networkWs}</option>
+                      <option value="grpc">{t.coresPage.networkGrpc}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{t.coresPage.securityLabel}</label>
+                    <select
+                      value={wizard.security}
+                      onChange={(e) => updateWizard('security', e.target.value as typeof wizard.security)}
+                      className={inputClass}
+                    >
+                      <option value="" disabled>
+                        {t.coresPage.selectPlaceholder}
+                      </option>
+                      <option value="none">{t.coresPage.securityNone}</option>
+                      <option value="tls">{t.coresPage.securityTls}</option>
+                      <option value="reality">{t.coresPage.securityReality}</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              {wizard.protocol === 'shadowsocks' && (
+                <div>
+                  <label className={labelClass}>{t.coresPage.methodLabel}</label>
+                  <input
+                    dir="ltr"
+                    value={wizard.method}
+                    onChange={(e) => updateWizard('method', e.target.value)}
+                    placeholder="2022-blake3-aes-128-gcm"
+                    className={`${inputClass} w-52 text-left`}
+                  />
+                </div>
+              )}
+            </div>
+
+            {isTransportProtocol && (wizard.security === 'tls' || wizard.security === 'reality') && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                <div>
+                  <label className={labelClass}>{t.coresPage.sniLabel}</label>
+                  <input
+                    dir="ltr"
+                    value={wizard.sni}
+                    onChange={(e) => updateWizard('sni', e.target.value)}
+                    placeholder="www.example.com"
+                    className={`${inputClass} text-left`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>{t.coresPage.fingerprintLabel}</label>
+                  <select
+                    dir="ltr"
+                    value={wizard.fingerprint}
+                    onChange={(e) => updateWizard('fingerprint', e.target.value)}
+                    className={`${inputClass} w-36 text-left`}
+                  >
+                    <option value="">{t.coresPage.selectPlaceholder}</option>
+                    {FINGERPRINTS.map((fp) => (
+                      <option key={fp} value={fp}>
+                        {fp}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {wizard.security === 'tls' && (
+                  <div>
+                    <label className={labelClass}>{t.coresPage.alpnLabel}</label>
+                    <input
+                      dir="ltr"
+                      value={wizard.alpn}
+                      onChange={(e) => updateWizard('alpn', e.target.value)}
+                      placeholder="h2,http/1.1"
+                      className={`${inputClass} text-left`}
+                    />
+                  </div>
+                )}
+                {wizard.security === 'reality' && (
+                  <div className="flex flex-col justify-end gap-1 text-[11px] text-slate-500">
+                    <div dir="ltr" className="font-mono">
+                      privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'}
+                    </div>
+                    <div dir="ltr" className="font-mono">
+                      shortId: {wizard.realityShortId || '—'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isTransportProtocol && (wizard.network === 'ws' || wizard.network === 'grpc') && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                <div>
+                  <label className={labelClass}>
+                    {wizard.network === 'ws' ? t.coresPage.wsPathLabel : t.coresPage.grpcServiceLabel}
+                  </label>
+                  <input
+                    dir="ltr"
+                    value={wizard.path}
+                    onChange={(e) => updateWizard('path', e.target.value)}
+                    className={`${inputClass} w-40 text-left`}
+                  />
+                </div>
+                {wizard.network === 'ws' && (
+                  <div>
+                    <label className={labelClass}>{t.coresPage.hostHeaderLabel}</label>
+                    <input
+                      dir="ltr"
+                      value={wizard.hostHeader}
+                      onChange={(e) => updateWizard('hostHeader', e.target.value)}
+                      className={`${inputClass} w-40 text-left`}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={addWizardToJson}
+              disabled={!wizardCanAdd}
+              className="mt-3 rounded-lg px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40"
+              style={{ backgroundColor: ACCENT }}
+            >
+              {addedFlash ? t.coresPage.addedToJson : t.coresPage.addToJsonBtn}
+            </button>
           </div>
 
           <form onSubmit={handleSubmit}>

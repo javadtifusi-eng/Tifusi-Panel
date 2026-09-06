@@ -47,7 +47,7 @@ export default function NodesPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
-  const [port, setPort] = useState('62050')
+  const [port, setPort] = useState('')
   const [coreId, setCoreId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
@@ -76,7 +76,7 @@ export default function NodesPage() {
     setEditingId(null)
     setName('')
     setAddress('')
-    setPort('62050')
+    setPort('')
     setCoreId(null)
     setShowForm(false)
   }
@@ -190,6 +190,7 @@ export default function NodesPage() {
               max="65535"
               value={port}
               onChange={(e) => setPort(e.target.value)}
+              placeholder="62050"
               required
               className={`${inputClass} w-28`}
             />
