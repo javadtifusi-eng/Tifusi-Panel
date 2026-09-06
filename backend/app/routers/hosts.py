@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cores.resolve import resolve_core_id
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.groups.access import resolve_groups
-from app.models.host import Host
+from app.models.host import XRAY_PROTOCOLS, Host, HostProtocol
+from app.models.inbound import Inbound
 from app.reality.keys import generate_reality_keypair
 from app.schemas.host import (
     HostCreate,
@@ -19,6 +19,42 @@ from app.schemas.host import (
 from app.wireguard.keys import generate_wireguard_keypair
 
 router = APIRouter(prefix="/api/hosts", tags=["hosts"], dependencies=[Depends(get_current_admin)])
+
+
+def _missing(**fields: object) -> list[str]:
+    return [name for name, value in fields.items() if not value]
+
+
+async def _validate(protocol: HostProtocol, get, db: AsyncSession) -> None:
+    """`get(field)` returns the value that would end up on the Host after
+    this create/update — the merged value for updates, the payload value
+    for creates. Raises 400 with exactly what's missing."""
+    if protocol in XRAY_PROTOCOLS:
+        inbound_id = get("inbound_id")
+        missing = _missing(inbound_id=inbound_id)
+        if missing:
+            raise HTTPException(status_code=400, detail=f"{protocol.value} requires: {', '.join(missing)}")
+        inbound = await db.get(Inbound, inbound_id)
+        if inbound is None:
+            raise HTTPException(status_code=400, detail="inbound_id not found")
+        if inbound.protocol != protocol.value:
+            raise HTTPException(
+                status_code=400,
+                detail=f"inbound '{inbound.tag}' is {inbound.protocol}, not {protocol.value}",
+            )
+    elif protocol == HostProtocol.wireguard:
+        missing = _missing(
+            wireguard_public_key=get("wireguard_public_key"),
+            wireguard_private_key=get("wireguard_private_key"),
+            wireguard_subnet=get("wireguard_subnet"),
+            wireguard_port=get("wireguard_port"),
+        )
+        if missing:
+            raise HTTPException(status_code=400, detail=f"wireguard requires: {', '.join(missing)}")
+    elif protocol == HostProtocol.hysteria2:
+        missing = _missing(hysteria2_sni=get("hysteria2_sni"), hysteria2_port=get("hysteria2_port"))
+        if missing:
+            raise HTTPException(status_code=400, detail=f"hysteria2 requires: {', '.join(missing)}")
 
 
 @router.get("/reality-keypair", response_model=RealityKeypairResponse)
@@ -40,9 +76,10 @@ async def list_hosts(db: AsyncSession = Depends(get_db)) -> HostList:
 
 @router.post("", response_model=HostResponse, status_code=201)
 async def create_host(payload: HostCreate, db: AsyncSession = Depends(get_db)) -> Host:
-    data = payload.model_dump(exclude={"group_ids", "core_id"})
-    host = Host(**data)
-    host.core_id = await resolve_core_id(payload.core_id, db)
+    data = payload.model_dump()
+    await _validate(payload.protocol, data.get, db)
+
+    host = Host(**payload.model_dump(exclude={"group_ids"}))
     host.groups = await resolve_groups(payload.group_ids, db) or []
     db.add(host)
     await db.commit()
@@ -65,13 +102,15 @@ async def get_host(host_id: int, db: AsyncSession = Depends(get_db)) -> Host:
 @router.put("/{host_id}", response_model=HostResponse)
 async def update_host(host_id: int, payload: HostUpdate, db: AsyncSession = Depends(get_db)) -> Host:
     host = await _get_host_or_404(host_id, db)
-    updates = payload.model_dump(exclude_unset=True, exclude={"group_ids", "core_id"})
+    updates = payload.model_dump(exclude_unset=True, exclude={"group_ids"})
+
+    def get(field: str):
+        return updates.get(field, getattr(host, field))
+
+    await _validate(host.protocol, get, db)
 
     for field, value in updates.items():
         setattr(host, field, value)
-
-    if "core_id" in payload.model_fields_set:
-        host.core_id = await resolve_core_id(payload.core_id, db)
 
     new_groups = await resolve_groups(payload.group_ids, db)
     if new_groups is not None:

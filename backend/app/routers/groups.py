@@ -6,10 +6,21 @@ from app.database import get_db
 from app.dependencies import get_current_admin
 from app.models.group import Group
 from app.models.host import Host
+from app.models.inbound import Inbound
 from app.models.user import ProxyUser
 from app.schemas.group import GroupCreate, GroupList, GroupResponse, GroupUpdate
 
 router = APIRouter(prefix="/api/groups", tags=["groups"], dependencies=[Depends(get_current_admin)])
+
+
+async def _resolve_inbounds(ids: list[int], db: AsyncSession) -> list[Inbound]:
+    if not ids:
+        return []
+    result = await db.execute(select(Inbound).where(Inbound.id.in_(ids)))
+    inbounds = list(result.scalars().all())
+    if len(inbounds) != len(set(ids)):
+        raise HTTPException(status_code=400, detail="One or more inbound_ids not found")
+    return inbounds
 
 
 async def _resolve_hosts(ids: list[int], db: AsyncSession) -> list[Host]:
@@ -57,6 +68,7 @@ async def create_group(payload: GroupCreate, db: AsyncSession = Depends(get_db))
     # an AsyncSession, setting a many-to-many collection makes SQLAlchemy try
     # to lazy-load the old value to sync the backref, which raises
     # MissingGreenlet under async — harmless on a brand-new object either way.
+    group.inbounds = await _resolve_inbounds(payload.inbound_ids, db)
     group.hosts = await _resolve_hosts(payload.host_ids, db)
     group.users = await _resolve_users(payload.user_ids, db)
     db.add(group)
@@ -74,10 +86,12 @@ async def get_group(group_id: int, db: AsyncSession = Depends(get_db)) -> Group:
 async def update_group(group_id: int, payload: GroupUpdate, db: AsyncSession = Depends(get_db)) -> Group:
     group = await _get_group_or_404(group_id, db)
 
-    updates = payload.model_dump(exclude_unset=True, exclude={"host_ids", "user_ids"})
+    updates = payload.model_dump(exclude_unset=True, exclude={"inbound_ids", "host_ids", "user_ids"})
     for field, value in updates.items():
         setattr(group, field, value)
 
+    if payload.inbound_ids is not None:
+        group.inbounds = await _resolve_inbounds(payload.inbound_ids, db)
     if payload.host_ids is not None:
         group.hosts = await _resolve_hosts(payload.host_ids, db)
     if payload.user_ids is not None:

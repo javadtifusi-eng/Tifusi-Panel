@@ -2,27 +2,59 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.host import HostNetwork, HostProtocol, HostSecurity
+from app.models.host import HostProtocol, HostSecurity
 
 
 class HostCreate(BaseModel):
     remark: str = Field(min_length=1, max_length=100)
     address: str = Field(min_length=1, max_length=255)
-    core_id: int
-    port: int | None = Field(default=None, ge=1, le=65535)
+    protocol: HostProtocol
+    group_ids: list[int] = Field(default_factory=list)
+
+    # vless/vmess/trojan/shadowsocks
+    inbound_id: int | None = None
+    port_override: int | None = Field(default=None, ge=1, le=65535)
     sni_override: str | None = None
     alpn_override: str | None = None
-    group_ids: list[int] = Field(default_factory=list)
+    fingerprint_override: str | None = None
+    path_override: str | None = None
+    host_header_override: str | None = None
+    security_override: HostSecurity | None = None
+    allowinsecure: bool = False
+
+    # wireguard
+    wireguard_public_key: str | None = None
+    wireguard_private_key: str | None = None
+    wireguard_subnet: str | None = None
+    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
+
+    # hysteria2
+    hysteria2_sni: str | None = None
+    hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
 
 
 class HostUpdate(BaseModel):
     remark: str | None = Field(default=None, min_length=1, max_length=100)
     address: str | None = Field(default=None, min_length=1, max_length=255)
-    core_id: int | None = None
-    port: int | None = Field(default=None, ge=1, le=65535)
+    group_ids: list[int] | None = None
+
+    inbound_id: int | None = None
+    port_override: int | None = Field(default=None, ge=1, le=65535)
     sni_override: str | None = None
     alpn_override: str | None = None
-    group_ids: list[int] | None = None
+    fingerprint_override: str | None = None
+    path_override: str | None = None
+    host_header_override: str | None = None
+    security_override: HostSecurity | None = None
+    allowinsecure: bool | None = None
+
+    wireguard_public_key: str | None = None
+    wireguard_private_key: str | None = None
+    wireguard_subnet: str | None = None
+    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
+
+    hysteria2_sni: str | None = None
+    hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
 
 
 class HostResponse(BaseModel):
@@ -31,21 +63,36 @@ class HostResponse(BaseModel):
     id: int
     remark: str
     address: str
-    port: int | None
-    sni_override: str | None
-    alpn_override: str | None
+    protocol: HostProtocol
     created_at: datetime
     group_ids: list[int]
-    core_id: int
 
-    # Read through the Core (via Host's passthrough properties) so the
-    # frontend can show these without a second lookup.
-    protocol: HostProtocol
-    network: HostNetwork | None
-    security: HostSecurity | None
+    inbound_id: int | None
+    port_override: int | None
+    sni_override: str | None
+    alpn_override: str | None
+    fingerprint_override: str | None
+    path_override: str | None
+    host_header_override: str | None
+    security_override: HostSecurity | None
+    allowinsecure: bool
+
+    wireguard_public_key: str | None
+    wireguard_private_key: str | None
+    wireguard_subnet: str | None
+    wireguard_port: int | None
+
+    hysteria2_sni: str | None
+    hysteria2_port: int | None
+
+    network: str | None
+    effective_security: str | None
     effective_port: int | None
     effective_sni: str | None
     effective_alpn: str | None
+    effective_fingerprint: str | None
+    effective_path: str | None
+    effective_host_header: str | None
 
 
 class HostList(BaseModel):

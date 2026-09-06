@@ -5,6 +5,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
+# wireguard/hysteria2 hosts have no Inbound to grant access through, so they
+# keep a direct Group<->Host link. vless/vmess/trojan/shadowsocks hosts are
+# gated through group_inbounds instead (see app/models/inbound.py) — a Group
+# grants whole Inbounds, and every Host under a granted Inbound becomes
+# visible, matching PasarGuard's actual access model.
 group_hosts = Table(
     "group_hosts",
     Base.metadata,
@@ -21,9 +26,10 @@ group_users = Table(
 
 
 class Group(Base):
-    """Bundles hosts and users together. A host with no group is treated as
-    global (visible to every user); once a host joins a group, only users
-    sharing that group can see or actually use it — see app/groups/access.py."""
+    """Bundles inbounds/wireguard+hysteria2 hosts and users together. An
+    inbound or standalone host with no group is global (visible to every
+    user); once it joins a group, only users sharing that group can see or
+    actually use it — see app/groups/access.py."""
 
     __tablename__ = "groups"
 
@@ -34,12 +40,19 @@ class Group(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
+    inbounds: Mapped[list["Inbound"]] = relationship(  # noqa: F821
+        "Inbound", secondary="group_inbounds", back_populates="groups", lazy="selectin"
+    )
     hosts: Mapped[list["Host"]] = relationship(  # noqa: F821
         "Host", secondary=group_hosts, back_populates="groups", lazy="selectin"
     )
     users: Mapped[list["ProxyUser"]] = relationship(  # noqa: F821
         "ProxyUser", secondary=group_users, back_populates="groups", lazy="selectin"
     )
+
+    @property
+    def inbound_ids(self) -> list[int]:
+        return [i.id for i in self.inbounds]
 
     @property
     def host_ids(self) -> list[int]:

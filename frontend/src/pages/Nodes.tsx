@@ -289,7 +289,7 @@ export default function NodesPage() {
               </div>
               {core && (
                 <div className="mb-1 text-xs text-slate-500">
-                  {core.name} · {t.coresPage.protocolLabels[core.protocol]}
+                  {core.name} · {t.nodesPage.inboundsCount(core.inbounds.length)}
                 </div>
               )}
               <div dir="ltr" className="mb-3 text-left text-xs text-slate-500">

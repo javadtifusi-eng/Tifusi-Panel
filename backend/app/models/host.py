@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -12,14 +12,31 @@ class HostProtocol(str, enum.Enum):
     vless = "vless"
     vmess = "vmess"
     trojan = "trojan"
+    shadowsocks = "shadowsocks"
     wireguard = "wireguard"
     hysteria2 = "hysteria2"
 
 
-class HostNetwork(str, enum.Enum):
-    tcp = "tcp"
-    ws = "ws"
-    grpc = "grpc"
+# Protocols Xray-core itself terminates — these are the ones backed by an
+# Inbound (parsed out of a Core's real Xray JSON, see app/models/inbound.py).
+# wireguard/hysteria2 are separate standalone servers this panel doesn't
+# start, so they keep their own directly-on-Host fields instead.
+XRAY_PROTOCOLS = {HostProtocol.vless, HostProtocol.vmess, HostProtocol.trojan, HostProtocol.shadowsocks}
+
+FINGERPRINTS = (
+    "chrome",
+    "firefox",
+    "safari",
+    "ios",
+    "android",
+    "edge",
+    "360",
+    "qq",
+    "random",
+    "randomized",
+    "randomizednoalpn",
+    "unsafe",
+)
 
 
 class HostSecurity(str, enum.Enum):
@@ -29,35 +46,59 @@ class HostSecurity(str, enum.Enum):
 
 
 class Host(Base):
-    """A presentation-layer entry: an address/port a client actually connects
-    to. Everything about *how* it speaks (protocol, transport, security,
-    REALITY/WireGuard keys, fingerprint, ALPN) comes from its Core instead —
-    a Host just picks one and optionally overrides a couple of per-instance
-    details (port, SNI/ALPN target) on top of it. See app/models/core.py."""
+    """A presentation-layer entry: an address a client actually connects to.
+
+    For vless/vmess/trojan/shadowsocks, a Host just picks an Inbound (which
+    carries the real protocol/network/security/REALITY keys/flow, parsed
+    from its Core's Xray JSON — see app/models/inbound.py) and may layer a
+    handful of client-facing overrides on top (SNI, ALPN, fingerprint,
+    path, security, allowinsecure). Nothing about *how* the proxy actually
+    runs lives on the Host for these — that's the Inbound's JSON.
+
+    wireguard/hysteria2 aren't Xray inbounds at all (separate standalone
+    servers this panel doesn't start), so they keep their own fields
+    directly on the Host instead of going through an Inbound.
+    """
 
     __tablename__ = "hosts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     remark: Mapped[str] = mapped_column(String(100))
     address: Mapped[str] = mapped_column(String(255))
+    protocol: Mapped[HostProtocol] = mapped_column(Enum(HostProtocol))
 
-    # None = use the Core's default_port.
-    port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # --- vless/vmess/trojan/shadowsocks: Inbound + overrides ---
+    inbound_id: Mapped[int | None] = mapped_column(ForeignKey("inbounds.id"), nullable=True)
+    inbound: Mapped["Inbound | None"] = relationship("Inbound", back_populates="hosts", lazy="selectin")  # noqa: F821
 
-    # Per-host overrides of the Core's own sni/alpn — leave unset to just
-    # inherit the Core's value. Useful for spreading several REALITY targets
-    # across hosts that otherwise share one Core's protocol/transport/keys.
+    port_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sni_override: Mapped[str | None] = mapped_column(String(255), nullable=True)
     alpn_override: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fingerprint_override: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    path_override: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    host_header_override: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # None = inherit the Inbound's own security (its streamSettings.security).
+    security_override: Mapped[HostSecurity | None] = mapped_column(Enum(HostSecurity), nullable=True)
+    allowinsecure: Mapped[bool] = mapped_column(default=False)
+
+    # --- wireguard only ---
+    wireguard_public_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wireguard_private_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wireguard_subnet: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    wireguard_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # --- hysteria2 only ---
+    hysteria2_sni: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    hysteria2_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
-    core_id: Mapped[int] = mapped_column(ForeignKey("cores.id"))
-    core: Mapped["Core"] = relationship("Core", lazy="selectin")  # noqa: F821
-
     # Empty = global/ungrouped, visible and usable by every user. See app/groups/access.py.
+    # For xray-backed hosts, access is really controlled at the Inbound level
+    # (a Group grants access to Inbounds) — this direct Host<->Group link only
+    # matters for wireguard/hysteria2 hosts, which have no Inbound to grant.
     groups: Mapped[list["Group"]] = relationship(  # noqa: F821
         "Group", secondary=group_hosts, back_populates="hosts", lazy="selectin"
     )
@@ -66,68 +107,57 @@ class Host(Base):
     def group_ids(self) -> list[int]:
         return [g.id for g in self.groups]
 
-    # --- Everything below just reads through to the Core. Kept as
-    # properties (same names builder.py/generator.py/wireguard/* used before
-    # this fields-moved-to-Core redesign) so that code didn't have to change
-    # at every call site — only the handful of places that need the
-    # override-aware *effective_* value do.
+    # --- Effective (override-aware) values, reading through to the Inbound
+    # for xray-backed hosts. Only meaningful when self.inbound is set.
 
     @property
-    def protocol(self) -> HostProtocol:
-        return self.core.protocol
+    def network(self) -> str | None:
+        return self.inbound.network if self.inbound else None
 
     @property
-    def network(self) -> HostNetwork | None:
-        return self.core.network
-
-    @property
-    def security(self) -> HostSecurity | None:
-        return self.core.security
-
-    @property
-    def fingerprint(self) -> str | None:
-        return self.core.fingerprint
-
-    @property
-    def path(self) -> str | None:
-        return self.core.path
-
-    @property
-    def host_header(self) -> str | None:
-        return self.core.host_header
-
-    @property
-    def reality_public_key(self) -> str | None:
-        return self.core.reality_public_key
-
-    @property
-    def reality_private_key(self) -> str | None:
-        return self.core.reality_private_key
-
-    @property
-    def reality_short_id(self) -> str | None:
-        return self.core.reality_short_id
-
-    @property
-    def wireguard_public_key(self) -> str | None:
-        return self.core.wireguard_public_key
-
-    @property
-    def wireguard_private_key(self) -> str | None:
-        return self.core.wireguard_private_key
-
-    @property
-    def wireguard_subnet(self) -> str | None:
-        return self.core.wireguard_subnet
+    def effective_security(self) -> str | None:
+        if self.security_override is not None:
+            return self.security_override.value
+        return self.inbound.security if self.inbound else None
 
     @property
     def effective_port(self) -> int | None:
-        return self.port if self.port is not None else self.core.default_port
+        if self.protocol == HostProtocol.wireguard:
+            return self.wireguard_port
+        if self.protocol == HostProtocol.hysteria2:
+            return self.hysteria2_port
+        if self.port_override is not None:
+            return self.port_override
+        return self.inbound.port if self.inbound else None
 
     @property
     def effective_sni(self) -> str | None:
-        return self.sni_override if self.sni_override is not None else self.core.sni
+        if self.protocol == HostProtocol.hysteria2:
+            return self.hysteria2_sni
+        if self.sni_override is not None:
+            return self.sni_override
+        return self.inbound.sni if self.inbound else None
 
     @property
     def effective_alpn(self) -> str | None:
-        return self.alpn_override if self.alpn_override is not None else self.core.alpn
+        if self.alpn_override is not None:
+            return self.alpn_override
+        return self.inbound.alpn if self.inbound else None
+
+    @property
+    def effective_fingerprint(self) -> str | None:
+        if self.fingerprint_override is not None:
+            return self.fingerprint_override
+        return self.inbound.fingerprint if self.inbound else None
+
+    @property
+    def effective_path(self) -> str | None:
+        if self.path_override is not None:
+            return self.path_override
+        return self.inbound.path if self.inbound else None
+
+    @property
+    def effective_host_header(self) -> str | None:
+        if self.host_header_override is not None:
+            return self.host_header_override
+        return self.inbound.host_header if self.inbound else None

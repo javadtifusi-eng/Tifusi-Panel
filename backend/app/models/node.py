@@ -23,7 +23,8 @@ class Node(Base):
     port: Mapped[int] = mapped_column(Integer, default=62050)
     api_key: Mapped[str] = mapped_column(String(64), default=lambda: secrets.token_urlsafe(24))
 
-    # Which Core this node runs — sync_node() only pushes hosts sharing this core_id.
+    # Which Core this node runs — sync_node() pushes that Core's raw Xray
+    # JSON with clients injected per inbound (see app/xray_config/builder.py).
     core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
 
     status: Mapped[NodeStatus] = mapped_column(Enum(NodeStatus), default=NodeStatus.pending)

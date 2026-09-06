@@ -4,7 +4,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.host import Host
+from app.models.core import Core
+from app.models.inbound import Inbound
 from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser
 from app.notifications.telegram import send_telegram_message
@@ -17,12 +18,17 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     traffic job (app/traffic/sync.py), which re-syncs every connected node
     right after a status change so an expired/limited user's inbound entry
     actually disappears instead of lingering until someone clicks sync."""
-    # Only hosts sharing this node's Core get pushed to it — that's what lets
-    # separate Cores run entirely different protocol/transport combos on
-    # different nodes without stepping on each other.
-    hosts = list((await db.execute(select(Host).where(Host.core_id == node.core_id))).scalars().all())
-    users = list((await db.execute(select(ProxyUser))).scalars().all())
-    config = build_xray_config(hosts, users)
+    # A node with no Core assigned yet has nothing to run — push an empty
+    # config rather than guessing, same as it having zero hosts before.
+    core = await db.get(Core, node.core_id) if node.core_id is not None else None
+    if core is None:
+        config = {"inbounds": []}
+    else:
+        inbounds = list(
+            (await db.execute(select(Inbound).where(Inbound.core_id == core.id))).scalars().all()
+        )
+        users = list((await db.execute(select(ProxyUser))).scalars().all())
+        config = build_xray_config(core, inbounds, users)
 
     base_url = f"http://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}

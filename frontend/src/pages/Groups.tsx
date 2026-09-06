@@ -12,6 +12,7 @@ import {
   type Core,
   type Group,
   type Host,
+  type Inbound,
   type ProxyUser,
 } from '../lib/api'
 
@@ -22,7 +23,7 @@ const inputClass =
 const labelClass = 'mb-1.5 block text-xs text-slate-400'
 
 function emptyForm() {
-  return { name: '', note: '', hostIds: new Set<number>(), userIds: new Set<number>() }
+  return { name: '', note: '', inboundIds: new Set<number>(), hostIds: new Set<number>(), userIds: new Set<number>() }
 }
 
 export default function GroupsPage() {
@@ -70,6 +71,7 @@ export default function GroupsPage() {
     setForm({
       name: group.name,
       note: group.note ?? '',
+      inboundIds: new Set(group.inbound_ids),
       hostIds: new Set(group.host_ids),
       userIds: new Set(group.user_ids),
     })
@@ -83,15 +85,15 @@ export default function GroupsPage() {
     return next
   }
 
-  function toggleCoreHosts(coreHosts: Host[]) {
+  function toggleCoreInbounds(coreInbounds: Inbound[]) {
     setForm((f) => {
-      const allSelected = coreHosts.every((h) => f.hostIds.has(h.id))
-      const next = new Set(f.hostIds)
-      for (const h of coreHosts) {
-        if (allSelected) next.delete(h.id)
-        else next.add(h.id)
+      const allSelected = coreInbounds.every((i) => f.inboundIds.has(i.id))
+      const next = new Set(f.inboundIds)
+      for (const i of coreInbounds) {
+        if (allSelected) next.delete(i.id)
+        else next.add(i.id)
       }
-      return { ...f, hostIds: next }
+      return { ...f, inboundIds: next }
     })
   }
 
@@ -102,6 +104,7 @@ export default function GroupsPage() {
     const payload = {
       name: form.name,
       note: form.note || null,
+      inbound_ids: Array.from(form.inboundIds),
       host_ids: Array.from(form.hostIds),
       user_ids: Array.from(form.userIds),
     }
@@ -127,11 +130,9 @@ export default function GroupsPage() {
     }
   }
 
-  const hostsByCore = cores.map((core) => ({
-    core,
-    hosts: hosts.filter((h) => h.core_id === core.id),
-  }))
-  const orphanHosts = hosts.filter((h) => !cores.some((c) => c.id === h.core_id))
+  // xray-protocol hosts are gated through their Inbound's groups, so only
+  // standalone (wireguard/hysteria2) hosts get a direct Group<->Host checklist.
+  const standaloneHosts = hosts.filter((h) => h.inbound_id == null)
 
   return (
     <div>
@@ -169,46 +170,59 @@ export default function GroupsPage() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <div className={labelClass}>{t.groupsPage.hostsInGroup}</div>
+              <div className={labelClass}>{t.groupsPage.inboundsInGroup}</div>
               <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
-                {hosts.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noHosts}</div>}
-                {hostsByCore.map(({ core, hosts: coreHosts }) => {
-                  if (coreHosts.length === 0) return null
-                  const allSelected = coreHosts.every((h) => form.hostIds.has(h.id))
+                {cores.every((c) => c.inbounds.length === 0) && (
+                  <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noInboundsInList}</div>
+                )}
+                {cores.map((core) => {
+                  if (core.inbounds.length === 0) return null
+                  const allSelected = core.inbounds.every((i) => form.inboundIds.has(i.id))
                   return (
                     <div key={core.id} className="mb-2 last:mb-0">
                       <div className="flex items-center justify-between px-2 py-1">
-                        <span className="text-xs font-bold text-slate-300">
-                          {core.name} <span className="text-slate-500">· {protocolLabels[core.protocol]}</span>
-                        </span>
+                        <span className="text-xs font-bold text-slate-300">{core.name}</span>
                         <button
                           type="button"
-                          onClick={() => toggleCoreHosts(coreHosts)}
+                          onClick={() => toggleCoreInbounds(core.inbounds)}
                           className="text-[11px] hover:underline"
                           style={{ color: ACCENT }}
                         >
                           {allSelected ? t.groupsPage.deselectAllInCore : t.groupsPage.selectAllInCore}
                         </button>
                       </div>
-                      {coreHosts.map((h) => (
+                      {core.inbounds.map((i) => (
                         <label
-                          key={h.id}
+                          key={i.id}
                           className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"
                         >
                           <input
                             type="checkbox"
-                            checked={form.hostIds.has(h.id)}
-                            onChange={() => setForm((f) => ({ ...f, hostIds: toggle(f.hostIds, h.id) }))}
+                            checked={form.inboundIds.has(i.id)}
+                            onChange={() => setForm((f) => ({ ...f, inboundIds: toggle(f.inboundIds, i.id) }))}
                           />
-                          <span className="text-slate-200">{h.remark}</span>
+                          <span dir="ltr" className="font-mono text-slate-200">
+                            {i.tag}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            ({protocolLabels[i.protocol as keyof typeof protocolLabels] ?? i.protocol})
+                          </span>
                         </label>
                       ))}
                     </div>
                   )
                 })}
-                {orphanHosts.map((h) => (
+              </div>
+            </div>
+            <div>
+              <div className={labelClass}>{t.groupsPage.hostsInGroup}</div>
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
+                {standaloneHosts.length === 0 && (
+                  <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noHosts}</div>
+                )}
+                {standaloneHosts.map((h) => (
                   <label key={h.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
                     <input
                       type="checkbox"
@@ -266,7 +280,10 @@ export default function GroupsPage() {
           <div key={g.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
             <div className="mb-2 font-bold text-slate-100">{g.name}</div>
             <div className="mb-3 text-xs text-slate-400">{g.note ?? '—'}</div>
-            <div className="mb-3 flex gap-4 text-xs text-slate-400">
+            <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-400">
+              <span>
+                {t.groupsPage.colInbounds}: <span className="text-slate-200">{g.inbound_ids.length}</span>
+              </span>
               <span>
                 {t.groupsPage.colHosts}: <span className="text-slate-200">{g.host_ids.length}</span>
               </span>

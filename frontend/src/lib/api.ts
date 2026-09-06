@@ -14,7 +14,12 @@ export class ApiError extends Error {
 async function parseErrorDetail(res: Response): Promise<string> {
   try {
     const data = await res.json()
-    return typeof data.detail === 'string' ? data.detail : `Request failed (${res.status})`
+    if (typeof data.detail === 'string') return data.detail
+    // FastAPI/Pydantic validation errors come back as a list of {msg, loc}.
+    if (Array.isArray(data.detail) && data.detail.length > 0) {
+      return data.detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join('; ') || `Request failed (${res.status})`
+    }
+    return `Request failed (${res.status})`
   } catch {
     return `Request failed (${res.status})`
   }
@@ -166,27 +171,58 @@ export async function scanReality(sampleSize?: number): Promise<RealityScanRespo
   return res.json()
 }
 
-export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'wireguard' | 'hysteria2'
-export type HostNetwork = 'tcp' | 'ws' | 'grpc'
+export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'wireguard' | 'hysteria2'
 export type HostSecurity = 'none' | 'tls' | 'reality'
+
+export const FINGERPRINTS = [
+  'chrome',
+  'firefox',
+  'safari',
+  'ios',
+  'android',
+  'edge',
+  '360',
+  'qq',
+  'random',
+  'randomized',
+  'randomizednoalpn',
+  'unsafe',
+] as const
 
 export interface Host {
   id: number
   remark: string
   address: string
-  port: number | null
-  sni_override: string | null
-  alpn_override: string | null
+  protocol: HostProtocol
   created_at: string
   group_ids: number[]
-  core_id: number
-  // Read through from the Core — see HostResponse on the backend.
-  protocol: HostProtocol
-  network: HostNetwork | null
-  security: HostSecurity | null
+
+  inbound_id: number | null
+  port_override: number | null
+  sni_override: string | null
+  alpn_override: string | null
+  fingerprint_override: string | null
+  path_override: string | null
+  host_header_override: string | null
+  security_override: HostSecurity | null
+  allowinsecure: boolean
+
+  wireguard_public_key: string | null
+  wireguard_private_key: string | null
+  wireguard_subnet: string | null
+  wireguard_port: number | null
+
+  hysteria2_sni: string | null
+  hysteria2_port: number | null
+
+  network: string | null
+  effective_security: string | null
   effective_port: number | null
   effective_sni: string | null
   effective_alpn: string | null
+  effective_fingerprint: string | null
+  effective_path: string | null
+  effective_host_header: string | null
 }
 
 export interface HostList {
@@ -213,11 +249,26 @@ export async function listHosts(): Promise<HostList> {
 export interface HostPayload {
   remark: string
   address: string
-  core_id: number
-  port?: number | null
+  protocol: HostProtocol
+  group_ids?: number[]
+
+  inbound_id?: number | null
+  port_override?: number | null
   sni_override?: string | null
   alpn_override?: string | null
-  group_ids?: number[]
+  fingerprint_override?: string | null
+  path_override?: string | null
+  host_header_override?: string | null
+  security_override?: HostSecurity | null
+  allowinsecure?: boolean
+
+  wireguard_public_key?: string | null
+  wireguard_private_key?: string | null
+  wireguard_subnet?: string | null
+  wireguard_port?: number | null
+
+  hysteria2_sni?: string | null
+  hysteria2_port?: number | null
 }
 
 export async function createHost(payload: HostPayload): Promise<Host> {
@@ -306,6 +357,7 @@ export interface Group {
   name: string
   note: string | null
   created_at: string
+  inbound_ids: number[]
   host_ids: number[]
   user_ids: number[]
 }
@@ -323,6 +375,7 @@ export async function listGroups(): Promise<GroupList> {
 export async function createGroup(payload: {
   name: string
   note?: string | null
+  inbound_ids?: number[]
   host_ids?: number[]
   user_ids?: number[]
 }): Promise<Group> {
@@ -332,7 +385,13 @@ export async function createGroup(payload: {
 
 export async function updateGroup(
   id: number,
-  payload: Partial<{ name: string; note: string | null; host_ids: number[]; user_ids: number[] }>,
+  payload: Partial<{
+    name: string
+    note: string | null
+    inbound_ids: number[]
+    host_ids: number[]
+    user_ids: number[]
+  }>,
 ): Promise<Group> {
   const res = await authorizedFetch(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
@@ -342,28 +401,36 @@ export async function deleteGroup(id: number): Promise<void> {
   await authorizedFetch(`/groups/${id}`, { method: 'DELETE' })
 }
 
+export interface Inbound {
+  id: number
+  tag: string
+  protocol: string
+  network: string
+  security: string
+  port: number | null
+  encryption: string | null
+  flow: string | null
+  header_type: string | null
+  path: string | null
+  host_header: string | null
+  sni: string | null
+  alpn: string | null
+  fingerprint: string | null
+  reality_public_key: string | null
+  reality_short_id: string | null
+  host_count: number
+  group_ids: number[]
+}
+
 export interface Core {
   id: number
   name: string
   note: string | null
+  config: Record<string, unknown>
   created_at: string
-  host_count: number
+  inbounds: Inbound[]
   node_count: number
-  protocol: HostProtocol
-  network: HostNetwork | null
-  security: HostSecurity | null
-  default_port: number | null
-  sni: string | null
-  fingerprint: string | null
-  alpn: string | null
-  path: string | null
-  host_header: string | null
-  reality_public_key: string | null
-  reality_private_key: string | null
-  reality_short_id: string | null
-  wireguard_public_key: string | null
-  wireguard_private_key: string | null
-  wireguard_subnet: string | null
+  warnings: string[]
 }
 
 export interface CoreList {
@@ -374,21 +441,7 @@ export interface CoreList {
 export interface CorePayload {
   name: string
   note?: string | null
-  protocol: HostProtocol
-  network?: HostNetwork | null
-  security?: HostSecurity | null
-  default_port?: number | null
-  sni?: string | null
-  fingerprint?: string | null
-  alpn?: string | null
-  path?: string | null
-  host_header?: string | null
-  reality_public_key?: string | null
-  reality_private_key?: string | null
-  reality_short_id?: string | null
-  wireguard_public_key?: string | null
-  wireguard_private_key?: string | null
-  wireguard_subnet?: string | null
+  config: Record<string, unknown>
 }
 
 export async function listCores(): Promise<CoreList> {
