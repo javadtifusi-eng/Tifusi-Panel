@@ -63,15 +63,9 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
         -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
         cp "letsencrypt-work/live/${domain}/fullchain.pem" certs/fullchain.pem
         cp "letsencrypt-work/live/${domain}/privkey.pem" certs/privkey.pem
-        {
-          echo "TIFUSI_SSL_CERTFILE=/app/certs/fullchain.pem"
-          echo "TIFUSI_SSL_KEYFILE=/app/certs/privkey.pem"
-          echo "TIFUSI_PUBLIC_URL=https://${domain}"
-        } >> .env
-        sed -i 's|# - ./certs:/app/certs:ro|- ./certs:/app/certs:ro|' docker-compose.yml
-        PANEL_URL="https://localhost:8000"
+        echo "TIFUSI_PUBLIC_URL=https://${domain}" >> .env
         PANEL_PUBLIC_URL="https://${domain}"
-        info "Certificate obtained — the panel will serve HTTPS directly on port 8000."
+        info "Certificate obtained — the dashboard (login page) will serve HTTPS directly on $PANEL_PUBLIC_URL."
         warn "Let's Encrypt certificates expire every 90 days — this installer doesn't set up auto-renewal, so you'll need to repeat this (or set up certbot renew plus a container restart) before then."
       else
         warn "Certificate request failed — full output:"
@@ -109,11 +103,11 @@ HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 HOST_IP="${HOST_IP:-<server-ip>}"
 info "The panel is up."
 if [ -n "$PANEL_PUBLIC_URL" ]; then
-  info "  Panel:      $PANEL_PUBLIC_URL"
+  info "  Dashboard:  $PANEL_PUBLIC_URL"
 else
-  info "  Panel API:  http://${HOST_IP}:8000"
+  info "  Dashboard:  http://${HOST_IP}:8080"
 fi
-info "  Dashboard:  http://${HOST_IP}:8080"
+info "  Panel API:  http://${HOST_IP}:8000"
 info ""
 info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
 info "  docker exec -it tifusi-panel tifusi-cli generate-admin-key"

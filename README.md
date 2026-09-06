@@ -144,11 +144,15 @@ docker compose up -d --build
 - Dashboard: `http://localhost:8080`
 - SQLite data persists in `./data`
 
-Set `TIFUSI_PUBLIC_URL` (e.g. `https://your-domain.example:8000`) once the panel sits behind Docker/a proxy — without it, subscription URLs are built from the request's Host header, which is an internal container hostname there, not something a client can reach. This env var is only the bootstrap default: an admin can view and change it any time from the panel's own Settings page (also where the admin password gets changed), no redeploy needed.
+Set `TIFUSI_PUBLIC_URL` (e.g. `https://your-domain.example`) once the panel sits behind Docker/a proxy — without it, subscription URLs are built from the request's Host header, which is an internal container hostname there, not something a client can reach. This env var is only the bootstrap default: an admin can view and change it any time from the panel's own Settings page (also where the admin password gets changed), no redeploy needed.
 
-### Direct TLS (no reverse proxy)
+### HTTPS on the dashboard (recommended, no separate reverse proxy needed)
 
-By default the panel container runs plain HTTP, same as before — put nginx/Caddy in front of it for TLS. If you'd rather have uvicorn terminate TLS itself:
+The `dashboard` container (the one you actually open in a browser) can terminate TLS itself on port 443 and proxy `/api/` and `/sub/` through to the panel internally — this is exactly what `install.sh`'s domain/Let's Encrypt step sets up for you. To do it by hand: drop `fullchain.pem`/`privkey.pem` into `./certs`, uncomment the `./certs:/etc/nginx/certs:ro` line under the `dashboard` service in `docker-compose.yml`, and restart. The container picks the cert up automatically at startup (no `nginx.conf` edits) and starts redirecting port 80 to 443.
+
+### Direct TLS on the panel (advanced, no dashboard/reverse proxy in front)
+
+By default the panel container runs plain HTTP internally — the dashboard's nginx is the one that should face the internet (see above). If you're not using the dashboard container at all and want uvicorn itself to terminate TLS for direct API access:
 
 ```bash
 # in .env
