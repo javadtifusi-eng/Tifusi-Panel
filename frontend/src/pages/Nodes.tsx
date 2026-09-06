@@ -25,10 +25,11 @@ const inputClass =
   'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
 
 function setupCommand(node: Node): string {
-  return [
-    'docker build -t tifusi-node-agent -f backend/node_agent/Dockerfile backend',
-    `docker run -d --name tifusi-node --restart unless-stopped -p ${node.port}:62050 -e TIFUSI_NODE_API_KEY=${node.api_key} tifusi-node-agent`,
-  ].join('\n')
+  // The one-line installer (not a raw docker build/run) — it clones the
+  // repo itself into a temp dir, so it works on a brand-new server with
+  // nothing on it yet, unlike a bare `docker build -f backend/... backend`
+  // which only works from inside an already-cloned panel checkout.
+  return `bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- ${node.api_key} ${node.port}`
 }
 
 export default function NodesPage() {
