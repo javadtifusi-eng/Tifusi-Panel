@@ -276,31 +276,41 @@ export default function GroupsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {groups?.map((g) => (
-          <div key={g.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-            <div className="mb-2 font-bold text-slate-100">{g.name}</div>
-            <div className="mb-3 text-xs text-slate-400">{g.note ?? '—'}</div>
-            <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-400">
-              <span>
-                {t.groupsPage.colInbounds}: <span className="text-slate-200">{g.inbound_ids.length}</span>
-              </span>
-              <span>
-                {t.groupsPage.colHosts}: <span className="text-slate-200">{g.host_ids.length}</span>
-              </span>
-              <span>
-                {t.groupsPage.colUsers}: <span className="text-slate-200">{g.user_ids.length}</span>
-              </span>
+        {groups?.map((g) => {
+          // A host counts as "covered" either directly (wireguard/hysteria2,
+          // added by host_id) or indirectly through one of the group's
+          // granted inbounds (vless/vmess/trojan/shadowsocks) — showing only
+          // the direct host_ids count made it look like 0 hosts were in a
+          // group that actually gates a real host via its inbound.
+          const coveredHosts = hosts.filter(
+            (h) => g.host_ids.includes(h.id) || (h.inbound_id != null && g.inbound_ids.includes(h.inbound_id)),
+          )
+          return (
+            <div key={g.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+              <div className="mb-2 font-bold text-slate-100">{g.name}</div>
+              <div className="mb-3 text-xs text-slate-400">{g.note ?? '—'}</div>
+              <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-400">
+                <span>
+                  {t.groupsPage.colHosts}: <span className="text-slate-200">{coveredHosts.length}</span>
+                </span>
+                <span>
+                  {t.groupsPage.colInbounds}: <span className="text-slate-200">{g.inbound_ids.length}</span>
+                </span>
+                <span>
+                  {t.groupsPage.colUsers}: <span className="text-slate-200">{g.user_ids.length}</span>
+                </span>
+              </div>
+              <div className="flex gap-3 border-t border-white/5 pt-3">
+                <button onClick={() => startEdit(g)} className="text-xs text-slate-400 hover:underline">
+                  {t.common.edit}
+                </button>
+                <button onClick={() => handleDelete(g)} className="text-xs text-red-400 hover:underline">
+                  {t.common.delete}
+                </button>
+              </div>
             </div>
-            <div className="flex gap-3 border-t border-white/5 pt-3">
-              <button onClick={() => startEdit(g)} className="text-xs text-slate-400 hover:underline">
-                {t.common.edit}
-              </button>
-              <button onClick={() => handleDelete(g)} className="text-xs text-red-400 hover:underline">
-                {t.common.delete}
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
