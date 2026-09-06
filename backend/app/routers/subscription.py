@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.groups.access import hosts_for_user
-from app.links.generator import build_links_for_user, build_subscription_content
+from app.links.generator import build_links_for_user, build_subscription_content, render_remark
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser
 from app.wireguard.allocate import get_or_create_peer
@@ -49,5 +49,5 @@ async def get_subscription_wireguard(secret: str, db: AsyncSession = Depends(get
             peer = await get_or_create_peer(host, user, db)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        configs.append({"remark": host.remark, "config": build_client_config(peer, host)})
+        configs.append({"remark": render_remark(host, user), "config": build_client_config(peer, host)})
     return configs

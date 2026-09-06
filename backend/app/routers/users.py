@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.groups.access import hosts_for_user, resolve_groups
-from app.links.generator import build_links_for_user
+from app.links.generator import build_links_for_user, render_remark
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser
 from app.schemas.user import ProxyUserCreate, ProxyUserList, ProxyUserResponse, ProxyUserUpdate
@@ -110,7 +110,7 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
             peer = await get_or_create_peer(host, user, db)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        wireguard_configs.append({"remark": host.remark, "config": build_client_config(peer, host)})
+        wireguard_configs.append({"remark": render_remark(host, user), "config": build_client_config(peer, host)})
 
     return {
         "subscription_url": f"{base}sub/{user.secret}",

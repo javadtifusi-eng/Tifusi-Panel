@@ -28,8 +28,10 @@ function emptyForm() {
   }
 }
 
+const PLACEHOLDER_KEYS = ['username', 'protocol', 'days_left', 'expire_date', 'data_limit_gb', 'data_left_gb'] as const
+
 export default function HostsPage() {
-  const { t, align } = useLang()
+  const { t } = useLang()
   const protocolLabels = t.coresPage.protocolLabels
   const [hosts, setHosts] = useState<Host[] | null>(null)
   const [cores, setCores] = useState<Core[]>([])
@@ -38,6 +40,8 @@ export default function HostsPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm())
   const [submitting, setSubmitting] = useState(false)
+  const [showPlaceholders, setShowPlaceholders] = useState(false)
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
   async function refresh() {
     try {
@@ -64,6 +68,18 @@ export default function HostsPage() {
 
   function update<K extends keyof ReturnType<typeof emptyForm>>(key: K, value: ReturnType<typeof emptyForm>[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  async function insertPlaceholder(key: string) {
+    const token = `{${key}}`
+    update('remark', form.remark + token)
+    try {
+      await navigator.clipboard.writeText(token)
+    } catch {
+      // Clipboard API unavailable — the token is still inserted into the field above.
+    }
+    setCopiedToken(key)
+    window.setTimeout(() => setCopiedToken((k) => (k === key ? null : k)), 1200)
   }
 
   function resetForm() {
@@ -137,14 +153,43 @@ export default function HostsPage() {
       {showForm && (
         <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
           <div className="flex flex-wrap gap-3">
-            <div>
-              <label className={labelClass}>{t.hostsPage.remark}</label>
+            <div className="relative">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <label className="text-xs text-slate-400">{t.hostsPage.remark}</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPlaceholders((v) => !v)}
+                  className="flex h-4 w-4 items-center justify-center rounded-full border border-white/20 text-[10px] text-slate-400 hover:border-cyan-400/50 hover:text-cyan-300"
+                >
+                  ?
+                </button>
+              </div>
               <input
                 value={form.remark}
                 onChange={(e) => update('remark', e.target.value)}
                 required
                 className={inputClass}
               />
+              {showPlaceholders && (
+                <div className="absolute top-full z-10 mt-1 w-64 rounded-lg border border-cyan-400/20 bg-slate-900 p-2 shadow-xl">
+                  <div className="mb-1.5 text-[10px] text-slate-500">{t.hostsPage.remarkPlaceholdersTitle}</div>
+                  {PLACEHOLDER_KEYS.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => insertPlaceholder(key)}
+                      className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs hover:bg-white/5"
+                    >
+                      <span dir="ltr" className="font-mono" style={{ color: ACCENT }}>
+                        {`{${key}}`}
+                      </span>
+                      <span className="text-slate-400">
+                        {copiedToken === key ? t.hostsPage.remarkPlaceholderCopied : t.hostsPage.placeholders[key]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className={labelClass}>{t.hostsPage.coreLabel}</label>
@@ -221,67 +266,44 @@ export default function HostsPage() {
 
       {!showForm && error && <div className="mb-4 text-sm text-red-400">{error}</div>}
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className={`w-full text-sm ${align}`}>
-          <thead>
-            <tr className="border-b border-white/10 text-xs text-slate-400">
-              <th className="px-4 py-3 font-medium">{t.hostsPage.colName}</th>
-              <th className="px-4 py-3 font-medium">{t.hostsPage.colProtocol}</th>
-              <th className="px-4 py-3 font-medium">{t.hostsPage.colAddress}</th>
-              <th className="px-4 py-3 font-medium">{t.hostsPage.colSecurity}</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {hosts === null && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  {t.loading}
-                </td>
-              </tr>
-            )}
-            {hosts !== null && hosts.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  {t.hostsPage.noHostsYet}
-                </td>
-              </tr>
-            )}
-            {hosts?.map((h) => (
-              <tr key={h.id} className="border-b border-white/5 last:border-0">
-                <td className="px-4 py-3 text-slate-100">{h.remark}</td>
-                <td className="px-4 py-3">
-                  <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">
-                    {protocolLabels[h.protocol]}
-                  </span>
-                </td>
-                <td dir="ltr" className="px-4 py-3 text-left font-mono text-xs text-slate-400">
-                  {h.address}:{h.effective_port ?? '—'}
-                </td>
-                <td className="px-4 py-3 text-slate-400">
-                  {h.security === 'reality' ? (
-                    <span dir="ltr" className="font-mono text-xs" style={{ color: ACCENT }}>
-                      REALITY · {h.effective_sni ?? '—'}
-                    </span>
-                  ) : (
-                    (h.security ?? '—')
-                  )}
-                </td>
-                <td className="px-4 py-3 text-left">
-                  <button
-                    onClick={() => startEdit(h)}
-                    className="ml-3 text-xs text-slate-400 hover:underline"
-                  >
-                    {t.common.edit}
-                  </button>
-                  <button onClick={() => handleDelete(h)} className="text-xs text-red-400 hover:underline">
-                    {t.common.delete}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {hosts === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {hosts !== null && hosts.length === 0 && (
+        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+          {t.hostsPage.noHostsYet}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {hosts?.map((h) => (
+          <div key={h.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-bold text-slate-100">{h.remark}</span>
+              <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">
+                {protocolLabels[h.protocol]}
+              </span>
+            </div>
+            <div dir="ltr" className="mb-1 text-left font-mono text-xs text-slate-400">
+              {h.address}:{h.effective_port ?? '—'}
+            </div>
+            <div className="mb-3 text-xs text-slate-400">
+              {h.security === 'reality' ? (
+                <span dir="ltr" className="font-mono" style={{ color: ACCENT }}>
+                  REALITY · {h.effective_sni ?? '—'}
+                </span>
+              ) : (
+                (h.security ?? '—')
+              )}
+            </div>
+            <div className="flex gap-3 border-t border-white/5 pt-3">
+              <button onClick={() => startEdit(h)} className="text-xs text-slate-400 hover:underline">
+                {t.common.edit}
+              </button>
+              <button onClick={() => handleDelete(h)} className="text-xs text-red-400 hover:underline">
+                {t.common.delete}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -102,6 +102,16 @@ export const dict = {
       colSecurity: 'امنیت',
       noHostsYet: 'هنوز هاستی ساخته نشده',
       confirmDelete: (name: string) => `هاست «${name}» حذف بشه؟`,
+      remarkPlaceholdersTitle: 'متغیرها (برای کپی کلیک کن)',
+      remarkPlaceholderCopied: 'کپی شد ✓',
+      placeholders: {
+        username: 'نام کاربری',
+        protocol: 'پروتکل',
+        days_left: 'روزهای باقی‌مانده تا انقضا',
+        expire_date: 'تاریخ انقضا',
+        data_limit_gb: 'حجم کل (گیگابایت)',
+        data_left_gb: 'حجم باقی‌مانده (گیگابایت)',
+      },
     },
 
     groupsPage: {
@@ -123,6 +133,8 @@ export const dict = {
       colUsers: 'کاربرها',
       noGroupsYet: 'هنوز گروهی ساخته نشده',
       confirmDelete: (name: string) => `گروه «${name}» حذف بشه؟`,
+      selectAllInCore: 'انتخاب همه',
+      deselectAllInCore: 'لغو انتخاب همه',
     },
 
     nodesPage: {
@@ -395,6 +407,16 @@ export const dict = {
       colSecurity: 'Security',
       noHostsYet: 'No hosts yet',
       confirmDelete: (name: string) => `Delete host "${name}"?`,
+      remarkPlaceholdersTitle: 'Placeholders (click to copy)',
+      remarkPlaceholderCopied: 'Copied ✓',
+      placeholders: {
+        username: 'Username',
+        protocol: 'Protocol',
+        days_left: 'Days left until expiry',
+        expire_date: 'Expiry date',
+        data_limit_gb: 'Data limit (GB)',
+        data_left_gb: 'Data left (GB)',
+      },
     },
 
     groupsPage: {
@@ -416,6 +438,8 @@ export const dict = {
       colUsers: 'Users',
       noGroupsYet: 'No groups yet',
       confirmDelete: (name: string) => `Delete group "${name}"?`,
+      selectAllInCore: 'Select all',
+      deselectAllInCore: 'Deselect all',
     },
 
     nodesPage: {

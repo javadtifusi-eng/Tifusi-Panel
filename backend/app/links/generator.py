@@ -1,9 +1,47 @@
 import base64
 import json
+from datetime import datetime, timezone
 from urllib.parse import quote, urlencode
 
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser
+
+_BYTES_PER_GB = 1024**3
+
+
+def render_remark(host: Host, user: ProxyUser) -> str:
+    """Fill {placeholder} tokens in a host's remark with this user's own
+    values — expiry/traffic are per-user, so this can't be precomputed once
+    on the host the way the rest of its config is."""
+    template = host.remark
+    if "{" not in template:
+        return template
+
+    days_left = "∞"
+    expire_date = "-"
+    if user.expire is not None:
+        expire_at = user.expire if user.expire.tzinfo else user.expire.replace(tzinfo=timezone.utc)
+        days_left = str(max(0, (expire_at - datetime.now(timezone.utc)).days))
+        expire_date = expire_at.strftime("%Y-%m-%d")
+
+    data_limit_gb = "∞"
+    data_left_gb = "∞"
+    if user.data_limit is not None:
+        data_limit_gb = f"{user.data_limit / _BYTES_PER_GB:.1f}"
+        data_left_gb = f"{max(0, user.data_limit - user.used_traffic) / _BYTES_PER_GB:.1f}"
+
+    values = {
+        "username": user.username,
+        "protocol": host.protocol.value if host.protocol else "",
+        "days_left": days_left,
+        "expire_date": expire_date,
+        "data_limit_gb": data_limit_gb,
+        "data_left_gb": data_left_gb,
+    }
+    result = template
+    for key, value in values.items():
+        result = result.replace("{" + key + "}", value)
+    return result
 
 
 def _fragment(remark: str) -> str:
@@ -47,7 +85,7 @@ def build_vless_link(user: ProxyUser, host: Host) -> str:
         if host.effective_alpn:
             params["alpn"] = host.effective_alpn
 
-    return f"vless://{user.secret}@{host.address}:{host.effective_port}?{urlencode(params)}#{_fragment(host.remark)}"
+    return f"vless://{user.secret}@{host.address}:{host.effective_port}?{urlencode(params)}#{_fragment(render_remark(host, user))}"
 
 
 def build_vmess_link(user: ProxyUser, host: Host) -> str:
@@ -55,7 +93,7 @@ def build_vmess_link(user: ProxyUser, host: Host) -> str:
     security = host.security.value if host.security else "none"
     obj = {
         "v": "2",
-        "ps": host.remark,
+        "ps": render_remark(host, user),
         "add": host.address,
         "port": str(host.effective_port),
         "id": user.secret,
@@ -94,7 +132,7 @@ def build_trojan_link(user: ProxyUser, host: Host) -> str:
         if host.effective_alpn:
             params["alpn"] = host.effective_alpn
 
-    return f"trojan://{user.secret}@{host.address}:{host.effective_port}?{urlencode(params)}#{_fragment(host.remark)}"
+    return f"trojan://{user.secret}@{host.address}:{host.effective_port}?{urlencode(params)}#{_fragment(render_remark(host, user))}"
 
 
 def build_hysteria2_link(user: ProxyUser, host: Host) -> str:
@@ -102,7 +140,7 @@ def build_hysteria2_link(user: ProxyUser, host: Host) -> str:
     if host.effective_sni:
         params["sni"] = host.effective_sni
     suffix = f"?{urlencode(params)}" if params else ""
-    return f"hysteria2://{user.secret}@{host.address}:{host.effective_port}{suffix}#{_fragment(host.remark)}"
+    return f"hysteria2://{user.secret}@{host.address}:{host.effective_port}{suffix}#{_fragment(render_remark(host, user))}"
 
 
 # WireGuard needs a per-user keypair and an allocated tunnel IP, which nothing

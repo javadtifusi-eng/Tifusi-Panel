@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
@@ -15,7 +15,13 @@ import {
 
 const ACCENT = '#22D3EE'
 
-const statusStyles: Record<NodeStatus, string> = {
+const statusDot: Record<NodeStatus, string> = {
+  connected: 'bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,0.6)]',
+  pending: 'bg-slate-500',
+  error: 'bg-red-400 shadow-[0_0_8px_2px_rgba(248,113,113,0.5)]',
+}
+
+const statusBadge: Record<NodeStatus, string> = {
   connected: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/30',
   pending: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
   error: 'bg-red-400/10 text-red-300 border-red-400/30',
@@ -33,7 +39,7 @@ function setupCommand(node: Node): string {
 }
 
 export default function NodesPage() {
-  const { t, align } = useLang()
+  const { t } = useLang()
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [cores, setCores] = useState<Core[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +53,8 @@ export default function NodesPage() {
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [setupNodeId, setSetupNodeId] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+
+  const coreById = new Map(cores.map((c) => [c.id, c]))
 
   async function refresh() {
     try {
@@ -104,6 +112,7 @@ export default function NodesPage() {
   }
 
   async function handleSync(node: Node) {
+    if (syncingId !== null) return
     setSyncingId(node.id)
     setError(null)
     try {
@@ -116,7 +125,8 @@ export default function NodesPage() {
     }
   }
 
-  async function handleDelete(node: Node) {
+  async function handleDelete(node: Node, e: MouseEvent) {
+    e.stopPropagation()
     if (!window.confirm(t.nodesPage.confirmDelete(node.name))) return
     try {
       await deleteNode(node.id)
@@ -135,6 +145,8 @@ export default function NodesPage() {
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1500)
   }
+
+  const setupNode = nodes?.find((n) => n.id === setupNodeId) ?? null
 
   return (
     <div>
@@ -185,10 +197,11 @@ export default function NodesPage() {
           <div>
             <label className="mb-1.5 block text-xs text-slate-400">{t.nodesPage.coreLabel}</label>
             <select
-              value={coreId ?? cores[0]?.id ?? ''}
+              value={coreId ?? ''}
               onChange={(e) => setCoreId(e.target.value ? Number(e.target.value) : null)}
               className={inputClass}
             >
+              <option value="">{t.coresPage.selectPlaceholder}</option>
               {cores.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -209,99 +222,106 @@ export default function NodesPage() {
 
       {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className={`w-full text-sm ${align}`}>
-          <thead>
-            <tr className="border-b border-white/10 text-xs text-slate-400">
-              <th className="px-4 py-3 font-medium">{t.nodesPage.colName}</th>
-              <th className="px-4 py-3 font-medium">{t.nodesPage.colAddress}</th>
-              <th className="px-4 py-3 font-medium">{t.nodesPage.colStatus}</th>
-              <th className="px-4 py-3 font-medium">{t.nodesPage.colXrayVersion}</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {nodes === null && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  {t.loading}
-                </td>
-              </tr>
-            )}
-            {nodes !== null && nodes.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  {t.nodesPage.noNodesYet}
-                </td>
-              </tr>
-            )}
-            {nodes?.map((node) => (
-              <Fragment key={node.id}>
-                <tr className="border-b border-white/5 last:border-0">
-                  <td className="px-4 py-3 text-slate-100">{node.name}</td>
-                  <td dir="ltr" className="px-4 py-3 text-left font-mono text-xs text-slate-400">
-                    {node.address}:{node.port}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles[node.status]}`}>
-                      {t.nodesPage.status[node.status]}
-                    </span>
-                  </td>
-                  <td dir="ltr" className="px-4 py-3 text-left text-xs text-slate-400">
-                    {node.xray_version ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-left">
-                    <button
-                      onClick={() => handleSync(node)}
-                      disabled={syncingId === node.id}
-                      className="ml-3 text-xs hover:underline disabled:opacity-60"
-                      style={{ color: ACCENT }}
-                    >
-                      {syncingId === node.id ? t.nodesPage.syncing : t.nodesPage.sync}
-                    </button>
-                    <button
-                      onClick={() => setSetupNodeId((id) => (id === node.id ? null : node.id))}
-                      className="ml-3 text-xs text-slate-400 hover:underline"
-                    >
-                      {t.nodesPage.installCmd}
-                    </button>
-                    <button onClick={() => startEdit(node)} className="ml-3 text-xs text-slate-400 hover:underline">
-                      {t.common.edit}
-                    </button>
-                    <button onClick={() => handleDelete(node)} className="text-xs text-red-400 hover:underline">
-                      {t.common.delete}
-                    </button>
-                  </td>
-                </tr>
-                {setupNodeId === node.id && (
-                  <tr>
-                    <td colSpan={5} className="border-b border-white/5 bg-black/25 px-4 py-4">
-                      <div className="mb-2 text-xs text-slate-400">{t.nodesPage.setupIntro}</div>
-                      <pre
-                        dir="ltr"
-                        className="mb-2 overflow-x-auto whitespace-pre-wrap rounded-lg border border-cyan-400/20 bg-black/40 p-3 text-left font-mono text-[11px] text-cyan-200"
-                      >
-                        {setupCommand(node)}
-                      </pre>
-                      {node.last_error && (
-                        <div className="mb-2 text-xs text-red-400">
-                          {t.nodesPage.lastError} {node.last_error}
-                        </div>
-                      )}
-                      <button
-                        onClick={() => copySetup(node)}
-                        className="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-950"
-                        style={{ backgroundColor: ACCENT }}
-                      >
-                        {copied ? t.common.copiedCheck : t.nodesPage.copyCommand}
-                      </button>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+      {setupNode && (
+        <div className="mb-6 rounded-xl border border-cyan-400/20 bg-black/25 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-bold text-slate-100">{setupNode.name}</div>
+            <button onClick={() => setSetupNodeId(null)} className="text-xs text-slate-400 hover:underline">
+              ✕
+            </button>
+          </div>
+          <div className="mb-2 text-xs text-slate-400">{t.nodesPage.setupIntro}</div>
+          <pre
+            dir="ltr"
+            className="mb-2 overflow-x-auto whitespace-pre-wrap rounded-lg border border-cyan-400/20 bg-black/40 p-3 text-left font-mono text-[11px] text-cyan-200"
+          >
+            {setupCommand(setupNode)}
+          </pre>
+          {setupNode.last_error && (
+            <div className="mb-2 text-xs text-red-400">
+              {t.nodesPage.lastError} {setupNode.last_error}
+            </div>
+          )}
+          <button
+            onClick={() => copySetup(setupNode)}
+            className="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-950"
+            style={{ backgroundColor: ACCENT }}
+          >
+            {copied ? t.common.copiedCheck : t.nodesPage.copyCommand}
+          </button>
+        </div>
+      )}
+
+      {nodes === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {nodes !== null && nodes.length === 0 && (
+        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+          {t.nodesPage.noNodesYet}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {nodes?.map((node) => {
+          const core = node.core_id != null ? coreById.get(node.core_id) : undefined
+          const isSyncing = syncingId === node.id
+          return (
+            <div
+              key={node.id}
+              onClick={() => handleSync(node)}
+              title={t.nodesPage.sync}
+              className="cursor-pointer rounded-xl border border-white/10 bg-slate-950/60 p-4 transition-colors hover:border-cyan-400/40"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${
+                      isSyncing ? 'animate-pulse bg-cyan-400' : statusDot[node.status]
+                    }`}
+                  />
+                  <span className="font-bold text-slate-100">{node.name}</span>
+                </div>
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge[node.status]}`}>
+                  {isSyncing ? t.nodesPage.syncing : t.nodesPage.status[node.status]}
+                </span>
+              </div>
+
+              <div dir="ltr" className="mb-1 text-left font-mono text-xs text-slate-400">
+                {node.address}:{node.port}
+              </div>
+              {core && (
+                <div className="mb-1 text-xs text-slate-500">
+                  {core.name} · {t.coresPage.protocolLabels[core.protocol]}
+                </div>
+              )}
+              <div dir="ltr" className="mb-3 text-left text-xs text-slate-500">
+                {node.xray_version ?? '—'}
+              </div>
+
+              <div className="flex items-center gap-3 border-t border-white/5 pt-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSetupNodeId((id) => (id === node.id ? null : node.id))
+                  }}
+                  className="text-xs text-slate-400 hover:underline"
+                >
+                  {t.nodesPage.installCmd}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    startEdit(node)
+                  }}
+                  className="text-xs text-slate-400 hover:underline"
+                >
+                  {t.common.edit}
+                </button>
+                <button onClick={(e) => handleDelete(node, e)} className="text-xs text-red-400 hover:underline">
+                  {t.common.delete}
+                </button>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -4,10 +4,12 @@ import {
   ApiError,
   createGroup,
   deleteGroup,
+  listCores,
   listGroups,
   listHosts,
   listUsers,
   updateGroup,
+  type Core,
   type Group,
   type Host,
   type ProxyUser,
@@ -24,9 +26,11 @@ function emptyForm() {
 }
 
 export default function GroupsPage() {
-  const { t, align } = useLang()
+  const { t } = useLang()
+  const protocolLabels = t.coresPage.protocolLabels
   const [groups, setGroups] = useState<Group[] | null>(null)
   const [hosts, setHosts] = useState<Host[]>([])
+  const [cores, setCores] = useState<Core[]>([])
   const [users, setUsers] = useState<ProxyUser[]>([])
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -36,10 +40,16 @@ export default function GroupsPage() {
 
   async function refresh() {
     try {
-      const [groupsRes, hostsRes, usersRes] = await Promise.all([listGroups(), listHosts(), listUsers()])
+      const [groupsRes, hostsRes, usersRes, coresRes] = await Promise.all([
+        listGroups(),
+        listHosts(),
+        listUsers(),
+        listCores(),
+      ])
       setGroups(groupsRes.groups)
       setHosts(hostsRes.hosts)
       setUsers(usersRes.users)
+      setCores(coresRes.cores)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.groupsPage.fetchError)
     }
@@ -73,6 +83,18 @@ export default function GroupsPage() {
     return next
   }
 
+  function toggleCoreHosts(coreHosts: Host[]) {
+    setForm((f) => {
+      const allSelected = coreHosts.every((h) => f.hostIds.has(h.id))
+      const next = new Set(f.hostIds)
+      for (const h of coreHosts) {
+        if (allSelected) next.delete(h.id)
+        else next.add(h.id)
+      }
+      return { ...f, hostIds: next }
+    })
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSubmitting(true)
@@ -104,6 +126,12 @@ export default function GroupsPage() {
       setError(err instanceof ApiError ? err.message : t.common.genericError)
     }
   }
+
+  const hostsByCore = cores.map((core) => ({
+    core,
+    hosts: hosts.filter((h) => h.core_id === core.id),
+  }))
+  const orphanHosts = hosts.filter((h) => !cores.some((c) => c.id === h.core_id))
 
   return (
     <div>
@@ -144,9 +172,43 @@ export default function GroupsPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <div className={labelClass}>{t.groupsPage.hostsInGroup}</div>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
                 {hosts.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noHosts}</div>}
-                {hosts.map((h) => (
+                {hostsByCore.map(({ core, hosts: coreHosts }) => {
+                  if (coreHosts.length === 0) return null
+                  const allSelected = coreHosts.every((h) => form.hostIds.has(h.id))
+                  return (
+                    <div key={core.id} className="mb-2 last:mb-0">
+                      <div className="flex items-center justify-between px-2 py-1">
+                        <span className="text-xs font-bold text-slate-300">
+                          {core.name} <span className="text-slate-500">· {protocolLabels[core.protocol]}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCoreHosts(coreHosts)}
+                          className="text-[11px] hover:underline"
+                          style={{ color: ACCENT }}
+                        >
+                          {allSelected ? t.groupsPage.deselectAllInCore : t.groupsPage.selectAllInCore}
+                        </button>
+                      </div>
+                      {coreHosts.map((h) => (
+                        <label
+                          key={h.id}
+                          className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.hostIds.has(h.id)}
+                            onChange={() => setForm((f) => ({ ...f, hostIds: toggle(f.hostIds, h.id) }))}
+                          />
+                          <span className="text-slate-200">{h.remark}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )
+                })}
+                {orphanHosts.map((h) => (
                   <label key={h.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
                     <input
                       type="checkbox"
@@ -154,14 +216,14 @@ export default function GroupsPage() {
                       onChange={() => setForm((f) => ({ ...f, hostIds: toggle(f.hostIds, h.id) }))}
                     />
                     <span className="text-slate-200">{h.remark}</span>
-                    <span className="text-xs text-slate-500">({h.protocol})</span>
+                    <span className="text-xs text-slate-500">({protocolLabels[h.protocol]})</span>
                   </label>
                 ))}
               </div>
             </div>
             <div>
               <div className={labelClass}>{t.groupsPage.usersInGroup}</div>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
                 {users.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noUsers}</div>}
                 {users.map((u) => (
                   <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
@@ -192,50 +254,36 @@ export default function GroupsPage() {
 
       {!showForm && error && <div className="mb-4 text-sm text-red-400">{error}</div>}
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className={`w-full text-sm ${align}`}>
-          <thead>
-            <tr className="border-b border-white/10 text-xs text-slate-400">
-              <th className="px-4 py-3 font-medium">{t.groupsPage.colName}</th>
-              <th className="px-4 py-3 font-medium">{t.groupsPage.colNote}</th>
-              <th className="px-4 py-3 font-medium">{t.groupsPage.colHosts}</th>
-              <th className="px-4 py-3 font-medium">{t.groupsPage.colUsers}</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups === null && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  {t.loading}
-                </td>
-              </tr>
-            )}
-            {groups !== null && groups.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  {t.groupsPage.noGroupsYet}
-                </td>
-              </tr>
-            )}
-            {groups?.map((g) => (
-              <tr key={g.id} className="border-b border-white/5 last:border-0">
-                <td className="px-4 py-3 text-slate-100">{g.name}</td>
-                <td className="px-4 py-3 text-slate-400">{g.note ?? '—'}</td>
-                <td className="px-4 py-3 text-slate-400">{g.host_ids.length}</td>
-                <td className="px-4 py-3 text-slate-400">{g.user_ids.length}</td>
-                <td className="px-4 py-3 text-left">
-                  <button onClick={() => startEdit(g)} className="ml-3 text-xs text-slate-400 hover:underline">
-                    {t.common.edit}
-                  </button>
-                  <button onClick={() => handleDelete(g)} className="text-xs text-red-400 hover:underline">
-                    {t.common.delete}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {groups === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {groups !== null && groups.length === 0 && (
+        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+          {t.groupsPage.noGroupsYet}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {groups?.map((g) => (
+          <div key={g.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+            <div className="mb-2 font-bold text-slate-100">{g.name}</div>
+            <div className="mb-3 text-xs text-slate-400">{g.note ?? '—'}</div>
+            <div className="mb-3 flex gap-4 text-xs text-slate-400">
+              <span>
+                {t.groupsPage.colHosts}: <span className="text-slate-200">{g.host_ids.length}</span>
+              </span>
+              <span>
+                {t.groupsPage.colUsers}: <span className="text-slate-200">{g.user_ids.length}</span>
+              </span>
+            </div>
+            <div className="flex gap-3 border-t border-white/5 pt-3">
+              <button onClick={() => startEdit(g)} className="text-xs text-slate-400 hover:underline">
+                {t.common.edit}
+              </button>
+              <button onClick={() => handleDelete(g)} className="text-xs text-red-400 hover:underline">
+                {t.common.delete}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
