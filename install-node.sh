@@ -49,8 +49,13 @@ if docker ps -a --format '{{.Names}}' | grep -qx tifusi-node; then
   docker rm -f tifusi-node >/dev/null
 fi
 
-info "Starting the node on port $PORT..."
+info "Starting the node on the host's real network (agent on port $PORT)..."
+# --network host, not -p per port: Xray binds to whatever proxy ports the
+# panel's pushed config gives it, decided AFTER this container starts, and
+# Docker can't pre-publish a port it doesn't know about yet. Host networking
+# means every port Xray (or the agent) binds to is reachable directly,
+# exactly like PasarGuard's own node containers.
 docker run -d --name tifusi-node --restart unless-stopped \
-  -p "${PORT}:62050" -e "TIFUSI_NODE_API_KEY=${API_KEY}" tifusi-node-agent
+  --network host -e "TIFUSI_NODE_API_KEY=${API_KEY}" -e "AGENT_PORT=${PORT}" tifusi-node-agent
 
 info "Node is up. Now hit Sync on it from the panel's Nodes tab."
