@@ -1,36 +1,46 @@
+FROM python:3.12-slim AS strongswan-builder
+
+# Debian's packaged strongSwan doesn't ship eap-mschapv2 at all (confirmed
+# live: dpkg -L libcharon-extra-plugins lists eap-md5/gtc/tls/ttls/aka but
+# no eap-mschapv2, and apt-cache search turns up nothing either) — it needs
+# MD4, which modern OpenSSL dropped, so distros just leave the plugin out.
+# Native iOS/Windows IKEv2 "Username" auth specifically requires
+# EAP-MSCHAPv2 (nothing else), so there's no packaged way to get a normal
+# username/password prompt working — building strongSwan ourselves with
+# --enable-eap-mschapv2 (which pulls in strongSwan's own MD4 plugin, not
+# OpenSSL's) is the actual fix real-world guides for this same problem use.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential pkg-config bison flex gettext \
+      libgmp-dev libssl-dev \
+      curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG STRONGSWAN_VERSION=6.0.1
+RUN curl -fsSL -o /tmp/strongswan.tar.bz2 \
+      "https://download.strongswan.org/strongswan-${STRONGSWAN_VERSION}.tar.bz2" \
+    && mkdir -p /tmp/strongswan-src \
+    && tar -xjf /tmp/strongswan.tar.bz2 -C /tmp/strongswan-src --strip-components=1 \
+    && cd /tmp/strongswan-src \
+    && ./configure --prefix=/usr --sysconfdir=/etc \
+         --enable-eap-mschapv2 --enable-eap-identity --enable-md4 \
+         --enable-swanctl --enable-vici \
+    && make -j"$(nproc)" \
+    && make DESTDIR=/build install
+
 FROM python:3.12-slim
 
-# policy-rc.d: the standard Debian trick for a container/chroot build —
-# strongswan-starter's postinst tries to start the strongswan service via
-# invoke-rc.d, which fails the whole `apt-get install` (and so the whole
-# `docker build`) because there's no systemd/init here to actually start
-# it against. Returning 101 tells invoke-rc.d "don't start it, and that's
-# fine" instead of erroring. We manage the daemon ourselves via subprocess
-# (see node_agent/ipsec.py), so nothing needs the package to auto-start it.
-RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
-    && chmod +x /usr/sbin/policy-rc.d
-
-# strongswan/xl2tpd/ppp/iptables: only actually used when the panel assigns
-# this node an l2tp or ikev2 Core (see node_agent/ipsec.py) — installed
-# unconditionally here so a node never needs a second install/rebuild just
-# to switch which kind of core it serves. Debian splits strongSwan across
-# several packages we each need explicitly rather than trusting apt's
-# dependency resolution to pick them (confirmed live: with only
-# strongswan-libcharon — the shared library — pulled in, `ipsec restart`
-# fails with "IKE daemon '/usr/lib/ipsec/charon' not found", because that
-# executable ships in the separate strongswan-charon package):
-#   - strongswan-charon:  the actual charon daemon binary
-#   - strongswan-starter: the /usr/sbin/ipsec CLI, used only to get charon
-#                          itself running
-#   - strongswan-swanctl: the vici-based tool that loads connections and
-#                          reports status, replacing the stroke interface
-#                          strongSwan 6 removed
+# Runtime counterparts of the -dev libs the builder stage compiled
+# against, plus xl2tpd/ppp/iptables for l2tp (only actually used when the
+# panel assigns this node an l2tp or ikev2 Core — see node_agent/ipsec.py
+# — installed unconditionally so a node never needs a second
+# install/rebuild just to switch which kind of core it serves).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl unzip ca-certificates \
-      strongswan strongswan-charon strongswan-starter strongswan-swanctl strongswan-pki \
-      libcharon-extra-plugins libstrongswan-extra-plugins \
+      libgmp10 libssl3 \
       xl2tpd ppp iptables \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=strongswan-builder /build/ /
 
 # The real Xray-core binary. This is the one piece of the node agent that
 # couldn't be verified inside the sandboxed session this project was built
