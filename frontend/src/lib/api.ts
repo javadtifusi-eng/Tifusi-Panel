@@ -223,17 +223,10 @@ export interface Host {
   security_override: HostSecurity | null
   allowinsecure: boolean
 
-  wireguard_public_key: string | null
-  wireguard_private_key: string | null
-  wireguard_subnet: string | null
-  wireguard_port: number | null
+  core_id: number | null
 
   hysteria2_sni: string | null
   hysteria2_port: number | null
-
-  ikev2_psk: string | null
-
-  l2tp_psk: string | null
 
   network: string | null
   effective_security: string | null
@@ -282,17 +275,10 @@ export interface HostPayload {
   security_override?: HostSecurity | null
   allowinsecure?: boolean
 
-  wireguard_public_key?: string | null
-  wireguard_private_key?: string | null
-  wireguard_subnet?: string | null
-  wireguard_port?: number | null
+  core_id?: number | null
 
   hysteria2_sni?: string | null
   hysteria2_port?: number | null
-
-  ikev2_psk?: string | null
-
-  l2tp_psk?: string | null
 }
 
 export async function createHost(payload: HostPayload): Promise<Host> {
@@ -446,15 +432,29 @@ export interface Inbound {
   group_ids: number[]
 }
 
+export type CoreType = 'xray' | 'wireguard' | 'l2tp' | 'ikev2'
+
 export interface Core {
   id: number
   name: string
   note: string | null
-  config: Record<string, unknown>
+  core_type: CoreType
+  config: Record<string, unknown> | null
   created_at: string
   inbounds: Inbound[]
   node_count: number
+  host_count: number
   warnings: string[]
+
+  wireguard_public_key: string | null
+  wireguard_private_key: string | null
+  wireguard_port: number | null
+  wireguard_subnet: string | null
+
+  l2tp_psk: string | null
+
+  ikev2_psk: string | null
+  ikev2_remote_id: string | null
 }
 
 export interface CoreList {
@@ -465,7 +465,18 @@ export interface CoreList {
 export interface CorePayload {
   name: string
   note?: string | null
-  config: Record<string, unknown>
+  core_type: CoreType
+  config?: Record<string, unknown> | null
+
+  wireguard_public_key?: string | null
+  wireguard_private_key?: string | null
+  wireguard_port?: number | null
+  wireguard_subnet?: string | null
+
+  l2tp_psk?: string | null
+
+  ikev2_psk?: string | null
+  ikev2_remote_id?: string | null
 }
 
 export async function listCores(): Promise<CoreList> {

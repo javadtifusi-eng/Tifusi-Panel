@@ -22,21 +22,13 @@ class HostCreate(BaseModel):
     security_override: HostSecurity | None = None
     allowinsecure: bool = False
 
-    # wireguard
-    wireguard_public_key: str | None = None
-    wireguard_private_key: str | None = None
-    wireguard_subnet: str | None = None
-    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
+    # wireguard/l2tp/ikev2: which Core (of the matching core_type) this
+    # Host is built on
+    core_id: int | None = None
 
     # hysteria2
     hysteria2_sni: str | None = None
     hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
-
-    # ikev2
-    ikev2_psk: str | None = None
-
-    # l2tp
-    l2tp_psk: str | None = None
 
 
 class HostUpdate(BaseModel):
@@ -54,17 +46,10 @@ class HostUpdate(BaseModel):
     security_override: HostSecurity | None = None
     allowinsecure: bool | None = None
 
-    wireguard_public_key: str | None = None
-    wireguard_private_key: str | None = None
-    wireguard_subnet: str | None = None
-    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
+    core_id: int | None = None
 
     hysteria2_sni: str | None = None
     hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
-
-    ikev2_psk: str | None = None
-
-    l2tp_psk: str | None = None
 
 
 class HostResponse(BaseModel):
@@ -87,17 +72,10 @@ class HostResponse(BaseModel):
     security_override: HostSecurity | None
     allowinsecure: bool
 
-    wireguard_public_key: str | None
-    wireguard_private_key: str | None
-    wireguard_subnet: str | None
-    wireguard_port: int | None
+    core_id: int | None
 
     hysteria2_sni: str | None
     hysteria2_port: int | None
-
-    ikev2_psk: str | None
-
-    l2tp_psk: str | None
 
     network: str | None
     effective_security: str | None

@@ -13,7 +13,7 @@ def build_client_config(peer: WireGuardPeer, host: Host) -> str:
         f"DNS = {_DNS}\n"
         "\n"
         "[Peer]\n"
-        f"PublicKey = {host.wireguard_public_key}\n"
+        f"PublicKey = {host.core.wireguard_public_key if host.core else ''}\n"
         f"Endpoint = {host.address}:{host.effective_port}\n"
         "AllowedIPs = 0.0.0.0/0, ::/0\n"
         "PersistentKeepalive = 25\n"

@@ -21,9 +21,12 @@ class HostProtocol(str, enum.Enum):
 
 # Protocols Xray-core itself terminates — these are the ones backed by an
 # Inbound (parsed out of a Core's real Xray JSON, see app/models/inbound.py).
-# wireguard/hysteria2 are separate standalone servers this panel doesn't
-# start, so they keep their own directly-on-Host fields instead.
 XRAY_PROTOCOLS = {HostProtocol.vless, HostProtocol.vmess, HostProtocol.trojan, HostProtocol.shadowsocks}
+
+# Standalone servers this panel doesn't run itself — a Host just picks a
+# Core of the matching core_type, which holds the shared technical fields
+# (keys/PSK/port/subnet) once instead of repeating them per Host.
+CORE_LINKED_PROTOCOLS = {HostProtocol.wireguard, HostProtocol.l2tp, HostProtocol.ikev2}
 
 FINGERPRINTS = (
     "chrome",
@@ -57,9 +60,11 @@ class Host(Base):
     path, security, allowinsecure). Nothing about *how* the proxy actually
     runs lives on the Host for these — that's the Inbound's JSON.
 
-    wireguard/hysteria2 aren't Xray inbounds at all (separate standalone
-    servers this panel doesn't start), so they keep their own fields
-    directly on the Host instead of going through an Inbound.
+    wireguard/l2tp/ikev2 aren't Xray inbounds at all (separate standalone
+    servers this panel doesn't start) — a Host for these just picks a Core
+    of the matching core_type (see app/models/core.py), which holds the
+    shared fields. hysteria2 is the one exception: no Core concept for it
+    yet, so it still keeps its own fields directly on the Host.
     """
 
     __tablename__ = "hosts"
@@ -83,24 +88,14 @@ class Host(Base):
     security_override: Mapped[HostSecurity | None] = mapped_column(Enum(HostSecurity), nullable=True)
     allowinsecure: Mapped[bool] = mapped_column(default=False)
 
-    # --- wireguard only ---
-    wireguard_public_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    wireguard_private_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    wireguard_subnet: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    wireguard_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # --- wireguard/l2tp/ikev2: which Core (of the matching core_type)
+    # this Host is built on — that Core holds the actual keys/PSK/port/subnet.
+    core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
+    core: Mapped["Core | None"] = relationship("Core", lazy="selectin")  # noqa: F821
 
     # --- hysteria2 only ---
     hysteria2_sni: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hysteria2_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-    # --- ikev2 only: shared IPsec pre-shared key, standard UDP 500/4500 ports ---
-    ikev2_psk: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    # --- l2tp only: shared IPsec PSK; the PPP username/password are
-    # per-user, not per-host (see app/links/generator.py::build_l2tp_config,
-    # which reuses the user's own username/secret instead of a separate
-    # allocation table) ---
-    l2tp_psk: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -134,7 +129,7 @@ class Host(Base):
     @property
     def effective_port(self) -> int | None:
         if self.protocol == HostProtocol.wireguard:
-            return self.wireguard_port
+            return self.core.wireguard_port if self.core else None
         if self.protocol == HostProtocol.hysteria2:
             return self.hysteria2_port
         if self.port_override is not None:

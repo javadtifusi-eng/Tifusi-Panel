@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.groups.access import resolve_groups
-from app.models.host import XRAY_PROTOCOLS, Host, HostProtocol
+from app.models.core import Core
+from app.models.host import CORE_LINKED_PROTOCOLS, XRAY_PROTOCOLS, Host, HostProtocol
 from app.models.inbound import Inbound
 from app.reality.keys import generate_reality_keypair
 from app.schemas.host import (
@@ -42,27 +43,23 @@ async def _validate(protocol: HostProtocol, get, db: AsyncSession) -> None:
                 status_code=400,
                 detail=f"inbound '{inbound.tag}' is {inbound.protocol}, not {protocol.value}",
             )
-    elif protocol == HostProtocol.wireguard:
-        missing = _missing(
-            wireguard_public_key=get("wireguard_public_key"),
-            wireguard_private_key=get("wireguard_private_key"),
-            wireguard_subnet=get("wireguard_subnet"),
-            wireguard_port=get("wireguard_port"),
-        )
+    elif protocol in CORE_LINKED_PROTOCOLS:
+        core_id = get("core_id")
+        missing = _missing(core_id=core_id)
         if missing:
-            raise HTTPException(status_code=400, detail=f"wireguard requires: {', '.join(missing)}")
+            raise HTTPException(status_code=400, detail=f"{protocol.value} requires: {', '.join(missing)}")
+        core = await db.get(Core, core_id)
+        if core is None:
+            raise HTTPException(status_code=400, detail="core_id not found")
+        if core.core_type != protocol.value:
+            raise HTTPException(
+                status_code=400,
+                detail=f"core '{core.name}' is {core.core_type.value}, not {protocol.value}",
+            )
     elif protocol == HostProtocol.hysteria2:
         missing = _missing(hysteria2_sni=get("hysteria2_sni"), hysteria2_port=get("hysteria2_port"))
         if missing:
             raise HTTPException(status_code=400, detail=f"hysteria2 requires: {', '.join(missing)}")
-    elif protocol == HostProtocol.ikev2:
-        missing = _missing(ikev2_psk=get("ikev2_psk"))
-        if missing:
-            raise HTTPException(status_code=400, detail=f"ikev2 requires: {', '.join(missing)}")
-    elif protocol == HostProtocol.l2tp:
-        missing = _missing(l2tp_psk=get("l2tp_psk"))
-        if missing:
-            raise HTTPException(status_code=400, detail=f"l2tp requires: {', '.join(missing)}")
 
 
 @router.get("/reality-keypair", response_model=RealityKeypairResponse)

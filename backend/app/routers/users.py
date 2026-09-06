@@ -117,7 +117,7 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
     # not an importable link, so each gets its own field of raw connection
     # info instead of joining the base64 link list.
     ikev2_configs = [
-        {"remark": render_remark(host, user), "server": host.address, "psk": host.ikev2_psk}
+        {"remark": render_remark(host, user), "server": host.address, "psk": host.core.ikev2_psk if host.core else None}
         for host in allowed_hosts
         if host.protocol == HostProtocol.ikev2
     ]
@@ -125,7 +125,7 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
         {
             "remark": render_remark(host, user),
             "server": host.address,
-            "psk": host.l2tp_psk,
+            "psk": host.core.l2tp_psk if host.core else None,
             "username": user.username,
             "password": user.secret,
         }

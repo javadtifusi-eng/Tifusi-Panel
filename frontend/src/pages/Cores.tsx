@@ -6,10 +6,12 @@ import {
   deleteCore,
   FINGERPRINTS,
   getRealityKeypair,
+  getWireGuardKeypair,
   listCores,
   scanReality,
   updateCore,
   type Core,
+  type CoreType,
   type RealityScanResult,
 } from '../lib/api'
 
@@ -21,8 +23,22 @@ const labelClass = 'mb-1.5 block text-xs text-slate-400'
 const monoTextarea =
   'w-full rounded-lg border border-white/15 bg-black/30 p-3 font-mono text-xs text-cyan-100 outline-none focus:border-cyan-400/60'
 
+const CORE_TYPES: CoreType[] = ['xray', 'wireguard', 'l2tp', 'ikev2']
+
 function emptyForm() {
-  return { name: '', note: '', configText: '' }
+  return {
+    coreType: '' as CoreType | '',
+    name: '',
+    note: '',
+    configText: '',
+    wireguardPublicKey: '',
+    wireguardPrivateKey: '',
+    wireguardPort: '',
+    wireguardSubnet: '',
+    l2tpPsk: '',
+    ikev2Psk: '',
+    ikev2RemoteId: '',
+  }
 }
 
 type WizardProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks'
@@ -132,6 +148,9 @@ export default function CoresPage() {
   )
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
+  const [generatingWgKeys, setGeneratingWgKeys] = useState(false)
+  const [showWgPrivateKey, setShowWgPrivateKey] = useState(false)
+
   function updateWizard<K extends keyof ReturnType<typeof emptyWizard>>(
     key: K,
     value: ReturnType<typeof emptyWizard>[K],
@@ -186,10 +205,35 @@ export default function CoresPage() {
 
   function startEdit(core: Core) {
     setEditingId(core.id)
-    setForm({ name: core.name, note: core.note ?? '', configText: JSON.stringify(core.config, null, 2) })
+    setForm({
+      coreType: core.core_type,
+      name: core.name,
+      note: core.note ?? '',
+      configText: core.config ? JSON.stringify(core.config, null, 2) : '',
+      wireguardPublicKey: core.wireguard_public_key ?? '',
+      wireguardPrivateKey: core.wireguard_private_key ?? '',
+      wireguardPort: core.wireguard_port != null ? String(core.wireguard_port) : '',
+      wireguardSubnet: core.wireguard_subnet ?? '',
+      l2tpPsk: core.l2tp_psk ?? '',
+      ikev2Psk: core.ikev2_psk ?? '',
+      ikev2RemoteId: core.ikev2_remote_id ?? '',
+    })
     setWizard(emptyWizard())
     setLastWarnings([])
     setShowForm(true)
+  }
+
+  async function generateWgKeys() {
+    setGeneratingWgKeys(true)
+    setError(null)
+    try {
+      const keys = await getWireGuardKeypair()
+      setForm((f) => ({ ...f, wireguardPublicKey: keys.public_key, wireguardPrivateKey: keys.private_key }))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.hostsPage.keyGenFailed)
+    } finally {
+      setGeneratingWgKeys(false)
+    }
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -243,18 +287,33 @@ export default function CoresPage() {
     e.preventDefault()
     setError(null)
     setLastWarnings([])
+    if (!form.coreType) return
 
-    let config: Record<string, unknown>
-    try {
-      config = JSON.parse(form.configText)
-    } catch {
-      setError(t.coresPage.invalidJson)
-      return
+    let config: Record<string, unknown> | undefined
+    if (form.coreType === 'xray') {
+      try {
+        config = JSON.parse(form.configText)
+      } catch {
+        setError(t.coresPage.invalidJson)
+        return
+      }
     }
 
     setSubmitting(true)
     try {
-      const payload = { name: form.name, note: form.note || null, config }
+      const payload = {
+        name: form.name,
+        note: form.note || null,
+        core_type: form.coreType,
+        config,
+        wireguard_public_key: form.coreType === 'wireguard' ? form.wireguardPublicKey || null : null,
+        wireguard_private_key: form.coreType === 'wireguard' ? form.wireguardPrivateKey || null : null,
+        wireguard_port: form.coreType === 'wireguard' && form.wireguardPort ? parseInt(form.wireguardPort, 10) : null,
+        wireguard_subnet: form.coreType === 'wireguard' ? form.wireguardSubnet || null : null,
+        l2tp_psk: form.coreType === 'l2tp' ? form.l2tpPsk || null : null,
+        ikev2_psk: form.coreType === 'ikev2' ? form.ikev2Psk || null : null,
+        ikev2_remote_id: form.coreType === 'ikev2' ? form.ikev2RemoteId || null : null,
+      }
       const result = editingId ? await updateCore(editingId, payload) : await createCore(payload)
       setLastWarnings(result.warnings)
       if (result.warnings.length === 0) resetForm()
@@ -292,6 +351,30 @@ export default function CoresPage() {
 
       {showForm && (
         <div className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
+          <div className="mb-4">
+            <label className={labelClass}>{t.coresPage.coreTypeLabel}</label>
+            <div className="flex flex-wrap gap-2">
+              {CORE_TYPES.map((ct) => (
+                <button
+                  key={ct}
+                  type="button"
+                  disabled={!!editingId}
+                  onClick={() => setForm((f) => ({ ...emptyForm(), coreType: ct, name: f.name, note: f.note }))}
+                  className="rounded-lg border px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                  style={
+                    form.coreType === ct
+                      ? { borderColor: ACCENT, color: ACCENT, backgroundColor: 'rgba(34,211,238,0.1)' }
+                      : { borderColor: 'rgba(255,255,255,0.15)', color: '#cbd5e1' }
+                  }
+                >
+                  {t.coresPage.coreTypeLabels[ct]}
+                </button>
+              ))}
+            </div>
+            {editingId && <div className="mt-1.5 text-[11px] text-slate-500">{t.coresPage.coreTypeHint}</div>}
+          </div>
+
+          {form.coreType === 'xray' && (
           <div className="mb-4 rounded-lg border border-white/10 bg-black/20 p-3">
             <div className="mb-1 text-xs font-bold text-slate-300">{t.coresPage.wizardTitle}</div>
             <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.wizardHint}</div>
@@ -578,7 +661,9 @@ export default function CoresPage() {
               {addedFlash ? t.coresPage.addedToJson : t.coresPage.addToJsonBtn}
             </button>
           </div>
+          )}
 
+          {form.coreType && (
           <form onSubmit={handleSubmit}>
             <div className="flex flex-wrap gap-3">
               <div>
@@ -600,6 +685,7 @@ export default function CoresPage() {
               </div>
             </div>
 
+            {form.coreType === 'xray' && (
             <div className="mt-3">
               <div className="mb-1.5 flex items-center justify-between">
                 <label className={labelClass}>{t.coresPage.configLabel}</label>
@@ -631,6 +717,117 @@ export default function CoresPage() {
                 className={monoTextarea}
               />
             </div>
+            )}
+
+            {form.coreType === 'wireguard' && (
+              <div className="mt-4 rounded-lg border border-cyan-400/15 bg-black/25 p-3">
+                <div className="mb-3 flex flex-wrap gap-3">
+                  <div>
+                    <label className={labelClass}>{t.hostsPage.wgPortLabel}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={form.wireguardPort}
+                      onChange={(e) => setForm((f) => ({ ...f, wireguardPort: e.target.value }))}
+                      required
+                      className={`${inputClass} w-28`}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>{t.hostsPage.wgSubnetLabel}</label>
+                    <input
+                      dir="ltr"
+                      value={form.wireguardSubnet}
+                      onChange={(e) => setForm((f) => ({ ...f, wireguardSubnet: e.target.value }))}
+                      placeholder="10.66.66.0/24"
+                      required
+                      className={`${inputClass} w-48 text-left font-mono text-xs`}
+                    />
+                  </div>
+                </div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">{t.hostsPage.wgServerKeyLabel}</span>
+                  <button
+                    type="button"
+                    onClick={generateWgKeys}
+                    disabled={generatingWgKeys}
+                    className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                  >
+                    {generatingWgKeys ? t.hostsPage.generatingKeys : t.hostsPage.generateNewKey}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <input
+                    dir="ltr"
+                    readOnly
+                    value={form.wireguardPublicKey}
+                    placeholder="Public Key"
+                    className={`${inputClass} text-left font-mono text-xs`}
+                  />
+                  <div className="relative">
+                    <input
+                      dir="ltr"
+                      readOnly
+                      type={showWgPrivateKey ? 'text' : 'password'}
+                      value={form.wireguardPrivateKey}
+                      placeholder="Private Key"
+                      className={`${inputClass} w-full pr-12 text-left font-mono text-xs`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowWgPrivateKey((v) => !v)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400"
+                    >
+                      {showWgPrivateKey ? t.hostsPage.hide : t.hostsPage.show}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 text-[10px] text-slate-500">{t.hostsPage.wgHint}</div>
+              </div>
+            )}
+
+            {form.coreType === 'l2tp' && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                <div>
+                  <label className={labelClass}>{t.hostsPage.l2tpPskLabel}</label>
+                  <input
+                    dir="ltr"
+                    value={form.l2tpPsk}
+                    onChange={(e) => setForm((f) => ({ ...f, l2tpPsk: e.target.value }))}
+                    required
+                    className={`${inputClass} w-64 font-mono text-xs`}
+                  />
+                </div>
+                <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.l2tpHint}</div>
+              </div>
+            )}
+
+            {form.coreType === 'ikev2' && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                <div>
+                  <label className={labelClass}>{t.hostsPage.ikev2PskLabel}</label>
+                  <input
+                    dir="ltr"
+                    value={form.ikev2Psk}
+                    onChange={(e) => setForm((f) => ({ ...f, ikev2Psk: e.target.value }))}
+                    required
+                    className={`${inputClass} w-64 font-mono text-xs`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>{t.coresPage.ikev2RemoteIdLabel}</label>
+                  <input
+                    dir="ltr"
+                    value={form.ikev2RemoteId}
+                    onChange={(e) => setForm((f) => ({ ...f, ikev2RemoteId: e.target.value }))}
+                    className={`${inputClass} w-56 text-left`}
+                  />
+                </div>
+                <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.ikev2PortsHint}</div>
+              </div>
+            )}
 
             {lastWarnings.length > 0 && (
               <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200">
@@ -654,6 +851,7 @@ export default function CoresPage() {
               {editingId ? t.common.save : t.coresPage.createCoreBtn}
             </button>
           </form>
+          )}
         </div>
       )}
 
@@ -671,13 +869,24 @@ export default function CoresPage() {
           <div key={c.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <div className="font-bold text-slate-100">{c.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-100">{c.name}</span>
+                  <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-slate-300">
+                    {t.coresPage.coreTypeLabels[c.core_type]}
+                  </span>
+                </div>
                 {c.note && <div className="text-xs text-slate-500">{c.note}</div>}
               </div>
               <div className="flex items-center gap-4">
-                <span className="text-xs text-slate-400">
-                  {t.coresPage.colNodes}: <span className="text-slate-200">{c.node_count}</span>
-                </span>
+                {c.core_type === 'xray' ? (
+                  <span className="text-xs text-slate-400">
+                    {t.coresPage.colNodes}: <span className="text-slate-200">{c.node_count}</span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-400">
+                    {t.coresPage.colHosts}: <span className="text-slate-200">{c.host_count}</span>
+                  </span>
+                )}
                 <button onClick={() => startEdit(c)} className="text-xs text-slate-400 hover:underline">
                   {t.common.edit}
                 </button>
@@ -687,9 +896,29 @@ export default function CoresPage() {
               </div>
             </div>
 
-            {c.inbounds.length === 0 ? (
+            {c.core_type === 'wireguard' && (
+              <div dir="ltr" className="font-mono text-xs text-slate-400">
+                {c.wireguard_subnet} · port {c.wireguard_port}
+              </div>
+            )}
+            {c.core_type === 'l2tp' && (
+              <div className="text-xs text-slate-400">PSK: {c.l2tp_psk ? '••••••••' : '—'}</div>
+            )}
+            {c.core_type === 'ikev2' && (
+              <div className="text-xs text-slate-400">
+                PSK: {c.ikev2_psk ? '••••••••' : '—'}
+                {c.ikev2_remote_id && (
+                  <span dir="ltr" className="font-mono">
+                    {' '}
+                    · {c.ikev2_remote_id}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {c.core_type === 'xray' && c.inbounds.length === 0 ? (
               <div className="text-xs text-slate-500">{t.coresPage.noInbounds}</div>
-            ) : (
+            ) : c.core_type === 'xray' ? (
               <div className="overflow-x-auto rounded-lg border border-white/10">
                 <table className="w-full text-xs">
                   <thead>
@@ -732,7 +961,7 @@ export default function CoresPage() {
                   </tbody>
                 </table>
               </div>
-            )}
+            ) : null}
           </div>
         ))}
       </div>

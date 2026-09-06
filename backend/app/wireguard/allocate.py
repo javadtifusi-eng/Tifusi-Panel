@@ -10,7 +10,8 @@ from app.wireguard.keys import generate_wireguard_keypair
 
 
 async def _allocate_address(host: Host, db: AsyncSession) -> str:
-    network = ipaddress.ip_network(host.wireguard_subnet, strict=False)
+    subnet = host.core.wireguard_subnet if host.core else None
+    network = ipaddress.ip_network(subnet, strict=False)
     result = await db.execute(select(WireGuardPeer.address).where(WireGuardPeer.host_id == host.id))
     taken = {address for (address,) in result.all()}
 
@@ -20,7 +21,7 @@ async def _allocate_address(host: Host, db: AsyncSession) -> str:
         address = str(candidate)
         if address not in taken:
             return address
-    raise ValueError(f"WireGuard subnet {host.wireguard_subnet} on host {host.id} has no free addresses left")
+    raise ValueError(f"WireGuard subnet {subnet} on host {host.id} has no free addresses left")
 
 
 async def get_or_create_peer(host: Host, user: ProxyUser, db: AsyncSession) -> WireGuardPeer:

@@ -203,7 +203,9 @@ export default function NodesPage() {
               className={inputClass}
             >
               <option value="">{t.coresPage.selectPlaceholder}</option>
-              {cores.map((c) => (
+              {cores
+                .filter((c) => c.core_type === 'xray')
+                .map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>

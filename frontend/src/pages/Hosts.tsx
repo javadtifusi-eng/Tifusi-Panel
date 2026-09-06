@@ -5,7 +5,6 @@ import {
   createHost,
   deleteHost,
   FINGERPRINTS,
-  getWireGuardKeypair,
   listCores,
   listHosts,
   updateHost,
@@ -40,14 +39,9 @@ function emptyForm() {
     host_header_override: '',
     security_override: '' as HostSecurity | '',
     allowinsecure: false,
-    wireguard_public_key: '',
-    wireguard_private_key: '',
-    wireguard_subnet: '',
-    wireguard_port: '',
+    core_id: null as number | null,
     hysteria2_sni: '',
     hysteria2_port: '',
-    ikev2_psk: '',
-    l2tp_psk: '',
   }
 }
 
@@ -65,16 +59,13 @@ export default function HostsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [showPlaceholders, setShowPlaceholders] = useState(false)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
-  const [generatingKeys, setGeneratingKeys] = useState(false)
-  const [showPrivateKey, setShowPrivateKey] = useState(false)
 
   const allInbounds: Inbound[] = cores.flatMap((c) => c.inbounds)
   const isXray = form.protocol !== '' && XRAY_PROTOCOLS.includes(form.protocol)
-  const isWireguard = form.protocol === 'wireguard'
+  const isCoreLinked = form.protocol === 'wireguard' || form.protocol === 'l2tp' || form.protocol === 'ikev2'
   const isHysteria2 = form.protocol === 'hysteria2'
-  const isIkev2 = form.protocol === 'ikev2'
-  const isL2tp = form.protocol === 'l2tp'
   const inboundsForProtocol = allInbounds.filter((i) => i.protocol === form.protocol)
+  const coresForProtocol = cores.filter((c) => c.core_type === form.protocol)
 
   async function refresh() {
     try {
@@ -119,7 +110,6 @@ export default function HostsPage() {
     setEditingId(null)
     setForm(emptyForm())
     setShowForm(false)
-    setShowPrivateKey(false)
     setError(null)
   }
 
@@ -138,29 +128,11 @@ export default function HostsPage() {
       host_header_override: host.host_header_override ?? '',
       security_override: host.security_override ?? '',
       allowinsecure: host.allowinsecure,
-      wireguard_public_key: host.wireguard_public_key ?? '',
-      wireguard_private_key: host.wireguard_private_key ?? '',
-      wireguard_subnet: host.wireguard_subnet ?? '',
-      wireguard_port: host.wireguard_port != null ? String(host.wireguard_port) : '',
+      core_id: host.core_id,
       hysteria2_sni: host.hysteria2_sni ?? '',
       hysteria2_port: host.hysteria2_port != null ? String(host.hysteria2_port) : '',
-      ikev2_psk: host.ikev2_psk ?? '',
-      l2tp_psk: host.l2tp_psk ?? '',
     })
     setShowForm(true)
-  }
-
-  async function generateWgKeys() {
-    setGeneratingKeys(true)
-    setError(null)
-    try {
-      const keys = await getWireGuardKeypair()
-      setForm((f) => ({ ...f, wireguard_public_key: keys.public_key, wireguard_private_key: keys.private_key }))
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.hostsPage.keyGenFailed)
-    } finally {
-      setGeneratingKeys(false)
-    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -181,14 +153,9 @@ export default function HostsPage() {
       host_header_override: isXray ? form.host_header_override || null : null,
       security_override: isXray && form.security_override ? form.security_override : null,
       allowinsecure: isXray ? form.allowinsecure : false,
-      wireguard_public_key: isWireguard ? form.wireguard_public_key || null : null,
-      wireguard_private_key: isWireguard ? form.wireguard_private_key || null : null,
-      wireguard_subnet: isWireguard ? form.wireguard_subnet || null : null,
-      wireguard_port: isWireguard && form.wireguard_port ? parseInt(form.wireguard_port, 10) : null,
+      core_id: isCoreLinked ? form.core_id : null,
       hysteria2_sni: isHysteria2 ? form.hysteria2_sni || null : null,
       hysteria2_port: isHysteria2 && form.hysteria2_port ? parseInt(form.hysteria2_port, 10) : null,
-      ikev2_psk: isIkev2 ? form.ikev2_psk || null : null,
-      l2tp_psk: isL2tp ? form.l2tp_psk || null : null,
     }
     try {
       if (editingId) await updateHost(editingId, payload)
@@ -284,6 +251,7 @@ export default function HostsPage() {
                 onChange={(e) => {
                   update('protocol', e.target.value as HostProtocol)
                   update('inbound_id', null)
+                  update('core_id', null)
                 }}
                 required
                 className={inputClass}
@@ -412,70 +380,29 @@ export default function HostsPage() {
             </div>
           )}
 
-          {isWireguard && (
-            <div className="mt-4 rounded-lg border border-cyan-400/15 bg-black/25 p-3">
-              <div className="mb-3 flex flex-wrap gap-3">
-                <div>
-                  <label className={labelClass}>{t.hostsPage.wgPortLabel}</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="65535"
-                    value={form.wireguard_port}
-                    onChange={(e) => update('wireguard_port', e.target.value)}
-                    className={`${inputClass} w-28`}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>{t.hostsPage.wgSubnetLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={form.wireguard_subnet}
-                    onChange={(e) => update('wireguard_subnet', e.target.value)}
-                    placeholder="10.66.66.0/24"
-                    className={`${inputClass} w-48 text-left font-mono text-xs`}
-                  />
-                </div>
-              </div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs text-slate-400">{t.hostsPage.wgServerKeyLabel}</span>
-                <button
-                  type="button"
-                  onClick={generateWgKeys}
-                  disabled={generatingKeys}
-                  className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                  style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+          {isCoreLinked && (
+            <div className="mt-3 flex flex-wrap gap-3">
+              <div>
+                <label className={labelClass}>{t.hostsPage.selectCoreLabel}</label>
+                <select
+                  value={form.core_id ?? ''}
+                  onChange={(e) => update('core_id', e.target.value ? Number(e.target.value) : null)}
+                  required
+                  className={`${inputClass} w-56`}
                 >
-                  {generatingKeys ? t.hostsPage.generatingKeys : t.hostsPage.generateNewKey}
-                </button>
+                  <option value="" disabled>
+                    {t.coresPage.selectPlaceholder}
+                  </option>
+                  {coresForProtocol.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {coresForProtocol.length === 0 && (
+                  <div className="mt-1 text-[10px] text-amber-400">{t.hostsPage.noCoresForProtocol}</div>
+                )}
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <input
-                  dir="ltr"
-                  readOnly
-                  value={form.wireguard_public_key}
-                  placeholder="Public Key"
-                  className={`${inputClass} text-left font-mono text-xs`}
-                />
-                <div className="relative">
-                  <input
-                    dir="ltr"
-                    readOnly
-                    type={showPrivateKey ? 'text' : 'password'}
-                    value={form.wireguard_private_key}
-                    placeholder="Private Key"
-                    className={`${inputClass} w-full pr-12 text-left font-mono text-xs`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPrivateKey((v) => !v)}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400"
-                  >
-                    {showPrivateKey ? t.hostsPage.hide : t.hostsPage.show}
-                  </button>
-                </div>
-              </div>
-              <div className="mt-2 text-[10px] text-slate-500">{t.hostsPage.wgHint}</div>
             </div>
           )}
 
@@ -501,36 +428,6 @@ export default function HostsPage() {
                   className={`${inputClass} w-28`}
                 />
               </div>
-            </div>
-          )}
-
-          {isIkev2 && (
-            <div className="mt-3 flex flex-wrap gap-3">
-              <div>
-                <label className={labelClass}>{t.hostsPage.ikev2PskLabel}</label>
-                <input
-                  dir="ltr"
-                  value={form.ikev2_psk}
-                  onChange={(e) => update('ikev2_psk', e.target.value)}
-                  className={`${inputClass} w-64 font-mono text-xs`}
-                />
-              </div>
-              <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.ikev2PortsHint}</div>
-            </div>
-          )}
-
-          {isL2tp && (
-            <div className="mt-3 flex flex-wrap gap-3">
-              <div>
-                <label className={labelClass}>{t.hostsPage.l2tpPskLabel}</label>
-                <input
-                  dir="ltr"
-                  value={form.l2tp_psk}
-                  onChange={(e) => update('l2tp_psk', e.target.value)}
-                  className={`${inputClass} w-64 font-mono text-xs`}
-                />
-              </div>
-              <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.l2tpHint}</div>
             </div>
           )}
 
