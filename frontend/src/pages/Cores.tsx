@@ -293,103 +293,6 @@ export default function CoresPage() {
       {showForm && (
         <div className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
           <div className="mb-4 rounded-lg border border-white/10 bg-black/20 p-3">
-            <div className="mb-2 text-xs font-bold text-slate-300">{t.coresPage.realityToolsTitle}</div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={generateKeys}
-                disabled={generatingKeys}
-                className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
-              >
-                {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
-              </button>
-              <button
-                type="button"
-                onClick={runScan}
-                disabled={scanning}
-                className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
-              >
-                {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
-              </button>
-            </div>
-
-            {generatedKey && (
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {(['private_key', 'public_key', 'short_id'] as const).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => copy(generatedKey[key], key)}
-                    dir="ltr"
-                    className="truncate rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-left font-mono text-[11px] text-cyan-200 hover:border-cyan-400/40"
-                    title={generatedKey[key]}
-                  >
-                    {copiedField === key ? t.coresPage.copied : `${key}: ${generatedKey[key]}`}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {scanResults !== null && scanResults.length > 0 && (
-              <div className="mt-3 max-h-64 overflow-y-auto overflow-x-auto rounded-lg border border-white/10">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-white/10 text-slate-400">
-                      <th className="px-3 py-2 text-left font-medium" dir="ltr">
-                        {t.coresPage.scanColHost}
-                      </th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.scanColStatus}</th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.scanColTls}</th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.scanColLatency}</th>
-                      <th className="px-3 py-2 font-medium"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scanResults.map((r) => (
-                      <tr key={r.host} className="border-b border-white/5 last:border-0">
-                        <td dir="ltr" className="px-3 py-2 text-left font-mono text-slate-200">
-                          {r.host}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {r.recommended ? (
-                            <span className="font-bold" style={{ color: ACCENT }}>
-                              {t.coresPage.scanStatusRecommended}
-                            </span>
-                          ) : r.reachable ? (
-                            <span className="text-slate-300">{t.coresPage.scanStatusUsable}</span>
-                          ) : (
-                            <span className="text-red-400">{t.coresPage.scanStatusUnreachable}</span>
-                          )}
-                        </td>
-                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
-                          {r.tls_version ?? '—'}
-                        </td>
-                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
-                          {r.latency_ms != null ? `${r.latency_ms}ms` : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-left">
-                          {r.reachable && (
-                            <button
-                              type="button"
-                              onClick={() => updateWizard('sni', r.host)}
-                              className="text-[11px] hover:underline"
-                              style={{ color: ACCENT }}
-                            >
-                              {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="mb-4 rounded-lg border border-white/10 bg-black/20 p-3">
             <div className="mb-1 text-xs font-bold text-slate-300">{t.coresPage.wizardTitle}</div>
             <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.wizardHint}</div>
 
@@ -530,14 +433,109 @@ export default function CoresPage() {
                     />
                   </div>
                 )}
-                {wizard.security === 'reality' && (
-                  <div className="flex flex-col justify-end gap-1 text-[11px] text-slate-500">
-                    <div dir="ltr" className="font-mono">
-                      privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'}
-                    </div>
-                    <div dir="ltr" className="font-mono">
-                      shortId: {wizard.realityShortId || '—'}
-                    </div>
+              </div>
+            )}
+
+            {isTransportProtocol && wizard.security === 'reality' && (
+              <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                <div className="mb-2 text-xs font-bold text-slate-300">{t.coresPage.realityToolsTitle}</div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={generateKeys}
+                    disabled={generatingKeys}
+                    className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                  >
+                    {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={runScan}
+                    disabled={scanning}
+                    className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                  >
+                    {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
+                  </button>
+                  <div className="text-[11px] text-slate-500">
+                    <span dir="ltr" className="font-mono">
+                      privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'} · shortId:{' '}
+                      {wizard.realityShortId || '—'}
+                    </span>
+                  </div>
+                </div>
+
+                {generatedKey && (
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {(['private_key', 'public_key', 'short_id'] as const).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => copy(generatedKey[key], key)}
+                        dir="ltr"
+                        className="truncate rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-left font-mono text-[11px] text-cyan-200 hover:border-cyan-400/40"
+                        title={generatedKey[key]}
+                      >
+                        {copiedField === key ? t.coresPage.copied : `${key}: ${generatedKey[key]}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {scanResults !== null && scanResults.length > 0 && (
+                  <div className="mt-3 max-h-64 overflow-y-auto overflow-x-auto rounded-lg border border-white/10">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400">
+                          <th className="px-3 py-2 text-left font-medium" dir="ltr">
+                            {t.coresPage.scanColHost}
+                          </th>
+                          <th className="px-3 py-2 font-medium">{t.coresPage.scanColStatus}</th>
+                          <th className="px-3 py-2 font-medium">{t.coresPage.scanColTls}</th>
+                          <th className="px-3 py-2 font-medium">{t.coresPage.scanColLatency}</th>
+                          <th className="px-3 py-2 font-medium"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scanResults.map((r) => (
+                          <tr key={r.host} className="border-b border-white/5 last:border-0">
+                            <td dir="ltr" className="px-3 py-2 text-left font-mono text-slate-200">
+                              {r.host}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {r.recommended ? (
+                                <span className="font-bold" style={{ color: ACCENT }}>
+                                  {t.coresPage.scanStatusRecommended}
+                                </span>
+                              ) : r.reachable ? (
+                                <span className="text-slate-300">{t.coresPage.scanStatusUsable}</span>
+                              ) : (
+                                <span className="text-red-400">{t.coresPage.scanStatusUnreachable}</span>
+                              )}
+                            </td>
+                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
+                              {r.tls_version ?? '—'}
+                            </td>
+                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
+                              {r.latency_ms != null ? `${r.latency_ms}ms` : '—'}
+                            </td>
+                            <td className="px-3 py-2 text-left">
+                              {r.reachable && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateWizard('sni', r.host)}
+                                  className="text-[11px] hover:underline"
+                                  style={{ color: ACCENT }}
+                                >
+                                  {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
