@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+import { LangProvider } from './i18n/LangContext'
 import { clearToken, getToken, setToken } from './lib/auth'
 
 export default function App() {
@@ -24,9 +25,9 @@ export default function App() {
     setTokenState(null)
   }
 
-  if (!token) {
-    return <Login onAuthenticated={handleAuthenticated} />
-  }
-
-  return <Dashboard onLogout={handleLogout} />
+  return (
+    <LangProvider>
+      {!token ? <Login onAuthenticated={handleAuthenticated} /> : <Dashboard onLogout={handleLogout} />}
+    </LangProvider>
+  )
 }

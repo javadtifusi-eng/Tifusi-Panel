@@ -8,6 +8,12 @@ body {
   margin: 0;
 }
 
+@media (max-height: 820px) {
+  .hide-on-short-viewport {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

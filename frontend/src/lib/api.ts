@@ -157,11 +157,6 @@ export interface RealityScanResponse {
   results: RealityScanResult[]
 }
 
-export async function getRealityTargetCount(): Promise<number> {
-  const res = await authorizedFetch('/reality/targets')
-  return (await res.json()).count
-}
-
 export async function scanReality(sampleSize?: number): Promise<RealityScanResponse> {
   const res = await authorizedFetch('/reality/scan', {
     method: 'POST',

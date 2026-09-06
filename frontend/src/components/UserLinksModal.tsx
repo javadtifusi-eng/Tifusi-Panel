@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import { useLang } from '../i18n/LangContext'
 import { ApiError, getUserLinks, type UserLinks } from '../lib/api'
 
 const ACCENT = '#22D3EE'
@@ -17,6 +18,7 @@ export default function UserLinksModal({
   username: string
   onClose: () => void
 }) {
+  const { t, dir } = useLang()
   const [data, setData] = useState<UserLinks | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -24,7 +26,7 @@ export default function UserLinksModal({
   useEffect(() => {
     getUserLinks(userId)
       .then(setData)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'خطا در دریافت لینک‌ها'))
+      .catch((err) => setError(err instanceof ApiError ? err.message : t.userLinksModal.fetchError))
   }, [userId])
 
   async function copy(text: string) {
@@ -40,20 +42,20 @@ export default function UserLinksModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div
-        dir="rtl"
+        dir={dir}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-cyan-400/20 bg-slate-950 p-6"
         style={{ boxShadow: '0 0 60px rgba(34,211,238,0.1)' }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-50">لینک‌های {username}</h2>
+          <h2 className="text-lg font-bold text-slate-50">{t.userLinksModal.title(username)}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
             ✕
           </button>
         </div>
 
         {error && <div className="text-sm text-red-400">{error}</div>}
-        {!data && !error && <div className="text-sm text-slate-500">در حال بارگذاری…</div>}
+        {!data && !error && <div className="text-sm text-slate-500">{t.loading}</div>}
 
         {data && (
           <>
@@ -61,7 +63,7 @@ export default function UserLinksModal({
               <div className="rounded-lg bg-white p-3">
                 <QRCodeSVG value={data.subscription_url} size={160} />
               </div>
-              <div className="text-xs text-slate-400">لینک اشتراک (همه‌ی کانفیگ‌ها با یک لینک)</div>
+              <div className="text-xs text-slate-400">{t.userLinksModal.subscriptionLinkLabel}</div>
               <div
                 dir="ltr"
                 className="w-full break-all rounded-lg bg-white/5 px-3 py-2 text-center font-mono text-[11px] text-cyan-200"
@@ -73,12 +75,12 @@ export default function UserLinksModal({
                 className="rounded-lg px-4 py-1.5 text-xs font-bold text-slate-950"
                 style={{ backgroundColor: ACCENT }}
               >
-                {copied === data.subscription_url ? 'کپی شد ✓' : 'کپی لینک اشتراک'}
+                {copied === data.subscription_url ? t.common.copiedCheck : t.userLinksModal.copySubLink}
               </button>
             </div>
 
             {data.links.length === 0 && data.wireguard_configs.length === 0 ? (
-              <div className="text-sm text-slate-500">هنوز هاستی برای ساخت لینک وجود نداره.</div>
+              <div className="text-sm text-slate-500">{t.userLinksModal.noHostsForLinks}</div>
             ) : (
               <div className="flex flex-col gap-2">
                 {data.links.map((link) => (
@@ -93,7 +95,7 @@ export default function UserLinksModal({
                       {link}
                     </span>
                     <button onClick={() => copy(link)} className="flex-shrink-0 text-xs" style={{ color: ACCENT }}>
-                      {copied === link ? 'کپی شد' : 'کپی'}
+                      {copied === link ? t.copied : t.copy}
                     </button>
                   </div>
                 ))}
@@ -113,7 +115,7 @@ export default function UserLinksModal({
                         className="text-xs font-bold"
                         style={{ color: ACCENT }}
                       >
-                        {copied === wg.config ? 'کپی شد' : 'کپی کانفیگ'}
+                        {copied === wg.config ? t.copied : t.userLinksModal.copyConfig}
                       </button>
                     </div>
                     <pre

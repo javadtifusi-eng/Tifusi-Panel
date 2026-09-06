@@ -43,7 +43,7 @@ Not built yet: per-admin permission scoping, node-side WireGuard interface manag
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
-Clones the repo, brings the panel up with Docker Compose, then — right there in the same terminal — offers to create the admin account and, optionally, a node, so there's no separate trip to the browser or a second command for a quick single-server setup. (Running a node on the same machine as the panel isn't the recommended setup — keep Xray traffic off the management server when you can — but the installer still offers it, since it's a fine way to get started.)
+Installs Docker automatically if it's missing (via the official `get.docker.com` script), clones the repo, optionally gets a free Let's Encrypt certificate if you have a domain pointing at the server (so the panel serves HTTPS directly, no reverse proxy needed), brings the panel up with Docker Compose, then — right there in the same terminal — offers to create the admin account and, optionally, a node, so there's no separate trip to the browser or a second command for a quick single-server setup. (Running a node on the same machine as the panel isn't the recommended setup — keep Xray traffic off the management server when you can — but the installer still offers it, since it's a fine way to get started.)
 
 **Node** (any server that'll actually run Xray-core — create the node from the panel's Nodes page first to get its API key):
 ```bash
@@ -51,7 +51,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 ```
 Builds and runs just the node agent — no full panel, no database, nothing else on that machine.
 
-Both scripts check for Docker first and tell you how to install it (`curl -fsSL https://get.docker.com | sh`) rather than doing it themselves.
+Both scripts check for Docker first and install it automatically via the official `get.docker.com` script if it's missing.
 
 ## The first-run flow (manual / no install.sh)
 

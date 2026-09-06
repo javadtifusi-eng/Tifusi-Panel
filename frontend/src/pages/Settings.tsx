@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
   changePassword,
@@ -24,6 +25,7 @@ const cardClass = 'rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4'
 const buttonClass = 'rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60'
 
 export default function SettingsPage() {
+  const { t, align } = useLang()
   const [profile, setProfile] = useState<AdminProfile | null>(null)
 
   const [publicUrl, setPublicUrl] = useState('')
@@ -92,7 +94,7 @@ export default function SettingsPage() {
       setUrlSaved(true)
       window.setTimeout(() => setUrlSaved(false), 2000)
     } catch (err) {
-      setUrlError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setUrlError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setUrlSaving(false)
     }
@@ -103,7 +105,7 @@ export default function SettingsPage() {
     setPwError(null)
     setPwSaved(false)
     if (newPassword !== confirmPassword) {
-      setPwError('رمز جدید و تکرارش یکی نیستن')
+      setPwError(t.settingsPage.passwordMismatch)
       return
     }
     setPwSubmitting(true)
@@ -115,7 +117,7 @@ export default function SettingsPage() {
       setPwSaved(true)
       window.setTimeout(() => setPwSaved(false), 2000)
     } catch (err) {
-      setPwError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setPwError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setPwSubmitting(false)
     }
@@ -127,18 +129,14 @@ export default function SettingsPage() {
     try {
       await downloadBackup()
     } catch (err) {
-      setBackupError(err instanceof ApiError ? err.message : 'دانلود بک‌آپ با خطا مواجه شد')
+      setBackupError(err instanceof ApiError ? err.message : t.settingsPage.downloadFailed)
     } finally {
       setBackupDownloading(false)
     }
   }
 
   async function handleRestoreFile(file: File) {
-    if (
-      !window.confirm(
-        'با بازیابی این بک‌آپ، تمام کاربرها، هاست‌ها، نودها و تنظیمات فعلی پاک و با محتوای فایل جایگزین می‌شن. مطمئنی؟',
-      )
-    ) {
+    if (!window.confirm(t.settingsPage.restoreConfirm)) {
       if (restoreInputRef.current) restoreInputRef.current.value = ''
       return
     }
@@ -149,7 +147,7 @@ export default function SettingsPage() {
       await restoreBackup(file)
       setRestoreDone(true)
     } catch (err) {
-      setBackupError(err instanceof ApiError ? err.message : 'بازیابی با خطا مواجه شد')
+      setBackupError(err instanceof ApiError ? err.message : t.settingsPage.restoreFailed)
     } finally {
       setRestoring(false)
       if (restoreInputRef.current) restoreInputRef.current.value = ''
@@ -166,19 +164,19 @@ export default function SettingsPage() {
       setNewAdminPassword('')
       await refreshAdmins()
     } catch (err) {
-      setAdminError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setAdminSubmitting(false)
     }
   }
 
   async function handleDeleteAdmin(a: AdminListItem) {
-    if (!window.confirm(`حساب ادمین «${a.username}» حذف بشه؟`)) return
+    if (!window.confirm(t.settingsPage.confirmDeleteAdmin(a.username))) return
     try {
       await deleteAdminAccount(a.id)
       await refreshAdmins()
     } catch (err) {
-      setAdminError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
     }
   }
 
@@ -198,7 +196,7 @@ export default function SettingsPage() {
       setTelegramSaved(true)
       window.setTimeout(() => setTelegramSaved(false), 2000)
     } catch (err) {
-      setTelegramError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setTelegramError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setTelegramSaving(false)
     }
@@ -213,7 +211,7 @@ export default function SettingsPage() {
       setTelegramTestOk(true)
       window.setTimeout(() => setTelegramTestOk(false), 3000)
     } catch (err) {
-      setTelegramError(err instanceof ApiError ? err.message : 'ارسال پیام تستی با خطا مواجه شد')
+      setTelegramError(err instanceof ApiError ? err.message : t.settingsPage.testTelegramFailed)
     } finally {
       setTelegramTesting(false)
     }
@@ -222,25 +220,21 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">تنظیمات</h1>
+        <h1 className="text-xl font-bold text-slate-50">{t.settingsPage.title}</h1>
         {profile && (
           <span className="text-xs text-slate-400">
-            وارد شده به عنوان <span className="text-slate-200">{profile.username}</span>
+            {t.settingsPage.signedInAs} <span className="text-slate-200">{profile.username}</span>
           </span>
         )}
       </div>
 
       <div className="flex flex-col gap-6">
         <form onSubmit={handleSaveUrl} className={cardClass}>
-          <h2 className="mb-1 text-sm font-bold text-slate-100">آدرس عمومی پنل</h2>
-          <p className="mb-3 text-xs text-slate-500">
-            وقتی پنل پشت یه دامنه یا ریورس‌پروکسی باشه، لینک‌های اشتراک باید از روی این آدرس ساخته بشن، نه هدر
-            داخلی درخواست — مثلاً <span dir="ltr" className="font-mono">https://panel.example.com</span>. خالی
-            بذاری، همون آدرسی که باهاش به پنل وصل شدی استفاده می‌شه.
-          </p>
+          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.publicUrlTitle}</h2>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.publicUrlDesc}</p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1" style={{ minWidth: 240 }}>
-              <label className={labelClass}>آدرس عمومی</label>
+              <label className={labelClass}>{t.settingsPage.publicUrlLabel}</label>
               <input
                 dir="ltr"
                 value={publicUrl}
@@ -250,18 +244,18 @@ export default function SettingsPage() {
               />
             </div>
             <button type="submit" disabled={urlSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
-              {urlSaving ? 'در حال ذخیره…' : urlSaved ? 'ذخیره شد ✓' : 'ذخیره'}
+              {urlSaving ? t.common.saving : urlSaved ? t.common.saved : t.common.save}
             </button>
           </div>
           {urlError && <div className="mt-3 text-xs text-red-400">{urlError}</div>}
         </form>
 
         <form onSubmit={handleChangePassword} className={cardClass}>
-          <h2 className="mb-1 text-sm font-bold text-slate-100">تغییر رمز عبور</h2>
-          <p className="mb-3 text-xs text-slate-500">برای تغییر رمز، اول رمز فعلی‌ت رو وارد کن.</p>
+          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.changePasswordTitle}</h2>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.changePasswordDesc}</p>
           <div className="flex flex-wrap gap-3">
             <div>
-              <label className={labelClass}>رمز فعلی</label>
+              <label className={labelClass}>{t.settingsPage.currentPassword}</label>
               <input
                 type="password"
                 value={currentPassword}
@@ -271,7 +265,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className={labelClass}>رمز جدید</label>
+              <label className={labelClass}>{t.settingsPage.newPassword}</label>
               <input
                 type="password"
                 value={newPassword}
@@ -282,7 +276,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className={labelClass}>تکرار رمز جدید</label>
+              <label className={labelClass}>{t.settingsPage.confirmPassword}</label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -300,19 +294,18 @@ export default function SettingsPage() {
             className={`${buttonClass} mt-4`}
             style={{ backgroundColor: ACCENT }}
           >
-            {pwSubmitting ? 'در حال ذخیره…' : pwSaved ? 'رمز عوض شد ✓' : 'تغییر رمز'}
+            {pwSubmitting ? t.common.saving : pwSaved ? t.settingsPage.passwordChanged : t.settingsPage.changePasswordBtn}
           </button>
         </form>
 
         <form onSubmit={handleSaveTelegram} className={cardClass}>
-          <h2 className="mb-1 text-sm font-bold text-slate-100">اعلان‌های تلگرام</h2>
-          <p className="mb-3 text-xs text-slate-500">
-            وقتی یه کاربر منقضی/محدود بشه یا یه نود قطع/وصل بشه، پنل یه پیام به همین چت تلگرام می‌فرسته. توکن رو
-            از{' '}
+          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.telegramTitle}</h2>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>
+            {t.settingsPage.telegramDesc1}{' '}
             <span dir="ltr" className="font-mono">
               @BotFather
             </span>{' '}
-            بگیر، و chat id رو از خود بات یا یه بات مثل{' '}
+            {t.settingsPage.telegramDesc2}{' '}
             <span dir="ltr" className="font-mono">
               @userinfobot
             </span>
@@ -320,7 +313,7 @@ export default function SettingsPage() {
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className={labelClass}>توکن بات</label>
+              <label className={labelClass}>{t.settingsPage.botToken}</label>
               <input
                 dir="ltr"
                 value={botToken}
@@ -330,7 +323,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className={labelClass}>Chat ID</label>
+              <label className={labelClass}>{t.settingsPage.chatId}</label>
               <input
                 dir="ltr"
                 value={chatId}
@@ -340,7 +333,7 @@ export default function SettingsPage() {
               />
             </div>
             <button type="submit" disabled={telegramSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
-              {telegramSaving ? 'در حال ذخیره…' : telegramSaved ? 'ذخیره شد ✓' : 'ذخیره'}
+              {telegramSaving ? t.common.saving : telegramSaved ? t.common.saved : t.common.save}
             </button>
             <button
               type="button"
@@ -349,18 +342,15 @@ export default function SettingsPage() {
               className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
               style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
             >
-              {telegramTesting ? 'در حال ارسال…' : telegramTestOk ? 'ارسال شد ✓' : 'ارسال پیام تستی'}
+              {telegramTesting ? t.settingsPage.sending : telegramTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
           </div>
           {telegramError && <div className="mt-3 text-xs text-red-400">{telegramError}</div>}
         </form>
 
         <div className={cardClass}>
-          <h2 className="mb-1 text-sm font-bold text-slate-100">بک‌آپ و بازیابی</h2>
-          <p className="mb-3 text-xs text-slate-500">
-            یه نسخه از کل دیتابیس پنل (کاربرها، هاست‌ها، نودها، تنظیمات) دانلود کن، یا از یه بک‌آپ قبلی بازیابی
-            کن. بازیابی همه‌چیزِ فعلی رو با محتوای فایل جایگزین می‌کنه — برگشت‌ناپذیره.
-          </p>
+          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.backupTitle}</h2>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.backupDesc}</p>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -369,7 +359,7 @@ export default function SettingsPage() {
               className={buttonClass}
               style={{ backgroundColor: ACCENT }}
             >
-              {backupDownloading ? 'در حال دانلود…' : 'دانلود بک‌آپ'}
+              {backupDownloading ? t.settingsPage.downloading : t.settingsPage.downloadBackup}
             </button>
 
             <button
@@ -379,7 +369,7 @@ export default function SettingsPage() {
               className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
               style={{ borderColor: 'rgba(248,113,113,0.4)', color: '#f87171' }}
             >
-              {restoring ? 'در حال بازیابی…' : restoreDone ? 'بازیابی شد ✓' : 'بازیابی از فایل بک‌آپ'}
+              {restoring ? t.settingsPage.restoring : restoreDone ? t.settingsPage.restored : t.settingsPage.restoreFromFile}
             </button>
             <input
               ref={restoreInputRef}
@@ -393,24 +383,17 @@ export default function SettingsPage() {
             />
           </div>
           {backupError && <div className="mt-3 text-xs text-red-400">{backupError}</div>}
-          {restoreDone && (
-            <div className="mt-3 text-xs text-slate-400">
-              بازیابی انجام شد. اگه رمز یا نام‌کاربری ادمین تو بک‌آپ فرق داشت، ممکنه لازم بشه دوباره وارد بشی.
-            </div>
-          )}
+          {restoreDone && <div className="mt-3 text-xs text-slate-400">{t.settingsPage.restoreDoneNote}</div>}
         </div>
 
         {profile?.is_owner && (
           <div className={cardClass}>
-            <h2 className="mb-1 text-sm font-bold text-slate-100">مدیریت ادمین‌ها</h2>
-            <p className="mb-3 text-xs text-slate-500">
-              فقط مالک پنل (owner) می‌تونه ادمین جدید بسازه یا حذف کنه. ادمین‌های دیگه دسترسی کامل به پنل دارن،
-              به‌جز مدیریت خودِ حساب‌های ادمین.
-            </p>
+            <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.adminsTitle}</h2>
+            <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.adminsDesc}</p>
 
             <form onSubmit={handleCreateAdmin} className="mb-4 flex flex-wrap items-end gap-3">
               <div>
-                <label className={labelClass}>نام کاربری</label>
+                <label className={labelClass}>{t.usersPage.username}</label>
                 <input
                   value={newAdminUsername}
                   onChange={(e) => setNewAdminUsername(e.target.value)}
@@ -420,7 +403,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div>
-                <label className={labelClass}>رمز عبور</label>
+                <label className={labelClass}>{t.passLabel}</label>
                 <input
                   type="password"
                   value={newAdminPassword}
@@ -431,7 +414,7 @@ export default function SettingsPage() {
                 />
               </div>
               <button type="submit" disabled={adminSubmitting} className={buttonClass} style={{ backgroundColor: ACCENT }}>
-                {adminSubmitting ? 'در حال ساخت…' : '+ ادمین جدید'}
+                {adminSubmitting ? t.settingsPage.creating : t.settingsPage.newAdminBtn}
               </button>
             </form>
             {adminError && <div className="mb-3 text-xs text-red-400">{adminError}</div>}
@@ -449,7 +432,7 @@ export default function SettingsPage() {
                   </div>
                   {!a.is_owner && (
                     <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-red-400 hover:underline">
-                      حذف
+                      {t.common.delete}
                     </button>
                   )}
                 </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
   createGroup,
@@ -23,6 +24,7 @@ function emptyForm() {
 }
 
 export default function GroupsPage() {
+  const { t, align } = useLang()
   const [groups, setGroups] = useState<Group[] | null>(null)
   const [hosts, setHosts] = useState<Host[]>([])
   const [users, setUsers] = useState<ProxyUser[]>([])
@@ -39,7 +41,7 @@ export default function GroupsPage() {
       setHosts(hostsRes.hosts)
       setUsers(usersRes.users)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'خطا در دریافت اطلاعات')
+      setError(err instanceof ApiError ? err.message : t.groupsPage.fetchError)
     }
   }
 
@@ -87,44 +89,41 @@ export default function GroupsPage() {
       resetForm()
       await refresh()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setSubmitting(false)
     }
   }
 
   async function handleDelete(group: Group) {
-    if (!window.confirm(`گروه «${group.name}» حذف بشه؟`)) return
+    if (!window.confirm(t.groupsPage.confirmDelete(group.name))) return
     try {
       await deleteGroup(group.id)
       await refresh()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
     }
   }
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">گروه‌ها</h1>
+        <h1 className="text-xl font-bold text-slate-50">{t.groupsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
           style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
         >
-          + گروه جدید
+          {t.groupsPage.newBtn}
         </button>
       </div>
-      <p className="mb-6 text-sm text-slate-400">
-        هاستی که تو هیچ گروهی نباشه برای همه‌ی کاربرها آزاده. وقتی یه هاست رو وارد یه گروه کنی، فقط
-        کاربرهای همون گروه بهش دسترسی دارن — هم تو لینک‌هاشون، هم واقعاً رو کانفیگی که به نود فرستاده می‌شه.
-      </p>
+      <p className="mb-6 text-sm text-slate-400">{t.groupsPage.intro}</p>
 
       {showForm && (
         <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
           <div className="flex flex-wrap gap-3">
             <div>
-              <label className={labelClass}>نام گروه</label>
+              <label className={labelClass}>{t.groupsPage.nameLabel}</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -133,7 +132,7 @@ export default function GroupsPage() {
               />
             </div>
             <div>
-              <label className={labelClass}>یادداشت</label>
+              <label className={labelClass}>{t.groupsPage.noteLabel}</label>
               <input
                 value={form.note}
                 onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
@@ -144,9 +143,9 @@ export default function GroupsPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <div className={labelClass}>هاست‌های این گروه</div>
+              <div className={labelClass}>{t.groupsPage.hostsInGroup}</div>
               <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
-                {hosts.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">هاستی وجود نداره</div>}
+                {hosts.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noHosts}</div>}
                 {hosts.map((h) => (
                   <label key={h.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
                     <input
@@ -161,9 +160,9 @@ export default function GroupsPage() {
               </div>
             </div>
             <div>
-              <div className={labelClass}>کاربرهای این گروه</div>
+              <div className={labelClass}>{t.groupsPage.usersInGroup}</div>
               <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
-                {users.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">کاربری وجود نداره</div>}
+                {users.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noUsers}</div>}
                 {users.map((u) => (
                   <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
                     <input
@@ -186,7 +185,7 @@ export default function GroupsPage() {
             className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
-            {editingId ? 'ذخیره تغییرات' : 'ساخت گروه'}
+            {editingId ? t.common.save : t.groupsPage.createGroupBtn}
           </button>
         </form>
       )}
@@ -194,13 +193,13 @@ export default function GroupsPage() {
       {!showForm && error && <div className="mb-4 text-sm text-red-400">{error}</div>}
 
       <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full text-right text-sm">
+        <table className={`w-full text-sm ${align}`}>
           <thead>
             <tr className="border-b border-white/10 text-xs text-slate-400">
-              <th className="px-4 py-3 font-medium">نام</th>
-              <th className="px-4 py-3 font-medium">یادداشت</th>
-              <th className="px-4 py-3 font-medium">هاست‌ها</th>
-              <th className="px-4 py-3 font-medium">کاربرها</th>
+              <th className="px-4 py-3 font-medium">{t.groupsPage.colName}</th>
+              <th className="px-4 py-3 font-medium">{t.groupsPage.colNote}</th>
+              <th className="px-4 py-3 font-medium">{t.groupsPage.colHosts}</th>
+              <th className="px-4 py-3 font-medium">{t.groupsPage.colUsers}</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
@@ -208,14 +207,14 @@ export default function GroupsPage() {
             {groups === null && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  در حال بارگذاری…
+                  {t.loading}
                 </td>
               </tr>
             )}
             {groups !== null && groups.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  هنوز گروهی ساخته نشده
+                  {t.groupsPage.noGroupsYet}
                 </td>
               </tr>
             )}
@@ -227,10 +226,10 @@ export default function GroupsPage() {
                 <td className="px-4 py-3 text-slate-400">{g.user_ids.length}</td>
                 <td className="px-4 py-3 text-left">
                   <button onClick={() => startEdit(g)} className="ml-3 text-xs text-slate-400 hover:underline">
-                    ویرایش
+                    {t.common.edit}
                   </button>
                   <button onClick={() => handleDelete(g)} className="text-xs text-red-400 hover:underline">
-                    حذف
+                    {t.common.delete}
                   </button>
                 </td>
               </tr>

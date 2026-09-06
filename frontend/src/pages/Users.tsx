@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import UserLinksModal from '../components/UserLinksModal'
+import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
   createUser,
@@ -19,26 +20,8 @@ const statusStyles: Record<UserStatus, string> = {
   limited: 'bg-amber-400/10 text-amber-300 border-amber-400/30',
 }
 
-const statusLabels: Record<UserStatus, string> = {
-  active: 'فعال',
-  disabled: 'غیرفعال',
-  expired: 'منقضی',
-  limited: 'محدود شده',
-}
-
-function formatLimit(bytes: number | null): string {
-  if (!bytes) return 'نامحدود'
-  const gb = bytes / 1024 ** 3
-  return `${gb.toFixed(gb >= 10 ? 0 : 1)} گیگ`
-}
-
-function formatUsed(bytes: number): string {
-  const gb = bytes / 1024 ** 3
-  if (gb < 0.1) return '۰ گیگ'
-  return `${gb.toFixed(1)} گیگ`
-}
-
 export default function UsersPage() {
+  const { t, align } = useLang()
   const [users, setUsers] = useState<ProxyUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -50,12 +33,24 @@ export default function UsersPage() {
   const [submitting, setSubmitting] = useState(false)
   const [linksUser, setLinksUser] = useState<ProxyUser | null>(null)
 
+  function formatLimit(bytes: number | null): string {
+    if (!bytes) return t.usersPage.unlimited
+    const gb = bytes / 1024 ** 3
+    return `${gb.toFixed(gb >= 10 ? 0 : 1)} ${t.usersPage.gbSuffix}`
+  }
+
+  function formatUsed(bytes: number): string {
+    const gb = bytes / 1024 ** 3
+    if (gb < 0.1) return `0 ${t.usersPage.gbSuffix}`
+    return `${gb.toFixed(1)} ${t.usersPage.gbSuffix}`
+  }
+
   async function refresh() {
     try {
       const res = await listUsers()
       setUsers(res.users)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'خطا در دریافت لیست کاربران')
+      setError(err instanceof ApiError ? err.message : t.usersPage.fetchError)
     }
   }
 
@@ -96,7 +91,7 @@ export default function UsersPage() {
       resetForm()
       await refresh()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setSubmitting(false)
     }
@@ -108,30 +103,30 @@ export default function UsersPage() {
       await updateUser(user.id, { status: next })
       await refresh()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
     }
   }
 
   async function handleDelete(user: ProxyUser) {
-    if (!window.confirm(`کاربر «${user.username}» حذف بشه؟`)) return
+    if (!window.confirm(t.usersPage.confirmDelete(user.username))) return
     try {
       await deleteUser(user.id)
       await refresh()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'مشکلی پیش اومد')
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
     }
   }
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">کاربران</h1>
+        <h1 className="text-xl font-bold text-slate-50">{t.usersPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
           style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
         >
-          + کاربر جدید
+          {t.usersPage.newBtn}
         </button>
       </div>
 
@@ -141,7 +136,7 @@ export default function UsersPage() {
           className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
         >
           <div>
-            <label className="mb-1.5 block text-xs text-slate-400">نام کاربری</label>
+            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.username}</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -152,7 +147,7 @@ export default function UsersPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-slate-400">حجم به گیگابایت (خالی = نامحدود)</label>
+            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.dataLimit}</label>
             <input
               value={dataLimitGb}
               onChange={(e) => setDataLimitGb(e.target.value)}
@@ -163,7 +158,7 @@ export default function UsersPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-slate-400">تاریخ انقضا (خالی = بدون انقضا)</label>
+            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.expire}</label>
             <input
               value={expire}
               onChange={(e) => setExpire(e.target.value)}
@@ -172,7 +167,7 @@ export default function UsersPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-slate-400">یادداشت</label>
+            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.note}</label>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -185,7 +180,7 @@ export default function UsersPage() {
             className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
-            {editingId ? 'ذخیره تغییرات' : 'ساخت'}
+            {editingId ? t.common.save : t.usersPage.createBtn}
           </button>
         </form>
       )}
@@ -193,12 +188,12 @@ export default function UsersPage() {
       {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
 
       <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full text-right text-sm">
+        <table className={`w-full text-sm ${align}`}>
           <thead>
             <tr className="border-b border-white/10 text-xs text-slate-400">
-              <th className="px-4 py-3 font-medium">نام کاربری</th>
-              <th className="px-4 py-3 font-medium">وضعیت</th>
-              <th className="px-4 py-3 font-medium">ترافیک</th>
+              <th className="px-4 py-3 font-medium">{t.usersPage.colUsername}</th>
+              <th className="px-4 py-3 font-medium">{t.usersPage.colStatus}</th>
+              <th className="px-4 py-3 font-medium">{t.usersPage.colTraffic}</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
@@ -206,14 +201,14 @@ export default function UsersPage() {
             {users === null && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                  در حال بارگذاری…
+                  {t.loading}
                 </td>
               </tr>
             )}
             {users !== null && users.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                  هنوز کاربری ساخته نشده
+                  {t.usersPage.noUsersYet}
                 </td>
               </tr>
             )}
@@ -225,7 +220,7 @@ export default function UsersPage() {
                     onClick={() => toggleStatus(u)}
                     className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles[u.status]}`}
                   >
-                    {statusLabels[u.status]}
+                    {t.usersPage.status[u.status]}
                   </button>
                 </td>
                 <td className="px-4 py-3 text-slate-400">
@@ -237,13 +232,13 @@ export default function UsersPage() {
                     className="ml-3 text-xs hover:underline"
                     style={{ color: ACCENT }}
                   >
-                    لینک‌ها
+                    {t.usersPage.linksBtn}
                   </button>
                   <button onClick={() => startEdit(u)} className="ml-3 text-xs text-slate-400 hover:underline">
-                    ویرایش
+                    {t.common.edit}
                   </button>
                   <button onClick={() => handleDelete(u)} className="text-xs text-red-400 hover:underline">
-                    حذف
+                    {t.common.delete}
                   </button>
                 </td>
               </tr>
