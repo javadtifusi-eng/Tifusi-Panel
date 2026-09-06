@@ -22,6 +22,7 @@ network stack instead of an isolated container-only one.
 """
 
 import subprocess
+import time
 from pathlib import Path
 
 IPSEC_CONF = Path("/etc/ipsec.conf")
@@ -228,7 +229,22 @@ def _load_swanctl_config(
     _write(IPSEC_CONF, _ipsec_conf())
     _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users), mode=0o600)
     _restart_ipsec()  # ensures charon itself is up before swanctl talks to it
-    _run(["swanctl", "--load-all"])
+
+    # `ipsec restart` returns as soon as it has forked charon, not once
+    # charon has actually finished starting up and opened its vici socket
+    # — confirmed live: calling --load-all immediately after often hits
+    # that socket before it exists, fails silently (we don't surface a
+    # subprocess's exit code anywhere), and leaves charon running with
+    # zero connections loaded, so every real handshake gets rejected with
+    # NO_PROPOSAL_CHOSEN. Retry for a few seconds instead of once.
+    # Bounded well under sync_node's 8s httpx timeout (app/nodes/sync.py) —
+    # charon's vici socket is normally ready in a second or two, so this
+    # only ever runs long on a genuinely broken node, and even then the
+    # panel should hear back "not running" rather than time out entirely.
+    for attempt in range(5):
+        if _run(["swanctl", "--load-all"]).returncode == 0:
+            break
+        time.sleep(1)
 
 
 def apply_l2tp(psk: str, users: list[dict]) -> None:
