@@ -108,6 +108,7 @@ export async function createUser(payload: {
   data_limit?: number | null
   expire?: string | null
   note?: string | null
+  group_ids?: number[]
 }): Promise<ProxyUser> {
   const res = await authorizedFetch('/users', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
@@ -115,7 +116,7 @@ export async function createUser(payload: {
 
 export async function updateUser(
   id: number,
-  payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'note'>>,
+  payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'note' | 'group_ids'>>,
 ): Promise<ProxyUser> {
   const res = await authorizedFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
@@ -165,28 +166,27 @@ export async function scanReality(sampleSize?: number): Promise<RealityScanRespo
   return res.json()
 }
 
-export type HostProtocol = 'vless' | 'trojan' | 'wireguard' | 'hysteria2'
+export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'wireguard' | 'hysteria2'
 export type HostNetwork = 'tcp' | 'ws' | 'grpc'
 export type HostSecurity = 'none' | 'tls' | 'reality'
 
 export interface Host {
   id: number
   remark: string
-  protocol: HostProtocol
   address: string
-  port: number
-  network: HostNetwork | null
-  security: HostSecurity | null
-  sni: string | null
-  reality_public_key: string | null
-  reality_private_key: string | null
-  reality_short_id: string | null
-  wireguard_public_key: string | null
-  wireguard_private_key: string | null
-  wireguard_subnet: string | null
+  port: number | null
+  sni_override: string | null
+  alpn_override: string | null
   created_at: string
   group_ids: number[]
-  core_id: number | null
+  core_id: number
+  // Read through from the Core — see HostResponse on the backend.
+  protocol: HostProtocol
+  network: HostNetwork | null
+  security: HostSecurity | null
+  effective_port: number | null
+  effective_sni: string | null
+  effective_alpn: string | null
 }
 
 export interface HostList {
@@ -210,20 +210,22 @@ export async function listHosts(): Promise<HostList> {
   return res.json()
 }
 
-export async function createHost(
-  payload: Omit<Host, 'id' | 'created_at' | 'group_ids' | 'core_id'> & {
-    group_ids?: number[]
-    core_id?: number | null
-  },
-): Promise<Host> {
+export interface HostPayload {
+  remark: string
+  address: string
+  core_id: number
+  port?: number | null
+  sni_override?: string | null
+  alpn_override?: string | null
+  group_ids?: number[]
+}
+
+export async function createHost(payload: HostPayload): Promise<Host> {
   const res = await authorizedFetch('/hosts', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }
 
-export async function updateHost(
-  id: number,
-  payload: Partial<Omit<Host, 'id' | 'protocol' | 'created_at'>>,
-): Promise<Host> {
+export async function updateHost(id: number, payload: Partial<HostPayload>): Promise<Host> {
   const res = await authorizedFetch(`/hosts/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
 }
@@ -347,6 +349,21 @@ export interface Core {
   created_at: string
   host_count: number
   node_count: number
+  protocol: HostProtocol
+  network: HostNetwork | null
+  security: HostSecurity | null
+  default_port: number | null
+  sni: string | null
+  fingerprint: string | null
+  alpn: string | null
+  path: string | null
+  host_header: string | null
+  reality_public_key: string | null
+  reality_private_key: string | null
+  reality_short_id: string | null
+  wireguard_public_key: string | null
+  wireguard_private_key: string | null
+  wireguard_subnet: string | null
 }
 
 export interface CoreList {
@@ -354,17 +371,37 @@ export interface CoreList {
   cores: Core[]
 }
 
+export interface CorePayload {
+  name: string
+  note?: string | null
+  protocol: HostProtocol
+  network?: HostNetwork | null
+  security?: HostSecurity | null
+  default_port?: number | null
+  sni?: string | null
+  fingerprint?: string | null
+  alpn?: string | null
+  path?: string | null
+  host_header?: string | null
+  reality_public_key?: string | null
+  reality_private_key?: string | null
+  reality_short_id?: string | null
+  wireguard_public_key?: string | null
+  wireguard_private_key?: string | null
+  wireguard_subnet?: string | null
+}
+
 export async function listCores(): Promise<CoreList> {
   const res = await authorizedFetch('/cores')
   return res.json()
 }
 
-export async function createCore(payload: { name: string; note?: string | null }): Promise<Core> {
+export async function createCore(payload: CorePayload): Promise<Core> {
   const res = await authorizedFetch('/cores', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }
 
-export async function updateCore(id: number, payload: Partial<{ name: string; note: string | null }>): Promise<Core> {
+export async function updateCore(id: number, payload: Partial<CorePayload>): Promise<Core> {
   const res = await authorizedFetch(`/cores/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
 }

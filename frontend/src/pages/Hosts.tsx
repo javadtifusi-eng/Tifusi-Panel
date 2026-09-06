@@ -4,17 +4,11 @@ import {
   ApiError,
   createHost,
   deleteHost,
-  getRealityKeypair,
-  getWireGuardKeypair,
   listCores,
   listHosts,
-  scanReality,
   updateHost,
   type Core,
   type Host,
-  type HostNetwork,
-  type HostProtocol,
-  type HostSecurity,
 } from '../lib/api'
 
 const ACCENT = '#22D3EE'
@@ -26,25 +20,17 @@ const labelClass = 'mb-1.5 block text-xs text-slate-400'
 function emptyForm() {
   return {
     remark: '',
-    protocol: 'vless' as HostProtocol,
     address: '',
-    port: '443',
-    network: 'tcp' as HostNetwork,
-    security: 'reality' as HostSecurity,
-    sni: '',
-    reality_public_key: '',
-    reality_private_key: '',
-    reality_short_id: '',
-    wireguard_public_key: '',
-    wireguard_private_key: '',
-    wireguard_subnet: '10.66.66.0/24',
+    port: '',
+    sni_override: '',
+    alpn_override: '',
     core_id: null as number | null,
   }
 }
 
 export default function HostsPage() {
   const { t, align } = useLang()
-  const protocolLabels = t.hostsPage.protocolLabels
+  const protocolLabels = t.coresPage.protocolLabels
   const [hosts, setHosts] = useState<Host[] | null>(null)
   const [cores, setCores] = useState<Core[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -52,15 +38,6 @@ export default function HostsPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm())
   const [submitting, setSubmitting] = useState(false)
-  const [findingTarget, setFindingTarget] = useState(false)
-  const [generatingKeys, setGeneratingKeys] = useState(false)
-  const [showPrivateKey, setShowPrivateKey] = useState(false)
-  const [generatingWgKeys, setGeneratingWgKeys] = useState(false)
-  const [showWgPrivateKey, setShowWgPrivateKey] = useState(false)
-
-  const usesTransport = form.protocol === 'vless' || form.protocol === 'trojan'
-  const usesReality = usesTransport && form.security === 'reality'
-  const usesWireguard = form.protocol === 'wireguard'
 
   async function refresh() {
     try {
@@ -71,91 +48,39 @@ export default function HostsPage() {
     }
   }
 
+  async function refreshCores() {
+    try {
+      const res = await listCores()
+      setCores(res.cores)
+    } catch {
+      // ignored — the core select just stays empty
+    }
+  }
+
   useEffect(() => {
     refresh()
-    listCores()
-      .then((res) => setCores(res.cores))
-      .catch(() => undefined)
+    refreshCores()
   }, [])
 
   function update<K extends keyof ReturnType<typeof emptyForm>>(key: K, value: ReturnType<typeof emptyForm>[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  async function findBestTarget() {
-    setFindingTarget(true)
-    setError(null)
-    try {
-      const res = await scanReality()
-      const best = res.results.find((r) => r.recommended)
-      if (best) update('sni', best.host)
-      else setError(t.hostsPage.noTargetFound)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.hostsPage.scanFailed)
-    } finally {
-      setFindingTarget(false)
-    }
-  }
-
-  async function generateKeys() {
-    setGeneratingKeys(true)
-    setError(null)
-    try {
-      const keys = await getRealityKeypair()
-      setForm((f) => ({
-        ...f,
-        reality_public_key: keys.public_key,
-        reality_private_key: keys.private_key,
-        reality_short_id: keys.short_id,
-      }))
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.hostsPage.keyGenFailed)
-    } finally {
-      setGeneratingKeys(false)
-    }
-  }
-
-  async function generateWgKeys() {
-    setGeneratingWgKeys(true)
-    setError(null)
-    try {
-      const keys = await getWireGuardKeypair()
-      setForm((f) => ({
-        ...f,
-        wireguard_public_key: keys.public_key,
-        wireguard_private_key: keys.private_key,
-      }))
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.hostsPage.keyGenFailed)
-    } finally {
-      setGeneratingWgKeys(false)
-    }
-  }
-
   function resetForm() {
     setEditingId(null)
     setForm(emptyForm())
     setShowForm(false)
-    setShowPrivateKey(false)
-    setShowWgPrivateKey(false)
+    setError(null)
   }
 
   function startEdit(host: Host) {
     setEditingId(host.id)
     setForm({
       remark: host.remark,
-      protocol: host.protocol,
       address: host.address,
-      port: String(host.port),
-      network: host.network ?? 'tcp',
-      security: host.security ?? 'none',
-      sni: host.sni ?? '',
-      reality_public_key: host.reality_public_key ?? '',
-      reality_private_key: host.reality_private_key ?? '',
-      reality_short_id: host.reality_short_id ?? '',
-      wireguard_public_key: host.wireguard_public_key ?? '',
-      wireguard_private_key: host.wireguard_private_key ?? '',
-      wireguard_subnet: host.wireguard_subnet ?? '10.66.66.0/24',
+      port: host.port != null ? String(host.port) : '',
+      sni_override: host.sni_override ?? '',
+      alpn_override: host.alpn_override ?? '',
       core_id: host.core_id,
     })
     setShowForm(true)
@@ -163,29 +88,20 @@ export default function HostsPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    setSubmitting(true)
     setError(null)
+    if (!form.core_id) return
+    setSubmitting(true)
     const payload = {
       remark: form.remark,
       address: form.address,
-      port: parseInt(form.port, 10),
-      network: usesTransport ? form.network : null,
-      security: usesTransport ? form.security : null,
-      sni: usesReality ? form.sni : null,
-      reality_public_key: usesReality ? form.reality_public_key : null,
-      reality_private_key: usesReality ? form.reality_private_key : null,
-      reality_short_id: usesReality ? form.reality_short_id : null,
-      wireguard_public_key: usesWireguard ? form.wireguard_public_key : null,
-      wireguard_private_key: usesWireguard ? form.wireguard_private_key : null,
-      wireguard_subnet: usesWireguard ? form.wireguard_subnet : null,
       core_id: form.core_id,
+      port: form.port ? parseInt(form.port, 10) : null,
+      sni_override: form.sni_override || null,
+      alpn_override: form.alpn_override || null,
     }
     try {
-      if (editingId) {
-        await updateHost(editingId, payload)
-      } else {
-        await createHost({ ...payload, protocol: form.protocol })
-      }
+      if (editingId) await updateHost(editingId, payload)
+      else await createHost(payload)
       resetForm()
       await refresh()
     } catch (err) {
@@ -231,22 +147,22 @@ export default function HostsPage() {
               />
             </div>
             <div>
-              <label className={labelClass}>{t.hostsPage.protocol}</label>
+              <label className={labelClass}>{t.hostsPage.coreLabel}</label>
               <select
-                value={form.protocol}
-                onChange={(e) => update('protocol', e.target.value as HostProtocol)}
-                disabled={editingId !== null}
-                className={`${inputClass} disabled:opacity-50`}
+                value={form.core_id ?? ''}
+                onChange={(e) => update('core_id', e.target.value ? Number(e.target.value) : null)}
+                required
+                className={inputClass}
               >
-                {Object.entries(protocolLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
+                <option value="" disabled>
+                  {t.coresPage.selectPlaceholder}
+                </option>
+                {cores.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {protocolLabels[c.protocol]}
                   </option>
                 ))}
               </select>
-              {editingId !== null && (
-                <div className="mt-1 text-[10px] text-slate-500">{t.hostsPage.protocolLockedNote}</div>
-              )}
             </div>
             <div>
               <label className={labelClass}>{t.hostsPage.address}</label>
@@ -267,181 +183,28 @@ export default function HostsPage() {
                 max="65535"
                 value={form.port}
                 onChange={(e) => update('port', e.target.value)}
-                required
-                className={`${inputClass} w-24`}
+                className={`${inputClass} w-28`}
               />
             </div>
             <div>
-              <label className={labelClass}>{t.hostsPage.coreLabel}</label>
-              <select
-                value={form.core_id ?? cores[0]?.id ?? ''}
-                onChange={(e) => update('core_id', e.target.value ? Number(e.target.value) : null)}
-                className={inputClass}
-              >
-                {cores.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <label className={labelClass}>{t.hostsPage.sniOverride}</label>
+              <input
+                dir="ltr"
+                value={form.sni_override}
+                onChange={(e) => update('sni_override', e.target.value)}
+                className={`${inputClass} text-left`}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t.hostsPage.alpnOverride}</label>
+              <input
+                dir="ltr"
+                value={form.alpn_override}
+                onChange={(e) => update('alpn_override', e.target.value)}
+                className={`${inputClass} text-left`}
+              />
             </div>
           </div>
-
-          {usesTransport && (
-            <div className="mt-3 flex flex-wrap gap-3">
-              <div>
-                <label className={labelClass}>{t.hostsPage.network}</label>
-                <select
-                  value={form.network}
-                  onChange={(e) => update('network', e.target.value as HostNetwork)}
-                  className={inputClass}
-                >
-                  <option value="tcp">{t.hostsPage.networkTcp}</option>
-                  <option value="ws">{t.hostsPage.networkWs}</option>
-                  <option value="grpc">{t.hostsPage.networkGrpc}</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>{t.hostsPage.security}</label>
-                <select
-                  value={form.security}
-                  onChange={(e) => update('security', e.target.value as HostSecurity)}
-                  className={inputClass}
-                >
-                  <option value="none">{t.hostsPage.securityNone}</option>
-                  <option value="tls">{t.hostsPage.securityTls}</option>
-                  <option value="reality">{t.hostsPage.securityReality}</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {usesReality && (
-            <div className="mt-4 rounded-lg border border-cyan-400/15 bg-black/25 p-3">
-              <div className="mb-3 flex items-end gap-3">
-                <div className="flex-1">
-                  <label className={labelClass}>{t.hostsPage.sniLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={form.sni}
-                    onChange={(e) => update('sni', e.target.value)}
-                    placeholder="www.example.com"
-                    className={`${inputClass} w-full text-left`}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={findBestTarget}
-                  disabled={findingTarget}
-                  className="flex-shrink-0 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-60"
-                  style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
-                >
-                  {findingTarget ? t.hostsPage.scanning : t.hostsPage.suggestTarget}
-                </button>
-              </div>
-
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs text-slate-400">{t.hostsPage.realityKeyLabel}</span>
-                <button
-                  type="button"
-                  onClick={generateKeys}
-                  disabled={generatingKeys}
-                  className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                  style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
-                >
-                  {generatingKeys ? t.hostsPage.generatingKeys : t.hostsPage.generateNewKey}
-                </button>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <input
-                  dir="ltr"
-                  readOnly
-                  value={form.reality_public_key}
-                  placeholder="Public Key"
-                  className={`${inputClass} text-left font-mono text-xs`}
-                />
-                <div className="relative">
-                  <input
-                    dir="ltr"
-                    readOnly
-                    type={showPrivateKey ? 'text' : 'password'}
-                    value={form.reality_private_key}
-                    placeholder="Private Key"
-                    className={`${inputClass} w-full pr-12 text-left font-mono text-xs`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPrivateKey((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400"
-                  >
-                    {showPrivateKey ? t.hostsPage.hide : t.hostsPage.show}
-                  </button>
-                </div>
-                <input
-                  dir="ltr"
-                  readOnly
-                  value={form.reality_short_id}
-                  placeholder="Short ID"
-                  className={`${inputClass} text-left font-mono text-xs`}
-                />
-              </div>
-            </div>
-          )}
-
-          {usesWireguard && (
-            <div className="mt-4 rounded-lg border border-cyan-400/15 bg-black/25 p-3">
-              <div className="mb-3">
-                <label className={labelClass}>{t.hostsPage.wgSubnetLabel}</label>
-                <input
-                  dir="ltr"
-                  value={form.wireguard_subnet}
-                  onChange={(e) => update('wireguard_subnet', e.target.value)}
-                  placeholder="10.66.66.0/24"
-                  className={`${inputClass} w-48 text-left font-mono text-xs`}
-                />
-              </div>
-
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs text-slate-400">{t.hostsPage.wgServerKeyLabel}</span>
-                <button
-                  type="button"
-                  onClick={generateWgKeys}
-                  disabled={generatingWgKeys}
-                  className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                  style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
-                >
-                  {generatingWgKeys ? t.hostsPage.generatingKeys : t.hostsPage.generateNewKey}
-                </button>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <input
-                  dir="ltr"
-                  readOnly
-                  value={form.wireguard_public_key}
-                  placeholder="Public Key"
-                  className={`${inputClass} text-left font-mono text-xs`}
-                />
-                <div className="relative">
-                  <input
-                    dir="ltr"
-                    readOnly
-                    type={showWgPrivateKey ? 'text' : 'password'}
-                    value={form.wireguard_private_key}
-                    placeholder="Private Key"
-                    className={`${inputClass} w-full pr-12 text-left font-mono text-xs`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowWgPrivateKey((v) => !v)}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400"
-                  >
-                    {showWgPrivateKey ? t.hostsPage.hide : t.hostsPage.show}
-                  </button>
-                </div>
-              </div>
-              <div className="mt-2 text-[10px] text-slate-500">{t.hostsPage.wgHint}</div>
-            </div>
-          )}
 
           {error && <div className="mt-3 text-xs text-red-400">{error}</div>}
 
@@ -493,16 +256,12 @@ export default function HostsPage() {
                   </span>
                 </td>
                 <td dir="ltr" className="px-4 py-3 text-left font-mono text-xs text-slate-400">
-                  {h.address}:{h.port}
+                  {h.address}:{h.effective_port ?? '—'}
                 </td>
                 <td className="px-4 py-3 text-slate-400">
                   {h.security === 'reality' ? (
                     <span dir="ltr" className="font-mono text-xs" style={{ color: ACCENT }}>
-                      REALITY · {h.sni}
-                    </span>
-                  ) : h.protocol === 'wireguard' ? (
-                    <span dir="ltr" className="font-mono text-xs text-slate-400">
-                      {h.wireguard_subnet ?? '—'}
+                      REALITY · {h.effective_sni ?? '—'}
                     </span>
                   ) : (
                     (h.security ?? '—')

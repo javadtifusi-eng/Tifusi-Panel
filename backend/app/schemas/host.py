@@ -7,37 +7,22 @@ from app.models.host import HostNetwork, HostProtocol, HostSecurity
 
 class HostCreate(BaseModel):
     remark: str = Field(min_length=1, max_length=100)
-    protocol: HostProtocol
     address: str = Field(min_length=1, max_length=255)
-    port: int = Field(ge=1, le=65535)
-    network: HostNetwork | None = None
-    security: HostSecurity | None = None
-    sni: str | None = None
-    reality_public_key: str | None = None
-    reality_private_key: str | None = None
-    reality_short_id: str | None = None
-    wireguard_public_key: str | None = None
-    wireguard_private_key: str | None = None
-    wireguard_subnet: str | None = None
+    core_id: int
+    port: int | None = Field(default=None, ge=1, le=65535)
+    sni_override: str | None = None
+    alpn_override: str | None = None
     group_ids: list[int] = Field(default_factory=list)
-    core_id: int | None = None
 
 
 class HostUpdate(BaseModel):
     remark: str | None = Field(default=None, min_length=1, max_length=100)
     address: str | None = Field(default=None, min_length=1, max_length=255)
-    port: int | None = Field(default=None, ge=1, le=65535)
-    network: HostNetwork | None = None
-    security: HostSecurity | None = None
-    sni: str | None = None
-    reality_public_key: str | None = None
-    reality_private_key: str | None = None
-    reality_short_id: str | None = None
-    wireguard_public_key: str | None = None
-    wireguard_private_key: str | None = None
-    wireguard_subnet: str | None = None
-    group_ids: list[int] | None = None
     core_id: int | None = None
+    port: int | None = Field(default=None, ge=1, le=65535)
+    sni_override: str | None = None
+    alpn_override: str | None = None
+    group_ids: list[int] | None = None
 
 
 class HostResponse(BaseModel):
@@ -45,21 +30,22 @@ class HostResponse(BaseModel):
 
     id: int
     remark: str
-    protocol: HostProtocol
     address: str
-    port: int
-    network: HostNetwork | None
-    security: HostSecurity | None
-    sni: str | None
-    reality_public_key: str | None
-    reality_private_key: str | None
-    reality_short_id: str | None
-    wireguard_public_key: str | None
-    wireguard_private_key: str | None
-    wireguard_subnet: str | None
+    port: int | None
+    sni_override: str | None
+    alpn_override: str | None
     created_at: datetime
     group_ids: list[int]
-    core_id: int | None
+    core_id: int
+
+    # Read through the Core (via Host's passthrough properties) so the
+    # frontend can show these without a second lookup.
+    protocol: HostProtocol
+    network: HostNetwork | None
+    security: HostSecurity | None
+    effective_port: int | None
+    effective_sni: str | None
+    effective_alpn: str | None
 
 
 class HostList(BaseModel):
