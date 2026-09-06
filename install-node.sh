@@ -49,14 +49,21 @@ if docker ps -a --format '{{.Names}}' | grep -qx tifusi-node; then
   docker rm -f tifusi-node >/dev/null
 fi
 
-# l2tp_ppp/pppol2tp: xl2tpd needs these loaded into the HOST kernel to
+# l2tp_ppp/ppp_generic: xl2tpd needs these loaded into the HOST kernel to
 # actually create L2TP/PPP sessions — a container can't load kernel
 # modules into a kernel it doesn't own, so this has to happen out here,
 # not inside the Dockerfile/container. `|| true` because a kernel that
-# already has L2TP built in (not as a module) has nothing to modprobe,
-# and that's not a failure.
+# already has these built in (not as modules) has nothing to modprobe,
+# and that's not a failure. ppp_generic is what actually owns /dev/ppp —
+# confirmed live that a kernel can have l2tp_ppp loaded and still lack
+# this, since it's what registers the character device, not l2tp_ppp.
 modprobe l2tp_ppp 2>/dev/null || true
-modprobe pppol2tp 2>/dev/null || true
+modprobe ppp_generic 2>/dev/null || true
+# Some hosts' kernels create /dev/ppp via udev only, which a minimal VPS
+# image may not be running — recreate it by hand (major/minor 108:0 is
+# the kernel-assigned, unchanging device number for /dev/ppp) if loading
+# the module alone didn't produce it.
+[ -e /dev/ppp ] || mknod -m 600 /dev/ppp c 108 0 2>/dev/null || true
 
 info "Starting the node on the host's real network (agent on port $PORT)..."
 # --network host, not -p per port: Xray binds to whatever proxy ports the
@@ -72,6 +79,13 @@ info "Starting the node on the host's real network (agent on port $PORT)..."
 EXTRA_DOCKER_ARGS=(--cap-add=NET_ADMIN --cap-add=NET_RAW)
 if [ -d /lib/modules ]; then
   EXTRA_DOCKER_ARGS+=(-v /lib/modules:/lib/modules:ro)
+fi
+# /dev/ppp: xl2tpd/pppd need this character device to create PPP
+# interfaces at all — Docker doesn't pass host devices into a container
+# by default, so without this xl2tpd fails even once the host kernel has
+# every l2tp/ppp module loaded (confirmed live, this exact gap).
+if [ -e /dev/ppp ]; then
+  EXTRA_DOCKER_ARGS+=(--device=/dev/ppp:/dev/ppp)
 fi
 
 docker run -d --name tifusi-node --restart unless-stopped \
