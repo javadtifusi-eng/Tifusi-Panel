@@ -49,6 +49,7 @@ export default function NodesPage() {
   const [address, setAddress] = useState('')
   const [port, setPort] = useState('')
   const [coreId, setCoreId] = useState<number | null>(null)
+  const [ipsecCoreId, setIpsecCoreId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [setupNodeId, setSetupNodeId] = useState<number | null>(null)
@@ -78,6 +79,7 @@ export default function NodesPage() {
     setAddress('')
     setPort('')
     setCoreId(null)
+    setIpsecCoreId(null)
     setShowForm(false)
   }
 
@@ -87,6 +89,7 @@ export default function NodesPage() {
     setAddress(node.address)
     setPort(String(node.port))
     setCoreId(node.core_id)
+    setIpsecCoreId(node.ipsec_core_id)
     setShowForm(true)
   }
 
@@ -96,10 +99,22 @@ export default function NodesPage() {
     setError(null)
     try {
       if (editingId) {
-        await updateNode(editingId, { name, address, port: parseInt(port, 10), core_id: coreId })
+        await updateNode(editingId, {
+          name,
+          address,
+          port: parseInt(port, 10),
+          core_id: coreId,
+          ipsec_core_id: ipsecCoreId,
+        })
         resetForm()
       } else {
-        const created = await createNode({ name, address, port: parseInt(port, 10), core_id: coreId })
+        const created = await createNode({
+          name,
+          address,
+          port: parseInt(port, 10),
+          core_id: coreId,
+          ipsec_core_id: ipsecCoreId,
+        })
         resetForm()
         setSetupNodeId(created.id)
       }
@@ -204,12 +219,31 @@ export default function NodesPage() {
             >
               <option value="">{t.coresPage.selectPlaceholder}</option>
               {cores
-                .filter((c) => c.core_type !== 'wireguard')
+                .filter((c) => c.core_type === 'xray')
                 .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} — {t.coresPage.coreTypeLabels[c.core_type]}
-                </option>
-              ))}
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-slate-400" title={t.nodesPage.ipsecCoreHint}>
+              {t.nodesPage.ipsecCoreLabel}
+            </label>
+            <select
+              value={ipsecCoreId ?? ''}
+              onChange={(e) => setIpsecCoreId(e.target.value ? Number(e.target.value) : null)}
+              className={inputClass}
+            >
+              <option value="">{t.coresPage.selectPlaceholder}</option>
+              {cores
+                .filter((c) => c.core_type === 'l2tp' || c.core_type === 'ikev2')
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {t.coresPage.coreTypeLabels[c.core_type]}
+                  </option>
+                ))}
             </select>
           </div>
           <button
@@ -265,6 +299,7 @@ export default function NodesPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {nodes?.map((node) => {
           const core = node.core_id != null ? coreById.get(node.core_id) : undefined
+          const ipsecCore = node.ipsec_core_id != null ? coreById.get(node.ipsec_core_id) : undefined
           const isSyncing = syncingId === node.id
           return (
             <div
@@ -292,10 +327,12 @@ export default function NodesPage() {
               </div>
               {core && (
                 <div className="mb-1 text-xs text-slate-500">
-                  {core.name} ·{' '}
-                  {core.core_type === 'xray'
-                    ? t.nodesPage.inboundsCount(core.inbounds.length)
-                    : t.coresPage.coreTypeLabels[core.core_type]}
+                  {core.name} · {t.nodesPage.inboundsCount(core.inbounds.length)}
+                </div>
+              )}
+              {ipsecCore && (
+                <div className="mb-1 text-xs text-slate-500">
+                  {ipsecCore.name} · {t.coresPage.coreTypeLabels[ipsecCore.core_type]}
                 </div>
               )}
               <div dir="ltr" className="mb-3 text-left text-xs text-slate-500">

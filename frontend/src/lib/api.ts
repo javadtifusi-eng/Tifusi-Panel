@@ -314,6 +314,7 @@ export interface Node {
   port: number
   api_key: string
   core_id: number | null
+  ipsec_core_id: number | null
   status: NodeStatus
   xray_version: string | null
   last_error: string | null
@@ -339,7 +340,13 @@ export async function listNodes(): Promise<NodeList> {
 }
 
 export async function createNode(
-  payload: { name: string; address: string; port: number; core_id?: number | null },
+  payload: {
+    name: string
+    address: string
+    port: number
+    core_id?: number | null
+    ipsec_core_id?: number | null
+  },
 ): Promise<Node> {
   const res = await authorizedFetch('/nodes', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
@@ -347,7 +354,13 @@ export async function createNode(
 
 export async function updateNode(
   id: number,
-  payload: Partial<{ name: string; address: string; port: number; core_id: number | null }>,
+  payload: Partial<{
+    name: string
+    address: string
+    port: number
+    core_id: number | null
+    ipsec_core_id: number | null
+  }>,
 ): Promise<Node> {
   const res = await authorizedFetch(`/nodes/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()

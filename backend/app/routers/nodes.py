@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cores.resolve import resolve_core_id
+from app.cores.resolve import resolve_ipsec_core_id, resolve_xray_core_id
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.models.node import Node
@@ -22,7 +22,8 @@ async def list_nodes(db: AsyncSession = Depends(get_db)) -> NodeList:
 @router.post("", response_model=NodeResponse, status_code=201)
 async def create_node(payload: NodeCreate, db: AsyncSession = Depends(get_db)) -> Node:
     node = Node(name=payload.name, address=payload.address, port=payload.port)
-    node.core_id = await resolve_core_id(payload.core_id, db)
+    node.core_id = await resolve_xray_core_id(payload.core_id, db)
+    node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
     db.add(node)
     await db.commit()
     await db.refresh(node)
@@ -45,11 +46,15 @@ async def get_node(node_id: int, db: AsyncSession = Depends(get_db)) -> Node:
 async def update_node(node_id: int, payload: NodeUpdate, db: AsyncSession = Depends(get_db)) -> Node:
     node = await _get_node_or_404(node_id, db)
 
-    for field, value in payload.model_dump(exclude_unset=True, exclude={"core_id"}).items():
+    for field, value in payload.model_dump(
+        exclude_unset=True, exclude={"core_id", "ipsec_core_id"}
+    ).items():
         setattr(node, field, value)
 
     if "core_id" in payload.model_fields_set:
-        node.core_id = await resolve_core_id(payload.core_id, db)
+        node.core_id = await resolve_xray_core_id(payload.core_id, db)
+    if "ipsec_core_id" in payload.model_fields_set:
+        node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
 
     db.add(node)
     await db.commit()

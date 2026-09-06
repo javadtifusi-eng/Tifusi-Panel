@@ -32,11 +32,15 @@ _process: subprocess.Popen | None = None
 _started_at: float | None = None
 _xray_version: str | None = None
 
-# Which kind of core this node last had pushed to it — /health reads this
-# to know whether "running" means the Xray subprocess or the IPsec
-# daemons. Starts as xray since that's the shape a never-synced node (or
-# one with no Core assigned yet) has always been pushed.
-_mode = "xray"
+# Which ipsec core type (if any) this node currently has configured — a
+# node can run Xray *and* l2tp/ikev2 at the same time (the panel's
+# app/nodes/sync.py pushes to both /config and /ipsec-config independently
+# when a node has both an Xray and an ipsec Core assigned), so this is
+# tracked separately from the Xray process above instead of as a single
+# exclusive mode. Stays None on a node with no ipsec Core assigned — it
+# never gets a /ipsec-config push, so /health reports ipsec as not
+# configured rather than guessing at a mode.
+_ipsec_mode: str | None = None
 
 
 def _check_key(x_node_api_key: str | None) -> None:
@@ -59,8 +63,7 @@ def _get_xray_version() -> str | None:
 @app.post("/config")
 async def apply_config(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
     _check_key(x_node_api_key)
-    global _process, _started_at, _mode
-    _mode = "xray"
+    global _process, _started_at
 
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(payload))
@@ -84,16 +87,16 @@ async def apply_config(payload: dict, x_node_api_key: str | None = Header(defaul
 @app.post("/ipsec-config")
 async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
     _check_key(x_node_api_key)
-    global _mode
+    global _ipsec_mode
 
     core_type = payload.get("core_type")
     if core_type not in ("l2tp", "ikev2"):
         raise HTTPException(status_code=400, detail=f"Unknown core_type: {core_type!r}")
 
     # Set before applying, not after: if this fails partway (e.g. a binary
-    # genuinely missing), /health should still report using this mode's
-    # shape rather than silently falling back to the xray one.
-    _mode = core_type
+    # genuinely missing), /health should still judge the ipsec side using
+    # this mode's checks rather than silently reporting it unconfigured.
+    _ipsec_mode = core_type
     try:
         if core_type == "l2tp":
             ipsec.apply_l2tp(payload.get("psk") or "", payload.get("users") or [])
@@ -107,23 +110,30 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
 
 @app.get("/health")
 async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Reports Xray and ipsec state independently — a node can be running
+    both at once, so the panel (app/nodes/sync.py::_apply_health) checks
+    each side against whether it actually assigned that Core, not against
+    a single overall 'running' flag."""
     _check_key(x_node_api_key)
-
-    if _mode == "l2tp":
-        running = ipsec.is_ipsec_running() and ipsec.is_xl2tpd_running()
-        return {"running": running, "xray_version": None}
-    if _mode == "ikev2":
-        running = ipsec.is_ipsec_running()
-        return {"running": running, "xray_version": None}
 
     running = _process is not None and _process.poll() is None
     uptime = (time.monotonic() - _started_at) if (running and _started_at) else None
-    return {
+    xray = {
         "running": running,
         "pid": _process.pid if running else None,
         "uptime_seconds": uptime,
-        "xray_version": _get_xray_version(),
+        "version": _get_xray_version(),
     }
+
+    if _ipsec_mode == "l2tp":
+        ipsec_running = ipsec.is_ipsec_running() and ipsec.is_xl2tpd_running()
+    elif _ipsec_mode == "ikev2":
+        ipsec_running = ipsec.is_ipsec_running()
+    else:
+        ipsec_running = None
+    ipsec_state = {"mode": _ipsec_mode, "running": ipsec_running}
+
+    return {"xray": xray, "ipsec": ipsec_state}
 
 
 @app.get("/stats")
