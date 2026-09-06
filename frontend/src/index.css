@@ -4,6 +4,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The panel is always dark-themed, but native form controls (a <select>'s
+   dropdown list, date pickers, etc.) don't know that — they inherit our
+   light text color into their own browser-default white popup, so options
+   render as invisible white-on-white. This tells the browser to draw those
+   native widgets with its dark palette instead. */
+:root {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
 }

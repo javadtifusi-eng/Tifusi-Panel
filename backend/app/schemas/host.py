@@ -32,6 +32,12 @@ class HostCreate(BaseModel):
     hysteria2_sni: str | None = None
     hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
 
+    # ikev2
+    ikev2_psk: str | None = None
+
+    # l2tp
+    l2tp_psk: str | None = None
+
 
 class HostUpdate(BaseModel):
     remark: str | None = Field(default=None, min_length=1, max_length=100)
@@ -55,6 +61,10 @@ class HostUpdate(BaseModel):
 
     hysteria2_sni: str | None = None
     hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
+
+    ikev2_psk: str | None = None
+
+    l2tp_psk: str | None = None
 
 
 class HostResponse(BaseModel):
@@ -84,6 +94,10 @@ class HostResponse(BaseModel):
 
     hysteria2_sni: str | None
     hysteria2_port: int | None
+
+    ikev2_psk: str | None
+
+    l2tp_psk: str | None
 
     network: str | None
     effective_security: str | None

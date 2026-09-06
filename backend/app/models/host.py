@@ -15,6 +15,8 @@ class HostProtocol(str, enum.Enum):
     shadowsocks = "shadowsocks"
     wireguard = "wireguard"
     hysteria2 = "hysteria2"
+    ikev2 = "ikev2"
+    l2tp = "l2tp"
 
 
 # Protocols Xray-core itself terminates — these are the ones backed by an
@@ -90,6 +92,15 @@ class Host(Base):
     # --- hysteria2 only ---
     hysteria2_sni: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hysteria2_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # --- ikev2 only: shared IPsec pre-shared key, standard UDP 500/4500 ports ---
+    ikev2_psk: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # --- l2tp only: shared IPsec PSK; the PPP username/password are
+    # per-user, not per-host (see app/links/generator.py::build_l2tp_config,
+    # which reuses the user's own username/secret instead of a separate
+    # allocation table) ---
+    l2tp_psk: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

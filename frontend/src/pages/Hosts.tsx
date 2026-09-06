@@ -22,7 +22,7 @@ const inputClass =
   'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
 const labelClass = 'mb-1.5 block text-xs text-slate-400'
 
-const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'wireguard', 'hysteria2']
+const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'wireguard', 'hysteria2', 'ikev2', 'l2tp']
 const XRAY_PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks']
 const PLACEHOLDER_KEYS = ['username', 'protocol', 'days_left', 'expire_date', 'data_limit_gb', 'data_left_gb'] as const
 
@@ -46,6 +46,8 @@ function emptyForm() {
     wireguard_port: '',
     hysteria2_sni: '',
     hysteria2_port: '',
+    ikev2_psk: '',
+    l2tp_psk: '',
   }
 }
 
@@ -70,6 +72,8 @@ export default function HostsPage() {
   const isXray = form.protocol !== '' && XRAY_PROTOCOLS.includes(form.protocol)
   const isWireguard = form.protocol === 'wireguard'
   const isHysteria2 = form.protocol === 'hysteria2'
+  const isIkev2 = form.protocol === 'ikev2'
+  const isL2tp = form.protocol === 'l2tp'
   const inboundsForProtocol = allInbounds.filter((i) => i.protocol === form.protocol)
 
   async function refresh() {
@@ -140,6 +144,8 @@ export default function HostsPage() {
       wireguard_port: host.wireguard_port != null ? String(host.wireguard_port) : '',
       hysteria2_sni: host.hysteria2_sni ?? '',
       hysteria2_port: host.hysteria2_port != null ? String(host.hysteria2_port) : '',
+      ikev2_psk: host.ikev2_psk ?? '',
+      l2tp_psk: host.l2tp_psk ?? '',
     })
     setShowForm(true)
   }
@@ -181,6 +187,8 @@ export default function HostsPage() {
       wireguard_port: isWireguard && form.wireguard_port ? parseInt(form.wireguard_port, 10) : null,
       hysteria2_sni: isHysteria2 ? form.hysteria2_sni || null : null,
       hysteria2_port: isHysteria2 && form.hysteria2_port ? parseInt(form.hysteria2_port, 10) : null,
+      ikev2_psk: isIkev2 ? form.ikev2_psk || null : null,
+      l2tp_psk: isL2tp ? form.l2tp_psk || null : null,
     }
     try {
       if (editingId) await updateHost(editingId, payload)
@@ -496,6 +504,36 @@ export default function HostsPage() {
             </div>
           )}
 
+          {isIkev2 && (
+            <div className="mt-3 flex flex-wrap gap-3">
+              <div>
+                <label className={labelClass}>{t.hostsPage.ikev2PskLabel}</label>
+                <input
+                  dir="ltr"
+                  value={form.ikev2_psk}
+                  onChange={(e) => update('ikev2_psk', e.target.value)}
+                  className={`${inputClass} w-64 font-mono text-xs`}
+                />
+              </div>
+              <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.ikev2PortsHint}</div>
+            </div>
+          )}
+
+          {isL2tp && (
+            <div className="mt-3 flex flex-wrap gap-3">
+              <div>
+                <label className={labelClass}>{t.hostsPage.l2tpPskLabel}</label>
+                <input
+                  dir="ltr"
+                  value={form.l2tp_psk}
+                  onChange={(e) => update('l2tp_psk', e.target.value)}
+                  className={`${inputClass} w-64 font-mono text-xs`}
+                />
+              </div>
+              <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.l2tpHint}</div>
+            </div>
+          )}
+
           {error && <div className="mt-3 text-xs text-red-400">{error}</div>}
 
           <button
@@ -528,7 +566,8 @@ export default function HostsPage() {
               </span>
             </div>
             <div dir="ltr" className="mb-1 text-left font-mono text-xs text-slate-400">
-              {h.address}:{h.effective_port ?? '—'}
+              {h.address}
+              {h.effective_port != null ? `:${h.effective_port}` : ''}
             </div>
             <div className="mb-3 text-xs text-slate-400">
               {h.effective_security === 'reality' ? (

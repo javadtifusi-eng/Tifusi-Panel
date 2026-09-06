@@ -20,7 +20,3 @@ class PanelSetting(Base):
     # your bot for the target chat (a user, group, or channel it's in).
     telegram_bot_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    # Anthropic API key for the in-panel AI assistant (app/ai/*) — unset by
-    # default, the assistant tab stays disabled until an admin pastes one in.
-    ai_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True)

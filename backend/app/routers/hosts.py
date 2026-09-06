@@ -55,6 +55,14 @@ async def _validate(protocol: HostProtocol, get, db: AsyncSession) -> None:
         missing = _missing(hysteria2_sni=get("hysteria2_sni"), hysteria2_port=get("hysteria2_port"))
         if missing:
             raise HTTPException(status_code=400, detail=f"hysteria2 requires: {', '.join(missing)}")
+    elif protocol == HostProtocol.ikev2:
+        missing = _missing(ikev2_psk=get("ikev2_psk"))
+        if missing:
+            raise HTTPException(status_code=400, detail=f"ikev2 requires: {', '.join(missing)}")
+    elif protocol == HostProtocol.l2tp:
+        missing = _missing(l2tp_psk=get("l2tp_psk"))
+        if missing:
+            raise HTTPException(status_code=400, detail=f"l2tp requires: {', '.join(missing)}")
 
 
 @router.get("/reality-keypair", response_model=RealityKeypairResponse)

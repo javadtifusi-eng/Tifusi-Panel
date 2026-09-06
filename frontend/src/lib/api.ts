@@ -136,10 +136,26 @@ export interface WireGuardConfig {
   config: string
 }
 
+export interface Ikev2Config {
+  remark: string
+  server: string
+  psk: string | null
+}
+
+export interface L2tpConfig {
+  remark: string
+  server: string
+  psk: string | null
+  username: string
+  password: string
+}
+
 export interface UserLinks {
   subscription_url: string
   links: string[]
   wireguard_configs: WireGuardConfig[]
+  ikev2_configs: Ikev2Config[]
+  l2tp_configs: L2tpConfig[]
 }
 
 export async function getUserLinks(id: number): Promise<UserLinks> {
@@ -171,7 +187,7 @@ export async function scanReality(sampleSize?: number): Promise<RealityScanRespo
   return res.json()
 }
 
-export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'wireguard' | 'hysteria2'
+export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'wireguard' | 'hysteria2' | 'ikev2' | 'l2tp'
 export type HostSecurity = 'none' | 'tls' | 'reality'
 
 export const FINGERPRINTS = [
@@ -214,6 +230,10 @@ export interface Host {
 
   hysteria2_sni: string | null
   hysteria2_port: number | null
+
+  ikev2_psk: string | null
+
+  l2tp_psk: string | null
 
   network: string | null
   effective_security: string | null
@@ -269,6 +289,10 @@ export interface HostPayload {
 
   hysteria2_sni?: string | null
   hysteria2_port?: number | null
+
+  ikev2_psk?: string | null
+
+  l2tp_psk?: string | null
 }
 
 export async function createHost(payload: HostPayload): Promise<Host> {
@@ -467,7 +491,6 @@ export interface PanelSettings {
   public_url: string | null
   telegram_bot_token: string | null
   telegram_chat_id: string | null
-  ai_api_key: string | null
 }
 
 export async function getSettings(): Promise<PanelSettings> {
@@ -573,20 +596,5 @@ export interface SystemStats {
 
 export async function getSystemStats(): Promise<SystemStats> {
   const res = await authorizedFetch('/system/stats')
-  return res.json()
-}
-
-export interface AiChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-export interface AiChatResponse {
-  reply: string
-  actions: string[]
-}
-
-export async function sendAiChat(messages: AiChatMessage[]): Promise<AiChatResponse> {
-  const res = await authorizedFetch('/ai/chat', { method: 'POST', body: JSON.stringify({ messages }) })
   return res.json()
 }

@@ -112,8 +112,31 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         wireguard_configs.append({"remark": render_remark(host, user), "config": build_client_config(peer, host)})
 
+    # ikev2/l2tp have no URI scheme either — iOS/Android/strongSwan set them
+    # up from plain fields (server, PSK, and for l2tp a username/password),
+    # not an importable link, so each gets its own field of raw connection
+    # info instead of joining the base64 link list.
+    ikev2_configs = [
+        {"remark": render_remark(host, user), "server": host.address, "psk": host.ikev2_psk}
+        for host in allowed_hosts
+        if host.protocol == HostProtocol.ikev2
+    ]
+    l2tp_configs = [
+        {
+            "remark": render_remark(host, user),
+            "server": host.address,
+            "psk": host.l2tp_psk,
+            "username": user.username,
+            "password": user.secret,
+        }
+        for host in allowed_hosts
+        if host.protocol == HostProtocol.l2tp
+    ]
+
     return {
         "subscription_url": f"{base}sub/{user.secret}",
         "links": build_links_for_user(user, allowed_hosts),
         "wireguard_configs": wireguard_configs,
+        "ikev2_configs": ikev2_configs,
+        "l2tp_configs": l2tp_configs,
     }

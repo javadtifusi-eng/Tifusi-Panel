@@ -79,7 +79,10 @@ export default function UserLinksModal({
               </button>
             </div>
 
-            {data.links.length === 0 && data.wireguard_configs.length === 0 ? (
+            {data.links.length === 0 &&
+            data.wireguard_configs.length === 0 &&
+            data.ikev2_configs.length === 0 &&
+            data.l2tp_configs.length === 0 ? (
               <div className="text-sm text-slate-500">{t.userLinksModal.noHostsForLinks}</div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -126,6 +129,58 @@ export default function UserLinksModal({
                     </pre>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {data.ikev2_configs.length > 0 && (
+              <div className="mt-4 flex flex-col gap-3">
+                {data.ikev2_configs.map((ike, idx) => {
+                  const text = `Server: ${ike.server}\nPSK: ${ike.psk ?? '—'}`
+                  return (
+                    <div key={`${idx}-${ike.remark}`} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="rounded-full border border-white/15 px-2 py-1 text-[10px] text-slate-300">
+                          IKEV2 · {ike.remark}
+                        </span>
+                        <button onClick={() => copy(text)} className="text-xs font-bold" style={{ color: ACCENT }}>
+                          {copied === text ? t.copied : t.userLinksModal.copyConfig}
+                        </button>
+                      </div>
+                      <pre
+                        dir="ltr"
+                        className="whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-slate-400"
+                      >
+                        {text}
+                      </pre>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {data.l2tp_configs.length > 0 && (
+              <div className="mt-4 flex flex-col gap-3">
+                {data.l2tp_configs.map((l2tp, idx) => {
+                  const text = `Server: ${l2tp.server}\nPSK: ${l2tp.psk ?? '—'}\nUsername: ${l2tp.username}\nPassword: ${l2tp.password}`
+                  return (
+                    <div key={`${idx}-${l2tp.remark}`} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="rounded-full border border-white/15 px-2 py-1 text-[10px] text-slate-300">
+                          L2TP · {l2tp.remark}
+                        </span>
+                        <button onClick={() => copy(text)} className="text-xs font-bold" style={{ color: ACCENT }}>
+                          {copied === text ? t.copied : t.userLinksModal.copyConfig}
+                        </button>
+                      </div>
+                      <pre
+                        dir="ltr"
+                        className="whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-slate-400"
+                      >
+                        {text}
+                      </pre>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </>
