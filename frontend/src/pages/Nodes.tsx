@@ -4,9 +4,11 @@ import {
   ApiError,
   createNode,
   deleteNode,
+  listCores,
   listNodes,
   syncNode,
   updateNode,
+  type Core,
   type Node,
   type NodeStatus,
 } from '../lib/api'
@@ -32,12 +34,14 @@ function setupCommand(node: Node): string {
 export default function NodesPage() {
   const { t, align } = useLang()
   const [nodes, setNodes] = useState<Node[] | null>(null)
+  const [cores, setCores] = useState<Core[]>([])
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [port, setPort] = useState('62050')
+  const [coreId, setCoreId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [setupNodeId, setSetupNodeId] = useState<number | null>(null)
@@ -54,6 +58,9 @@ export default function NodesPage() {
 
   useEffect(() => {
     refresh()
+    listCores()
+      .then((res) => setCores(res.cores))
+      .catch(() => undefined)
   }, [])
 
   function resetForm() {
@@ -61,6 +68,7 @@ export default function NodesPage() {
     setName('')
     setAddress('')
     setPort('62050')
+    setCoreId(null)
     setShowForm(false)
   }
 
@@ -69,6 +77,7 @@ export default function NodesPage() {
     setName(node.name)
     setAddress(node.address)
     setPort(String(node.port))
+    setCoreId(node.core_id)
     setShowForm(true)
   }
 
@@ -78,10 +87,10 @@ export default function NodesPage() {
     setError(null)
     try {
       if (editingId) {
-        await updateNode(editingId, { name, address, port: parseInt(port, 10) })
+        await updateNode(editingId, { name, address, port: parseInt(port, 10), core_id: coreId })
         resetForm()
       } else {
-        const created = await createNode({ name, address, port: parseInt(port, 10) })
+        const created = await createNode({ name, address, port: parseInt(port, 10), core_id: coreId })
         resetForm()
         setSetupNodeId(created.id)
       }
@@ -171,6 +180,20 @@ export default function NodesPage() {
               required
               className={`${inputClass} w-28`}
             />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-slate-400">{t.nodesPage.coreLabel}</label>
+            <select
+              value={coreId ?? cores[0]?.id ?? ''}
+              onChange={(e) => setCoreId(e.target.value ? Number(e.target.value) : null)}
+              className={inputClass}
+            >
+              {cores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
           <button
             type="submit"

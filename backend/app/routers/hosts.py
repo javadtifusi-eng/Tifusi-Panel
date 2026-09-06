@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cores.resolve import resolve_core_id
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.groups.access import resolve_groups
@@ -72,8 +73,9 @@ async def create_host(payload: HostCreate, db: AsyncSession = Depends(get_db)) -
         if missing:
             raise HTTPException(status_code=400, detail=f"WireGuard requires: {', '.join(missing)}")
 
-    data = payload.model_dump(exclude={"group_ids"})
+    data = payload.model_dump(exclude={"group_ids", "core_id"})
     host = Host(**data)
+    host.core_id = await resolve_core_id(payload.core_id, db)
     host.groups = await resolve_groups(payload.group_ids, db) or []
     db.add(host)
     await db.commit()
@@ -96,7 +98,7 @@ async def get_host(host_id: int, db: AsyncSession = Depends(get_db)) -> Host:
 @router.put("/{host_id}", response_model=HostResponse)
 async def update_host(host_id: int, payload: HostUpdate, db: AsyncSession = Depends(get_db)) -> Host:
     host = await _get_host_or_404(host_id, db)
-    updates = payload.model_dump(exclude_unset=True, exclude={"group_ids"})
+    updates = payload.model_dump(exclude_unset=True, exclude={"group_ids", "core_id"})
 
     merged_security = updates.get("security", host.security)
     if merged_security == HostSecurity.reality:
@@ -120,6 +122,9 @@ async def update_host(host_id: int, payload: HostUpdate, db: AsyncSession = Depe
 
     for field, value in updates.items():
         setattr(host, field, value)
+
+    if "core_id" in payload.model_fields_set:
+        host.core_id = await resolve_core_id(payload.core_id, db)
 
     new_groups = await resolve_groups(payload.group_ids, db)
     if new_groups is not None:

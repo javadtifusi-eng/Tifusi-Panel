@@ -36,6 +36,7 @@ export const dict = {
       hosts: 'هاست‌ها',
       groups: 'گروه‌ها',
       nodes: 'نودها',
+      cores: 'هسته‌ها',
       settings: 'تنظیمات',
       logout: 'خروج',
     },
@@ -79,6 +80,7 @@ export const dict = {
       title: 'هاست‌ها',
       newBtn: '+ هاست جدید',
       fetchError: 'خطا در دریافت لیست هاست‌ها',
+      coreLabel: 'هسته',
       remark: 'نام نمایشی',
       protocol: 'پروتکل',
       protocolLockedNote: 'پروتکل بعد از ساخت قابل تغییر نیست',
@@ -147,6 +149,7 @@ export const dict = {
       title: 'نودها',
       newBtn: '+ نود جدید',
       fetchError: 'خطا در دریافت لیست نودها',
+      coreLabel: 'هسته',
       intro:
         'هر نود یه سرور جداست که Xray واقعی روش اجرا می‌شه. اول نود رو اینجا ثبت کن، بعد با دستوری که نشون داده می‌شه ایجنت رو روی همون سرور بالا بیار، بعد «همگام‌سازی» رو بزن تا کانفیگ هاست‌ها و کاربرها براش فرستاده بشه.',
       nameLabel: 'نام',
@@ -171,6 +174,25 @@ export const dict = {
         pending: 'در انتظار همگام‌سازی',
         error: 'خطا',
       },
+    },
+
+    coresPage: {
+      title: 'هسته‌ها',
+      newBtn: '+ هسته جدید',
+      fetchError: 'خطا در دریافت لیست هسته‌ها',
+      intro:
+        'هر هسته یه پروفایل جدای کانفیگ Xray‌ه. هر هاست و هر نود یکی از هسته‌ها رو انتخاب می‌کنه، و وقتی به یه نود سینک می‌زنی، فقط کانفیگ هاست‌های همون هسته براش ساخته و فرستاده می‌شه — یعنی می‌تونی مثلاً یه هسته VLESS+REALITY و یه هسته کاملاً جدا برای WireGuard داشته باشی.',
+      nameLabel: 'نام هسته',
+      noteLabel: 'یادداشت',
+      createCoreBtn: 'ساخت هسته',
+      colName: 'نام',
+      colNote: 'یادداشت',
+      colHosts: 'هاست‌ها',
+      colNodes: 'نودها',
+      noCoresYet: 'هنوز هسته‌ای ساخته نشده',
+      confirmDelete: (name: string) => `هسته «${name}» حذف بشه؟`,
+      inUseError: 'این هسته هنوز به هاست یا نودی وصله — اول اونا رو به هسته‌ی دیگه‌ای منتقل کن.',
+      onlyCoreError: 'نمی‌شه تنها هسته‌ی باقی‌مونده رو حذف کرد.',
     },
 
     settingsPage: {
@@ -263,6 +285,7 @@ export const dict = {
       hosts: 'Hosts',
       groups: 'Groups',
       nodes: 'Nodes',
+      cores: 'Cores',
       settings: 'Settings',
       logout: 'Sign Out',
     },
@@ -306,6 +329,7 @@ export const dict = {
       title: 'Hosts',
       newBtn: '+ New Host',
       fetchError: 'Failed to load hosts',
+      coreLabel: 'Core',
       remark: 'Display Name',
       protocol: 'Protocol',
       protocolLockedNote: "Protocol can't be changed after creation",
@@ -374,6 +398,7 @@ export const dict = {
       title: 'Nodes',
       newBtn: '+ New Node',
       fetchError: 'Failed to load nodes',
+      coreLabel: 'Core',
       intro:
         'Each node is a separate server that actually runs Xray. Register the node here first, bring the agent up on that server with the command shown, then hit "Sync" to push the host and user config to it.',
       nameLabel: 'Name',
@@ -398,6 +423,25 @@ export const dict = {
         pending: 'Awaiting sync',
         error: 'Error',
       },
+    },
+
+    coresPage: {
+      title: 'Cores',
+      newBtn: '+ New Core',
+      fetchError: 'Failed to load cores',
+      intro:
+        "Each Core is a separate Xray config profile. Every host and node picks one Core, and syncing a node only builds and pushes the hosts sharing its Core — so you can run, say, a VLESS+REALITY core and a completely separate WireGuard-only core side by side.",
+      nameLabel: 'Core Name',
+      noteLabel: 'Note',
+      createCoreBtn: 'Create Core',
+      colName: 'Name',
+      colNote: 'Note',
+      colHosts: 'Hosts',
+      colNodes: 'Nodes',
+      noCoresYet: 'No cores yet',
+      confirmDelete: (name: string) => `Delete core "${name}"?`,
+      inUseError: 'This core still has hosts or nodes assigned — move them to another core first.',
+      onlyCoreError: "Can't delete the only remaining core.",
     },
 
     settingsPage: {

@@ -6,9 +6,11 @@ import {
   deleteHost,
   getRealityKeypair,
   getWireGuardKeypair,
+  listCores,
   listHosts,
   scanReality,
   updateHost,
+  type Core,
   type Host,
   type HostNetwork,
   type HostProtocol,
@@ -36,6 +38,7 @@ function emptyForm() {
     wireguard_public_key: '',
     wireguard_private_key: '',
     wireguard_subnet: '10.66.66.0/24',
+    core_id: null as number | null,
   }
 }
 
@@ -43,6 +46,7 @@ export default function HostsPage() {
   const { t, align } = useLang()
   const protocolLabels = t.hostsPage.protocolLabels
   const [hosts, setHosts] = useState<Host[] | null>(null)
+  const [cores, setCores] = useState<Core[]>([])
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -69,6 +73,9 @@ export default function HostsPage() {
 
   useEffect(() => {
     refresh()
+    listCores()
+      .then((res) => setCores(res.cores))
+      .catch(() => undefined)
   }, [])
 
   function update<K extends keyof ReturnType<typeof emptyForm>>(key: K, value: ReturnType<typeof emptyForm>[K]) {
@@ -149,6 +156,7 @@ export default function HostsPage() {
       wireguard_public_key: host.wireguard_public_key ?? '',
       wireguard_private_key: host.wireguard_private_key ?? '',
       wireguard_subnet: host.wireguard_subnet ?? '10.66.66.0/24',
+      core_id: host.core_id,
     })
     setShowForm(true)
   }
@@ -170,6 +178,7 @@ export default function HostsPage() {
       wireguard_public_key: usesWireguard ? form.wireguard_public_key : null,
       wireguard_private_key: usesWireguard ? form.wireguard_private_key : null,
       wireguard_subnet: usesWireguard ? form.wireguard_subnet : null,
+      core_id: form.core_id,
     }
     try {
       if (editingId) {
@@ -261,6 +270,20 @@ export default function HostsPage() {
                 required
                 className={`${inputClass} w-24`}
               />
+            </div>
+            <div>
+              <label className={labelClass}>{t.hostsPage.coreLabel}</label>
+              <select
+                value={form.core_id ?? cores[0]?.id ?? ''}
+                onChange={(e) => update('core_id', e.target.value ? Number(e.target.value) : null)}
+                className={inputClass}
+              >
+                {cores.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

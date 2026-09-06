@@ -9,12 +9,14 @@ class NodeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     address: str = Field(min_length=1, max_length=255)
     port: int = Field(default=62050, ge=1, le=65535)
+    core_id: int | None = None
 
 
 class NodeUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     address: str | None = Field(default=None, min_length=1, max_length=255)
     port: int | None = Field(default=None, ge=1, le=65535)
+    core_id: int | None = None
 
 
 class NodeResponse(BaseModel):
@@ -25,6 +27,7 @@ class NodeResponse(BaseModel):
     address: str
     port: int
     api_key: str
+    core_id: int | None
     status: NodeStatus
     xray_version: str | None
     last_error: str | None

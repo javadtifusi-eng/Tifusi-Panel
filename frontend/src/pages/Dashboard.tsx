@@ -2,6 +2,7 @@ import { useState } from 'react'
 import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
 import { useLang } from '../i18n/LangContext'
+import CoresPage from './Cores'
 import GroupsPage from './Groups'
 import HostsPage from './Hosts'
 import NodesPage from './Nodes'
@@ -10,7 +11,7 @@ import UsersPage from './Users'
 
 const ACCENT = '#22D3EE'
 
-type ActiveTab = 'users' | 'hosts' | 'groups' | 'nodes' | 'settings'
+type ActiveTab = 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'settings'
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { lang, setLang, t, dir } = useLang()
@@ -21,6 +22,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
     { id: 'hosts', label: t.nav.hosts },
     { id: 'groups', label: t.nav.groups },
     { id: 'nodes', label: t.nav.nodes },
+    { id: 'cores', label: t.nav.cores },
     { id: 'settings', label: t.nav.settings },
   ]
 
@@ -82,6 +84,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         {active === 'hosts' && <HostsPage />}
         {active === 'groups' && <GroupsPage />}
         {active === 'nodes' && <NodesPage />}
+        {active === 'cores' && <CoresPage />}
         {active === 'settings' && <SettingsPage />}
       </main>
     </div>

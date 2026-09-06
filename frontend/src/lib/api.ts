@@ -186,6 +186,7 @@ export interface Host {
   wireguard_subnet: string | null
   created_at: string
   group_ids: number[]
+  core_id: number | null
 }
 
 export interface HostList {
@@ -210,7 +211,10 @@ export async function listHosts(): Promise<HostList> {
 }
 
 export async function createHost(
-  payload: Omit<Host, 'id' | 'created_at' | 'group_ids'> & { group_ids?: number[] },
+  payload: Omit<Host, 'id' | 'created_at' | 'group_ids' | 'core_id'> & {
+    group_ids?: number[]
+    core_id?: number | null
+  },
 ): Promise<Host> {
   const res = await authorizedFetch('/hosts', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
@@ -246,6 +250,7 @@ export interface Node {
   address: string
   port: number
   api_key: string
+  core_id: number | null
   status: NodeStatus
   xray_version: string | null
   last_error: string | null
@@ -270,14 +275,16 @@ export async function listNodes(): Promise<NodeList> {
   return res.json()
 }
 
-export async function createNode(payload: { name: string; address: string; port: number }): Promise<Node> {
+export async function createNode(
+  payload: { name: string; address: string; port: number; core_id?: number | null },
+): Promise<Node> {
   const res = await authorizedFetch('/nodes', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }
 
 export async function updateNode(
   id: number,
-  payload: Partial<{ name: string; address: string; port: number }>,
+  payload: Partial<{ name: string; address: string; port: number; core_id: number | null }>,
 ): Promise<Node> {
   const res = await authorizedFetch(`/nodes/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
@@ -331,6 +338,39 @@ export async function updateGroup(
 
 export async function deleteGroup(id: number): Promise<void> {
   await authorizedFetch(`/groups/${id}`, { method: 'DELETE' })
+}
+
+export interface Core {
+  id: number
+  name: string
+  note: string | null
+  created_at: string
+  host_count: number
+  node_count: number
+}
+
+export interface CoreList {
+  total: number
+  cores: Core[]
+}
+
+export async function listCores(): Promise<CoreList> {
+  const res = await authorizedFetch('/cores')
+  return res.json()
+}
+
+export async function createCore(payload: { name: string; note?: string | null }): Promise<Core> {
+  const res = await authorizedFetch('/cores', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function updateCore(id: number, payload: Partial<{ name: string; note: string | null }>): Promise<Core> {
+  const res = await authorizedFetch(`/cores/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteCore(id: number): Promise<void> {
+  await authorizedFetch(`/cores/${id}`, { method: 'DELETE' })
 }
 
 export interface PanelSettings {

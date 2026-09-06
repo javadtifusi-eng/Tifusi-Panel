@@ -17,7 +17,10 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     traffic job (app/traffic/sync.py), which re-syncs every connected node
     right after a status change so an expired/limited user's inbound entry
     actually disappears instead of lingering until someone clicks sync."""
-    hosts = list((await db.execute(select(Host))).scalars().all())
+    # Only hosts sharing this node's Core get pushed to it — that's what lets
+    # separate Cores run entirely different protocol/transport combos on
+    # different nodes without stepping on each other.
+    hosts = list((await db.execute(select(Host).where(Host.core_id == node.core_id))).scalars().all())
     users = list((await db.execute(select(ProxyUser))).scalars().all())
     config = build_xray_config(hosts, users)
 

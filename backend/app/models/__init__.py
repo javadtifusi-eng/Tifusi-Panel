@@ -1,4 +1,5 @@
 from app.models.admin import Admin
+from app.models.core import Core
 from app.models.group import Group
 from app.models.host import Host, HostNetwork, HostProtocol, HostSecurity
 from app.models.node import Node, NodeStatus
@@ -18,6 +19,7 @@ __all__ = [
     "HostSecurity",
     "Node",
     "NodeStatus",
+    "Core",
     "Group",
     "WireGuardPeer",
     "PanelSetting",

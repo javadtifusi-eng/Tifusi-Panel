@@ -20,6 +20,7 @@ class HostCreate(BaseModel):
     wireguard_private_key: str | None = None
     wireguard_subnet: str | None = None
     group_ids: list[int] = Field(default_factory=list)
+    core_id: int | None = None
 
 
 class HostUpdate(BaseModel):
@@ -36,6 +37,7 @@ class HostUpdate(BaseModel):
     wireguard_private_key: str | None = None
     wireguard_subnet: str | None = None
     group_ids: list[int] | None = None
+    core_id: int | None = None
 
 
 class HostResponse(BaseModel):
@@ -57,6 +59,7 @@ class HostResponse(BaseModel):
     wireguard_subnet: str | None
     created_at: datetime
     group_ids: list[int]
+    core_id: int | None
 
 
 class HostList(BaseModel):

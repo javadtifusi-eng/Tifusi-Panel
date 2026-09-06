@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -55,6 +55,10 @@ class Host(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+    # Which Core's Xray config this host feeds into — a node only receives
+    # the hosts sharing its own core_id. See app/nodes/sync.py.
+    core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
 
     # Empty = global/ungrouped, visible and usable by every user. See app/groups/access.py.
     groups: Mapped[list["Group"]] = relationship(  # noqa: F821
