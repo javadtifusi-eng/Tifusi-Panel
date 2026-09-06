@@ -13,15 +13,21 @@ RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
 # strongswan/xl2tpd/ppp/iptables: only actually used when the panel assigns
 # this node an l2tp or ikev2 Core (see node_agent/ipsec.py) — installed
 # unconditionally here so a node never needs a second install/rebuild just
-# to switch which kind of core it serves. strongSwan 6 split its control
-# plane into two pieces we both need explicitly rather than trusting the
-# strongswan metapackage to pull them in: strongswan-starter (the
-# /usr/sbin/ipsec CLI, used only to get charon itself running) and
-# strongswan-swanctl (the vici-based tool that actually loads connections
-# and reports status now that the old stroke interface is gone).
+# to switch which kind of core it serves. Debian splits strongSwan across
+# several packages we each need explicitly rather than trusting apt's
+# dependency resolution to pick them (confirmed live: with only
+# strongswan-libcharon — the shared library — pulled in, `ipsec restart`
+# fails with "IKE daemon '/usr/lib/ipsec/charon' not found", because that
+# executable ships in the separate strongswan-charon package):
+#   - strongswan-charon:  the actual charon daemon binary
+#   - strongswan-starter: the /usr/sbin/ipsec CLI, used only to get charon
+#                          itself running
+#   - strongswan-swanctl: the vici-based tool that loads connections and
+#                          reports status, replacing the stroke interface
+#                          strongSwan 6 removed
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl unzip ca-certificates \
-      strongswan strongswan-starter strongswan-swanctl strongswan-pki \
+      strongswan strongswan-charon strongswan-starter strongswan-swanctl strongswan-pki \
       libcharon-extra-plugins libstrongswan-extra-plugins \
       xl2tpd ppp iptables \
     && rm -rf /var/lib/apt/lists/*
