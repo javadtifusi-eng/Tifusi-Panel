@@ -55,7 +55,18 @@ info "Starting the node on the host's real network (agent on port $PORT)..."
 # Docker can't pre-publish a port it doesn't know about yet. Host networking
 # means every port Xray (or the agent) binds to is reachable directly,
 # exactly like PasarGuard's own node containers.
+#
+# NET_ADMIN/NET_RAW: only needed if the panel later assigns this node an
+# l2tp/ikev2 Core — strongSwan/xl2tpd need them to touch IPsec kernel state
+# and manage PPP interfaces. Harmless for a plain Xray node, so it's just
+# always granted rather than making this script guess in advance.
+EXTRA_DOCKER_ARGS=(--cap-add=NET_ADMIN --cap-add=NET_RAW)
+if [ -d /lib/modules ]; then
+  EXTRA_DOCKER_ARGS+=(-v /lib/modules:/lib/modules:ro)
+fi
+
 docker run -d --name tifusi-node --restart unless-stopped \
-  --network host -e "TIFUSI_NODE_API_KEY=${API_KEY}" -e "AGENT_PORT=${PORT}" tifusi-node-agent
+  --network host "${EXTRA_DOCKER_ARGS[@]}" \
+  -e "TIFUSI_NODE_API_KEY=${API_KEY}" -e "AGENT_PORT=${PORT}" tifusi-node-agent
 
 info "Node is up. Now hit Sync on it from the panel's Nodes tab."

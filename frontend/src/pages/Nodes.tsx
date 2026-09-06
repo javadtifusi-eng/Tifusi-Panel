@@ -204,10 +204,10 @@ export default function NodesPage() {
             >
               <option value="">{t.coresPage.selectPlaceholder}</option>
               {cores
-                .filter((c) => c.core_type === 'xray')
+                .filter((c) => c.core_type !== 'wireguard')
                 .map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {c.name} — {t.coresPage.coreTypeLabels[c.core_type]}
                 </option>
               ))}
             </select>
@@ -292,7 +292,10 @@ export default function NodesPage() {
               </div>
               {core && (
                 <div className="mb-1 text-xs text-slate-500">
-                  {core.name} · {t.nodesPage.inboundsCount(core.inbounds.length)}
+                  {core.name} ·{' '}
+                  {core.core_type === 'xray'
+                    ? t.nodesPage.inboundsCount(core.inbounds.length)
+                    : t.coresPage.coreTypeLabels[core.core_type]}
                 </div>
               )}
               <div dir="ltr" className="mb-3 text-left text-xs text-slate-500">

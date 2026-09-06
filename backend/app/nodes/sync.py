@@ -4,12 +4,57 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.core import Core
+from app.groups.access import users_for_host
+from app.models.core import Core, CoreType
+from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser
 from app.notifications.telegram import send_telegram_message
 from app.xray_config.builder import build_xray_config
+
+
+async def _ipsec_allowed_users(core: Core, db: AsyncSession) -> list[ProxyUser]:
+    """Every ProxyUser allowed on any Host built on this l2tp Core — same
+    group-access rule as everything else (a Host in no group is global)."""
+    hosts = list((await db.execute(select(Host).where(Host.core_id == core.id))).scalars().all())
+    users = list((await db.execute(select(ProxyUser))).scalars().all())
+    allowed: dict[int, ProxyUser] = {}
+    for host in hosts:
+        for user in users_for_host(host, users):
+            allowed[user.id] = user
+    return list(allowed.values())
+
+
+async def _build_payload(node: Node, core: Core | None, db: AsyncSession) -> tuple[str, dict]:
+    """Returns (agent_endpoint, json_body) for whatever this node's core
+    actually is — a Node with no core assigned yet gets pushed an empty
+    Xray config, same as before, since that was always the default shape."""
+    if core is None or core.core_type == CoreType.xray:
+        if core is None:
+            config = {"inbounds": []}
+        else:
+            inbounds = list(
+                (await db.execute(select(Inbound).where(Inbound.core_id == core.id))).scalars().all()
+            )
+            users = list((await db.execute(select(ProxyUser))).scalars().all())
+            config = build_xray_config(core, inbounds, users)
+        return "/config", config
+
+    if core.core_type == CoreType.l2tp:
+        users = await _ipsec_allowed_users(core, db)
+        return "/ipsec-config", {
+            "core_type": "l2tp",
+            "psk": core.l2tp_psk,
+            "users": [{"username": u.username, "password": u.secret} for u in users],
+        }
+
+    # ikev2 — shared PSK only, no per-user identity in this panel's design
+    return "/ipsec-config", {
+        "core_type": "ikev2",
+        "psk": core.ikev2_psk,
+        "remote_id": core.ikev2_remote_id,
+    }
 
 
 async def sync_node(node: Node, db: AsyncSession) -> dict:
@@ -18,17 +63,8 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     traffic job (app/traffic/sync.py), which re-syncs every connected node
     right after a status change so an expired/limited user's inbound entry
     actually disappears instead of lingering until someone clicks sync."""
-    # A node with no Core assigned yet has nothing to run — push an empty
-    # config rather than guessing, same as it having zero hosts before.
     core = await db.get(Core, node.core_id) if node.core_id is not None else None
-    if core is None:
-        config = {"inbounds": []}
-    else:
-        inbounds = list(
-            (await db.execute(select(Inbound).where(Inbound.core_id == core.id))).scalars().all()
-        )
-        users = list((await db.execute(select(ProxyUser))).scalars().all())
-        config = build_xray_config(core, inbounds, users)
+    endpoint, payload = await _build_payload(node, core, db)
 
     base_url = f"http://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
@@ -37,7 +73,7 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     error: str | None = None
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.post(f"{base_url}/config", json=config, headers=headers)
+            resp = await client.post(f"{base_url}{endpoint}", json=payload, headers=headers)
             resp.raise_for_status()
             health_resp = await client.get(f"{base_url}/health", headers=headers)
             health_resp.raise_for_status()
@@ -53,19 +89,23 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     else:
         node.status = NodeStatus.connected if health.get("running") else NodeStatus.error
         node.xray_version = health.get("xray_version")
-        node.last_error = None if health.get("running") else "xray reported not running"
+        node.last_error = None if health.get("running") else f"{payload.get('core_type', 'xray')} reported not running"
         node.last_synced_at = datetime.now(timezone.utc)
 
     await db.commit()
 
-    # The reserved stats-API inbound (see build_xray_config) isn't one of
-    # the admin's own hosts, so it's excluded from the count they see.
-    client_inbound_count = sum(1 for inbound in config["inbounds"] if inbound.get("tag") != "api")
+    if endpoint == "/config":
+        # The reserved stats-API inbound (see build_xray_config) isn't one of
+        # the admin's own hosts, so it's excluded from the count they see.
+        inbound_count = sum(1 for inbound in payload["inbounds"] if inbound.get("tag") != "api")
+    else:
+        inbound_count = len(payload.get("users", [])) if payload["core_type"] == "l2tp" else (1 if core else 0)
+
     return {
         "status": node.status,
         "xray_version": node.xray_version,
         "error": node.last_error,
-        "inbound_count": client_inbound_count,
+        "inbound_count": inbound_count,
     }
 
 

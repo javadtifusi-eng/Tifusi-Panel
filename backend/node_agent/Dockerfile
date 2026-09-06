@@ -1,6 +1,13 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates \
+# strongswan/xl2tpd/ppp/iptables: only actually used when the panel assigns
+# this node an l2tp or ikev2 Core (see node_agent/ipsec.py) — installed
+# unconditionally here so a node never needs a second install/rebuild just
+# to switch which kind of core it serves.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl unzip ca-certificates \
+      strongswan strongswan-pki libcharon-extra-plugins libstrongswan-extra-plugins \
+      xl2tpd ppp iptables \
     && rm -rf /var/lib/apt/lists/*
 
 # The real Xray-core binary. This is the one piece of the node agent that
