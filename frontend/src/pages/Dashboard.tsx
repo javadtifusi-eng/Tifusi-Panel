@@ -9,11 +9,12 @@ import HostsPage from './Hosts'
 import NodesPage from './Nodes'
 import OverviewPage from './Overview'
 import SettingsPage from './Settings'
+import TunnelsPage from './Tunnels'
 import UsersPage from './Users'
 
 const ACCENT = '#22D3EE'
 
-type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'settings'
+type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'tunnels' | 'settings'
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { lang, setLang, t, dir } = useLang()
@@ -26,6 +27,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
     { id: 'groups', label: t.nav.groups },
     { id: 'nodes', label: t.nav.nodes },
     { id: 'cores', label: t.nav.cores },
+    { id: 'tunnels', label: t.nav.tunnels },
     { id: 'settings', label: t.nav.settings },
   ]
 
@@ -90,6 +92,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         {active === 'groups' && <GroupsPage />}
         {active === 'nodes' && <NodesPage />}
         {active === 'cores' && <CoresPage />}
+        {active === 'tunnels' && <TunnelsPage />}
         {active === 'settings' && <SettingsPage />}
       </main>
     </div>

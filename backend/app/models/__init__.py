@@ -6,6 +6,7 @@ from app.models.inbound import Inbound
 from app.models.node import Node, NodeStatus
 from app.models.setting import PanelSetting
 from app.models.setup_key import SetupKey
+from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.models.user import ProxyUser, UserStatus
 from app.models.wireguard_peer import WireGuardPeer
 
@@ -24,4 +25,7 @@ __all__ = [
     "Group",
     "WireGuardPeer",
     "PanelSetting",
+    "Tunnel",
+    "TunnelStatus",
+    "TunnelTransport",
 ]
