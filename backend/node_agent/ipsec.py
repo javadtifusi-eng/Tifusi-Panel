@@ -285,8 +285,17 @@ def apply_l2tp(psk: str, users: list[dict], egress_vless: str | None = None) -> 
     _ensure_forwarding_and_nat(_L2TP_SUBNET)
     # Chained egress (see vless_egress.py) layers TPROXY rules on top of the
     # plain NAT/FORWARD ones above, which are harmless to leave in place —
-    # TPROXY diverts matching packets before they'd ever reach them.
-    vless_egress.apply(egress_vless, _L2TP_SUBNET)
+    # TPROXY diverts matching packets before they'd ever reach them. Best
+    # effort: a bad/unreachable egress link, or a host missing some
+    # TPROXY-related tool, must never take down l2tp itself — worst case
+    # without this try/except, an exception here would skip the
+    # _restart_xl2tpd() call below entirely and silently break every l2tp
+    # user, egress or not. Traffic just falls back to the plain NAT egress
+    # already set up above.
+    try:
+        vless_egress.apply(egress_vless, _L2TP_SUBNET)
+    except Exception:
+        pass
     _restart_xl2tpd()
 
 

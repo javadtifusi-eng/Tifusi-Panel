@@ -30,10 +30,13 @@ TPROXY_TABLE = "100"
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
+    """check=False only swallows a nonzero exit — a missing binary or a
+    hung command still needs a CompletedProcess with real (empty) stdout,
+    since every caller here does `.stdout.decode()` unconditionally."""
     try:
         return subprocess.run(cmd, check=False, capture_output=True, timeout=15)
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return subprocess.CompletedProcess(cmd, returncode=127)
+        return subprocess.CompletedProcess(cmd, returncode=127, stdout=b"", stderr=b"")
 
 
 def parse_vless(uri: str) -> dict:
