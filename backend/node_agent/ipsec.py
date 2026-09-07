@@ -198,6 +198,17 @@ def _ensure_forwarding_and_nat(subnet_cidr: str) -> None:
     if check.returncode != 0:
         _run(["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", subnet_cidr, "-j", "MASQUERADE"])
 
+    # A NAT rule alone isn't enough on a Docker host — Docker manages the
+    # FORWARD chain itself and its default policy is commonly DROP, which
+    # silently swallows traffic to/from an interface it doesn't know about
+    # (xl2tpd's ppp0, charon's IPsec-protected traffic) even though
+    # MASQUERADE above is correctly configured. -I (insert at the top),
+    # not -A, so this wins over any DROP further down the chain.
+    for direction in ("-s", "-d"):
+        check = _run(["iptables", "-C", "FORWARD", direction, subnet_cidr, "-j", "ACCEPT"])
+        if check.returncode != 0:
+            _run(["iptables", "-I", "FORWARD", "1", direction, subnet_cidr, "-j", "ACCEPT"])
+
 
 _charon_process: subprocess.Popen | None = None
 
