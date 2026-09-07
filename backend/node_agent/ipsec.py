@@ -78,8 +78,8 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users:
             "    children {\n"
             "      l2tp {\n"
             "        mode = transport\n"
-            "        local_ts = dynamic[/1701]\n"
-            "        remote_ts = dynamic[/%any]\n"
+            "        local_ts = dynamic[udp/l2tp]\n"
+            "        remote_ts = dynamic[udp]\n"
             "        esp_proposals = aes256-sha1,aes128-sha1,aes256gcm16,3des-sha1\n"
             "      }\n"
             "    }\n"
@@ -151,6 +151,12 @@ def _xl2tpd_conf() -> str:
 
 def _ppp_options() -> str:
     lines = [
+        # Must match both xl2tpd.conf's `name` (which client CHAP requests
+        # get authenticated against) and chap-secrets' "server" column —
+        # without this, pppd defaults to presenting the container's own
+        # hostname as its identity, which matches neither, and CHAP auth
+        # fails even though the IPsec/L2TP tunnel itself came up fine.
+        "name tifusi-l2tp",
         "+mschap-v2",
         "ipcp-accept-local",
         "ipcp-accept-remote",
