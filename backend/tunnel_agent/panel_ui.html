@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tifusi Tunnel Panel</title>
+<script>(function(){try{var t=localStorage.getItem("tifusi-panel-theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 660'%3E%3Crect width='800' height='660' fill='%230b0e14' rx='90'/%3E%3Cg fill='none' stroke='%23eef2f8' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M400,340 L420,300 L450,270 L478,255 L510,258 L548,255 L585,248 L588,238 L565,222 L540,195 L515,168 L495,152 L478,158 L455,180 L445,210 L430,245 L415,285 Z' stroke-width='10'/%3E%3Cg transform='translate(800,0) scale(-1,1)'%3E%3Cpath d='M400,340 L420,300 L450,270 L478,255 L510,258 L548,255 L585,248 L588,238 L565,222 L540,195 L515,168 L495,152 L478,158 L455,180 L445,210 L430,245 L415,285 Z' stroke-width='10'/%3E%3C/g%3E%3Cpath d='M330,338 L470,338 L446,390 L354,390 Z' stroke-width='8'/%3E%3Cpath d='M362,390 L438,390 L420,610 L380,610 Z' stroke-width='8'/%3E%3Cpath d='M366,610 L434,610 L440,636 L360,636 Z' stroke-width='8'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0b0e14;
+    --bg-raised:#131826;
+    --bg-raised-2:#181f30;
+    --hairline:#262f42;
+    --ink:#eef2f8;
+    --muted:#8a96ab;
+    --muted-dim:#5c6579;
+    --cyan:#22d3ee;
+    --cyan-bright:#7ee7f7;
+    --crimson:#c8102e;
+    --green:#4caf72;
+    --red:#e0616f;
+    --logs-bg:#080a0f;
+    --logs-ink:#8a96ab;
+    --sans:-apple-system,"Segoe UI",Tahoma,sans-serif;
+    --mono:"DejaVu Sans Mono",Menlo,Consolas,monospace;
+    --radius:10px;
+  }
+  :root[data-theme="light"]{
+    --bg:#f3f4f7;
+    --bg-raised:#ffffff;
+    --bg-raised-2:#eef0f4;
+    --hairline:#dde1e9;
+    --ink:#1a1f2b;
+    --muted:#5c6579;
+    --muted-dim:#8a96ab;
+    --cyan:#0891b2;
+    --cyan-bright:#0e7490;
+    --crimson:#c8102e;
+    --green:#2e8b57;
+    --red:#c8313d;
+    --logs-bg:#101319;
+    --logs-ink:#a9b2c4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px}
+  body{min-height:100vh;line-height:1.5;transition:background .15s,color .15s}
+  [hidden]{display:none!important}
+  a{color:var(--cyan-bright)}
+  input,select,button,textarea{font-family:inherit;font-size:14px}
+  code{font-family:var(--mono);font-size:.9em;background:rgba(34,211,238,.12);padding:1px 6px;border-radius:5px;color:var(--cyan-bright)}
+
+  /* ---------------- login ---------------- */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .login-card{width:100%;max-width:360px;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:14px;padding:32px 28px}
+  .brand{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:26px;text-align:center}
+  .brand svg{width:56px;height:auto;color:var(--ink)}
+  .brand h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em}
+  .brand p{margin:0;color:var(--muted);font-size:12.5px;font-family:var(--mono)}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;letter-spacing:.03em}
+  .field input{width:100%;background:var(--bg-raised-2);border:1px solid var(--hairline);border-radius:8px;color:var(--ink);padding:10px 12px}
+  .field input:focus{outline:none;border-color:var(--cyan)}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    background:linear-gradient(180deg,#67e0f0,var(--cyan));color:#052a30;font-weight:600;
+    border:none;border-radius:8px;padding:11px 18px;cursor:pointer;width:100%;
+  }
+  .btn:hover{filter:brightness(1.05)}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--hairline);font-weight:500;width:auto}
+  .btn.danger{background:var(--crimson);color:#fff}
+  .btn.small{padding:7px 12px;font-size:13px;width:auto}
+  .err{color:var(--red);font-size:13px;margin-top:10px;text-align:center;min-height:1em}
+  .lang-toggle{display:flex;justify-content:center;gap:6px;margin-top:18px}
+  .lang-toggle button{background:none;border:1px solid var(--hairline);color:var(--muted);border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px}
+  .lang-toggle button.active{color:var(--cyan-bright);border-color:var(--cyan)}
+
+  /* ---------------- app shell ---------------- */
+  #app{display:none;min-height:100vh}
+  #app.show{display:block}
+  header.topbar{
+    display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--hairline);
+    background:var(--bg-raised);position:sticky;top:0;z-index:5;
+  }
+  header.topbar svg{width:28px;flex-shrink:0;color:var(--ink)}
+  header.topbar h1{font-size:16px;margin:0;font-weight:700;flex:1}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;padding:4px 10px;border-radius:99px;border:1px solid var(--hairline)}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--muted-dim)}
+  .pill.running .dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .pill.stopped .dot{background:var(--red)}
+  .clock{font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap}
+  #clock-login{margin-top:8px;font-size:11.5px}
+
+  .check-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .check-list li{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.4}
+  .check-list .mark{flex-shrink:0;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-top:1px}
+  .check-list .mark.ok{background:rgba(76,175,114,.18);color:var(--green)}
+  .check-list .mark.bad{background:rgba(224,97,111,.18);color:var(--red)}
+  .last-activity{margin-top:12px;font-family:var(--mono);font-size:11.5px;color:var(--muted-dim);word-break:break-word}
+
+  .speed-result{display:flex;gap:22px;margin-top:16px;flex-wrap:wrap}
+  .speed-stat{display:flex;flex-direction:column;gap:2px}
+  .speed-stat .num{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--cyan-bright)}
+  .speed-stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .speed-status{font-size:12.5px;color:var(--muted-dim);margin-top:10px;min-height:1.2em}
+
+  main{max-width:880px;margin:0 auto;padding:26px 20px 70px;display:flex;flex-direction:column;gap:22px}
+  .card{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:var(--radius);padding:20px 22px}
+  .card h2{font-size:14px;margin:0 0 16px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+  .card .card-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:600px){.grid2{grid-template-columns:1fr}}
+  .field-row label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field-row input,.field-row select{width:100%;background:var(--bg-raised-2);border:1px solid var(--hairline);border-radius:8px;color:var(--ink);padding:9px 11px}
+  .field-row input:focus,.field-row select:focus{outline:none;border-color:var(--cyan)}
+  .hint{font-size:12px;color:var(--muted-dim);margin-top:5px}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-dim);font-weight:500;padding:0 10px 8px;border-bottom:1px solid var(--hairline)}
+  td{padding:10px;border-bottom:1px solid var(--hairline);font-family:var(--mono);font-size:13px}
+  tr:last-child td{border-bottom:none}
+  .empty-row td{font-family:var(--sans);color:var(--muted-dim);text-align:center;padding:20px 0}
+  .table-wrap{overflow-x:auto}
+
+  .add-forward-row{display:grid;grid-template-columns:1.4fr 1fr .8fr .8fr auto;gap:8px;margin-top:14px;align-items:end}
+  @media(max-width:700px){.add-forward-row{grid-template-columns:1fr 1fr}}
+
+  #logs{
+    background:var(--logs-bg);border:1px solid var(--hairline);border-radius:8px;padding:14px;
+    font-family:var(--mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;
+    max-height:340px;overflow-y:auto;color:var(--logs-ink);
+  }
+  .theme-toggle{background:none;border:1px solid var(--hairline);color:var(--muted);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:14px;line-height:1;display:inline-flex;align-items:center}
+  .theme-toggle:hover{color:var(--ink);border-color:var(--cyan)}
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--bg-raised-2);border:1px solid var(--hairline);border-radius:8px;
+    padding:10px 18px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;
+  }
+  .toast.show{opacity:1}
+  .toast.ok{border-color:var(--green);color:var(--green)}
+  .toast.error{border-color:var(--red);color:var(--red)}
+
+  [dir="rtl"] .field-row,[dir="rtl"] th,[dir="rtl"] .field label{text-align:right}
+  [dir="rtl"] .add-forward-row{direction:rtl}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-card">
+    <div class="brand">
+      <svg viewBox="0 0 800 660"><g fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M400,340 L420,300 L450,270 L478,255 L510,258 L548,255 L585,248 L588,238 L565,222 L540,195 L515,168 L495,152 L478,158 L455,180 L445,210 L430,245 L415,285 Z" stroke-width="6"/>
+        <g transform="translate(800,0) scale(-1,1)"><path d="M400,340 L420,300 L450,270 L478,255 L510,258 L548,255 L585,248 L588,238 L565,222 L540,195 L515,168 L495,152 L478,158 L455,180 L445,210 L430,245 L415,285 Z" stroke-width="6"/></g>
+        <path d="M330,338 L470,338 L446,390 L354,390 Z" stroke-width="5"/>
+        <path d="M362,390 L438,390 L420,610 L380,610 Z" stroke-width="5"/>
+        <path d="M366,610 L434,610 L440,636 L360,636 Z" stroke-width="5"/>
+      </g></svg>
+      <h1>Tifusi Tunnel</h1>
+      <p data-t="login.subtitle">management panel</p>
+      <p class="clock" id="clock-login"></p>
+    </div>
+    <form id="login-form">
+      <div class="field">
+        <label data-t="login.username">Username</label>
+        <input id="login-user" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label data-t="login.password">Password</label>
+        <input id="login-pass" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn" type="submit" data-t="login.submit">Sign in</button>
+      <div class="err" id="login-err"></div>
+    </form>
+    <div class="lang-toggle">
+      <button data-lang="en" class="active">EN</button>
+      <button data-lang="fa">فارسی</button>
+      <button class="theme-toggle" id="btn-theme-login" type="button" title="Toggle theme">&#9789;</button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <header class="topbar">
+    <svg viewBox="0 0 800 660"><g fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M400,340 L420,300 L450,270 L478,255 L510,258 L548,255 L585,248 L588,238 L565,222 L540,195 L515,168 L495,152 L478,158 L455,180 L445,210 L430,245 L415,285 Z" stroke-width="6"/>
+      <g transform="translate(800,0) scale(-1,1)"><path d="M400,340 L420,300 L450,270 L478,255 L510,258 L548,255 L585,248 L588,238 L565,222 L540,195 L515,168 L495,152 L478,158 L455,180 L445,210 L430,245 L415,285 Z" stroke-width="6"/></g>
+      <path d="M330,338 L470,338 L446,390 L354,390 Z" stroke-width="5"/>
+      <path d="M362,390 L438,390 L420,610 L380,610 Z" stroke-width="5"/>
+      <path d="M366,610 L434,610 L440,636 L360,636 Z" stroke-width="5"/>
+    </g></svg>
+    <h1>Tifusi Tunnel</h1>
+    <span class="clock" id="clock-app"></span>
+    <span class="pill" id="status-pill"><span class="dot"></span><span id="status-text">&mdash;</span></span>
+    <button class="theme-toggle" id="btn-theme-app" type="button" title="Toggle theme">&#9789;</button>
+    <button class="btn ghost small" id="btn-lang-en">EN</button>
+    <button class="btn ghost small" id="btn-lang-fa">فا</button>
+    <button class="btn ghost small" id="btn-logout" data-t="topbar.logout">Sign out</button>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2 data-t="section.settings">Settings</h2>
+      <div class="grid2">
+        <div class="field-row">
+          <label data-t="field.mode">Mode</label>
+          <input id="f-mode" disabled>
+        </div>
+        <div class="field-row">
+          <label id="lbl-endpoint" data-t="field.listen">Tunnel port</label>
+          <input id="f-endpoint">
+        </div>
+        <div class="field-row">
+          <label data-t="field.transport">Transport</label>
+          <select id="f-transport">
+            <option value="tcp">tcp</option>
+            <option value="tls">tls</option>
+            <option value="ws">ws</option>
+            <option value="wss">wss</option>
+            <option value="tcpmux">tcpmux</option>
+            <option value="wsmux">wsmux</option>
+            <option value="wssmux">wssmux</option>
+            <option value="udp">udp</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label data-t="field.sni">SNI / hostname</label>
+          <input id="f-sni">
+        </div>
+        <div class="field-row">
+          <label data-t="field.path">HTTP path</label>
+          <input id="f-path">
+        </div>
+        <div class="field-row">
+          <label data-t="field.token">Shared token</label>
+          <input id="f-token">
+        </div>
+        <div class="field-row" id="row-pool">
+          <label data-t="field.pool">Pool / mux_con</label>
+          <input id="f-pool" type="number" min="1">
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn" id="btn-save-config" data-t="action.save">Save &amp; restart</button>
+        <span class="hint" data-t="hint.settings">Transport, token, SNI and path must match on both servers.</span>
+      </div>
+    </section>
+
+    <section class="card" id="section-forwards">
+      <h2 data-t="section.forwards">Forwarded ports</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th data-t="col.name">Name</th><th data-t="col.net">Proto</th>
+            <th data-t="col.listen">Public port</th><th data-t="col.target">Target port</th><th></th>
+          </tr></thead>
+          <tbody id="forwards-body"></tbody>
+        </table>
+      </div>
+      <div class="add-forward-row">
+        <div class="field-row"><label data-t="field.name">Name</label><input id="fw-name" placeholder="OpenVPN"></div>
+        <div class="field-row"><label data-t="col.net">Proto</label>
+          <select id="fw-net"><option value="tcp">tcp</option><option value="udp">udp</option></select>
+        </div>
+        <div class="field-row"><label data-t="field.listenport">Port</label><input id="fw-listen" placeholder="1194"></div>
+        <div class="field-row"><label data-t="field.targetport">Target</label><input id="fw-target" placeholder="1194"></div>
+        <button class="btn small" id="btn-add-forward" data-t="action.add">Add</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 data-t="section.testconn">Connection test</h2>
+      <p class="hint" data-t="hint.testconn">Checks whether the tunnel is actually passing traffic, not just whether the process is running.</p>
+      <ul class="check-list" id="testconn-list"></ul>
+      <div class="last-activity" id="testconn-activity"></div>
+      <div class="card-actions">
+        <button class="btn ghost" id="btn-testconn" data-t="action.testconn">Test connection</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 data-t="section.speedtest">Speed test</h2>
+      <p class="hint" data-t="hint.speedtest">Measures raw throughput to/from this server over HTTPS - a quick way to see if the bottleneck is this box's own link.</p>
+      <div class="speed-result">
+        <div class="speed-stat"><span class="num" id="speed-down">&mdash;</span><span class="lbl" data-t="speedtest.download">Download Mbps</span></div>
+        <div class="speed-stat"><span class="num" id="speed-up">&mdash;</span><span class="lbl" data-t="speedtest.upload">Upload Mbps</span></div>
+      </div>
+      <div class="speed-status" id="speed-status"></div>
+      <div class="card-actions">
+        <button class="btn ghost" id="btn-speedtest" data-t="action.speedtest">Run speed test</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 data-t="section.service">Service</h2>
+      <div class="card-actions">
+        <button class="btn ghost" id="btn-restart" data-t="action.restart">Restart service</button>
+        <button class="btn ghost" id="btn-refresh-logs" data-t="action.refreshlogs">Refresh logs</button>
+        <button class="btn danger" id="btn-uninstall-hint" data-t="action.uninstallhint">How to uninstall</button>
+      </div>
+      <p class="hint" id="uninstall-hint" hidden data-t="hint.uninstall">Uninstalling isn't done from the panel (it would remove the panel itself mid-request). Run <code>bm</code> on the server and choose Uninstall.</p>
+      <div id="logs" style="margin-top:14px"></div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STR = {
+    en: {
+      "login.subtitle":"management panel", "login.username":"Username", "login.password":"Password",
+      "login.submit":"Sign in", "login.error":"Invalid username or password",
+      "topbar.logout":"Sign out",
+      "section.settings":"Settings", "section.forwards":"Forwarded ports", "section.service":"Service",
+      "field.mode":"Mode", "field.listen":"Tunnel port (server)", "field.server":"Iran server (ip:port)",
+      "field.transport":"Transport", "field.sni":"SNI / hostname", "field.path":"HTTP path",
+      "field.token":"Shared token", "field.pool":"Pool / mux_con",
+      "field.name":"Name", "field.listenport":"Public port", "field.targetport":"Target port",
+      "col.name":"Name", "col.net":"Proto", "col.listen":"Public port", "col.target":"Target port",
+      "action.save":"Save & restart", "action.add":"Add", "action.restart":"Restart service",
+      "action.refreshlogs":"Refresh logs", "action.uninstallhint":"How to uninstall",
+      "hint.settings":"Transport, token, SNI and path must match on both servers.",
+      "hint.uninstall":"Uninstalling isn't done from the panel (it would remove the panel itself mid-request). Run bm on the server and choose Uninstall.",
+      "toast.saved":"Saved and restarted", "toast.forwardadded":"Forward added", "toast.forwardremoved":"Forward removed",
+      "toast.restarted":"Service restarted", "toast.error":"Something went wrong", "toast.nologs":"No logs yet",
+      "status.running":"running", "status.stopped":"stopped", "status.unknown":"unknown",
+      "empty.forwards":"No forwarded ports yet.", "action.remove":"Remove",
+      "section.testconn":"Connection test", "action.testconn":"Test connection",
+      "hint.testconn":"Checks whether the tunnel is actually passing traffic, not just whether the process is running.",
+      "section.speedtest":"Speed test", "action.speedtest":"Run speed test",
+      "hint.speedtest":"Measures raw throughput to/from this server over HTTPS - a quick way to see if the bottleneck is this box's own link.",
+      "speedtest.download":"Download Mbps", "speedtest.upload":"Upload Mbps",
+      "speedtest.testingdown":"Testing download…", "speedtest.testingup":"Testing upload…", "speedtest.done":"Done",
+      "testconn.norun":"Run the test to check the live connection."
+    },
+    fa: {
+      "login.subtitle":"پنل مدیریت", "login.username":"نام کاربری", "login.password":"رمز عبور",
+      "login.submit":"ورود", "login.error":"نام کاربری یا رمز عبور اشتباه است",
+      "topbar.logout":"خروج",
+      "section.settings":"تنظیمات", "section.forwards":"پورت‌های فوروارد شده", "section.service":"سرویس",
+      "field.mode":"حالت", "field.listen":"پورت تانل (سرور)", "field.server":"سرور ایران (ip:port)",
+      "field.transport":"ترانسپورت", "field.sni":"SNI / هاست‌نیم", "field.path":"مسیر HTTP",
+      "field.token":"توکن مشترک", "field.pool":"Pool / mux_con",
+      "field.name":"نام", "field.listenport":"پورت عمومی", "field.targetport":"پورت مقصد",
+      "col.name":"نام", "col.net":"پروتکل", "col.listen":"پورت عمومی", "col.target":"پورت مقصد",
+      "action.save":"ذخیره و ری‌استارت", "action.add":"افزودن", "action.restart":"ری‌استارت سرویس",
+      "action.refreshlogs":"بروزرسانی لاگ", "action.uninstallhint":"راهنمای حذف نصب",
+      "hint.settings":"ترانسپورت، توکن، SNI و مسیر باید روی هر دو سرور یکسان باشند.",
+      "hint.uninstall":"حذف نصب از داخل پنل انجام نمی‌شود (چون پنل خودش رو وسط درخواست حذف می‌کرد). روی سرور دستور bm رو بزنید و گزینه‌ی Uninstall رو انتخاب کنید.",
+      "toast.saved":"ذخیره و ری‌استارت شد", "toast.forwardadded":"فوروارد اضافه شد", "toast.forwardremoved":"فوروارد حذف شد",
+      "toast.restarted":"سرویس ری‌استارت شد", "toast.error":"مشکلی پیش اومد", "toast.nologs":"هنوز لاگی نیست",
+      "status.running":"در حال اجرا", "status.stopped":"متوقف", "status.unknown":"نامشخص",
+      "empty.forwards":"هنوز هیچ پورتی فوروارد نشده.", "action.remove":"حذف",
+      "section.testconn":"تست اتصال", "action.testconn":"تست کن",
+      "hint.testconn":"بررسی می‌کنه که تانل واقعاً داره ترافیک رد و بدل می‌کنه، نه فقط اینکه پروسه‌ش بالاست.",
+      "section.speedtest":"تست سرعت", "action.speedtest":"اجرای تست سرعت",
+      "hint.speedtest":"سرعت خام آپلود/دانلود به این سرور رو از طریق HTTPS اندازه می‌گیره - سریع می‌فهمی گلوگاه خودِ همین سروره یا نه.",
+      "speedtest.download":"دانلود (Mbps)", "speedtest.upload":"آپلود (Mbps)",
+      "speedtest.testingdown":"در حال تست دانلود…", "speedtest.testingup":"در حال تست آپلود…", "speedtest.done":"تمام شد",
+      "testconn.norun":"برای بررسی اتصال زنده، تست رو اجرا کن."
+    }
+  };
+
+  var lang = localStorage.getItem("tifusi-panel-lang") || "en";
+  var theme = localStorage.getItem("tifusi-panel-theme") || "dark";
+  var creds = null; // {user, pass} kept only in memory + sessionStorage
+  var cfg = null;
+
+  function t(key){ return (STR[lang] && STR[lang][key]) || STR.en[key] || key; }
+
+  var SUN_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var MOON_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.5 8.5 0 0 1 9.3 3.6a.6.6 0 0 0-.7-.8A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.8-.7Z"/></svg>';
+  function applyTheme(){
+    document.documentElement.setAttribute("data-theme", theme);
+    var icon = theme === "light" ? SUN_ICON : MOON_ICON;
+    document.querySelectorAll(".theme-toggle").forEach(function(b){ b.innerHTML = icon; });
+    localStorage.setItem("tifusi-panel-theme", theme);
+  }
+  function setTheme(tName){ theme = tName; applyTheme(); }
+  function toggleTheme(){ setTheme(theme === "light" ? "dark" : "light"); }
+  document.getElementById("btn-theme-login").addEventListener("click", toggleTheme);
+  document.getElementById("btn-theme-app").addEventListener("click", toggleTheme);
+
+  function applyLang(){
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+    document.querySelectorAll("[data-t]").forEach(function(el){
+      el.textContent = t(el.getAttribute("data-t"));
+    });
+    document.querySelectorAll(".lang-toggle button").forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-lang") === lang);
+    });
+    localStorage.setItem("tifusi-panel-lang", lang);
+  }
+  function setLang(l){ lang = l; applyLang(); updateClock(); if (cfg) render(); }
+
+  // ---- live clock, shown on both the login screen and the app header ----
+  function updateClock(){
+    var now = new Date();
+    var text;
+    try {
+      text = now.toLocaleString(lang === "fa" ? "fa-IR" : "en-GB", { dateStyle: "medium", timeStyle: "medium" });
+    } catch (e) {
+      text = now.toString();
+    }
+    var a = document.getElementById("clock-login"); if (a) a.textContent = text;
+    var b = document.getElementById("clock-app"); if (b) b.textContent = text;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  document.querySelectorAll(".lang-toggle button").forEach(function(b){
+    b.addEventListener("click", function(){ setLang(b.getAttribute("data-lang")); });
+  });
+  document.getElementById("btn-lang-en").addEventListener("click", function(){ setLang("en"); });
+  document.getElementById("btn-lang-fa").addEventListener("click", function(){ setLang("fa"); });
+
+  function toast(msg, kind){
+    var el = document.getElementById("toast");
+    el.textContent = msg;
+    el.className = "toast show " + (kind || "");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function(){ el.className = "toast"; }, 2600);
+  }
+
+  function authHeader(){ return "Basic " + btoa(creds.user + ":" + creds.pass); }
+
+  function api(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ "Authorization": authHeader(), "Content-Type": "application/json" }, opts.headers || {});
+    return fetch(path, opts).then(function(r){
+      if (r.status === 401) { doLogout(); throw new Error("unauthorized"); }
+      var isText = (r.headers.get("content-type") || "").indexOf("text/plain") === 0;
+      return (isText ? r.text() : r.json()).then(function(body){
+        if (!r.ok) throw new Error((body && body.error) || t("toast.error"));
+        return body;
+      });
+    });
+  }
+
+  // ---- login ----
+  document.getElementById("login-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var user = document.getElementById("login-user").value;
+    var pass = document.getElementById("login-pass").value;
+    creds = { user: user, pass: pass };
+    document.getElementById("login-err").textContent = "";
+    api("/api/config").then(function(c){
+      sessionStorage.setItem("tifusi-panel-creds", JSON.stringify(creds));
+      cfg = c;
+      showApp();
+    }).catch(function(){
+      document.getElementById("login-err").textContent = t("login.error");
+      creds = null;
+    });
+  });
+
+  function doLogout(){
+    creds = null; cfg = null;
+    sessionStorage.removeItem("tifusi-panel-creds");
+    document.getElementById("app").classList.remove("show");
+    document.getElementById("login").style.display = "flex";
+    document.getElementById("login-pass").value = "";
+  }
+  document.getElementById("btn-logout").addEventListener("click", doLogout);
+
+  function showApp(){
+    document.getElementById("login").style.display = "none";
+    document.getElementById("app").classList.add("show");
+    applyLang();
+    render();
+    renderTestConnPlaceholder();
+    refreshStatus();
+    refreshLogs();
+    setInterval(refreshStatus, 8000);
+  }
+
+  // ---- render config into the form ----
+  function render(){
+    document.getElementById("f-mode").value = cfg.mode;
+    document.getElementById("f-transport").value = cfg.transport;
+    document.getElementById("f-sni").value = cfg.sni || "";
+    document.getElementById("f-path").value = cfg.path || "";
+    document.getElementById("f-token").value = cfg.token || "";
+    var lbl = document.getElementById("lbl-endpoint");
+    if (cfg.mode === "server") {
+      lbl.textContent = t("field.listen");
+      document.getElementById("f-endpoint").value = (cfg.listen || "").split(":").pop();
+    } else {
+      lbl.textContent = t("field.server");
+      document.getElementById("f-endpoint").value = cfg.server || "";
+    }
+    document.getElementById("row-pool").hidden = cfg.mode !== "client";
+    document.getElementById("f-pool").value = cfg.pool || cfg.mux_con || 8;
+    document.getElementById("section-forwards").hidden = cfg.mode !== "server";
+    renderForwards();
+  }
+
+  function renderForwards(){
+    var body = document.getElementById("forwards-body");
+    body.innerHTML = "";
+    var list = cfg.forwards || [];
+    if (!list.length) {
+      var tr = document.createElement("tr");
+      tr.className = "empty-row";
+      var td = document.createElement("td");
+      td.colSpan = 5; td.textContent = t("empty.forwards");
+      tr.appendChild(td); body.appendChild(tr);
+      return;
+    }
+    list.forEach(function(fw){
+      var tr = document.createElement("tr");
+      var listenPort = (fw.listen || "").split(":").pop();
+      var targetPort = (fw.target || "").split(":").pop();
+      tr.innerHTML =
+        "<td>" + escapeHtml(fw.name || "") + "</td>" +
+        "<td>" + escapeHtml(fw.net) + "</td>" +
+        "<td>" + escapeHtml(listenPort) + "</td>" +
+        "<td>" + escapeHtml(targetPort) + "</td>" +
+        "<td></td>";
+      var btn = document.createElement("button");
+      btn.className = "btn ghost small"; btn.textContent = t("action.remove");
+      btn.addEventListener("click", function(){ removeForward(fw.listen, fw.net); });
+      tr.lastElementChild.appendChild(btn);
+      body.appendChild(tr);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+    });
+  }
+
+  // ---- save settings ----
+  document.getElementById("btn-save-config").addEventListener("click", function(){
+    var patch = {
+      transport: document.getElementById("f-transport").value,
+      sni: document.getElementById("f-sni").value,
+      path: document.getElementById("f-path").value,
+      token: document.getElementById("f-token").value
+    };
+    var endpoint = document.getElementById("f-endpoint").value.trim();
+    if (cfg.mode === "server") {
+      patch.listen = "0.0.0.0:" + endpoint.replace(/^0\.0\.0\.0:/, "");
+    } else {
+      patch.server = endpoint;
+      var pool = parseInt(document.getElementById("f-pool").value, 10) || 8;
+      patch.pool = pool; patch.mux_con = pool;
+    }
+    api("/api/config", { method: "PUT", body: JSON.stringify(patch) })
+      .then(function(c){ cfg = c; render(); toast(t("toast.saved"), "ok"); refreshStatus(); })
+      .catch(function(e){ toast(e.message || t("toast.error"), "error"); });
+  });
+
+  // ---- forwards ----
+  document.getElementById("btn-add-forward").addEventListener("click", function(){
+    var body = {
+      name: document.getElementById("fw-name").value,
+      net: document.getElementById("fw-net").value,
+      listen_port: document.getElementById("fw-listen").value,
+      target_port: document.getElementById("fw-target").value
+    };
+    if (!body.listen_port) { toast(t("toast.error"), "error"); return; }
+    api("/api/forwards", { method: "POST", body: JSON.stringify(body) })
+      .then(function(list){
+        cfg.forwards = list; renderForwards(); toast(t("toast.forwardadded"), "ok");
+        document.getElementById("fw-name").value = "";
+        document.getElementById("fw-listen").value = "";
+        document.getElementById("fw-target").value = "";
+      })
+      .catch(function(e){ toast(e.message || t("toast.error"), "error"); });
+  });
+
+  function removeForward(listen, net_){
+    api("/api/forwards?listen=" + encodeURIComponent(listen) + "&net=" + encodeURIComponent(net_), { method: "DELETE" })
+      .then(function(list){ cfg.forwards = list; renderForwards(); toast(t("toast.forwardremoved"), "ok"); })
+      .catch(function(e){ toast(e.message || t("toast.error"), "error"); });
+  }
+
+  // ---- connection test ----
+  function renderTestConnPlaceholder(){
+    var list = document.getElementById("testconn-list");
+    list.innerHTML = "";
+    var li = document.createElement("li");
+    li.style.color = "var(--muted-dim)";
+    li.textContent = t("testconn.norun");
+    list.appendChild(li);
+    document.getElementById("testconn-activity").textContent = "";
+  }
+
+  document.getElementById("btn-testconn").addEventListener("click", function(){
+    var btn = document.getElementById("btn-testconn");
+    btn.disabled = true;
+    api("/api/testconn").then(function(res){
+      var list = document.getElementById("testconn-list");
+      list.innerHTML = "";
+      (res.checks || []).forEach(function(c){
+        var li = document.createElement("li");
+        var mark = document.createElement("span");
+        mark.className = "mark " + (c.ok ? "ok" : "bad");
+        mark.textContent = c.ok ? "✓" : "✕";
+        var txt = document.createElement("span");
+        txt.textContent = c.text;
+        li.appendChild(mark); li.appendChild(txt);
+        list.appendChild(li);
+      });
+      var act = document.getElementById("testconn-activity");
+      act.textContent = res.lastActivity ? ("last activity: " + res.lastActivity) : "";
+    }).catch(function(e){ toast(e.message || t("toast.error"), "error"); })
+      .then(function(){ btn.disabled = false; });
+  });
+
+  // ---- speed test ----
+  function speedtestFetch(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ "Authorization": authHeader() }, opts.headers || {});
+    return fetch(path, opts);
+  }
+
+  function runDownloadTest(mb){
+    var start = performance.now();
+    return speedtestFetch("/api/speedtest/download?mb=" + mb)
+      .then(function(r){ return r.arrayBuffer(); })
+      .then(function(buf){
+        var seconds = Math.max((performance.now() - start) / 1000, 0.001);
+        return (buf.byteLength * 8 / 1e6) / seconds;
+      });
+  }
+
+  function runUploadTest(mb){
+    var data = new Uint8Array(mb * 1024 * 1024);
+    var start = performance.now();
+    return speedtestFetch("/api/speedtest/upload", { method: "POST", body: data })
+      .then(function(r){ return r.json(); })
+      .then(function(){
+        var seconds = Math.max((performance.now() - start) / 1000, 0.001);
+        return (data.byteLength * 8 / 1e6) / seconds;
+      });
+  }
+
+  document.getElementById("btn-speedtest").addEventListener("click", function(){
+    var btn = document.getElementById("btn-speedtest");
+    var status = document.getElementById("speed-status");
+    btn.disabled = true;
+    document.getElementById("speed-down").textContent = "—";
+    document.getElementById("speed-up").textContent = "—";
+    status.textContent = t("speedtest.testingdown");
+    runDownloadTest(20)
+      .then(function(mbps){
+        document.getElementById("speed-down").textContent = mbps.toFixed(1);
+        status.textContent = t("speedtest.testingup");
+        return runUploadTest(8);
+      })
+      .then(function(mbps){
+        document.getElementById("speed-up").textContent = mbps.toFixed(1);
+        status.textContent = t("speedtest.done");
+      })
+      .catch(function(e){ status.textContent = e.message || t("toast.error"); })
+      .then(function(){ btn.disabled = false; });
+  });
+
+  // ---- service controls ----
+  document.getElementById("btn-restart").addEventListener("click", function(){
+    api("/api/restart", { method: "POST" })
+      .then(function(){ toast(t("toast.restarted"), "ok"); refreshStatus(); refreshLogs(); })
+      .catch(function(e){ toast(e.message || t("toast.error"), "error"); });
+  });
+  document.getElementById("btn-refresh-logs").addEventListener("click", refreshLogs);
+  document.getElementById("btn-uninstall-hint").addEventListener("click", function(){
+    var el = document.getElementById("uninstall-hint");
+    el.hidden = !el.hidden;
+  });
+
+  function refreshStatus(){
+    api("/api/status").then(function(s){
+      var pill = document.getElementById("status-pill");
+      var text = document.getElementById("status-text");
+      pill.className = "pill " + (s.running ? "running" : "stopped");
+      text.textContent = s.running ? t("status.running") : (s.state === "unknown" ? t("status.unknown") : t("status.stopped"));
+    }).catch(function(){});
+  }
+
+  function refreshLogs(){
+    api("/api/logs?n=200").then(function(text){
+      var el = document.getElementById("logs");
+      el.textContent = text && text.trim() ? text : t("toast.nologs");
+      el.scrollTop = el.scrollHeight;
+    }).catch(function(){});
+  }
+
+  // ---- boot: resume session if we already have credentials ----
+  applyTheme();
+  applyLang();
+  try {
+    var saved = sessionStorage.getItem("tifusi-panel-creds");
+    if (saved) {
+      creds = JSON.parse(saved);
+      api("/api/config").then(function(c){ cfg = c; showApp(); }).catch(doLogout);
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
