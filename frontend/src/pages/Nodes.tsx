@@ -50,6 +50,7 @@ export default function NodesPage() {
   const [port, setPort] = useState('')
   const [coreId, setCoreId] = useState<number | null>(null)
   const [ipsecCoreId, setIpsecCoreId] = useState<number | null>(null)
+  const [l2tpEgressVless, setL2tpEgressVless] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [setupNodeId, setSetupNodeId] = useState<number | null>(null)
@@ -80,6 +81,7 @@ export default function NodesPage() {
     setPort('')
     setCoreId(null)
     setIpsecCoreId(null)
+    setL2tpEgressVless('')
     setShowForm(false)
   }
 
@@ -90,6 +92,7 @@ export default function NodesPage() {
     setPort(String(node.port))
     setCoreId(node.core_id)
     setIpsecCoreId(node.ipsec_core_id)
+    setL2tpEgressVless(node.l2tp_egress_vless ?? '')
     setShowForm(true)
   }
 
@@ -105,6 +108,7 @@ export default function NodesPage() {
           port: parseInt(port, 10),
           core_id: coreId,
           ipsec_core_id: ipsecCoreId,
+          l2tp_egress_vless: l2tpEgressVless || null,
         })
         resetForm()
       } else {
@@ -114,6 +118,7 @@ export default function NodesPage() {
           port: parseInt(port, 10),
           core_id: coreId,
           ipsec_core_id: ipsecCoreId,
+          l2tp_egress_vless: l2tpEgressVless || null,
         })
         resetForm()
         setSetupNodeId(created.id)
@@ -246,6 +251,21 @@ export default function NodesPage() {
                 ))}
             </select>
           </div>
+          {cores.find((c) => c.id === ipsecCoreId)?.core_type === 'l2tp' && (
+            <div className="w-full">
+              <label className="mb-1.5 block text-xs text-slate-400" title={t.nodesPage.l2tpEgressHint}>
+                {t.nodesPage.l2tpEgressLabel}
+              </label>
+              <textarea
+                dir="ltr"
+                rows={2}
+                value={l2tpEgressVless}
+                onChange={(e) => setL2tpEgressVless(e.target.value)}
+                placeholder="vless://..."
+                className={`${inputClass} w-full text-left font-mono text-xs`}
+              />
+            </div>
+          )}
           <button
             type="submit"
             disabled={submitting}

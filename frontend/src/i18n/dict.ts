@@ -193,6 +193,8 @@ export const dict = {
       coreLabel: 'هسته Xray',
       ipsecCoreLabel: 'هسته L2TP/IKEv2 (اختیاری)',
       ipsecCoreHint: 'همین نود می‌تونه همزمان یه هسته Xray و یه هسته L2TP/IKEv2 هم اجرا کنه.',
+      l2tpEgressLabel: 'خروجی زنجیره‌ای L2TP (لینک vless، اختیاری)',
+      l2tpEgressHint: 'اگه پر بشه، ترافیک کلاینت‌های L2TP این نود به‌جای اینترنت مستقیم از طریق این سرور VLESS (که می‌تونه رو یه پنل کاملاً دیگه باشه) خارج میشه.',
       inboundsCount: (n: number) => `${n} inbound`,
       intro:
         'هر نود یه سرور جداست که Xray واقعی روش اجرا می‌شه. اول نود رو اینجا ثبت کن، بعد با دستوری که نشون داده می‌شه ایجنت رو روی همون سرور بالا بیار، بعد «همگام‌سازی» رو بزن تا کانفیگ هاست‌ها و کاربرها براش فرستاده بشه.',
@@ -645,6 +647,8 @@ export const dict = {
       coreLabel: 'Xray Core',
       ipsecCoreLabel: 'L2TP/IKEv2 Core (optional)',
       ipsecCoreHint: 'This same node can run an Xray core and an L2TP/IKEv2 core at the same time.',
+      l2tpEgressLabel: 'L2TP chained egress (vless link, optional)',
+      l2tpEgressHint: "When set, this node's L2TP client traffic exits through this remote VLESS server (which can be on a completely different panel) instead of the internet directly.",
       inboundsCount: (n: number) => `${n} inbound${n === 1 ? '' : 's'}`,
       intro:
         'Each node is a separate server that actually runs Xray. Register the node here first, bring the agent up on that server with the command shown, then hit "Sync" to push the host and user config to it.',

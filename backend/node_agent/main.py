@@ -99,7 +99,9 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
     _ipsec_mode = core_type
     try:
         if core_type == "l2tp":
-            ipsec.apply_l2tp(payload.get("psk") or "", payload.get("users") or [])
+            ipsec.apply_l2tp(
+                payload.get("psk") or "", payload.get("users") or [], payload.get("egress_vless")
+            )
         else:
             ipsec.apply_ikev2(payload.get("psk") or "", payload.get("remote_id"), payload.get("users") or [])
     except FileNotFoundError as exc:
@@ -132,6 +134,8 @@ async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
     else:
         ipsec_running = None
     ipsec_state = {"mode": _ipsec_mode, "running": ipsec_running}
+    if _ipsec_mode == "l2tp":
+        ipsec_state["egress_running"] = ipsec.vless_egress.is_egress_running()
 
     return {"xray": xray, "ipsec": ipsec_state}
 

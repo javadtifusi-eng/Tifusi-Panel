@@ -35,6 +35,15 @@ class Node(Base):
     # several of either.
     ipsec_core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
 
+    # Optional chained egress for this node's L2TP clients: a vless:// share
+    # link to a *different* panel's server. When set, the node agent stops
+    # NAT'ing l2tp traffic straight to the internet and instead runs a
+    # second, isolated Xray process whose only outbound is that link, and
+    # TPROXYs the l2tp subnet into it — the far VLESS server becomes the
+    # real egress point instead of this node itself. Null keeps today's
+    # plain-NAT behavior.
+    l2tp_egress_vless: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
     status: Mapped[NodeStatus] = mapped_column(Enum(NodeStatus), default=NodeStatus.pending)
     xray_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -21,7 +21,12 @@ async def list_nodes(db: AsyncSession = Depends(get_db)) -> NodeList:
 
 @router.post("", response_model=NodeResponse, status_code=201)
 async def create_node(payload: NodeCreate, db: AsyncSession = Depends(get_db)) -> Node:
-    node = Node(name=payload.name, address=payload.address, port=payload.port)
+    node = Node(
+        name=payload.name,
+        address=payload.address,
+        port=payload.port,
+        l2tp_egress_vless=payload.l2tp_egress_vless,
+    )
     node.core_id = await resolve_xray_core_id(payload.core_id, db)
     node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
     db.add(node)

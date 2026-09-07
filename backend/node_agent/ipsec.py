@@ -27,6 +27,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from node_agent import vless_egress
+
 CHARON_BIN = "/usr/libexec/ipsec/charon"
 SWANCTL_CONF = Path("/etc/swanctl/swanctl.conf")
 XL2TPD_CONF = Path("/etc/xl2tpd/xl2tpd.conf")
@@ -275,12 +277,16 @@ def _load_swanctl_config(
         time.sleep(1)
 
 
-def apply_l2tp(psk: str, users: list[dict]) -> None:
+def apply_l2tp(psk: str, users: list[dict], egress_vless: str | None = None) -> None:
     _load_swanctl_config("l2tp", psk)
     _write(XL2TPD_CONF, _xl2tpd_conf())
     _write(PPP_OPTIONS, _ppp_options())
     _write(CHAP_SECRETS, _chap_secrets(users), mode=0o600)
     _ensure_forwarding_and_nat(_L2TP_SUBNET)
+    # Chained egress (see vless_egress.py) layers TPROXY rules on top of the
+    # plain NAT/FORWARD ones above, which are harmless to leave in place —
+    # TPROXY diverts matching packets before they'd ever reach them.
+    vless_egress.apply(egress_vless, _L2TP_SUBNET)
     _restart_xl2tpd()
 
 

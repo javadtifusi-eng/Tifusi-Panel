@@ -39,7 +39,7 @@ async def _build_xray_payload(core: Core | None, db: AsyncSession) -> dict:
     return build_xray_config(core, inbounds, users)
 
 
-async def _build_ipsec_payload(core: Core, db: AsyncSession) -> dict:
+async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict:
     users = await _ipsec_allowed_users(core, db)
     user_payload = [{"username": u.username, "password": u.secret} for u in users]
     if core.core_type == CoreType.l2tp:
@@ -47,6 +47,7 @@ async def _build_ipsec_payload(core: Core, db: AsyncSession) -> dict:
             "core_type": "l2tp",
             "psk": core.l2tp_psk,
             "users": user_payload,
+            "egress_vless": node.l2tp_egress_vless,
         }
     # ikev2 — the Core's PSK authenticates the server to the client (IKE
     # local auth); each ProxyUser's own username/secret authenticates the
@@ -101,7 +102,7 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     ipsec_core = await db.get(Core, node.ipsec_core_id) if node.ipsec_core_id is not None else None
 
     xray_payload = await _build_xray_payload(xray_core, db)
-    ipsec_payload = await _build_ipsec_payload(ipsec_core, db) if ipsec_core is not None else None
+    ipsec_payload = await _build_ipsec_payload(ipsec_core, node, db) if ipsec_core is not None else None
 
     base_url = f"http://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
