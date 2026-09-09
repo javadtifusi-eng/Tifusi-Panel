@@ -1,6 +1,14 @@
 // The real Tifusi griffin mark (frontend/public/logo-tifusi.png), background
 // keyed out to transparent. Not a redrawn approximation — the actual asset.
-export function Logo({ accent = '#22D3EE', size = 128 }: { accent?: string; size?: number }) {
+export function Logo({
+  accent = '#22D3EE',
+  size = 128,
+  glow = true,
+}: {
+  accent?: string
+  size?: number
+  glow?: boolean
+}) {
   return (
     <div
       style={{
@@ -12,14 +20,16 @@ export function Logo({ accent = '#22D3EE', size = 128 }: { accent?: string; size
         justifyContent: 'center',
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          inset: '-30%',
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${accent}59 0%, transparent 65%)`,
-        }}
-      />
+      {glow && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: '-30%',
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${accent}59 0%, transparent 65%)`,
+          }}
+        />
+      )}
       <img
         src="/logo-tifusi.png"
         alt="Tifusi"
