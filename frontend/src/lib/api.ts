@@ -156,6 +156,41 @@ export async function bulkDeleteUsers(userIds: number[]): Promise<{ deleted: num
   return res.json()
 }
 
+export interface UserTemplate {
+  id: number
+  name: string
+  data_limit: number | null
+  expire_days: number | null
+  note: string | null
+  created_at: string
+  group_ids: number[]
+}
+
+export interface UserTemplateList {
+  total: number
+  templates: UserTemplate[]
+}
+
+export async function listUserTemplates(): Promise<UserTemplateList> {
+  const res = await authorizedFetch('/user-templates')
+  return res.json()
+}
+
+export async function createUserTemplate(payload: {
+  name: string
+  data_limit?: number | null
+  expire_days?: number | null
+  note?: string | null
+  group_ids?: number[]
+}): Promise<UserTemplate> {
+  const res = await authorizedFetch('/user-templates', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteUserTemplate(id: number): Promise<void> {
+  await authorizedFetch(`/user-templates/${id}`, { method: 'DELETE' })
+}
+
 export async function updateUser(
   id: number,
   payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'note' | 'group_ids'>>,

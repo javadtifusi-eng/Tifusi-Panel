@@ -122,6 +122,18 @@ export const dict = {
       confirmBulkDelete: (n: number) => `${n} کاربر انتخاب‌شده حذف بشن؟`,
       apply: 'اعمال',
       cancelAction: 'انصراف',
+
+      templatesBtn: 'قالب‌ها',
+      templatesTitle: 'قالب‌های کاربر',
+      templatesDesc: 'یه قالب یعنی یه دست‌آماده از حجم/انقضا/گروه که با یه کلیک رو فرم ساخت کاربر (تکی یا گروهی) اعمال می‌شه.',
+      applyTemplateLabel: 'اعمال قالب',
+      noTemplate: '— بدون قالب —',
+      templateNameLabel: 'اسم قالب',
+      templateNamePlaceholder: 'مثلاً: یک ماهه ۵۰ گیگ',
+      expireDaysLabel: 'انقضا (روز از الان، خالی = بدون انقضا)',
+      saveTemplateBtn: '+ ذخیره قالب',
+      noTemplatesYet: 'هنوز قالبی ساخته نشده',
+      confirmDeleteTemplate: (name: string) => `قالب «${name}» حذف بشه؟`,
     },
 
     hostsPage: {
@@ -642,6 +654,18 @@ export const dict = {
       confirmBulkDelete: (n: number) => `Delete ${n} selected users?`,
       apply: 'Apply',
       cancelAction: 'Cancel',
+
+      templatesBtn: 'Templates',
+      templatesTitle: 'User templates',
+      templatesDesc: 'A template is a saved data limit/expiry/group preset you can apply to the create-user form (single or bulk) in one click.',
+      applyTemplateLabel: 'Apply template',
+      noTemplate: '— No template —',
+      templateNameLabel: 'Template name',
+      templateNamePlaceholder: 'e.g. 1 Month 50GB',
+      expireDaysLabel: 'Expiry (days from now, empty = never)',
+      saveTemplateBtn: '+ Save template',
+      noTemplatesYet: 'No templates yet',
+      confirmDeleteTemplate: (name: string) => `Delete template "${name}"?`,
     },
 
     hostsPage: {

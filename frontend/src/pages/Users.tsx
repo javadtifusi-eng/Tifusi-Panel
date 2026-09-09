@@ -7,13 +7,17 @@ import {
   bulkDeleteUsers,
   bulkUpdateUsers,
   createUser,
+  createUserTemplate,
   deleteUser,
+  deleteUserTemplate,
   listGroups,
+  listUserTemplates,
   listUsers,
   updateUser,
   type Group,
   type ProxyUser,
   type UserStatus,
+  type UserTemplate,
 } from '../lib/api'
 
 const ACCENT = '#22D3EE'
@@ -57,6 +61,15 @@ export default function UsersPage() {
   const [bulkCreateSubmitting, setBulkCreateSubmitting] = useState(false)
   const [bulkCreateMsg, setBulkCreateMsg] = useState<string | null>(null)
 
+  const [templates, setTemplates] = useState<UserTemplate[]>([])
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [tplName, setTplName] = useState('')
+  const [tplDataLimitGb, setTplDataLimitGb] = useState('')
+  const [tplExpireDays, setTplExpireDays] = useState('')
+  const [tplNote, setTplNote] = useState('')
+  const [tplGroupIds, setTplGroupIds] = useState<Set<number>>(new Set())
+  const [tplSubmitting, setTplSubmitting] = useState(false)
+
   function formatLimit(bytes: number | null): string {
     if (!bytes) return t.usersPage.unlimited
     const gb = bytes / 1024 ** 3
@@ -71,11 +84,86 @@ export default function UsersPage() {
 
   async function refresh() {
     try {
-      const [usersRes, groupsRes] = await Promise.all([listUsers(), listGroups()])
+      const [usersRes, groupsRes, templatesRes] = await Promise.all([listUsers(), listGroups(), listUserTemplates()])
       setUsers(usersRes.users)
       setGroups(groupsRes.groups)
+      setTemplates(templatesRes.templates)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.usersPage.fetchError)
+    }
+  }
+
+  function daysFromNowIso(days: number): string {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return d.toISOString().slice(0, 10)
+  }
+
+  function applyTemplateToSingle(templateId: number | null) {
+    if (templateId == null) return
+    const tpl = templates.find((tp) => tp.id === templateId)
+    if (!tpl) return
+    setDataLimitGb(tpl.data_limit ? String(tpl.data_limit / 1024 ** 3) : '')
+    setExpire(tpl.expire_days != null ? daysFromNowIso(tpl.expire_days) : '')
+    setNote(tpl.note ?? '')
+    setGroupIds(new Set(tpl.group_ids))
+  }
+
+  function applyTemplateToBulkCreate(templateId: number | null) {
+    if (templateId == null) return
+    const tpl = templates.find((tp) => tp.id === templateId)
+    if (!tpl) return
+    setBulkCreateDataLimitGb(tpl.data_limit ? String(tpl.data_limit / 1024 ** 3) : '')
+    setBulkCreateExpire(tpl.expire_days != null ? daysFromNowIso(tpl.expire_days) : '')
+    setBulkCreateGroupIds(new Set(tpl.group_ids))
+  }
+
+  function toggleTplGroup(id: number) {
+    setTplGroupIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function resetTplForm() {
+    setTplName('')
+    setTplDataLimitGb('')
+    setTplExpireDays('')
+    setTplNote('')
+    setTplGroupIds(new Set())
+  }
+
+  async function handleCreateTemplate(e: FormEvent) {
+    e.preventDefault()
+    if (!tplName.trim()) return
+    setTplSubmitting(true)
+    setError(null)
+    try {
+      await createUserTemplate({
+        name: tplName.trim(),
+        data_limit: tplDataLimitGb ? Math.round(parseFloat(tplDataLimitGb) * 1024 ** 3) : null,
+        expire_days: tplExpireDays ? parseInt(tplExpireDays, 10) : null,
+        note: tplNote || null,
+        group_ids: Array.from(tplGroupIds),
+      })
+      resetTplForm()
+      await refresh()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setTplSubmitting(false)
+    }
+  }
+
+  async function handleDeleteTemplate(tpl: UserTemplate) {
+    if (!window.confirm(t.usersPage.confirmDeleteTemplate(tpl.name))) return
+    try {
+      await deleteUserTemplate(tpl.id)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
     }
   }
 
@@ -251,6 +339,12 @@ export default function UsersPage() {
         <h1 className="text-xl font-bold text-slate-50">{t.usersPage.title}</h1>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowTemplates((v) => !v)}
+            className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-slate-300 hover:border-white/30"
+          >
+            {t.usersPage.templatesBtn}
+          </button>
+          <button
             onClick={() => {
               setShowBulkCreate((v) => !v)
               setBulkCreateMsg(null)
@@ -270,6 +364,100 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {showTemplates && (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-white/15 bg-slate-950/60 p-4">
+          <div>
+            <div className="text-sm font-bold text-slate-200">{t.usersPage.templatesTitle}</div>
+            <div className="mt-0.5 text-xs text-slate-500">{t.usersPage.templatesDesc}</div>
+          </div>
+
+          {templates.length === 0 && <div className="text-xs text-slate-500">{t.usersPage.noTemplatesYet}</div>}
+          {templates.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {templates.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-bold text-slate-200">{tpl.name}</span>
+                    <span className="text-slate-500">{formatLimit(tpl.data_limit)}</span>
+                    <span className="text-slate-500">
+                      {tpl.expire_days != null ? `${tpl.expire_days}d` : t.usersPage.unlimited}
+                    </span>
+                  </div>
+                  <button onClick={() => handleDeleteTemplate(tpl)} className="text-xs text-red-400 hover:underline">
+                    {t.common.delete}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateTemplate} className="flex flex-wrap items-end gap-3 border-t border-white/10 pt-3">
+            <div>
+              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.templateNameLabel}</label>
+              <input
+                value={tplName}
+                onChange={(e) => setTplName(e.target.value)}
+                placeholder={t.usersPage.templateNamePlaceholder}
+                required
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              />
+            </div>
+            <div>
+              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.dataLimit}</label>
+              <input
+                value={tplDataLimitGb}
+                onChange={(e) => setTplDataLimitGb(e.target.value)}
+                type="number"
+                min="0"
+                step="0.5"
+                className="w-40 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              />
+            </div>
+            <div>
+              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.expireDaysLabel}</label>
+              <input
+                value={tplExpireDays}
+                onChange={(e) => setTplExpireDays(e.target.value)}
+                type="number"
+                min="0"
+                className="w-56 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              />
+            </div>
+            <div>
+              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.note}</label>
+              <input
+                value={tplNote}
+                onChange={(e) => setTplNote(e.target.value)}
+                className="w-48 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              />
+            </div>
+            <div className="w-full">
+              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.groupsLabel}</label>
+              <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
+                {groups.length === 0 && <div className="px-1 py-1 text-xs text-slate-500">{t.usersPage.noGroups}</div>}
+                {groups.map((g) => (
+                  <label key={g.id} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <input type="checkbox" checked={tplGroupIds.has(g.id)} onChange={() => toggleTplGroup(g.id)} />
+                    <span className="text-slate-200">{g.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={tplSubmitting}
+              className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+              style={{ backgroundColor: ACCENT }}
+            >
+              {t.usersPage.saveTemplateBtn}
+            </button>
+          </form>
+        </div>
+      )}
+
       {showBulkCreate && (
         <form
           onSubmit={handleBulkCreateSubmit}
@@ -277,6 +465,23 @@ export default function UsersPage() {
         >
           <div className="text-sm font-bold text-slate-200">{t.usersPage.bulkCreateTitle}</div>
           <div className="flex flex-wrap items-end gap-3">
+            {templates.length > 0 && (
+              <div>
+                <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.applyTemplateLabel}</label>
+                <select
+                  onChange={(e) => applyTemplateToBulkCreate(e.target.value ? Number(e.target.value) : null)}
+                  defaultValue=""
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                >
+                  <option value="">{t.usersPage.noTemplate}</option>
+                  {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>
+                      {tpl.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.prefixLabel}</label>
               <input
@@ -369,6 +574,23 @@ export default function UsersPage() {
           onSubmit={handleSubmit}
           className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
         >
+          {!editingId && templates.length > 0 && (
+            <div>
+              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.applyTemplateLabel}</label>
+              <select
+                onChange={(e) => applyTemplateToSingle(e.target.value ? Number(e.target.value) : null)}
+                defaultValue=""
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              >
+                <option value="">{t.usersPage.noTemplate}</option>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.username}</label>
             <input

@@ -9,6 +9,7 @@ from app.models.setting import PanelSetting
 from app.models.setup_key import SetupKey
 from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.models.user import ProxyUser, UserStatus
+from app.models.user_template import UserTemplate
 
 __all__ = [
     "Admin",
@@ -16,6 +17,7 @@ __all__ = [
     "SetupKey",
     "ProxyUser",
     "UserStatus",
+    "UserTemplate",
     "Host",
     "HostProtocol",
     "HostSecurity",
