@@ -8,7 +8,6 @@ from app.models.setting import PanelSetting
 from app.models.setup_key import SetupKey
 from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.models.user import ProxyUser, UserStatus
-from app.models.wireguard_peer import WireGuardPeer
 
 __all__ = [
     "Admin",
@@ -23,7 +22,6 @@ __all__ = [
     "NodeStatus",
     "Core",
     "Group",
-    "WireGuardPeer",
     "PanelSetting",
     "Tunnel",
     "TunnelStatus",

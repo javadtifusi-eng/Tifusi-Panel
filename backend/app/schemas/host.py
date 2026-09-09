@@ -22,8 +22,7 @@ class HostCreate(BaseModel):
     security_override: HostSecurity | None = None
     allowinsecure: bool = False
 
-    # wireguard/l2tp/ikev2: which Core (of the matching core_type) this
-    # Host is built on
+    # l2tp/ikev2: which Core (of the matching core_type) this Host is built on
     core_id: int | None = None
 
     # hysteria2
@@ -96,8 +95,3 @@ class RealityKeypairResponse(BaseModel):
     private_key: str
     public_key: str
     short_id: str
-
-
-class WireGuardKeypairResponse(BaseModel):
-    private_key: str
-    public_key: str

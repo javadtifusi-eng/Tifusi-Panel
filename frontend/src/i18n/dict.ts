@@ -125,11 +125,6 @@ export const dict = {
       securityTls: 'TLS',
       securityReality: 'REALITY',
       allowinsecureLabel: 'رد کردن خطای گواهی (allowInsecure)',
-      wgSubnetLabel: 'سابنت تونل (برای تخصیص IP به هر کاربر)',
-      wgPortLabel: 'پورت سرور WireGuard',
-      wgServerKeyLabel: 'کلید سرور WireGuard',
-      wgHint:
-        'این کلید عمومی و پورت را باید دستی روی اینترفیس wg0 خود سرور هم تنظیم کنی؛ تیفوسی فقط کانفیگ سمت کاربر و بلاک Peer را می‌سازه.',
       hysteria2SniLabel: 'SNI (تارگت)',
       hysteria2PortLabel: 'پورت',
       ikev2PskLabel: 'کلید مشترک IPsec (PSK)',
@@ -170,7 +165,7 @@ export const dict = {
       nameLabel: 'نام گروه',
       noteLabel: 'یادداشت',
       inboundsInGroup: 'Inbound های این گروه (VLESS/VMess/Trojan/Shadowsocks)',
-      hostsInGroup: 'هاست‌های مستقل این گروه (WireGuard/Hysteria2)',
+      hostsInGroup: 'هاست‌های مستقل این گروه (L2TP/IKEv2/Hysteria2)',
       usersInGroup: 'کاربرهای این گروه',
       noInboundsInList: 'Inbound ای وجود نداره',
       noHosts: 'هاستی وجود نداره',
@@ -318,7 +313,6 @@ export const dict = {
       coreTypeHint: 'نوع هسته بعد از ساخت قابل تغییر نیست.',
       coreTypeLabels: {
         xray: 'Xray',
-        wireguard: 'WireGuard',
         l2tp: 'L2TP/IPsec',
         ikev2: 'IKEv2/IPsec',
       },
@@ -341,7 +335,6 @@ export const dict = {
         vmess: 'VMess',
         trojan: 'Trojan',
         shadowsocks: 'Shadowsocks',
-        wireguard: 'WireGuard',
         hysteria2: 'Hysteria2',
         ikev2: 'IKEv2/IPsec',
         l2tp: 'L2TP/IPsec',
@@ -387,9 +380,6 @@ export const dict = {
       scanStatusRecommended: 'پیشنهادی',
       scanStatusUsable: 'قابل استفاده',
       scanStatusUnreachable: 'غیرقابل دسترس',
-      wgServerKeyLabel: 'کلید سرور WireGuard',
-      wgHint:
-        'این کلید عمومی و پورت را باید دستی روی اینترفیس wg0 خود سرور هم تنظیم کنی؛ تیفوسی فقط کانفیگ سمت کاربر و بلاک Peer را می‌سازه.',
 
       routingTitle: 'مسیریابی (Routing)',
       routingHint: 'قانون‌ها به ترتیب از بالا به پایین چک می‌شن — اولین قانونی که مچ بشه برنده‌ست.',
@@ -607,11 +597,6 @@ export const dict = {
       securityTls: 'TLS',
       securityReality: 'REALITY',
       allowinsecureLabel: 'Allow insecure certificates (allowInsecure)',
-      wgSubnetLabel: 'Tunnel subnet (for per-user IP allocation)',
-      wgPortLabel: 'WireGuard server port',
-      wgServerKeyLabel: 'WireGuard Server Key',
-      wgHint:
-        "You'll also need to set this public key and port manually on the server's own wg0 interface — Tifusi only builds the user-side config and the Peer block.",
       hysteria2SniLabel: 'SNI (target)',
       hysteria2PortLabel: 'Port',
       ikev2PskLabel: 'IPsec Pre-Shared Key (PSK)',
@@ -652,7 +637,7 @@ export const dict = {
       nameLabel: 'Group Name',
       noteLabel: 'Note',
       inboundsInGroup: 'Inbounds in this group (VLESS/VMess/Trojan/Shadowsocks)',
-      hostsInGroup: 'Standalone hosts in this group (WireGuard/Hysteria2)',
+      hostsInGroup: 'Standalone hosts in this group (L2TP/IKEv2/Hysteria2)',
       usersInGroup: 'Users in this group',
       noInboundsInList: 'No inbounds',
       noHosts: 'No hosts',
@@ -800,7 +785,6 @@ export const dict = {
       coreTypeHint: "A core's type can't be changed after it's created.",
       coreTypeLabels: {
         xray: 'Xray',
-        wireguard: 'WireGuard',
         l2tp: 'L2TP/IPsec',
         ikev2: 'IKEv2/IPsec',
       },
@@ -823,7 +807,6 @@ export const dict = {
         vmess: 'VMess',
         trojan: 'Trojan',
         shadowsocks: 'Shadowsocks',
-        wireguard: 'WireGuard',
         hysteria2: 'Hysteria2',
         ikev2: 'IKEv2/IPsec',
         l2tp: 'L2TP/IPsec',
@@ -869,9 +852,6 @@ export const dict = {
       scanStatusRecommended: 'Recommended',
       scanStatusUsable: 'Usable',
       scanStatusUnreachable: 'Unreachable',
-      wgServerKeyLabel: 'WireGuard Server Key',
-      wgHint:
-        "You'll also need to set this public key and port manually on the server's own wg0 interface — Tifusi only builds the user-side config and the Peer block.",
 
       routingTitle: 'Routing',
       routingHint: 'Rules are checked top to bottom — the first one that matches wins.',

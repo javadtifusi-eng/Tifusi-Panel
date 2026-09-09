@@ -5,7 +5,7 @@ import { ApiError, createAdmin, getSetupStatus, login as loginApi } from '../lib
 
 const ACCENT = '#22D3EE'
 const COMMAND = 'docker exec -it tifusi-panel tifusi-cli generate-admin-key'
-const PROTOCOLS = ['VLESS', 'Trojan', 'WireGuard', 'Hysteria2']
+const PROTOCOLS = ['VLESS', 'Trojan', 'Hysteria2', 'IKEv2']
 
 function CopyIcon() {
   return (

@@ -131,7 +131,7 @@ export default function GroupsPage() {
   }
 
   // xray-protocol hosts are gated through their Inbound's groups, so only
-  // standalone (wireguard/hysteria2) hosts get a direct Group<->Host checklist.
+  // standalone (l2tp/ikev2/hysteria2) hosts get a direct Group<->Host checklist.
   const standaloneHosts = hosts.filter((h) => h.inbound_id == null)
 
   return (
@@ -277,7 +277,7 @@ export default function GroupsPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {groups?.map((g) => {
-          // A host counts as "covered" either directly (wireguard/hysteria2,
+          // A host counts as "covered" either directly (l2tp/ikev2/hysteria2,
           // added by host_id) or indirectly through one of the group's
           // granted inbounds (vless/vmess/trojan/shadowsocks) — showing only
           // the direct host_ids count made it look like 0 hosts were in a

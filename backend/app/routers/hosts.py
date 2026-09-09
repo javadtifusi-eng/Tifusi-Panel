@@ -9,15 +9,7 @@ from app.models.core import Core
 from app.models.host import CORE_LINKED_PROTOCOLS, XRAY_PROTOCOLS, Host, HostProtocol
 from app.models.inbound import Inbound
 from app.reality.keys import generate_reality_keypair
-from app.schemas.host import (
-    HostCreate,
-    HostList,
-    HostResponse,
-    HostUpdate,
-    RealityKeypairResponse,
-    WireGuardKeypairResponse,
-)
-from app.wireguard.keys import generate_wireguard_keypair
+from app.schemas.host import HostCreate, HostList, HostResponse, HostUpdate, RealityKeypairResponse
 
 router = APIRouter(prefix="/api/hosts", tags=["hosts"], dependencies=[Depends(get_current_admin)])
 
@@ -65,11 +57,6 @@ async def _validate(protocol: HostProtocol, get, db: AsyncSession) -> None:
 @router.get("/reality-keypair", response_model=RealityKeypairResponse)
 async def reality_keypair() -> RealityKeypairResponse:
     return RealityKeypairResponse(**generate_reality_keypair())
-
-
-@router.get("/wireguard-keypair", response_model=WireGuardKeypairResponse)
-async def wireguard_keypair() -> WireGuardKeypairResponse:
-    return WireGuardKeypairResponse(**generate_wireguard_keypair())
 
 
 @router.get("", response_model=HostList)

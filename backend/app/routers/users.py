@@ -10,8 +10,6 @@ from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser
 from app.schemas.user import ProxyUserCreate, ProxyUserList, ProxyUserResponse, ProxyUserUpdate
 from app.settings_store import get_public_url
-from app.wireguard.allocate import get_or_create_peer
-from app.wireguard.config import build_client_config
 
 router = APIRouter(
     prefix="/api/users",
@@ -100,18 +98,6 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
     public_url = await get_public_url(db)
     base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
 
-    # WireGuard isn't a URI-scheme protocol like the others, so it can't join
-    # the base64 link list — it gets its own field, one full .conf per host.
-    wireguard_configs = []
-    for host in allowed_hosts:
-        if host.protocol != HostProtocol.wireguard:
-            continue
-        try:
-            peer = await get_or_create_peer(host, user, db)
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        wireguard_configs.append({"remark": render_remark(host, user), "config": build_client_config(peer, host)})
-
     # ikev2/l2tp have no URI scheme either — iOS/Android/strongSwan set them
     # up from plain fields (server, PSK, and a per-user username/password
     # for EAP-MSCHAPv2/CHAP login), not an importable link, so each gets
@@ -143,7 +129,6 @@ async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depe
     return {
         "subscription_url": f"{base}sub/{user.secret}",
         "links": build_links_for_user(user, allowed_hosts),
-        "wireguard_configs": wireguard_configs,
         "ikev2_configs": ikev2_configs,
         "l2tp_configs": l2tp_configs,
     }

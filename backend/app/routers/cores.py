@@ -15,10 +15,6 @@ from app.schemas.core import CoreCreate, CoreList, CoreResponse, CoreUpdate, Inb
 router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(get_current_admin)])
 
 _CORE_FIELDS = (
-    "wireguard_public_key",
-    "wireguard_private_key",
-    "wireguard_port",
-    "wireguard_subnet",
     "l2tp_psk",
     "ikev2_psk",
     "ikev2_remote_id",
@@ -82,10 +78,6 @@ async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None 
         node_count=node_count or 0,
         host_count=host_count or 0,
         warnings=warnings or [],
-        wireguard_public_key=core.wireguard_public_key,
-        wireguard_private_key=core.wireguard_private_key,
-        wireguard_port=core.wireguard_port,
-        wireguard_subnet=core.wireguard_subnet,
         l2tp_psk=core.l2tp_psk,
         ikev2_psk=core.ikev2_psk,
         ikev2_remote_id=core.ikev2_remote_id,

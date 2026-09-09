@@ -21,7 +21,7 @@ const inputClass =
   'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
 const labelClass = 'mb-1.5 block text-xs text-slate-400'
 
-const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'wireguard', 'hysteria2', 'ikev2', 'l2tp']
+const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'hysteria2', 'ikev2', 'l2tp']
 const XRAY_PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks']
 const PLACEHOLDER_KEYS = ['username', 'protocol', 'days_left', 'expire_date', 'data_limit_gb', 'data_left_gb'] as const
 
@@ -62,7 +62,7 @@ export default function HostsPage() {
 
   const allInbounds: Inbound[] = cores.flatMap((c) => c.inbounds)
   const isXray = form.protocol !== '' && XRAY_PROTOCOLS.includes(form.protocol)
-  const isCoreLinked = form.protocol === 'wireguard' || form.protocol === 'l2tp' || form.protocol === 'ikev2'
+  const isCoreLinked = form.protocol === 'l2tp' || form.protocol === 'ikev2'
   const isHysteria2 = form.protocol === 'hysteria2'
   const inboundsForProtocol = allInbounds.filter((i) => i.protocol === form.protocol)
   const coresForProtocol = cores.filter((c) => c.core_type === form.protocol)

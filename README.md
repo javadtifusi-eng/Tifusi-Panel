@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=22D3EE" alt="GitHub stars" /></a>
-  <img src="https://img.shields.io/badge/protocols-VLESS%20%7C%20Trojan%20%7C%20WireGuard%20%7C%20Hysteria2-22D3EE?style=flat-square" alt="Supported protocols" />
+  <img src="https://img.shields.io/badge/protocols-VLESS%20%7C%20Trojan%20%7C%20Hysteria2%20%7C%20L2TP%20%7C%20IKEv2-22D3EE?style=flat-square" alt="Supported protocols" />
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 <hr>
 
-A proxy management panel — unified web UI + REST API, built with FastAPI and React. Same architectural pattern as PasarGuard (Python/FastAPI backend, React dashboard, Docker deployment), original UI and onboarding flow. Supported protocols: **VLESS, Trojan, WireGuard, Hysteria2** (no VMess or Shadowsocks).
+A proxy management panel — unified web UI + REST API, built with FastAPI and React. Same architectural pattern as PasarGuard (Python/FastAPI backend, React dashboard, Docker deployment), original UI and onboarding flow. Supported protocols: **VLESS, Trojan, Hysteria2, L2TP/IPsec, IKEv2/IPsec** (no VMess, Shadowsocks, or WireGuard).
 
 ## Screenshots
 
@@ -44,15 +44,15 @@ A proxy management panel — unified web UI + REST API, built with FastAPI and R
 - **Backend** (`backend/`): FastAPI + SQLAlchemy (async, SQLite by default), JWT auth, Alembic migrations.
 - **Frontend** (`frontend/`): React + Vite + Tailwind, "Obsidian Glow" visual direction, bilingual (fa/en) login.
 - **Users**: create/list/enable-disable/delete proxy users, with a traffic cap and usage tracking, and automatic `expired`/`limited` transitions once a user passes their expire date or data limit.
-- **Hosts**: VLESS/Trojan/WireGuard/Hysteria2 endpoints. For VLESS/Trojan you pick the transport (tcp/ws/grpc) and security (none/tls/reality); WireGuard hosts get a server keypair + tunnel subnet.
+- **Hosts**: VLESS/Trojan/Hysteria2/L2TP/IKEv2 endpoints. For VLESS/Trojan you pick the transport (tcp/ws/grpc) and security (none/tls/reality); L2TP/IKEv2 hosts pick a Core holding the shared PSK.
 - **Groups**: real access control, not just organization — a host with no group is global (every user sees it), once it joins a group only users sharing that group can see or use it. The same rule applies to link generation and to the actual Xray config pushed to nodes.
 - **REALITY scanner**: latency-tests ~160 candidate domains and recommends the fastest one as a REALITY target, right from the Hosts form.
-- **Subscription links**: every user gets a `vless://`/`trojan://`/`hysteria2://` link per host, a WireGuard `.conf` per WireGuard host (lazily provisioned with its own keypair + IP), plus one subscription URL (`/sub/<secret>`, no admin auth needed — client apps hit it directly) with a QR code.
+- **Subscription links**: every user gets a `vless://`/`trojan://`/`hysteria2://` link per host, plain connection fields (server/PSK/username/password) for L2TP/IKEv2 hosts, plus one subscription URL (`/sub/<secret>`, no admin auth needed — client apps hit it directly) with a QR code.
 - **Nodes**: register a server, get a `docker run` command to launch the node agent there, then "sync" to push the generated Xray config to it and see it come back **connected** with its Xray version. Health is polled automatically afterward, and real per-user traffic is pulled from Xray's own stats API on an interval. See [Nodes & the node agent](#nodes--the-node-agent) below for what that agent actually does and its current limits.
 - **Settings**: change the panel's public URL and the admin password at runtime, plus one-click database backup/restore — all from the dashboard, no redeploy.
 - **Docker**: `docker-compose.yml` runs the panel + dashboard. The node agent (`backend/node_agent/`) is built and run separately, once per node — see below.
 
-Not built yet: per-admin permission scoping, node-side WireGuard interface management (`wg-quick`) — see `ROADMAP.md` for the full list and some bigger ideas being considered.
+Not built yet: per-admin permission scoping — see `ROADMAP.md` for the full list and some bigger ideas being considered.
 
 ## Quick install
 
@@ -97,7 +97,7 @@ docker run -d --name tifusi-node --restart unless-stopped \
 
 The node agent's Dockerfile downloads the real Xray-core binary from its GitHub releases at build time — that step couldn't be verified inside the sandboxed session this project was built in (outbound GitHub access was blocked there), so **build and run it on a real machine before trusting it in production**. Everything else (config generation, the panel↔agent HTTP contract, status reporting) was verified end-to-end there using a stand-in binary.
 
-Only VLESS and Trojan hosts get pushed into the Xray config itself — Hysteria2 isn't part of Xray-core at all (it's a separate server) and WireGuard is a kernel/`wg-quick` affair, neither of which this starts. Both are skipped there rather than given a broken inbound; WireGuard is still fully supported at the link-generation level (see above), just not by this node agent.
+Only VLESS and Trojan hosts get pushed into the Xray config itself — Hysteria2 isn't part of Xray-core at all (it's a separate server), and L2TP/IKEv2 are handled by strongSwan/xl2tpd instead. All three are skipped here rather than given a broken inbound.
 
 ## Local development
 

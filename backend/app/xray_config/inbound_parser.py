@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from app.reality.keys import derive_x25519_public_key
 
 # vmess/vless/trojan/shadowsocks are what Xray-core itself terminates as a
-# TLS/TCP-style proxy inbound — hysteria/wireguard/mtproto are handled by
-# entirely separate server processes this panel doesn't manage through Core.
+# TLS/TCP-style proxy inbound — hysteria2/l2tp/ikev2 are handled by entirely
+# separate server processes this panel doesn't manage through Core.
 SUPPORTED_PROTOCOLS = {"vless", "vmess", "trojan", "shadowsocks"}
 
 

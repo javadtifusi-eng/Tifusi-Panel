@@ -7,7 +7,7 @@ here anymore — the admin's own JSON is the only source of truth for how an
 inbound actually runs; see app/models/inbound.py and app/cores/sync.py for
 how the panel keeps its own bookkeeping in sync with it.
 
-wireguard/hysteria2 aren't Xray inbounds and have no place in this config —
+hysteria2/l2tp/ikev2 aren't Xray inbounds and have no place in this config —
 they're separate standalone servers this panel doesn't start.
 """
 

@@ -131,11 +131,6 @@ export async function deleteUser(id: number): Promise<void> {
   await authorizedFetch(`/users/${id}`, { method: 'DELETE' })
 }
 
-export interface WireGuardConfig {
-  remark: string
-  config: string
-}
-
 export interface Ikev2Config {
   remark: string
   server: string
@@ -155,7 +150,6 @@ export interface L2tpConfig {
 export interface UserLinks {
   subscription_url: string
   links: string[]
-  wireguard_configs: WireGuardConfig[]
   ikev2_configs: Ikev2Config[]
   l2tp_configs: L2tpConfig[]
 }
@@ -189,7 +183,7 @@ export async function scanReality(sampleSize?: number): Promise<RealityScanRespo
   return res.json()
 }
 
-export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'wireguard' | 'hysteria2' | 'ikev2' | 'l2tp'
+export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'hysteria2' | 'ikev2' | 'l2tp'
 export type HostSecurity = 'none' | 'tls' | 'reality'
 
 export const FINGERPRINTS = [
@@ -251,11 +245,6 @@ export interface RealityKeypair {
   short_id: string
 }
 
-export interface WireGuardKeypair {
-  private_key: string
-  public_key: string
-}
-
 export async function listHosts(): Promise<HostList> {
   const res = await authorizedFetch('/hosts')
   return res.json()
@@ -299,11 +288,6 @@ export async function deleteHost(id: number): Promise<void> {
 
 export async function getRealityKeypair(): Promise<RealityKeypair> {
   const res = await authorizedFetch('/hosts/reality-keypair')
-  return res.json()
-}
-
-export async function getWireGuardKeypair(): Promise<WireGuardKeypair> {
-  const res = await authorizedFetch('/hosts/wireguard-keypair')
   return res.json()
 }
 
@@ -567,7 +551,7 @@ export interface Inbound {
   group_ids: number[]
 }
 
-export type CoreType = 'xray' | 'wireguard' | 'l2tp' | 'ikev2'
+export type CoreType = 'xray' | 'l2tp' | 'ikev2'
 
 export interface Core {
   id: number
@@ -580,11 +564,6 @@ export interface Core {
   node_count: number
   host_count: number
   warnings: string[]
-
-  wireguard_public_key: string | null
-  wireguard_private_key: string | null
-  wireguard_port: number | null
-  wireguard_subnet: string | null
 
   l2tp_psk: string | null
 
@@ -602,11 +581,6 @@ export interface CorePayload {
   note?: string | null
   core_type: CoreType
   config?: Record<string, unknown> | null
-
-  wireguard_public_key?: string | null
-  wireguard_private_key?: string | null
-  wireguard_port?: number | null
-  wireguard_subnet?: string | null
 
   l2tp_psk?: string | null
 
