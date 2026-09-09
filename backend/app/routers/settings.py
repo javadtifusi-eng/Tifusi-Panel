@@ -6,12 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings as env_settings
 from app.database import engine, get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.notifications.telegram import send_telegram_message
 from app.schemas.settings import PanelSettingsResponse, PanelSettingsUpdate
 from app.settings_store import get_settings_row
 
-router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_permission("settings"))])
 
 _SQLITE_PREFIX = "sqlite+aiosqlite:///"
 _SQLITE_MAGIC = b"SQLite format 3\x00"

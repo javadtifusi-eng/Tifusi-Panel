@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.groups.access import resolve_groups
 from app.models.core import Core
 from app.models.host import CORE_LINKED_PROTOCOLS, XRAY_PROTOCOLS, Host, HostProtocol
@@ -11,7 +11,7 @@ from app.models.inbound import Inbound
 from app.reality.keys import generate_reality_keypair
 from app.schemas.host import HostCreate, HostList, HostResponse, HostUpdate, RealityKeypairResponse
 
-router = APIRouter(prefix="/api/hosts", tags=["hosts"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/hosts", tags=["hosts"], dependencies=[Depends(require_permission("hosts"))])
 
 
 def _missing(**fields: object) -> list[str]:

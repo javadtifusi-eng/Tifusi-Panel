@@ -10,13 +10,16 @@ import {
   getSettings,
   getTlsStatus,
   listAdmins,
+  PERMISSION_SCOPES,
   removeTls,
   restoreBackup,
   testTelegram,
+  updateAdminPermissions,
   updateSettings,
   uploadTls,
   type AdminListItem,
   type AdminProfile,
+  type PermissionScope,
 } from '../lib/api'
 
 const ACCENT = '#22D3EE'
@@ -30,6 +33,7 @@ const buttonClass = 'rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disab
 export default function SettingsPage() {
   const { t, align } = useLang()
   const [profile, setProfile] = useState<AdminProfile | null>(null)
+  const canSettings = !profile || profile.is_owner || profile.permissions === null || profile.permissions.includes('settings')
 
   const [publicUrl, setPublicUrl] = useState('')
   const [urlSaving, setUrlSaving] = useState(false)
@@ -59,8 +63,14 @@ export default function SettingsPage() {
   const [admins, setAdmins] = useState<AdminListItem[] | null>(null)
   const [newAdminUsername, setNewAdminUsername] = useState('')
   const [newAdminPassword, setNewAdminPassword] = useState('')
+  const [newAdminPermissions, setNewAdminPermissions] = useState<Set<PermissionScope>>(
+    new Set(PERMISSION_SCOPES),
+  )
   const [adminSubmitting, setAdminSubmitting] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
+  const [editingPermsId, setEditingPermsId] = useState<number | null>(null)
+  const [editingPermsSet, setEditingPermsSet] = useState<Set<PermissionScope>>(new Set())
+  const [permsSaving, setPermsSaving] = useState(false)
 
   const [botToken, setBotToken] = useState('')
   const [chatId, setChatId] = useState('')
@@ -198,14 +208,29 @@ export default function SettingsPage() {
     }
   }
 
+  function toggleNewAdminPermission(scope: PermissionScope) {
+    setNewAdminPermissions((prev) => {
+      const next = new Set(prev)
+      if (next.has(scope)) next.delete(scope)
+      else next.add(scope)
+      return next
+    })
+  }
+
   async function handleCreateAdmin(e: FormEvent) {
     e.preventDefault()
     setAdminSubmitting(true)
     setAdminError(null)
+    const allChecked = newAdminPermissions.size === PERMISSION_SCOPES.length
     try {
-      await createAdminAccount({ username: newAdminUsername, password: newAdminPassword })
+      await createAdminAccount({
+        username: newAdminUsername,
+        password: newAdminPassword,
+        permissions: allChecked ? null : Array.from(newAdminPermissions),
+      })
       setNewAdminUsername('')
       setNewAdminPassword('')
+      setNewAdminPermissions(new Set(PERMISSION_SCOPES))
       await refreshAdmins()
     } catch (err) {
       setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
@@ -221,6 +246,36 @@ export default function SettingsPage() {
       await refreshAdmins()
     } catch (err) {
       setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
+    }
+  }
+
+  function startEditPerms(a: AdminListItem) {
+    setEditingPermsId(a.id)
+    setEditingPermsSet(new Set(a.permissions ?? PERMISSION_SCOPES))
+  }
+
+  function toggleEditingPermission(scope: PermissionScope) {
+    setEditingPermsSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(scope)) next.delete(scope)
+      else next.add(scope)
+      return next
+    })
+  }
+
+  async function saveEditingPerms() {
+    if (editingPermsId == null) return
+    setPermsSaving(true)
+    setAdminError(null)
+    const allChecked = editingPermsSet.size === PERMISSION_SCOPES.length
+    try {
+      await updateAdminPermissions(editingPermsId, allChecked ? null : Array.from(editingPermsSet))
+      setEditingPermsId(null)
+      await refreshAdmins()
+    } catch (err) {
+      setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setPermsSaving(false)
     }
   }
 
@@ -273,6 +328,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex flex-col gap-6">
+        {canSettings && (
         <form onSubmit={handleSaveUrl} className={cardClass}>
           <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.publicUrlTitle}</h2>
           <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.publicUrlDesc}</p>
@@ -293,6 +349,7 @@ export default function SettingsPage() {
           </div>
           {urlError && <div className="mt-3 text-xs text-red-400">{urlError}</div>}
         </form>
+        )}
 
         <form onSubmit={handleChangePassword} className={cardClass}>
           <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.changePasswordTitle}</h2>
@@ -342,6 +399,8 @@ export default function SettingsPage() {
           </button>
         </form>
 
+        {canSettings && (
+        <>
         <form onSubmit={handleSaveTelegram} className={cardClass}>
           <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.telegramTitle}</h2>
           <p className={`mb-3 text-xs text-slate-500 ${align}`}>
@@ -489,6 +548,8 @@ export default function SettingsPage() {
           </div>
           {tlsError && <div className="mt-3 text-xs text-red-400">{tlsError}</div>}
         </form>
+        </>
+        )}
 
         {profile?.is_owner && (
           <div className={cardClass}>
@@ -517,6 +578,22 @@ export default function SettingsPage() {
                   className={inputClass}
                 />
               </div>
+              <div className="w-full">
+                <label className={labelClass}>{t.settingsPage.permissionsLabel}</label>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-white/10 bg-black/20 p-2">
+                  {PERMISSION_SCOPES.map((scope) => (
+                    <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={newAdminPermissions.has(scope)}
+                        onChange={() => toggleNewAdminPermission(scope)}
+                      />
+                      <span className="text-slate-200">{t.settingsPage.permissionScopes[scope]}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-1 text-[11px] text-slate-500">{t.settingsPage.permissionsHint}</div>
+              </div>
               <button type="submit" disabled={adminSubmitting} className={buttonClass} style={{ backgroundColor: ACCENT }}>
                 {adminSubmitting ? t.settingsPage.creating : t.settingsPage.newAdminBtn}
               </button>
@@ -525,19 +602,61 @@ export default function SettingsPage() {
 
             <div className="flex flex-col gap-2">
               {admins?.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-100">{a.username}</span>
-                    {a.is_owner && (
-                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-slate-400">
-                        owner
-                      </span>
+                <div key={a.id} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-100">{a.username}</span>
+                      {a.is_owner ? (
+                        <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-slate-400">
+                          owner
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-500">
+                          {a.permissions === null
+                            ? t.settingsPage.fullAccess
+                            : a.permissions.map((s) => t.settingsPage.permissionScopes[s]).join(', ') ||
+                              t.settingsPage.noAccess}
+                        </span>
+                      )}
+                    </div>
+                    {!a.is_owner && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => (editingPermsId === a.id ? setEditingPermsId(null) : startEditPerms(a))}
+                          className="text-xs hover:underline"
+                          style={{ color: ACCENT }}
+                        >
+                          {t.settingsPage.editPermissions}
+                        </button>
+                        <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-red-400 hover:underline">
+                          {t.common.delete}
+                        </button>
+                      </div>
                     )}
                   </div>
-                  {!a.is_owner && (
-                    <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-red-400 hover:underline">
-                      {t.common.delete}
-                    </button>
+                  {editingPermsId === a.id && (
+                    <div className="mt-2 border-t border-white/10 pt-2">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {PERMISSION_SCOPES.map((scope) => (
+                          <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={editingPermsSet.has(scope)}
+                              onChange={() => toggleEditingPermission(scope)}
+                            />
+                            <span className="text-slate-200">{t.settingsPage.permissionScopes[scope]}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        onClick={saveEditingPerms}
+                        disabled={permsSaving}
+                        className="mt-2 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-950 disabled:opacity-60"
+                        style={{ backgroundColor: ACCENT }}
+                      >
+                        {t.common.save}
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

@@ -479,10 +479,24 @@ export const dict = {
       tlsRemoveFailed: 'حذف گواهی با خطا مواجه شد',
       adminsTitle: 'مدیریت ادمین‌ها',
       adminsDesc:
-        'فقط مالک پنل (owner) می‌تونه ادمین جدید بسازه یا حذف کنه. ادمین‌های دیگه دسترسی کامل به پنل دارن، به‌جز مدیریت خودِ حساب‌های ادمین.',
+        'فقط مالک پنل (owner) می‌تونه ادمین جدید بسازه یا حذف کنه، یا دسترسی‌هاشون رو عوض کنه. مدیریت خودِ حساب‌های ادمین همیشه مخصوص owner می‌مونه، صرف‌نظر از دسترسی‌های تنظیم‌شده.',
       newAdminBtn: '+ ادمین جدید',
       creating: 'در حال ساخت…',
       confirmDeleteAdmin: (name: string) => `حساب ادمین «${name}» حذف بشه؟`,
+      permissionsLabel: 'دسترسی‌ها',
+      permissionsHint: 'همه رو تیک بزنی یعنی دسترسی کامل؛ فقط چندتا رو تیک بزنی، این ادمین فقط به همونا دسترسی داره.',
+      permissionScopes: {
+        users: 'کاربران',
+        hosts: 'هاست‌ها',
+        nodes: 'نودها',
+        cores: 'هسته‌ها',
+        groups: 'گروه‌ها',
+        tunnels: 'تانل‌ها',
+        settings: 'تنظیمات',
+      },
+      fullAccess: 'دسترسی کامل',
+      noAccess: 'بدون دسترسی',
+      editPermissions: 'ویرایش دسترسی',
     },
 
     userLinksModal: {
@@ -974,10 +988,24 @@ export const dict = {
       tlsRemoveFailed: 'Removing the certificate failed',
       adminsTitle: 'Manage Admins',
       adminsDesc:
-        "Only the panel owner can create or delete admin accounts. Other admins have full access to the panel, except managing admin accounts themselves.",
+        "Only the panel owner can create or delete admin accounts, or change their access. Managing admin accounts themselves always stays owner-only, regardless of the permissions set.",
       newAdminBtn: '+ New Admin',
       creating: 'Creating…',
       confirmDeleteAdmin: (name: string) => `Delete admin account "${name}"?`,
+      permissionsLabel: 'Permissions',
+      permissionsHint: 'Check all for full access; check only some and this admin is limited to exactly those.',
+      permissionScopes: {
+        users: 'Users',
+        hosts: 'Hosts',
+        nodes: 'Nodes',
+        cores: 'Cores',
+        groups: 'Groups',
+        tunnels: 'Tunnels',
+        settings: 'Settings',
+      },
+      fullAccess: 'Full access',
+      noAccess: 'No access',
+      editPermissions: 'Edit permissions',
     },
 
     userLinksModal: {

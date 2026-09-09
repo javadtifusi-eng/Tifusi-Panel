@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.models.node import Node
 from app.models.tunnel import Tunnel, TunnelStatus
 from app.schemas.tunnel import (
@@ -22,7 +22,7 @@ from app.schemas.tunnel import (
 from app.tunnels.config import build_foreign_config, build_iran_config, build_install_command
 from app.tunnels.probe import recommend_transports, tcp_probe
 
-router = APIRouter(prefix="/api/tunnels", tags=["tunnels"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/tunnels", tags=["tunnels"], dependencies=[Depends(require_permission("tunnels"))])
 
 
 async def _resolve_foreign_node_id(node_id: int | None, db: AsyncSession) -> int | None:

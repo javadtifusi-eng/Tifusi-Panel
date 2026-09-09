@@ -4,12 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cores.resolve import resolve_ipsec_core_id, resolve_xray_core_id
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.models.node import Node
 from app.nodes.sync import sync_node
 from app.schemas.node import NodeCreate, NodeList, NodeResponse, NodeSyncResult, NodeUpdate
 
-router = APIRouter(prefix="/api/nodes", tags=["nodes"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/nodes", tags=["nodes"], dependencies=[Depends(require_permission("nodes"))])
 
 
 @router.get("", response_model=NodeList)

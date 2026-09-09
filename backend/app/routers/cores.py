@@ -5,14 +5,14 @@ from sqlalchemy.orm import selectinload
 
 from app.cores.sync import sync_inbounds
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.models.core import Core, CoreType
 from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.node import Node
 from app.schemas.core import CoreCreate, CoreList, CoreResponse, CoreUpdate, InboundResponse
 
-router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(require_permission("cores"))])
 
 _CORE_FIELDS = (
     "l2tp_psk",

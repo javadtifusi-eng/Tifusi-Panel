@@ -1,3 +1,5 @@
+from typing import Callable, Coroutine
+
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -27,3 +29,18 @@ async def get_current_admin(
         raise HTTPException(status_code=401, detail="Admin account no longer exists")
 
     return admin
+
+
+def require_permission(scope: str) -> Callable[..., Coroutine[None, None, Admin]]:
+    """A per-router replacement for plain get_current_admin: same auth,
+    plus a scope check. The owner is never restricted; a non-owner admin
+    with permissions=None (every admin created before this existed, and
+    any created since without explicit scoping) is unrestricted too —
+    only an admin with a real, non-null permissions list gets narrowed."""
+
+    async def _check(admin: Admin = Depends(get_current_admin)) -> Admin:
+        if not admin.is_owner and admin.permissions is not None and scope not in admin.permissions:
+            raise HTTPException(status_code=403, detail=f"Your admin account doesn't have access to {scope}")
+        return admin
+
+    return _check

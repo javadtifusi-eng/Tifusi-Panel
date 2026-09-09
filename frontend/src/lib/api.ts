@@ -664,9 +664,14 @@ export async function testTelegram(): Promise<void> {
   await authorizedFetch('/settings/telegram/test', { method: 'POST' })
 }
 
+// Matches app/permissions.py PERMISSION_SCOPES — keep in sync.
+export const PERMISSION_SCOPES = ['users', 'hosts', 'nodes', 'cores', 'groups', 'tunnels', 'settings'] as const
+export type PermissionScope = (typeof PERMISSION_SCOPES)[number]
+
 export interface AdminProfile {
   username: string
   is_owner: boolean
+  permissions: PermissionScope[] | null
 }
 
 export async function getAdminProfile(): Promise<AdminProfile> {
@@ -682,6 +687,7 @@ export interface AdminListItem {
   id: number
   username: string
   is_owner: boolean
+  permissions: PermissionScope[] | null
   created_at: string
 }
 
@@ -695,8 +701,23 @@ export async function listAdmins(): Promise<AdminListResponse> {
   return res.json()
 }
 
-export async function createAdminAccount(payload: { username: string; password: string }): Promise<AdminListItem> {
+export async function createAdminAccount(payload: {
+  username: string
+  password: string
+  permissions?: PermissionScope[] | null
+}): Promise<AdminListItem> {
   const res = await authorizedFetch('/admin', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function updateAdminPermissions(
+  id: number,
+  permissions: PermissionScope[] | null,
+): Promise<AdminListItem> {
+  const res = await authorizedFetch(`/admin/${id}/permissions`, {
+    method: 'PUT',
+    body: JSON.stringify({ permissions }),
+  })
   return res.json()
 }
 

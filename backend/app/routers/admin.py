@@ -5,7 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.models.admin import Admin
-from app.schemas.admin import AdminCreate, AdminList, AdminListItem, AdminProfileResponse, ChangePasswordRequest
+from app.schemas.admin import (
+    AdminCreate,
+    AdminList,
+    AdminListItem,
+    AdminPermissionsUpdate,
+    AdminProfileResponse,
+    ChangePasswordRequest,
+)
 from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -56,11 +63,37 @@ async def create_admin_account(
     if existing is not None:
         raise HTTPException(status_code=409, detail="An admin with this username already exists")
 
-    new_admin = Admin(username=payload.username, hashed_password=hash_password(payload.password), is_owner=False)
+    new_admin = Admin(
+        username=payload.username,
+        hashed_password=hash_password(payload.password),
+        is_owner=False,
+        permissions=payload.permissions,
+    )
     db.add(new_admin)
     await db.commit()
     await db.refresh(new_admin)
     return new_admin
+
+
+@router.put("/{admin_id}/permissions", response_model=AdminListItem)
+async def update_admin_permissions(
+    admin_id: int,
+    payload: AdminPermissionsUpdate,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Admin:
+    _require_owner(admin)
+    target = await db.get(Admin, admin_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    if target.is_owner:
+        raise HTTPException(status_code=400, detail="The owner account always has full access")
+
+    target.permissions = payload.permissions
+    db.add(target)
+    await db.commit()
+    await db.refresh(target)
+    return target
 
 
 @router.delete("/{admin_id}", status_code=204)

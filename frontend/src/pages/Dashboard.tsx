@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
 import SystemStatsBar from '../components/SystemStats'
 import { useLang } from '../i18n/LangContext'
+import { getAdminProfile, type AdminProfile } from '../lib/api'
 
 function MenuIcon() {
   return (
@@ -28,8 +29,22 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { lang, setLang, t, dir } = useLang()
   const [active, setActive] = useState<ActiveTab>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [profile, setProfile] = useState<AdminProfile | null>(null)
 
-  const navItems: { id: ActiveTab; label: string }[] = [
+  useEffect(() => {
+    getAdminProfile().then(setProfile).catch(() => undefined)
+  }, [])
+
+  // 'overview' and 'settings' always show — overview degrades gracefully
+  // per-section when a scope is missing, and settings is where an admin
+  // changes their own password regardless of what else they can reach.
+  function canSee(id: ActiveTab): boolean {
+    if (id === 'overview' || id === 'settings') return true
+    if (!profile || profile.is_owner || profile.permissions === null) return true
+    return (profile.permissions as string[]).includes(id)
+  }
+
+  const allNavItems: { id: ActiveTab; label: string }[] = [
     { id: 'overview', label: t.nav.dashboard },
     { id: 'users', label: t.nav.users },
     { id: 'hosts', label: t.nav.hosts },
@@ -39,6 +54,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
     { id: 'tunnels', label: t.nav.tunnels },
     { id: 'settings', label: t.nav.settings },
   ]
+  const navItems = allNavItems.filter((item) => canSee(item.id))
 
   function selectTab(id: ActiveTab) {
     setActive(id)

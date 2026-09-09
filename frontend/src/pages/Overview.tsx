@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLang } from '../i18n/LangContext'
 import {
-  ApiError,
   listCores,
   listGroups,
   listHosts,
@@ -82,21 +81,26 @@ export default function OverviewPage() {
   const [groupsCount, setGroupsCount] = useState<number | null>(null)
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [cores, setCores] = useState<Core[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    Promise.all([listUsers(), listHosts(), listGroups(), listNodes(), listCores()])
-      .then(([u, h, g, n, c]) => {
-        setUsers(u.users)
-        setHosts(h.hosts)
-        setGroupsCount(g.total)
-        setNodes(n.nodes)
-        setCores(c.cores)
-      })
-      .catch((err) => setError(err instanceof ApiError ? err.message : t.common.genericError))
+    // Promise.allSettled, not .all — an admin scoped to only some of these
+    // resources gets 403s on the rest, which shouldn't blank the whole
+    // tab; each section below just stays out (its StatTile/BreakdownCard
+    // simply isn't rendered) instead of the page showing a hard error.
+    Promise.allSettled([listUsers(), listHosts(), listGroups(), listNodes(), listCores()]).then(
+      ([u, h, g, n, c]) => {
+        if (u.status === 'fulfilled') setUsers(u.value.users)
+        if (h.status === 'fulfilled') setHosts(h.value.hosts)
+        if (g.status === 'fulfilled') setGroupsCount(g.value.total)
+        if (n.status === 'fulfilled') setNodes(n.value.nodes)
+        if (c.status === 'fulfilled') setCores(c.value.cores)
+        setLoaded(true)
+      },
+    )
   }, [])
 
-  const loading = users === null || hosts === null || groupsCount === null || nodes === null || cores === null
+  const loading = !loaded
 
   const usersByStatus = users ? countBy(users, (u) => u.status as UserStatus) : {}
   const hostsByProtocol = hosts ? countBy(hosts, (h) => h.protocol) : {}
@@ -106,63 +110,70 @@ export default function OverviewPage() {
     <div dir={dir}>
       <h1 className="mb-6 text-xl font-bold text-slate-50">{t.overviewPage.title}</h1>
 
-      {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
-      {loading && !error && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {loading && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
 
       {!loading && (
         <>
           <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            <StatTile label={t.overviewPage.totalUsers} value={users!.length} />
-            <StatTile label={t.overviewPage.totalHosts} value={hosts!.length} />
-            <StatTile label={t.overviewPage.totalGroups} value={groupsCount!} />
-            <StatTile label={t.overviewPage.totalNodes} value={nodes!.length} />
-            <StatTile label={t.overviewPage.totalCores} value={cores!.length} />
+            {users && <StatTile label={t.overviewPage.totalUsers} value={users.length} />}
+            {hosts && <StatTile label={t.overviewPage.totalHosts} value={hosts.length} />}
+            {groupsCount !== null && <StatTile label={t.overviewPage.totalGroups} value={groupsCount} />}
+            {nodes && <StatTile label={t.overviewPage.totalNodes} value={nodes.length} />}
+            {cores && <StatTile label={t.overviewPage.totalCores} value={cores.length} />}
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <BreakdownCard
-              title={t.overviewPage.usersByStatusTitle}
-              rows={Object.entries(usersByStatus).map(([status, count]) => ({
-                label: userStatusLabels[status as UserStatus],
-                count,
-              }))}
-            />
-            <BreakdownCard
-              title={t.overviewPage.hostsByProtocolTitle}
-              rows={Object.entries(hostsByProtocol).map(([protocol, count]) => ({
-                label: protocolLabels[protocol as keyof typeof protocolLabels] ?? protocol,
-                count,
-              }))}
-            />
-            <BreakdownCard
-              title={t.overviewPage.coresByTypeTitle}
-              rows={Object.entries(coresByType).map(([type, count]) => ({
-                label: coreTypeLabels[type as keyof typeof coreTypeLabels] ?? type,
-                count,
-              }))}
-            />
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-            <div className="mb-3 text-sm font-bold text-slate-100">{t.overviewPage.nodesStatusTitle}</div>
-            {nodes!.length === 0 ? (
-              <div className="text-xs text-slate-500">{t.overviewPage.noneYet}</div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {nodes!.map((n) => (
-                  <div key={n.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${statusDot[n.status]}`} />
-                      <span className="text-sm text-slate-200">{n.name}</span>
-                    </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge[n.status]}`}>
-                      {nodeStatusLabels[n.status]}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            {users && (
+              <BreakdownCard
+                title={t.overviewPage.usersByStatusTitle}
+                rows={Object.entries(usersByStatus).map(([status, count]) => ({
+                  label: userStatusLabels[status as UserStatus],
+                  count,
+                }))}
+              />
+            )}
+            {hosts && (
+              <BreakdownCard
+                title={t.overviewPage.hostsByProtocolTitle}
+                rows={Object.entries(hostsByProtocol).map(([protocol, count]) => ({
+                  label: protocolLabels[protocol as keyof typeof protocolLabels] ?? protocol,
+                  count,
+                }))}
+              />
+            )}
+            {cores && (
+              <BreakdownCard
+                title={t.overviewPage.coresByTypeTitle}
+                rows={Object.entries(coresByType).map(([type, count]) => ({
+                  label: coreTypeLabels[type as keyof typeof coreTypeLabels] ?? type,
+                  count,
+                }))}
+              />
             )}
           </div>
+
+          {nodes && (
+            <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+              <div className="mb-3 text-sm font-bold text-slate-100">{t.overviewPage.nodesStatusTitle}</div>
+              {nodes.length === 0 ? (
+                <div className="text-xs text-slate-500">{t.overviewPage.noneYet}</div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {nodes.map((n) => (
+                    <div key={n.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${statusDot[n.status]}`} />
+                        <span className="text-sm text-slate-200">{n.name}</span>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge[n.status]}`}>
+                        {nodeStatusLabels[n.status]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

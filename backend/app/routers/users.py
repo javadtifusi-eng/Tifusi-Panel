@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_links_for_user, render_remark
 from app.models.host import Host, HostProtocol
@@ -25,7 +25,7 @@ from app.settings_store import get_public_url
 router = APIRouter(
     prefix="/api/users",
     tags=["users"],
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_permission("users"))],
 )
 
 

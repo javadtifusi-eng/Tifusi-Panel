@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
 
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.reality.scanner import is_reality_ready, scan_targets
 from app.reality.targets import CANDIDATE_TARGETS
 from app.schemas.reality import RealityScanRequest, RealityScanResponse, RealityScanResult
 
-router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
 
 
 @router.get("/targets")
