@@ -13,6 +13,10 @@ import {
   type NodeStatus,
 } from '../lib/api'
 
+// Which core a node runs is assigned from the Cores page (a core lists and
+// toggles the nodes running it), not repeated here — this form only owns
+// what's actually the node's own identity (name/address/agent port).
+
 const ACCENT = '#22D3EE'
 
 const statusDot: Record<NodeStatus, string> = {
@@ -48,9 +52,6 @@ export default function NodesPage() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [port, setPort] = useState('')
-  const [coreId, setCoreId] = useState<number | null>(null)
-  const [ipsecCoreId, setIpsecCoreId] = useState<number | null>(null)
-  const [l2tpEgressVless, setL2tpEgressVless] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [setupNodeId, setSetupNodeId] = useState<number | null>(null)
@@ -79,9 +80,6 @@ export default function NodesPage() {
     setName('')
     setAddress('')
     setPort('')
-    setCoreId(null)
-    setIpsecCoreId(null)
-    setL2tpEgressVless('')
     setShowForm(false)
   }
 
@@ -90,9 +88,6 @@ export default function NodesPage() {
     setName(node.name)
     setAddress(node.address)
     setPort(String(node.port))
-    setCoreId(node.core_id)
-    setIpsecCoreId(node.ipsec_core_id)
-    setL2tpEgressVless(node.l2tp_egress_vless ?? '')
     setShowForm(true)
   }
 
@@ -102,24 +97,10 @@ export default function NodesPage() {
     setError(null)
     try {
       if (editingId) {
-        await updateNode(editingId, {
-          name,
-          address,
-          port: parseInt(port, 10),
-          core_id: coreId,
-          ipsec_core_id: ipsecCoreId,
-          l2tp_egress_vless: l2tpEgressVless || null,
-        })
+        await updateNode(editingId, { name, address, port: parseInt(port, 10) })
         resetForm()
       } else {
-        const created = await createNode({
-          name,
-          address,
-          port: parseInt(port, 10),
-          core_id: coreId,
-          ipsec_core_id: ipsecCoreId,
-          l2tp_egress_vless: l2tpEgressVless || null,
-        })
+        const created = await createNode({ name, address, port: parseInt(port, 10) })
         resetForm()
         setSetupNodeId(created.id)
       }
@@ -215,57 +196,7 @@ export default function NodesPage() {
               className={`${inputClass} w-28`}
             />
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-slate-400">{t.nodesPage.coreLabel}</label>
-            <select
-              value={coreId ?? ''}
-              onChange={(e) => setCoreId(e.target.value ? Number(e.target.value) : null)}
-              className={inputClass}
-            >
-              <option value="">{t.coresPage.selectPlaceholder}</option>
-              {cores
-                .filter((c) => c.core_type === 'xray')
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-slate-400" title={t.nodesPage.ipsecCoreHint}>
-              {t.nodesPage.ipsecCoreLabel}
-            </label>
-            <select
-              value={ipsecCoreId ?? ''}
-              onChange={(e) => setIpsecCoreId(e.target.value ? Number(e.target.value) : null)}
-              className={inputClass}
-            >
-              <option value="">{t.coresPage.selectPlaceholder}</option>
-              {cores
-                .filter((c) => c.core_type === 'l2tp' || c.core_type === 'ikev2')
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} — {t.coresPage.coreTypeLabels[c.core_type]}
-                  </option>
-                ))}
-            </select>
-          </div>
-          {cores.find((c) => c.id === ipsecCoreId)?.core_type === 'l2tp' && (
-            <div className="w-full">
-              <label className="mb-1.5 block text-xs text-slate-400" title={t.nodesPage.l2tpEgressHint}>
-                {t.nodesPage.l2tpEgressLabel}
-              </label>
-              <textarea
-                dir="ltr"
-                rows={2}
-                value={l2tpEgressVless}
-                onChange={(e) => setL2tpEgressVless(e.target.value)}
-                placeholder="vless://..."
-                className={`${inputClass} w-full text-left font-mono text-xs`}
-              />
-            </div>
-          )}
+          <div className="w-full text-[11px] text-slate-500">{t.nodesPage.assignCoreHint}</div>
           <button
             type="submit"
             disabled={submitting}

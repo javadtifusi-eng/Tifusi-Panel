@@ -41,6 +41,7 @@ export const dict = {
       tunnels: 'تانل‌ها',
       settings: 'تنظیمات',
       logout: 'خروج',
+      menu: 'منو',
     },
 
     dashboardStats: {
@@ -195,6 +196,7 @@ export const dict = {
       ipsecCoreHint: 'همین نود می‌تونه همزمان یه هسته Xray و یه هسته L2TP/IKEv2 هم اجرا کنه.',
       l2tpEgressLabel: 'خروجی زنجیره‌ای L2TP (لینک vless، اختیاری)',
       l2tpEgressHint: 'اگه پر بشه، ترافیک کلاینت‌های L2TP این نود به‌جای اینترنت مستقیم از طریق این سرور VLESS (که می‌تونه رو یه پنل کاملاً دیگه باشه) خارج میشه.',
+      assignCoreHint: 'انتخاب این‌که این نود چه هسته‌ای اجرا کنه، از صفحه‌ی «هسته‌ها» انجام می‌شه — بعد از ثبت نود، برو اونجا و از کارت هسته‌ی مربوطه نود رو فعال کن.',
       inboundsCount: (n: number) => `${n} inbound`,
       intro:
         'هر نود یه سرور جداست که Xray واقعی روش اجرا می‌شه. اول نود رو اینجا ثبت کن، بعد با دستوری که نشون داده می‌شه ایجنت رو روی همون سرور بالا بیار، بعد «همگام‌سازی» رو بزن تا کانفیگ هاست‌ها و کاربرها براش فرستاده بشه.',
@@ -388,6 +390,28 @@ export const dict = {
       wgServerKeyLabel: 'کلید سرور WireGuard',
       wgHint:
         'این کلید عمومی و پورت را باید دستی روی اینترفیس wg0 خود سرور هم تنظیم کنی؛ تیفوسی فقط کانفیگ سمت کاربر و بلاک Peer را می‌سازه.',
+
+      routingTitle: 'مسیریابی (Routing)',
+      routingHint: 'قانون‌ها به ترتیب از بالا به پایین چک می‌شن — اولین قانونی که مچ بشه برنده‌ست.',
+      addRuleBtn: '+ قانون جدید',
+      noRulesYet: 'هنوز قانون مسیریابی‌ای اضافه نشده',
+      ruleDomainLabel: 'دامنه (با کاما جدا کن)',
+      ruleIpLabel: 'IP (با کاما جدا کن)',
+      ruleOutboundLabel: 'برو از طریق',
+      outboundsTitle: 'Outbound ها',
+      outboundsHint: 'مسیر خروجی ترافیک — پیش‌فرض freedom/direct از قبل خودکار اضافه می‌شه، این‌جا فقط برای outbound اضافه (مثلاً یه پروکسی زنجیره‌ای یا WARP).',
+      addOutboundBtn: '+ Outbound جدید',
+      noOutboundsYet: 'هنوز outbound اضافه‌ای تعریف نشده',
+      outboundTagLabel: 'تگ',
+      outboundProtocolLabel: 'پروتکل',
+      outboundAddressLabel: 'آدرس سرور',
+      outboundPortLabel: 'پورت',
+      outboundSecretLabel: 'رمز/UUID',
+      generalSettingsTitle: 'تنظیمات عمومی',
+      dnsServersLabel: 'سرورهای DNS (با کاما جدا کن)',
+      logLevelLabel: 'سطح لاگ',
+      assignedNodesTitle: 'نودهایی که این هسته رو اجرا می‌کنن',
+      assignedElsewhere: 'الان رو یه هسته‌ی دیگه‌ست',
     },
 
     settingsPage: {
@@ -499,6 +523,7 @@ export const dict = {
       tunnels: 'Tunnels',
       settings: 'Settings',
       logout: 'Sign Out',
+      menu: 'Menu',
     },
 
     dashboardStats: {
@@ -653,6 +678,7 @@ export const dict = {
       ipsecCoreHint: 'This same node can run an Xray core and an L2TP/IKEv2 core at the same time.',
       l2tpEgressLabel: 'L2TP chained egress (vless link, optional)',
       l2tpEgressHint: "When set, this node's L2TP client traffic exits through this remote VLESS server (which can be on a completely different panel) instead of the internet directly.",
+      assignCoreHint: 'Which core this node runs is set from the Cores page — after registering the node, go there and turn it on from that core\'s card.',
       inboundsCount: (n: number) => `${n} inbound${n === 1 ? '' : 's'}`,
       intro:
         'Each node is a separate server that actually runs Xray. Register the node here first, bring the agent up on that server with the command shown, then hit "Sync" to push the host and user config to it.',
@@ -846,6 +872,28 @@ export const dict = {
       wgServerKeyLabel: 'WireGuard Server Key',
       wgHint:
         "You'll also need to set this public key and port manually on the server's own wg0 interface — Tifusi only builds the user-side config and the Peer block.",
+
+      routingTitle: 'Routing',
+      routingHint: 'Rules are checked top to bottom — the first one that matches wins.',
+      addRuleBtn: '+ Add rule',
+      noRulesYet: 'No routing rules yet',
+      ruleDomainLabel: 'Domain (comma-separated)',
+      ruleIpLabel: 'IP (comma-separated)',
+      ruleOutboundLabel: 'Route through',
+      outboundsTitle: 'Outbounds',
+      outboundsHint: 'Where traffic exits — freedom/direct is added automatically by default; use this to add an extra outbound (e.g. a chained proxy or WARP).',
+      addOutboundBtn: '+ Add outbound',
+      noOutboundsYet: 'No extra outbounds defined yet',
+      outboundTagLabel: 'Tag',
+      outboundProtocolLabel: 'Protocol',
+      outboundAddressLabel: 'Server address',
+      outboundPortLabel: 'Port',
+      outboundSecretLabel: 'Password/UUID',
+      generalSettingsTitle: 'General settings',
+      dnsServersLabel: 'DNS servers (comma-separated)',
+      logLevelLabel: 'Log level',
+      assignedNodesTitle: 'Nodes running this core',
+      assignedElsewhere: 'currently on a different core',
     },
 
     settingsPage: {

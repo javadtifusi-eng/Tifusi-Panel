@@ -8,10 +8,13 @@ import {
   getRealityKeypair,
   getWireGuardKeypair,
   listCores,
+  listNodes,
   scanReality,
   updateCore,
+  updateNode,
   type Core,
   type CoreType,
+  type Node,
   type RealityScanResult,
 } from '../lib/api'
 
@@ -115,10 +118,482 @@ function buildInboundJson(w: ReturnType<typeof emptyWizard>): Record<string, unk
   return inbound
 }
 
+function parseConfig(text: string): Record<string, unknown> {
+  try {
+    return text.trim() ? JSON.parse(text) : {}
+  } catch {
+    return {}
+  }
+}
+
+function csvToList(value: string): string[] {
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+type RoutingRule = {
+  type: 'field'
+  domain?: string[]
+  ip?: string[]
+  outboundTag?: string
+}
+
+// RoutingEditor edits config.routing.rules directly on the same raw JSON
+// string the rest of the form (and the inbound wizard above it) already
+// treats as the single source of truth - no separate state to drift out
+// of sync with a manual edit to the JSON textarea below.
+function RoutingEditor({
+  configText,
+  setConfigText,
+  t,
+}: {
+  configText: string
+  setConfigText: (text: string) => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const config = parseConfig(configText)
+  const routing = (config.routing as { rules?: RoutingRule[] } | undefined) ?? {}
+  const rules = Array.isArray(routing.rules) ? routing.rules : []
+  const outbounds = Array.isArray(config.outbounds) ? (config.outbounds as { tag?: string }[]) : []
+  const outboundTags = outbounds.map((o) => o.tag).filter((tag): tag is string => !!tag)
+  const tagOptions = outboundTags.length > 0 ? outboundTags : ['direct']
+
+  function commit(nextRules: RoutingRule[]) {
+    setConfigText(JSON.stringify({ ...config, routing: { ...routing, rules: nextRules } }, null, 2))
+  }
+  function addRule() {
+    commit([...rules, { type: 'field', domain: [], ip: [], outboundTag: tagOptions[0] }])
+  }
+  function updateRule(i: number, patch: Partial<RoutingRule>) {
+    commit(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  }
+  function removeRule(i: number) {
+    commit(rules.filter((_, idx) => idx !== i))
+  }
+  function moveRule(i: number, dir: -1 | 1) {
+    const j = i + dir
+    if (j < 0 || j >= rules.length) return
+    const next = [...rules]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    commit(next)
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
+      <div className="mb-1 flex items-center justify-between">
+        <div className="text-xs font-bold text-slate-300">{t.coresPage.routingTitle}</div>
+        <button type="button" onClick={addRule} className="text-xs font-bold" style={{ color: ACCENT }}>
+          {t.coresPage.addRuleBtn}
+        </button>
+      </div>
+      <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.routingHint}</div>
+      {rules.length === 0 && <div className="text-xs text-slate-500">{t.coresPage.noRulesYet}</div>}
+      <div className="flex flex-col gap-2">
+        {rules.map((r, i) => (
+          <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 p-2">
+            <div>
+              <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.ruleDomainLabel}</label>
+              <input
+                dir="ltr"
+                value={(r.domain ?? []).join(', ')}
+                onChange={(e) => updateRule(i, { domain: csvToList(e.target.value) })}
+                placeholder="geosite:category-ads-all, example.com"
+                className={`${inputClass} w-64 text-left`}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.ruleIpLabel}</label>
+              <input
+                dir="ltr"
+                value={(r.ip ?? []).join(', ')}
+                onChange={(e) => updateRule(i, { ip: csvToList(e.target.value) })}
+                placeholder="geoip:private, geoip:ir"
+                className={`${inputClass} w-52 text-left`}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.ruleOutboundLabel}</label>
+              <select
+                dir="ltr"
+                value={r.outboundTag ?? tagOptions[0]}
+                onChange={(e) => updateRule(i, { outboundTag: e.target.value })}
+                className={inputClass}
+              >
+                {tagOptions.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={() => moveRule(i, -1)} className="text-xs text-slate-400 hover:text-slate-200">
+                ↑
+              </button>
+              <button type="button" onClick={() => moveRule(i, 1)} className="text-xs text-slate-400 hover:text-slate-200">
+                ↓
+              </button>
+              <button type="button" onClick={() => removeRule(i)} className="text-xs text-red-400 hover:underline">
+                {t.common.delete}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const OUTBOUND_PROTOCOLS = ['freedom', 'blackhole', 'vless', 'vmess', 'trojan', 'shadowsocks', 'socks', 'http'] as const
+type OutboundProtocol = (typeof OUTBOUND_PROTOCOLS)[number]
+
+type OutboundEntry = {
+  tag?: string
+  protocol?: string
+  settings?: Record<string, unknown>
+}
+
+// Structured single-server fields for the protocols that actually need
+// settings (freedom/blackhole need none) - kept deliberately simple
+// (one upstream server per outbound) rather than a raw JSON textarea, so
+// typing here can never leave the surrounding config.routing/outbounds
+// JSON momentarily invalid the way a nested free-form JSON field would.
+function outboundServerFields(protocol: string | undefined, settings: Record<string, unknown>) {
+  const vnext = (settings.vnext as Record<string, unknown>[] | undefined)?.[0]
+  const server = (settings.servers as Record<string, unknown>[] | undefined)?.[0]
+  const users = (vnext?.users as Record<string, unknown>[] | undefined)?.[0]
+  switch (protocol) {
+    case 'vless':
+    case 'vmess':
+      return { address: (vnext?.address as string) ?? '', port: vnext?.port != null ? String(vnext.port) : '', secret: (users?.id as string) ?? '' }
+    case 'trojan':
+      return { address: (server?.address as string) ?? '', port: server?.port != null ? String(server.port) : '', secret: (server?.password as string) ?? '' }
+    case 'shadowsocks':
+      return { address: (server?.address as string) ?? '', port: server?.port != null ? String(server.port) : '', secret: (server?.password as string) ?? '' }
+    case 'socks':
+    case 'http':
+      return { address: (server?.address as string) ?? '', port: server?.port != null ? String(server.port) : '', secret: '' }
+    default:
+      return { address: '', port: '', secret: '' }
+  }
+}
+
+function buildOutboundSettings(
+  protocol: string | undefined,
+  fields: { address: string; port: string; secret: string },
+): Record<string, unknown> {
+  const port = parseInt(fields.port, 10) || 0
+  switch (protocol) {
+    case 'vless':
+      return { vnext: [{ address: fields.address, port, users: [{ id: fields.secret, encryption: 'none' }] }] }
+    case 'vmess':
+      return { vnext: [{ address: fields.address, port, users: [{ id: fields.secret, alterId: 0 }] }] }
+    case 'trojan':
+      return { servers: [{ address: fields.address, port, password: fields.secret }] }
+    case 'shadowsocks':
+      return { servers: [{ address: fields.address, port, password: fields.secret, method: 'aes-256-gcm' }] }
+    case 'socks':
+    case 'http':
+      return { servers: [{ address: fields.address, port }] }
+    default:
+      return {}
+  }
+}
+
+// OutboundsEditor edits config.outbounds the same way RoutingEditor edits
+// config.routing.rules - reads/writes the same raw configText string.
+function OutboundsEditor({
+  configText,
+  setConfigText,
+  t,
+}: {
+  configText: string
+  setConfigText: (text: string) => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const config = parseConfig(configText)
+  const outbounds = Array.isArray(config.outbounds) ? (config.outbounds as OutboundEntry[]) : []
+
+  function commit(next: OutboundEntry[]) {
+    setConfigText(JSON.stringify({ ...config, outbounds: next }, null, 2))
+  }
+  function addOutbound() {
+    commit([...outbounds, { tag: `outbound-${outbounds.length + 1}`, protocol: 'freedom', settings: {} }])
+  }
+  function updateOutbound(i: number, patch: Partial<OutboundEntry>) {
+    commit(outbounds.map((o, idx) => (idx === i ? { ...o, ...patch } : o)))
+  }
+  function removeOutbound(i: number) {
+    commit(outbounds.filter((_, idx) => idx !== i))
+  }
+  function moveOutbound(i: number, dir: -1 | 1) {
+    const j = i + dir
+    if (j < 0 || j >= outbounds.length) return
+    const next = [...outbounds]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    commit(next)
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
+      <div className="mb-1 flex items-center justify-between">
+        <div className="text-xs font-bold text-slate-300">{t.coresPage.outboundsTitle}</div>
+        <button type="button" onClick={addOutbound} className="text-xs font-bold" style={{ color: ACCENT }}>
+          {t.coresPage.addOutboundBtn}
+        </button>
+      </div>
+      <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.outboundsHint}</div>
+      {outbounds.length === 0 && <div className="text-xs text-slate-500">{t.coresPage.noOutboundsYet}</div>}
+      <div className="flex flex-col gap-2">
+        {outbounds.map((o, i) => {
+          const needsServer = o.protocol !== 'freedom' && o.protocol !== 'blackhole'
+          const fields = outboundServerFields(o.protocol, o.settings ?? {})
+          return (
+            <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 p-2">
+              <div>
+                <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundTagLabel}</label>
+                <input
+                  dir="ltr"
+                  value={o.tag ?? ''}
+                  onChange={(e) => updateOutbound(i, { tag: e.target.value })}
+                  className={`${inputClass} w-32 text-left`}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundProtocolLabel}</label>
+                <select
+                  dir="ltr"
+                  value={o.protocol ?? 'freedom'}
+                  onChange={(e) => updateOutbound(i, { protocol: e.target.value, settings: {} })}
+                  className={inputClass}
+                >
+                  {OUTBOUND_PROTOCOLS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {needsServer && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundAddressLabel}</label>
+                    <input
+                      dir="ltr"
+                      value={fields.address}
+                      onChange={(e) =>
+                        updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, address: e.target.value }) })
+                      }
+                      className={`${inputClass} w-40 text-left`}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundPortLabel}</label>
+                    <input
+                      dir="ltr"
+                      type="number"
+                      value={fields.port}
+                      onChange={(e) =>
+                        updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, port: e.target.value }) })
+                      }
+                      className={`${inputClass} w-20 text-left`}
+                    />
+                  </div>
+                  {(o.protocol === 'vless' || o.protocol === 'vmess' || o.protocol === 'trojan' || o.protocol === 'shadowsocks') && (
+                    <div>
+                      <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundSecretLabel}</label>
+                      <input
+                        dir="ltr"
+                        value={fields.secret}
+                        onChange={(e) =>
+                          updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, secret: e.target.value }) })
+                        }
+                        className={`${inputClass} w-40 text-left font-mono`}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => moveOutbound(i, -1)} className="text-xs text-slate-400 hover:text-slate-200">
+                  ↑
+                </button>
+                <button type="button" onClick={() => moveOutbound(i, 1)} className="text-xs text-slate-400 hover:text-slate-200">
+                  ↓
+                </button>
+                <button type="button" onClick={() => removeOutbound(i)} className="text-xs text-red-400 hover:underline">
+                  {t.common.delete}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// DnsLogEditor edits config.dns.servers and config.log.loglevel - the two
+// general settings actually worth exposing (everything else the builder
+// already defaults sensibly, see app/xray_config/builder.py).
+function DnsLogEditor({
+  configText,
+  setConfigText,
+  t,
+}: {
+  configText: string
+  setConfigText: (text: string) => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const config = parseConfig(configText)
+  const dns = (config.dns as { servers?: string[] } | undefined) ?? {}
+  const log = (config.log as { loglevel?: string } | undefined) ?? {}
+  const dnsServers = Array.isArray(dns.servers) ? dns.servers : []
+
+  function patch(next: Record<string, unknown>) {
+    setConfigText(JSON.stringify({ ...config, ...next }, null, 2))
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
+      <div className="mb-3 text-xs font-bold text-slate-300">{t.coresPage.generalSettingsTitle}</div>
+      <div className="flex flex-wrap gap-3">
+        <div>
+          <label className={labelClass}>{t.coresPage.dnsServersLabel}</label>
+          <input
+            dir="ltr"
+            value={dnsServers.join(', ')}
+            onChange={(e) => patch({ dns: { ...dns, servers: csvToList(e.target.value) } })}
+            placeholder="1.1.1.1, 8.8.8.8"
+            className={`${inputClass} w-64 text-left`}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>{t.coresPage.logLevelLabel}</label>
+          <select
+            dir="ltr"
+            value={log.loglevel ?? 'warning'}
+            onChange={(e) => patch({ log: { ...log, loglevel: e.target.value } })}
+            className={inputClass}
+          >
+            {['debug', 'info', 'warning', 'error', 'none'].map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// NodeAssignmentEditor is how "which node runs this core" actually gets
+// set now — moved here from the Node form (which only owned repeating a
+// core_id/ipsec_core_id dropdown) so the core/node relationship lives in
+// exactly one place instead of two forms that could disagree.
+function NodeAssignmentEditor({
+  core,
+  nodes,
+  onChanged,
+  t,
+}: {
+  core: Core
+  nodes: Node[]
+  onChanged: () => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [egressDrafts, setEgressDrafts] = useState<Record<number, string>>({})
+  const isIpsec = core.core_type === 'l2tp' || core.core_type === 'ikev2'
+
+  async function toggle(node: Node, assign: boolean) {
+    setBusyId(node.id)
+    try {
+      if (isIpsec) await updateNode(node.id, { ipsec_core_id: assign ? core.id : null })
+      else await updateNode(node.id, { core_id: assign ? core.id : null })
+      onChanged()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function saveEgress(node: Node) {
+    const value = egressDrafts[node.id] ?? node.l2tp_egress_vless ?? ''
+    setBusyId(node.id)
+    try {
+      await updateNode(node.id, { l2tp_egress_vless: value || null })
+      onChanged()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="mt-3 border-t border-white/5 pt-3">
+      <div className="mb-2 text-xs font-bold text-slate-300">{t.coresPage.assignedNodesTitle}</div>
+      {nodes.length === 0 && <div className="text-xs text-slate-500">{t.nodesPage.noNodesYet}</div>}
+      <div className="flex flex-col gap-1.5">
+        {nodes.map((n) => {
+          const assignedHere = isIpsec ? n.ipsec_core_id === core.id : n.core_id === core.id
+          const assignedElsewhere = !assignedHere && (isIpsec ? n.ipsec_core_id != null : n.core_id != null)
+          return (
+            <div key={n.id} className="rounded-lg border border-white/10 p-2">
+              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={assignedHere}
+                    disabled={busyId === n.id}
+                    onChange={(e) => toggle(n, e.target.checked)}
+                  />
+                  <span className="text-slate-200">{n.name}</span>
+                  <span dir="ltr" className="font-mono text-[10px] text-slate-500">
+                    {n.address}
+                  </span>
+                </span>
+                {assignedElsewhere && <span className="text-[10px] text-amber-400">{t.coresPage.assignedElsewhere}</span>}
+              </label>
+              {core.core_type === 'l2tp' && assignedHere && (
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] text-slate-500" title={t.nodesPage.l2tpEgressHint}>
+                    {t.nodesPage.l2tpEgressLabel}
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      dir="ltr"
+                      value={egressDrafts[n.id] ?? n.l2tp_egress_vless ?? ''}
+                      onChange={(e) => setEgressDrafts((d) => ({ ...d, [n.id]: e.target.value }))}
+                      placeholder="vless://..."
+                      className={`${inputClass} flex-1 text-left font-mono text-[11px]`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => saveEgress(n)}
+                      disabled={busyId === n.id}
+                      className="rounded-lg px-2.5 text-xs font-bold disabled:opacity-60"
+                      style={{ color: ACCENT }}
+                    >
+                      {t.common.save}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function CoresPage() {
   const { t } = useLang()
   const protocolLabels = t.coresPage.protocolLabels
   const [cores, setCores] = useState<Core[] | null>(null)
+  const [nodes, setNodes] = useState<Node[]>([])
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -188,8 +663,19 @@ export default function CoresPage() {
     }
   }
 
+  async function refreshNodes() {
+    try {
+      const res = await listNodes()
+      setNodes(res.nodes)
+    } catch {
+      // The node-assignment list is a convenience next to each core; a
+      // failed fetch here shouldn't block the rest of the Cores page.
+    }
+  }
+
   useEffect(() => {
     refresh()
+    refreshNodes()
   }, [])
 
   function resetForm() {
@@ -686,6 +1172,7 @@ export default function CoresPage() {
             </div>
 
             {form.coreType === 'xray' && (
+            <>
             <div className="mt-3">
               <div className="mb-1.5 flex items-center justify-between">
                 <label className={labelClass}>{t.coresPage.configLabel}</label>
@@ -717,6 +1204,23 @@ export default function CoresPage() {
                 className={monoTextarea}
               />
             </div>
+
+            <RoutingEditor
+              configText={form.configText}
+              setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))}
+              t={t}
+            />
+            <OutboundsEditor
+              configText={form.configText}
+              setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))}
+              t={t}
+            />
+            <DnsLogEditor
+              configText={form.configText}
+              setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))}
+              t={t}
+            />
+            </>
             )}
 
             {form.coreType === 'wireguard' && (
@@ -962,6 +1466,18 @@ export default function CoresPage() {
                 </table>
               </div>
             ) : null}
+
+            {(c.core_type === 'xray' || c.core_type === 'l2tp' || c.core_type === 'ikev2') && (
+              <NodeAssignmentEditor
+                core={c}
+                nodes={nodes}
+                onChanged={() => {
+                  refreshNodes()
+                  refresh()
+                }}
+                t={t}
+              />
+            )}
           </div>
         ))}
       </div>

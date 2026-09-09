@@ -3,6 +3,14 @@ import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
 import SystemStatsBar from '../components/SystemStats'
 import { useLang } from '../i18n/LangContext'
+
+function MenuIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <path d="M3 6h18M3 12h18M3 18h18" />
+    </svg>
+  )
+}
 import CoresPage from './Cores'
 import GroupsPage from './Groups'
 import HostsPage from './Hosts'
@@ -19,6 +27,7 @@ type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' |
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { lang, setLang, t, dir } = useLang()
   const [active, setActive] = useState<ActiveTab>('overview')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const navItems: { id: ActiveTab; label: string }[] = [
     { id: 'overview', label: t.nav.dashboard },
@@ -31,9 +40,43 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
     { id: 'settings', label: t.nav.settings },
   ]
 
+  function selectTab(id: ActiveTab) {
+    setActive(id)
+    setSidebarOpen(false)
+  }
+
+  const sideEdge = dir === 'rtl' ? 'right-0 border-l' : 'left-0 border-r'
+  const closedTranslate = dir === 'rtl' ? 'translate-x-full' : '-translate-x-full'
+
   return (
     <div dir={dir} className="flex min-h-screen w-full bg-panel-950 font-body text-slate-100">
-      <aside className={`flex w-60 flex-shrink-0 flex-col bg-slate-950/60 px-4 py-6 ${dir === 'rtl' ? 'border-l' : 'border-r'} border-white/10`}>
+      {/* Mobile top bar — the fixed w-60 sidebar below doesn't fit next to real
+          content on a phone-width screen, so under lg it's an off-canvas
+          drawer instead, opened from here. */}
+      <div className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-white/10 bg-panel-950/95 px-4 py-3 backdrop-blur lg:hidden">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          aria-label={t.nav.menu}
+          className="rounded-lg border border-white/10 p-2 text-slate-300"
+        >
+          <MenuIcon />
+        </button>
+        <div className="flex items-center gap-2">
+          <Logo accent={ACCENT} size={26} glow={false} />
+          <span className="font-display text-xs font-bold tracking-[2px] text-slate-50">TIFUSI</span>
+        </div>
+        <div className="w-9" />
+      </div>
+
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 z-50 flex w-64 flex-shrink-0 flex-col bg-slate-950 px-4 py-6 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:translate-x-0 lg:bg-slate-950/60 ${sideEdge} border-white/10 ${
+          sidebarOpen ? 'translate-x-0' : closedTranslate
+        } lg:transition-none`}
+      >
         <div className="mb-8 flex items-center gap-2.5 px-2">
           <Logo accent={ACCENT} size={36} />
           <div>
@@ -44,11 +87,11 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActive(item.id)}
+              onClick={() => selectTab(item.id)}
               className={`rounded-lg px-3 py-2.5 text-sm transition-colors ${dir === 'rtl' ? 'text-right' : 'text-left'} ${
                 active === item.id ? 'bg-cyan-400/10 text-cyan-300' : 'text-slate-300 hover:bg-white/5'
               }`}
@@ -81,9 +124,11 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         </button>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="mb-6 flex items-center justify-between">
-          <SystemStatsBar />
+      <main className="w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pt-20 lg:p-8 lg:pt-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="max-w-full overflow-x-auto">
+            <SystemStatsBar />
+          </div>
           <LiveClock />
         </div>
         {active === 'overview' && <OverviewPage />}
