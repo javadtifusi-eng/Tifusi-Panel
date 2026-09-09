@@ -7,12 +7,14 @@ import {
   getTunnelConfig,
   listNodes,
   listTunnels,
+  recommendTunnelTransport,
   testTunnel,
   updateTunnel,
   type Node,
   type Tunnel,
   type TunnelConfig,
   type TunnelForward,
+  type TunnelRecommendResult,
   type TunnelStatus,
   type TunnelTestResult,
   type TunnelTransport,
@@ -57,6 +59,8 @@ export default function TunnelsPage() {
   const [configId, setConfigId] = useState<number | null>(null)
   const [configData, setConfigData] = useState<TunnelConfig | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [recommending, setRecommending] = useState(false)
+  const [recommendResult, setRecommendResult] = useState<TunnelRecommendResult | null>(null)
 
   const [name, setName] = useState('')
   const [iranAddress, setIranAddress] = useState('')
@@ -104,6 +108,7 @@ export default function TunnelsPage() {
     setConnectionCount('8')
     setForwards([])
     setShowForm(false)
+    setRecommendResult(null)
   }
 
   function startEdit(tunnel: Tunnel) {
@@ -157,6 +162,33 @@ export default function TunnelsPage() {
       setError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleRecommend() {
+    if (!iranAddress) {
+      setError(t.tunnelsPage.recommendNeedsIran)
+      return
+    }
+    if (!foreignSource || (foreignSource === 'node' && foreignNodeId == null) || (foreignSource === 'address' && !foreignAddress)) {
+      setError(t.tunnelsPage.noNeedForeign)
+      return
+    }
+    setRecommending(true)
+    setError(null)
+    try {
+      const result = await recommendTunnelTransport({
+        iran_address: iranAddress,
+        iran_port: parseInt(iranPort, 10) || 8443,
+        foreign_node_id: foreignSource === 'node' ? foreignNodeId : null,
+        foreign_address: foreignSource === 'address' ? foreignAddress : null,
+      })
+      setRecommendResult(result)
+      if (result.ranked.length > 0) setTransport(result.ranked[0].transport)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setRecommending(false)
     }
   }
 
@@ -315,9 +347,55 @@ export default function TunnelsPage() {
           </div>
 
           <div>
-            <label className={labelClass} title={t.tunnelsPage.transportHint}>
-              {t.tunnelsPage.transportLabel}
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-xs text-slate-400" title={t.tunnelsPage.transportHint}>
+                {t.tunnelsPage.transportLabel}
+              </label>
+              <button
+                type="button"
+                onClick={handleRecommend}
+                disabled={recommending}
+                className="text-xs font-bold disabled:opacity-60"
+                style={{ color: ACCENT }}
+              >
+                {recommending ? t.tunnelsPage.recommending : t.tunnelsPage.recommendBtn}
+              </button>
+            </div>
+            {recommendResult && (
+              <div className="mb-2 flex flex-col gap-1 rounded-lg border border-white/10 bg-black/20 p-2 text-[11px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">{t.tunnelsPage.testResultIran}</span>
+                  <span className={recommendResult.iran_reachable ? 'text-emerald-300' : 'text-red-400'}>
+                    {recommendResult.iran_reachable
+                      ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.iran_latency_ms ?? 0)}ms)`
+                      : t.tunnelsPage.unreachable}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">{t.tunnelsPage.testResultForeign}</span>
+                  <span className={recommendResult.foreign_reachable ? 'text-emerald-300' : 'text-red-400'}>
+                    {recommendResult.foreign_reachable
+                      ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.foreign_latency_ms ?? 0)}ms)`
+                      : t.tunnelsPage.unreachable}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {recommendResult.ranked.map((r, i) => (
+                    <button
+                      key={r.transport}
+                      type="button"
+                      onClick={() => setTransport(r.transport)}
+                      className={`rounded-md border px-2 py-1 text-[10.5px] font-bold ${
+                        transport === r.transport ? 'border-cyan-400/60 bg-cyan-400/10 text-cyan-300' : 'border-white/15 text-slate-400'
+                      }`}
+                    >
+                      {i === 0 ? '★ ' : ''}
+                      {t.tunnelsPage.transportLabels[r.transport]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {TRANSPORTS.map((tr) => (
                 <button
@@ -558,20 +636,38 @@ export default function TunnelsPage() {
                   </div>
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500">{t.tunnelsPage.installCommandLabel}</span>
+                      <span className="text-[10px] text-slate-500">{t.tunnelsPage.iranInstallCommandLabel}</span>
                       <button
-                        onClick={() => copy(configData.install_command)}
+                        onClick={() => copy(configData.iran_install_command)}
                         className="text-[10px] font-bold"
                         style={{ color: ACCENT }}
                       >
-                        {copied === configData.install_command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
+                        {copied === configData.iran_install_command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
                       </button>
                     </div>
                     <pre
                       dir="ltr"
                       className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-cyan-200"
                     >
-                      {configData.install_command}
+                      {configData.iran_install_command}
+                    </pre>
+                  </div>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500">{t.tunnelsPage.foreignInstallCommandLabel}</span>
+                      <button
+                        onClick={() => copy(configData.foreign_install_command)}
+                        className="text-[10px] font-bold"
+                        style={{ color: ACCENT }}
+                      >
+                        {copied === configData.foreign_install_command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
+                      </button>
+                    </div>
+                    <pre
+                      dir="ltr"
+                      className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-cyan-200"
+                    >
+                      {configData.foreign_install_command}
                     </pre>
                   </div>
                 </div>

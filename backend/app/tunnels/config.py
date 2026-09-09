@@ -1,10 +1,18 @@
 """Builds the literal config.json content each side of a Tunnel needs —
 matches backend/tunnel_agent's own documented shape exactly (see its
 README), since the panel never talks to that binary as a managed agent;
-it only hands the admin correct config to paste in by hand.
+it only hands the admin a correct, ready-to-run install command per side.
 """
 
+import base64
+import json
+
 from app.models.tunnel import Tunnel, TunnelTransport
+
+_INSTALL_RAW_URL = (
+    "https://raw.githubusercontent.com/javadtifusi-eng/"
+    "Tifusi-Panel/main/backend/tunnel_agent/install.sh"
+)
 
 _MUX_TRANSPORTS = {TunnelTransport.tcpmux, TunnelTransport.wsmux, TunnelTransport.wssmux}
 
@@ -50,3 +58,14 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
     else:
         config["pool"] = tunnel.connection_count
     return config
+
+
+def build_install_command(config: dict) -> str:
+    """A single, non-interactive install command for one side of the
+    tunnel: install.sh reads its config from this base64 blob (see its
+    unattended_install()) instead of dropping into its interactive menu,
+    so the admin pastes this once on the right server and nothing else -
+    no terminal prompts, no picking transport/token/SNI by hand again.
+    """
+    encoded = base64.b64encode(json.dumps(config).encode()).decode()
+    return f"bash <(curl -fsSL {_INSTALL_RAW_URL}) -- {encoded}"

@@ -422,7 +422,21 @@ export interface TunnelTestResult {
 export interface TunnelConfig {
   iran_config: Record<string, unknown>
   foreign_config: Record<string, unknown>
-  install_command: string
+  iran_install_command: string
+  foreign_install_command: string
+}
+
+export interface TunnelRankedTransport {
+  transport: TunnelTransport
+  reason: string
+}
+
+export interface TunnelRecommendResult {
+  iran_reachable: boolean
+  iran_latency_ms: number | null
+  foreign_reachable: boolean
+  foreign_latency_ms: number | null
+  ranked: TunnelRankedTransport[]
 }
 
 export type TunnelPayload = {
@@ -465,6 +479,16 @@ export async function getTunnelConfig(id: number): Promise<TunnelConfig> {
 
 export async function testTunnel(id: number): Promise<TunnelTestResult> {
   const res = await authorizedFetch(`/tunnels/${id}/test`, { method: 'POST' })
+  return res.json()
+}
+
+export async function recommendTunnelTransport(payload: {
+  iran_address: string
+  iran_port: number
+  foreign_node_id?: number | null
+  foreign_address?: string | null
+}): Promise<TunnelRecommendResult> {
+  const res = await authorizedFetch('/tunnels/recommend', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }
 

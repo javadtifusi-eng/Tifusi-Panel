@@ -80,11 +80,33 @@ class TunnelTestResult(BaseModel):
 
 
 class TunnelConfig(BaseModel):
-    """The literal config.json content for each side — copy-paste onto
-    /etc/tifusi/config.json before running the (still-interactive)
-    installer, so the admin isn't retyping the token/transport/forwards
-    by hand into the bash menu."""
+    """The literal config.json content for each side, plus one ready-to-run
+    install command per side — each command carries its own config baked
+    in (see app.tunnels.config.build_install_command), so pasting it on the
+    right server installs and starts the tunnel with no interactive menu
+    and no retyping the token/transport/forwards by hand."""
 
     iran_config: dict
     foreign_config: dict
-    install_command: str
+    iran_install_command: str
+    foreign_install_command: str
+
+
+class TunnelRecommendRequest(BaseModel):
+    iran_address: str = Field(min_length=1, max_length=255)
+    iran_port: int = Field(default=8443, ge=1, le=65535)
+    foreign_node_id: int | None = None
+    foreign_address: str | None = Field(default=None, max_length=255)
+
+
+class RankedTransport(BaseModel):
+    transport: TunnelTransport
+    reason: str
+
+
+class TunnelRecommendResult(BaseModel):
+    iran_reachable: bool
+    iran_latency_ms: float | None
+    foreign_reachable: bool
+    foreign_latency_ms: float | None
+    ranked: list[RankedTransport]
