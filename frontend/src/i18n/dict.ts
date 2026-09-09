@@ -462,6 +462,11 @@ export const dict = {
       sending: 'در حال ارسال…',
       sent: 'ارسال شد ✓',
       testTelegramFailed: 'ارسال پیام تستی با خطا مواجه شد',
+      webhookTitle: 'وبهوک',
+      webhookDesc: 'برای وصل کردن پنل به بات یا سیستم خودت — با هر رویداد (کاربر ساخته/منقضی/محدود شد، نود قطع/وصل شد) یه POST با JSON به این آدرس فرستاده می‌شه. کلید مخفی هم تو هدر X-Webhook-Secret فرستاده می‌شه تا مطمئن بشی درخواست واقعاً از این پنله.',
+      webhookUrlLabel: 'آدرس وبهوک',
+      webhookSecretLabel: 'کلید مخفی (اختیاری)',
+      testWebhookFailed: 'ارسال وبهوک تستی با خطا مواجه شد',
       backupTitle: 'بک‌آپ و بازیابی',
       backupDesc:
         'یه نسخه از کل دیتابیس پنل (کاربرها، هاست‌ها، نودها، تنظیمات) دانلود کن، یا از یه بک‌آپ قبلی بازیابی کن. بازیابی همه‌چیزِ فعلی رو با محتوای فایل جایگزین می‌کنه — برگشت‌ناپذیره.',
@@ -995,6 +1000,11 @@ export const dict = {
       sending: 'Sending…',
       sent: 'Sent ✓',
       testTelegramFailed: 'Sending the test message failed',
+      webhookTitle: 'Webhook',
+      webhookDesc: 'Connect the panel to your own bot or system — on every event (user created/expired/limited, node disconnected/reconnected) a JSON POST is sent to this URL. The secret is sent in the X-Webhook-Secret header so you can verify a request really came from this panel.',
+      webhookUrlLabel: 'Webhook URL',
+      webhookSecretLabel: 'Secret (optional)',
+      testWebhookFailed: 'Sending the test webhook failed',
       backupTitle: 'Backup & Restore',
       backupDesc:
         "Download a copy of the panel's whole database (users, hosts, nodes, settings), or restore from a previous backup. Restoring replaces everything currently there with the file's contents — this can't be undone.",

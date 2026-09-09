@@ -17,6 +17,7 @@ import {
   removeTls,
   restoreBackup,
   testTelegram,
+  testWebhook,
   updateAdminPermissions,
   updateSettings,
   uploadTls,
@@ -92,6 +93,14 @@ export default function SettingsPage() {
   const [telegramTestOk, setTelegramTestOk] = useState(false)
   const [telegramError, setTelegramError] = useState<string | null>(null)
 
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookSecret, setWebhookSecret] = useState('')
+  const [webhookSaving, setWebhookSaving] = useState(false)
+  const [webhookSaved, setWebhookSaved] = useState(false)
+  const [webhookTesting, setWebhookTesting] = useState(false)
+  const [webhookTestOk, setWebhookTestOk] = useState(false)
+  const [webhookError, setWebhookError] = useState<string | null>(null)
+
   async function refreshAdmins() {
     try {
       const res = await listAdmins()
@@ -111,6 +120,8 @@ export default function SettingsPage() {
         setPublicUrl(s.public_url ?? '')
         setBotToken(s.telegram_bot_token ?? '')
         setChatId(s.telegram_chat_id ?? '')
+        setWebhookUrl(s.webhook_url ?? '')
+        setWebhookSecret(s.webhook_secret ?? '')
       })
       .catch(() => undefined)
     getTlsStatus()
@@ -366,6 +377,43 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveWebhook(e: FormEvent) {
+    e.preventDefault()
+    setWebhookSaving(true)
+    setWebhookError(null)
+    setWebhookSaved(false)
+    setWebhookTestOk(false)
+    try {
+      const res = await updateSettings({
+        webhook_url: webhookUrl.trim() || null,
+        webhook_secret: webhookSecret.trim() || null,
+      })
+      setWebhookUrl(res.webhook_url ?? '')
+      setWebhookSecret(res.webhook_secret ?? '')
+      setWebhookSaved(true)
+      window.setTimeout(() => setWebhookSaved(false), 2000)
+    } catch (err) {
+      setWebhookError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setWebhookSaving(false)
+    }
+  }
+
+  async function handleTestWebhook() {
+    setWebhookTesting(true)
+    setWebhookError(null)
+    setWebhookTestOk(false)
+    try {
+      await testWebhook()
+      setWebhookTestOk(true)
+      window.setTimeout(() => setWebhookTestOk(false), 3000)
+    } catch (err) {
+      setWebhookError(err instanceof ApiError ? err.message : t.settingsPage.testWebhookFailed)
+    } finally {
+      setWebhookTesting(false)
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -562,6 +610,45 @@ export default function SettingsPage() {
             </button>
           </div>
           {telegramError && <div className="mt-3 text-xs text-red-400">{telegramError}</div>}
+        </form>
+
+        <form onSubmit={handleSaveWebhook} className={cardClass}>
+          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.webhookTitle}</h2>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.webhookDesc}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1" style={{ minWidth: 240 }}>
+              <label className={labelClass}>{t.settingsPage.webhookUrlLabel}</label>
+              <input
+                dir="ltr"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://example.com/hook"
+                className={`${inputClass} w-full text-left`}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t.settingsPage.webhookSecretLabel}</label>
+              <input
+                dir="ltr"
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+                className={`${inputClass} w-48 text-left font-mono text-xs`}
+              />
+            </div>
+            <button type="submit" disabled={webhookSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {webhookSaving ? t.common.saving : webhookSaved ? t.common.saved : t.common.save}
+            </button>
+            <button
+              type="button"
+              onClick={handleTestWebhook}
+              disabled={webhookTesting}
+              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
+              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+            >
+              {webhookTesting ? t.settingsPage.sending : webhookTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
+            </button>
+          </div>
+          {webhookError && <div className="mt-3 text-xs text-red-400">{webhookError}</div>}
         </form>
 
         <div className={cardClass}>

@@ -8,6 +8,7 @@ from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser, UserStatus
 from app.nodes.sync import check_all_node_health, resync_connected_nodes
 from app.notifications.telegram import send_telegram_message
+from app.notifications.webhook import send_webhook_event
 
 
 async def _fetch_node_stats(node: Node) -> dict[str, dict[str, int]]:
@@ -65,20 +66,27 @@ async def enforce_limits(db: AsyncSession) -> bool:
 
     changed = False
     notifications: list[str] = []
+    events: list[tuple[str, dict]] = []
     for user in users:
         if user.expire is not None and _as_utc(user.expire) <= now:
             user.status = UserStatus.expired
             changed = True
             notifications.append(f"⏰ کاربر «{user.username}» منقضی شد.")
+            events.append(("user_expired", {"username": user.username, "expire": user.expire.isoformat()}))
         elif user.data_limit and user.used_traffic >= user.data_limit:
             user.status = UserStatus.limited
             changed = True
             notifications.append(f"📊 کاربر «{user.username}» به سقف حجم مصرفی‌اش رسید.")
+            events.append(
+                ("user_limited", {"username": user.username, "data_limit": user.data_limit, "used_traffic": user.used_traffic})
+            )
 
     if changed:
         await db.commit()
         for text in notifications:
             await send_telegram_message(db, text)
+        for event, payload in events:
+            await send_webhook_event(db, event, payload)
     return changed
 
 

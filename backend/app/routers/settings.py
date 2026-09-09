@@ -8,6 +8,7 @@ from app.config import settings as env_settings
 from app.database import engine, get_db
 from app.dependencies import require_permission
 from app.notifications.telegram import send_telegram_message
+from app.notifications.webhook import send_webhook_event
 from app.schemas.settings import PanelSettingsResponse, PanelSettingsUpdate
 from app.settings_store import get_settings_row
 
@@ -57,6 +58,17 @@ async def test_telegram(db: AsyncSession = Depends(get_db)) -> None:
     ok = await send_telegram_message(db, "✅ این یه پیام تستی از پنل Tifusi هست.")
     if not ok:
         raise HTTPException(status_code=502, detail="Failed to reach Telegram — check the token and chat ID")
+
+
+@router.post("/webhook/test", status_code=204)
+async def test_webhook(db: AsyncSession = Depends(get_db)) -> None:
+    row = await get_settings_row(db)
+    if not row.webhook_url:
+        raise HTTPException(status_code=400, detail="Set a webhook URL first")
+
+    ok = await send_webhook_event(db, "test", {"message": "This is a test webhook from Tifusi Panel."})
+    if not ok:
+        raise HTTPException(status_code=502, detail="Failed to reach the webhook URL")
 
 
 @router.get("/backup")

@@ -8,6 +8,7 @@ from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_links_for_user, render_remark
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser
+from app.notifications.webhook import send_webhook_event
 from app.schemas.user import (
     BulkCreateRequest,
     BulkCreateResult,
@@ -60,6 +61,7 @@ async def create_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    await send_webhook_event(db, "user_created", {"username": user.username, "id": user.id})
     return user
 
 
@@ -97,6 +99,8 @@ async def bulk_create_users(
     await db.commit()
     for user in created:
         await db.refresh(user)
+    for user in created:
+        await send_webhook_event(db, "user_created", {"username": user.username, "id": user.id})
     return BulkCreateResult(created=created, skipped=skipped)
 
 
