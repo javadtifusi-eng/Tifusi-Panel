@@ -13,6 +13,16 @@
   color-scheme: dark;
 }
 
+/* color-scheme isn't enough everywhere — some mobile browsers/WebViews
+   still pop a <select>'s option list in their light default regardless.
+   Setting the colors directly on select/option is honored much more
+   consistently, so it stays as a second line of defense. */
+select,
+option {
+  background-color: #020617;
+  color: #f1f5f9;
+}
+
 body {
   margin: 0;
 }
