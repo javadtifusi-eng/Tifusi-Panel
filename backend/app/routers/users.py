@@ -8,7 +8,18 @@ from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_links_for_user, render_remark
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser
-from app.schemas.user import ProxyUserCreate, ProxyUserList, ProxyUserResponse, ProxyUserUpdate
+from app.schemas.user import (
+    BulkCreateRequest,
+    BulkCreateResult,
+    BulkDeleteRequest,
+    BulkDeleteResult,
+    BulkUpdateRequest,
+    BulkUpdateResult,
+    ProxyUserCreate,
+    ProxyUserList,
+    ProxyUserResponse,
+    ProxyUserUpdate,
+)
 from app.settings_store import get_public_url
 
 router = APIRouter(
@@ -50,6 +61,83 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.post("/bulk-create", response_model=BulkCreateResult, status_code=201)
+async def bulk_create_users(
+    payload: BulkCreateRequest, db: AsyncSession = Depends(get_db)
+) -> BulkCreateResult:
+    groups = await resolve_groups(payload.group_ids, db) or []
+    existing = set(
+        (
+            await db.scalars(
+                select(ProxyUser.username).where(ProxyUser.username.in_(payload.usernames))
+            )
+        ).all()
+    )
+
+    created: list[ProxyUser] = []
+    skipped: list[str] = []
+    seen: set[str] = set()
+    for username in payload.usernames:
+        if username in existing or username in seen:
+            skipped.append(username)
+            continue
+        seen.add(username)
+        user = ProxyUser(
+            username=username,
+            data_limit=payload.data_limit,
+            expire=payload.expire,
+            note=payload.note,
+        )
+        user.groups = list(groups)
+        db.add(user)
+        created.append(user)
+
+    await db.commit()
+    for user in created:
+        await db.refresh(user)
+    return BulkCreateResult(created=created, skipped=skipped)
+
+
+@router.post("/bulk-update", response_model=BulkUpdateResult)
+async def bulk_update_users(
+    payload: BulkUpdateRequest, db: AsyncSession = Depends(get_db)
+) -> BulkUpdateResult:
+    users = list(
+        (await db.execute(select(ProxyUser).where(ProxyUser.id.in_(payload.user_ids)))).scalars().all()
+    )
+    field_updates = payload.model_dump(
+        exclude_unset=True, exclude={"user_ids", "add_group_ids", "remove_group_ids"}
+    )
+    add_groups = await resolve_groups(payload.add_group_ids, db) or []
+    remove_ids = set(payload.remove_group_ids)
+
+    for user in users:
+        for field, value in field_updates.items():
+            setattr(user, field, value)
+        if add_groups:
+            current_ids = {g.id for g in user.groups}
+            user.groups = user.groups + [g for g in add_groups if g.id not in current_ids]
+        if remove_ids:
+            user.groups = [g for g in user.groups if g.id not in remove_ids]
+        db.add(user)
+
+    await db.commit()
+    return BulkUpdateResult(updated=len(users))
+
+
+@router.post("/bulk-delete", response_model=BulkDeleteResult)
+async def bulk_delete_users(
+    payload: BulkDeleteRequest, db: AsyncSession = Depends(get_db)
+) -> BulkDeleteResult:
+    users = list(
+        (await db.execute(select(ProxyUser).where(ProxyUser.id.in_(payload.user_ids)))).scalars().all()
+    )
+    for user in users:
+        await db.delete(user)
+    await db.commit()
+    return BulkDeleteResult(deleted=len(users))
 
 
 async def _get_user_or_404(user_id: int, db: AsyncSession) -> ProxyUser:

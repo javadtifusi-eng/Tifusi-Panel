@@ -119,6 +119,43 @@ export async function createUser(payload: {
   return res.json()
 }
 
+export interface BulkCreateResult {
+  created: ProxyUser[]
+  skipped: string[]
+}
+
+export async function bulkCreateUsers(payload: {
+  usernames: string[]
+  data_limit?: number | null
+  expire?: string | null
+  note?: string | null
+  group_ids?: number[]
+}): Promise<BulkCreateResult> {
+  const res = await authorizedFetch('/users/bulk-create', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function bulkUpdateUsers(payload: {
+  user_ids: number[]
+  status?: UserStatus
+  data_limit?: number | null
+  expire?: string | null
+  note?: string | null
+  add_group_ids?: number[]
+  remove_group_ids?: number[]
+}): Promise<{ updated: number }> {
+  const res = await authorizedFetch('/users/bulk-update', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function bulkDeleteUsers(userIds: number[]): Promise<{ deleted: number }> {
+  const res = await authorizedFetch('/users/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ user_ids: userIds }),
+  })
+  return res.json()
+}
+
 export async function updateUser(
   id: number,
   payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'note' | 'group_ids'>>,
