@@ -725,6 +725,37 @@ export async function deleteAdminAccount(id: number): Promise<void> {
   await authorizedFetch(`/admin/${id}`, { method: 'DELETE' })
 }
 
+export interface ApiKeyListItem {
+  id: number
+  name: string
+  key_prefix: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface ApiKeyListResponse {
+  total: number
+  keys: ApiKeyListItem[]
+}
+
+export interface ApiKeyCreateResponse extends ApiKeyListItem {
+  key: string
+}
+
+export async function listApiKeys(): Promise<ApiKeyListResponse> {
+  const res = await authorizedFetch('/api-keys')
+  return res.json()
+}
+
+export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> {
+  const res = await authorizedFetch('/api-keys', { method: 'POST', body: JSON.stringify({ name }) })
+  return res.json()
+}
+
+export async function deleteApiKey(id: number): Promise<void> {
+  await authorizedFetch(`/api-keys/${id}`, { method: 'DELETE' })
+}
+
 export async function downloadBackup(): Promise<void> {
   const res = await authorizedFetch('/settings/backup')
   const blob = await res.blob()

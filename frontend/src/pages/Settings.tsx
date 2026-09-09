@@ -4,12 +4,15 @@ import {
   ApiError,
   changePassword,
   createAdminAccount,
+  createApiKey,
   deleteAdminAccount,
+  deleteApiKey,
   downloadBackup,
   getAdminProfile,
   getSettings,
   getTlsStatus,
   listAdmins,
+  listApiKeys,
   PERMISSION_SCOPES,
   removeTls,
   restoreBackup,
@@ -19,6 +22,8 @@ import {
   uploadTls,
   type AdminListItem,
   type AdminProfile,
+  type ApiKeyCreateResponse,
+  type ApiKeyListItem,
   type PermissionScope,
 } from '../lib/api'
 
@@ -72,6 +77,13 @@ export default function SettingsPage() {
   const [editingPermsSet, setEditingPermsSet] = useState<Set<PermissionScope>>(new Set())
   const [permsSaving, setPermsSaving] = useState(false)
 
+  const [apiKeys, setApiKeys] = useState<ApiKeyListItem[] | null>(null)
+  const [newKeyName, setNewKeyName] = useState('')
+  const [keyCreating, setKeyCreating] = useState(false)
+  const [keyError, setKeyError] = useState<string | null>(null)
+  const [justCreatedKey, setJustCreatedKey] = useState<ApiKeyCreateResponse | null>(null)
+  const [keyCopied, setKeyCopied] = useState(false)
+
   const [botToken, setBotToken] = useState('')
   const [chatId, setChatId] = useState('')
   const [telegramSaving, setTelegramSaving] = useState(false)
@@ -104,7 +116,18 @@ export default function SettingsPage() {
     getTlsStatus()
       .then((s) => setTlsEnabled(s.enabled))
       .catch(() => undefined)
+    refreshApiKeys()
   }, [])
+
+  async function refreshApiKeys() {
+    try {
+      const res = await listApiKeys()
+      setApiKeys(res.keys)
+    } catch {
+      // never expected to fail (every admin owns their own keys), but
+      // don't let it take the rest of the page down if it somehow does
+    }
+  }
 
   async function handleSaveUrl(e: FormEvent) {
     e.preventDefault()
@@ -279,6 +302,33 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleCreateApiKey(e: FormEvent) {
+    e.preventDefault()
+    setKeyCreating(true)
+    setKeyError(null)
+    try {
+      const res = await createApiKey(newKeyName)
+      setJustCreatedKey(res)
+      setNewKeyName('')
+      await refreshApiKeys()
+    } catch (err) {
+      setKeyError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setKeyCreating(false)
+    }
+  }
+
+  async function handleDeleteApiKey(key: ApiKeyListItem) {
+    if (!window.confirm(t.settingsPage.confirmDeleteApiKey(key.name))) return
+    try {
+      await deleteApiKey(key.id)
+      if (justCreatedKey?.id === key.id) setJustCreatedKey(null)
+      await refreshApiKeys()
+    } catch (err) {
+      setKeyError(err instanceof ApiError ? err.message : t.common.genericError)
+    }
+  }
+
   async function handleSaveTelegram(e: FormEvent) {
     e.preventDefault()
     setTelegramSaving(true)
@@ -398,6 +448,69 @@ export default function SettingsPage() {
             {pwSubmitting ? t.common.saving : pwSaved ? t.settingsPage.passwordChanged : t.settingsPage.changePasswordBtn}
           </button>
         </form>
+
+        <div className={cardClass}>
+          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.apiKeysTitle}</h2>
+          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.apiKeysDesc}</p>
+
+          <form onSubmit={handleCreateApiKey} className="mb-3 flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelClass}>{t.settingsPage.apiKeyNameLabel}</label>
+              <input
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                required
+                placeholder={t.settingsPage.apiKeyNamePlaceholder}
+                className={inputClass}
+              />
+            </div>
+            <button type="submit" disabled={keyCreating} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {keyCreating ? t.settingsPage.creating : t.settingsPage.newApiKeyBtn}
+            </button>
+          </form>
+          {keyError && <div className="mb-3 text-xs text-red-400">{keyError}</div>}
+
+          {justCreatedKey && (
+            <div className="mb-3 rounded-lg border border-cyan-400/30 bg-cyan-400/5 p-3">
+              <div className={`mb-1.5 text-xs text-slate-300 ${align}`}>{t.settingsPage.apiKeyShowOnceWarning}</div>
+              <div className="flex items-center gap-2">
+                <code dir="ltr" className="flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-black/40 px-2.5 py-1.5 text-left text-xs text-cyan-200">
+                  {justCreatedKey.key}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(justCreatedKey.key)
+                    setKeyCopied(true)
+                    window.setTimeout(() => setKeyCopied(false), 1500)
+                  }}
+                  className="flex-shrink-0 text-xs font-bold"
+                  style={{ color: ACCENT }}
+                >
+                  {keyCopied ? t.common.copiedCheck : t.settingsPage.copyKey}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            {apiKeys?.length === 0 && <div className="text-xs text-slate-500">{t.settingsPage.noApiKeysYet}</div>}
+            {apiKeys?.map((k) => (
+              <div key={k.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                <div>
+                  <div className="text-sm text-slate-100">{k.name}</div>
+                  <div dir="ltr" className="text-left font-mono text-[11px] text-slate-500">
+                    {k.key_prefix}…{' '}
+                    {k.last_used_at ? t.settingsPage.lastUsed(new Date(k.last_used_at).toLocaleDateString()) : t.settingsPage.neverUsed}
+                  </div>
+                </div>
+                <button onClick={() => handleDeleteApiKey(k)} className="text-xs text-red-400 hover:underline">
+                  {t.common.delete}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {canSettings && (
         <>

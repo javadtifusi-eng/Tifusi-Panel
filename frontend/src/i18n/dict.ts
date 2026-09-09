@@ -497,6 +497,18 @@ export const dict = {
       fullAccess: 'دسترسی کامل',
       noAccess: 'بدون دسترسی',
       editPermissions: 'ویرایش دسترسی',
+
+      apiKeysTitle: 'API Key ها',
+      apiKeysDesc: 'برای وصل‌کردن یه اسکریپت یا بات به REST API پنل، به‌جای لاگین معمولی. هر کلید دقیقاً همون دسترسی‌های خودِ حساب ادمینت رو داره — اگه دسترسی‌هات عوض بشه، کلید هم زنده به‌روز می‌شه.',
+      apiKeyNameLabel: 'اسم کلید',
+      apiKeyNamePlaceholder: 'مثلاً: بات تلگرام',
+      newApiKeyBtn: '+ ساخت کلید',
+      apiKeyShowOnceWarning: 'این کلید فقط همین یه بار کامل نشون داده می‌شه — همین الان کپیش کن.',
+      copyKey: 'کپی',
+      noApiKeysYet: 'هنوز کلیدی نساختی',
+      lastUsed: (date: string) => `آخرین استفاده: ${date}`,
+      neverUsed: 'هنوز استفاده نشده',
+      confirmDeleteApiKey: (name: string) => `کلید «${name}» حذف بشه؟ هر اسکریپتی که ازش استفاده می‌کنه از کار می‌افته.`,
     },
 
     userLinksModal: {
@@ -1006,6 +1018,18 @@ export const dict = {
       fullAccess: 'Full access',
       noAccess: 'No access',
       editPermissions: 'Edit permissions',
+
+      apiKeysTitle: 'API Keys',
+      apiKeysDesc: "For connecting a script or bot to the panel's REST API instead of logging in normally. Each key carries exactly your own admin account's permissions — if those change, the key updates live too.",
+      apiKeyNameLabel: 'Key name',
+      apiKeyNamePlaceholder: 'e.g. Telegram bot',
+      newApiKeyBtn: '+ Create key',
+      apiKeyShowOnceWarning: "This key is shown in full only this once — copy it now.",
+      copyKey: 'Copy',
+      noApiKeysYet: 'No API keys yet',
+      lastUsed: (date: string) => `Last used: ${date}`,
+      neverUsed: 'Never used',
+      confirmDeleteApiKey: (name: string) => `Delete key "${name}"? Any script using it will stop working.`,
     },
 
     userLinksModal: {
