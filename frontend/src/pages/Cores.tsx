@@ -488,61 +488,6 @@ function OutboundsEditor({
   )
 }
 
-// DnsLogEditor edits config.dns.servers and config.log.loglevel - the two
-// general settings actually worth exposing (everything else the builder
-// already defaults sensibly, see app/xray_config/builder.py).
-function DnsLogEditor({
-  configText,
-  setConfigText,
-  t,
-}: {
-  configText: string
-  setConfigText: (text: string) => void
-  t: ReturnType<typeof useLang>['t']
-}) {
-  const config = parseConfig(configText)
-  const dns = (config.dns as { servers?: string[] } | undefined) ?? {}
-  const log = (config.log as { loglevel?: string } | undefined) ?? {}
-  const dnsServers = Array.isArray(dns.servers) ? dns.servers : []
-
-  function patch(next: Record<string, unknown>) {
-    setConfigText(JSON.stringify({ ...config, ...next }, null, 2))
-  }
-
-  return (
-    <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
-      <div className="mb-3 text-xs font-bold text-secondary">{t.coresPage.generalSettingsTitle}</div>
-      <div className="flex flex-wrap gap-3">
-        <div>
-          <label className={labelClass}>{t.coresPage.dnsServersLabel}</label>
-          <input
-            dir="ltr"
-            value={dnsServers.join(', ')}
-            onChange={(e) => patch({ dns: { ...dns, servers: csvToList(e.target.value) } })}
-            placeholder="1.1.1.1, 8.8.8.8"
-            className={`${inputClass} w-64 text-left`}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>{t.coresPage.logLevelLabel}</label>
-          <select
-            dir="ltr"
-            value={log.loglevel ?? 'warning'}
-            onChange={(e) => patch({ log: { ...log, loglevel: e.target.value } })}
-            className={inputClass}
-          >
-            {['debug', 'info', 'warning', 'error', 'none'].map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // NodeAssignmentEditor is how "which node runs this core" actually gets
 // set now — moved here from the Node form (which only owned repeating a
 // core_id/ipsec_core_id dropdown) so the core/node relationship lives in
@@ -1260,11 +1205,6 @@ export default function CoresPage() {
               t={t}
             />
             <OutboundsEditor
-              configText={form.configText}
-              setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))}
-              t={t}
-            />
-            <DnsLogEditor
               configText={form.configText}
               setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))}
               t={t}
