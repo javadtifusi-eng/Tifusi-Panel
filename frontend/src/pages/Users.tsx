@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import UserDevicesModal from '../components/UserDevicesModal'
 import UserLinksModal from '../components/UserLinksModal'
 import { useLang } from '../i18n/LangContext'
 import {
@@ -13,6 +14,7 @@ import {
   listGroups,
   listUserTemplates,
   listUsers,
+  resetUserSecret,
   updateUser,
   type Group,
   type ProxyUser,
@@ -27,6 +29,7 @@ const statusStyles: Record<UserStatus, string> = {
   disabled: 'bg-neutral-tint text-muted border-neutral',
   expired: 'bg-danger-tint text-danger border-danger',
   limited: 'bg-warning-tint text-warning border-warning',
+  on_hold: 'bg-accent-tint text-accent border-cyan-400/40',
 }
 
 export default function UsersPage() {
@@ -41,8 +44,13 @@ export default function UsersPage() {
   const [expire, setExpire] = useState('')
   const [note, setNote] = useState('')
   const [groupIds, setGroupIds] = useState<Set<number>>(new Set())
+  const [onHold, setOnHold] = useState(false)
+  const [onHoldDays, setOnHoldDays] = useState('30')
+  const [hwidLimit, setHwidLimit] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [linksUser, setLinksUser] = useState<ProxyUser | null>(null)
+  const [devicesUser, setDevicesUser] = useState<ProxyUser | null>(null)
+  const [resettingSecretId, setResettingSecretId] = useState<number | null>(null)
 
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -178,6 +186,9 @@ export default function UsersPage() {
     setExpire('')
     setNote('')
     setGroupIds(new Set())
+    setOnHold(false)
+    setOnHoldDays('30')
+    setHwidLimit('')
     setShowForm(false)
   }
 
@@ -188,6 +199,8 @@ export default function UsersPage() {
     setExpire(user.expire ? user.expire.slice(0, 10) : '')
     setNote(user.note ?? '')
     setGroupIds(new Set(user.group_ids))
+    setOnHold(false)
+    setHwidLimit(user.hwid_limit ? String(user.hwid_limit) : '')
     setShowForm(true)
   }
 
@@ -207,11 +220,22 @@ export default function UsersPage() {
     const data_limit = dataLimitGb ? Math.round(parseFloat(dataLimitGb) * 1024 ** 3) : null
     const expireIso = expire ? new Date(`${expire}T23:59:59`).toISOString() : null
     const group_ids = Array.from(groupIds)
+    const hwid_limit = hwidLimit ? parseInt(hwidLimit, 10) : null
     try {
       if (editingId) {
-        await updateUser(editingId, { data_limit, expire: expireIso, note: note || null, group_ids })
+        await updateUser(editingId, { data_limit, expire: expireIso, hwid_limit, note: note || null, group_ids })
+      } else if (onHold) {
+        await createUser({
+          username,
+          status: 'on_hold',
+          data_limit,
+          on_hold_expire_days: onHoldDays ? parseInt(onHoldDays, 10) : null,
+          hwid_limit,
+          note: note || null,
+          group_ids,
+        })
       } else {
-        await createUser({ username, data_limit, expire: expireIso, note: note || null, group_ids })
+        await createUser({ username, data_limit, expire: expireIso, hwid_limit, note: note || null, group_ids })
       }
       resetForm()
       await refresh()
@@ -219,6 +243,20 @@ export default function UsersPage() {
       setError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleResetSecret(user: ProxyUser) {
+    if (!window.confirm(t.usersPage.confirmResetSecret(user.username))) return
+    setResettingSecretId(user.id)
+    setError(null)
+    try {
+      await resetUserSecret(user.id)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setResettingSecretId(null)
     }
   }
 
@@ -613,13 +651,36 @@ export default function UsersPage() {
               className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
             />
           </div>
+          {!editingId && onHold ? (
+            <div>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.onHoldDaysLabel}</label>
+              <input
+                value={onHoldDays}
+                onChange={(e) => setOnHoldDays(e.target.value)}
+                type="number"
+                min="0"
+                className="w-40 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.expire}</label>
+              <input
+                value={expire}
+                onChange={(e) => setExpire(e.target.value)}
+                type="date"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              />
+            </div>
+          )}
           <div>
-            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.expire}</label>
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.hwidLimitLabel}</label>
             <input
-              value={expire}
-              onChange={(e) => setExpire(e.target.value)}
-              type="date"
-              className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              value={hwidLimit}
+              onChange={(e) => setHwidLimit(e.target.value)}
+              type="number"
+              min="0"
+              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
             />
           </div>
           <div>
@@ -630,6 +691,12 @@ export default function UsersPage() {
               className="w-48 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
             />
           </div>
+          {!editingId && (
+            <label className="mb-1.5 flex cursor-pointer items-center gap-1.5 text-sm text-secondary">
+              <input type="checkbox" checked={onHold} onChange={(e) => setOnHold(e.target.checked)} />
+              {t.usersPage.onHoldToggleLabel}
+            </label>
+          )}
           <div className="w-full">
             <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.groupsLabel}</label>
             <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-subtle bg-well p-2">
@@ -821,9 +888,20 @@ export default function UsersPage() {
             <div dir="ltr" className="mb-3 text-left text-xs text-muted">
               {formatUsed(u.used_traffic)} / {formatLimit(u.data_limit)}
             </div>
-            <div className="flex gap-3 border-t border-hair pt-3">
+            <div className="flex flex-wrap gap-3 border-t border-hair pt-3">
               <button onClick={() => setLinksUser(u)} className="text-xs hover:underline" style={{ color: ACCENT }}>
                 {t.usersPage.linksBtn}
+              </button>
+              <button onClick={() => setDevicesUser(u)} className="text-xs text-muted hover:underline">
+                {t.usersPage.devicesBtn}
+                {u.hwid_limit ? ` (${u.hwid_limit})` : ''}
+              </button>
+              <button
+                onClick={() => handleResetSecret(u)}
+                disabled={resettingSecretId === u.id}
+                className="text-xs text-muted hover:underline disabled:opacity-50"
+              >
+                {resettingSecretId === u.id ? t.common.saving : t.usersPage.resetSecretBtn}
               </button>
               <button onClick={() => startEdit(u)} className="text-xs text-muted hover:underline">
                 {t.common.edit}
@@ -838,6 +916,9 @@ export default function UsersPage() {
 
       {linksUser && (
         <UserLinksModal userId={linksUser.id} username={linksUser.username} onClose={() => setLinksUser(null)} />
+      )}
+      {devicesUser && (
+        <UserDevicesModal userId={devicesUser.id} username={devicesUser.username} onClose={() => setDevicesUser(null)} />
       )}
     </div>
   )

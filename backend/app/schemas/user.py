@@ -10,16 +10,28 @@ USERNAME_PATTERN = r"^[a-zA-Z0-9_-]+$"
 
 class ProxyUserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=64, pattern=USERNAME_PATTERN)
+    status: UserStatus = UserStatus.active
     data_limit: int | None = Field(default=None, ge=0)
     expire: datetime | None = None
+    on_hold_expire_days: int | None = Field(default=None, ge=0)
+    hwid_limit: int | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] = Field(default_factory=list)
+
+    @field_validator("status")
+    @classmethod
+    def _validate_creatable_status(cls, status: UserStatus) -> UserStatus:
+        if status not in (UserStatus.active, UserStatus.on_hold):
+            raise ValueError("a new user can only be created active or on_hold")
+        return status
 
 
 class ProxyUserUpdate(BaseModel):
     status: UserStatus | None = None
     data_limit: int | None = Field(default=None, ge=0)
     expire: datetime | None = None
+    on_hold_expire_days: int | None = Field(default=None, ge=0)
+    hwid_limit: int | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] | None = None
 
@@ -34,6 +46,8 @@ class ProxyUserResponse(BaseModel):
     data_limit: int | None
     used_traffic: int
     expire: datetime | None
+    on_hold_expire_days: int | None
+    hwid_limit: int | None
     note: str | None
     created_at: datetime
     group_ids: list[int]
@@ -48,6 +62,7 @@ class BulkCreateRequest(BaseModel):
     usernames: list[str] = Field(min_length=1, max_length=500)
     data_limit: int | None = Field(default=None, ge=0)
     expire: datetime | None = None
+    hwid_limit: int | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] = Field(default_factory=list)
 
@@ -71,6 +86,7 @@ class BulkUpdateRequest(BaseModel):
     status: UserStatus | None = None
     data_limit: int | None = Field(default=None, ge=0)
     expire: datetime | None = None
+    hwid_limit: int | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=500)
     add_group_ids: list[int] = Field(default_factory=list)
     remove_group_ids: list[int] = Field(default_factory=list)

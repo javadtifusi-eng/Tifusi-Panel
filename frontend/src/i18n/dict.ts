@@ -103,7 +103,15 @@ export const dict = {
         disabled: 'غیرفعال',
         expired: 'منقضی',
         limited: 'محدود شده',
+        on_hold: 'در انتظار فعال‌سازی',
       },
+
+      onHoldToggleLabel: 'شمارش انقضا از اولین اتصال شروع بشه',
+      onHoldDaysLabel: 'تعداد روز (بعد از اولین اتصال)',
+      hwidLimitLabel: 'محدودیت تعداد دستگاه (خالی = نامحدود)',
+      resetSecretBtn: 'ریست لینک',
+      confirmResetSecret: (name: string) => `لینک اشتراک کاربر «${name}» ریست بشه؟ لینک/QR قبلی دیگه کار نمی‌کنه.`,
+      devicesBtn: 'دستگاه‌ها',
 
       bulkCreateBtn: '+ ساخت گروهی',
       bulkCreateTitle: 'ساخت گروهی کاربر',
@@ -542,6 +550,16 @@ export const dict = {
       noHostsForLinks: 'هنوز هاستی برای ساخت لینک وجود نداره.',
       copyConfig: 'کپی کانفیگ',
     },
+
+    userDevicesModal: {
+      title: (username: string) => `دستگاه‌های ${username}`,
+      desc: 'هر دستگاهی که لینک اشتراک این کاربر رو باز کرده، اینجا ثبت می‌شه — اگه سقف دستگاه براش تنظیم کرده باشی، دستگاه جدید بعد از پر شدن سقف رد می‌شه.',
+      fetchError: 'خطا در دریافت لیست دستگاه‌ها',
+      noDevicesYet: 'هنوز هیچ دستگاهی وصل نشده',
+      lastSeen: (when: string) => `آخرین اتصال: ${when}`,
+      resetAllBtn: 'حذف همه‌ی دستگاه‌ها',
+      confirmResetAll: 'همه‌ی دستگاه‌های ثبت‌شده‌ی این کاربر حذف بشن؟',
+    },
   },
 
   en: {
@@ -646,7 +664,15 @@ export const dict = {
         disabled: 'Disabled',
         expired: 'Expired',
         limited: 'Limited',
+        on_hold: 'On Hold',
       },
+
+      onHoldToggleLabel: 'Start expiry countdown on first connection',
+      onHoldDaysLabel: 'Days (from first connection)',
+      hwidLimitLabel: 'Device limit (empty = unlimited)',
+      resetSecretBtn: 'Reset link',
+      confirmResetSecret: (name: string) => `Reset the subscription link for "${name}"? The old link/QR stops working.`,
+      devicesBtn: 'Devices',
 
       bulkCreateBtn: '+ Bulk Create',
       bulkCreateTitle: 'Bulk create users',
@@ -1085,6 +1111,16 @@ export const dict = {
       copySubLink: 'Copy Subscription Link',
       noHostsForLinks: 'No hosts available to build links from yet.',
       copyConfig: 'Copy Config',
+    },
+
+    userDevicesModal: {
+      title: (username: string) => `${username}'s Devices`,
+      desc: "Every device that has opened this user's subscription link is logged here — if you set a device limit, a new device is turned away once that limit is reached.",
+      fetchError: 'Failed to load devices',
+      noDevicesYet: 'No devices connected yet',
+      lastSeen: (when: string) => `Last seen: ${when}`,
+      resetAllBtn: 'Remove all devices',
+      confirmResetAll: "Remove all of this user's registered devices?",
     },
   },
 } as const

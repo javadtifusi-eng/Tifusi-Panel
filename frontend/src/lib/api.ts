@@ -83,7 +83,7 @@ export async function login(payload: { username: string; password: string }): Pr
   return res.json()
 }
 
-export type UserStatus = 'active' | 'disabled' | 'expired' | 'limited'
+export type UserStatus = 'active' | 'disabled' | 'expired' | 'limited' | 'on_hold'
 
 export interface ProxyUser {
   id: number
@@ -93,6 +93,8 @@ export interface ProxyUser {
   data_limit: number | null
   used_traffic: number
   expire: string | null
+  on_hold_expire_days: number | null
+  hwid_limit: number | null
   note: string | null
   created_at: string
   group_ids: number[]
@@ -110,13 +112,42 @@ export async function listUsers(): Promise<ProxyUserList> {
 
 export async function createUser(payload: {
   username: string
+  status?: 'active' | 'on_hold'
   data_limit?: number | null
   expire?: string | null
+  on_hold_expire_days?: number | null
+  hwid_limit?: number | null
   note?: string | null
   group_ids?: number[]
 }): Promise<ProxyUser> {
   const res = await authorizedFetch('/users', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
+}
+
+export async function resetUserSecret(id: number): Promise<ProxyUser> {
+  const res = await authorizedFetch(`/users/${id}/reset-secret`, { method: 'POST' })
+  return res.json()
+}
+
+export interface UserDevice {
+  id: number
+  identifier: string
+  label: string | null
+  first_seen: string
+  last_seen: string
+}
+
+export async function listUserDevices(userId: number): Promise<UserDevice[]> {
+  const res = await authorizedFetch(`/users/${userId}/devices`)
+  return res.json()
+}
+
+export async function deleteUserDevice(userId: number, deviceId: number): Promise<void> {
+  await authorizedFetch(`/users/${userId}/devices/${deviceId}`, { method: 'DELETE' })
+}
+
+export async function resetUserDevices(userId: number): Promise<void> {
+  await authorizedFetch(`/users/${userId}/devices/reset`, { method: 'POST' })
 }
 
 export interface BulkCreateResult {
@@ -128,6 +159,7 @@ export async function bulkCreateUsers(payload: {
   usernames: string[]
   data_limit?: number | null
   expire?: string | null
+  hwid_limit?: number | null
   note?: string | null
   group_ids?: number[]
 }): Promise<BulkCreateResult> {
@@ -140,6 +172,7 @@ export async function bulkUpdateUsers(payload: {
   status?: UserStatus
   data_limit?: number | null
   expire?: string | null
+  hwid_limit?: number | null
   note?: string | null
   add_group_ids?: number[]
   remove_group_ids?: number[]
@@ -193,7 +226,7 @@ export async function deleteUserTemplate(id: number): Promise<void> {
 
 export async function updateUser(
   id: number,
-  payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'note' | 'group_ids'>>,
+  payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'hwid_limit' | 'note' | 'group_ids'>>,
 ): Promise<ProxyUser> {
   const res = await authorizedFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()

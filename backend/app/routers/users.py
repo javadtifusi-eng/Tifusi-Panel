@@ -1,3 +1,5 @@
+import uuid as uuid_lib
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +9,8 @@ from app.dependencies import require_permission
 from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_links_for_user, render_remark
 from app.models.host import Host, HostProtocol
-from app.models.user import ProxyUser
+from app.models.user import ProxyUser, UserStatus
+from app.models.user_device import UserDevice
 from app.notifications.webhook import send_webhook_event
 from app.schemas.user import (
     BulkCreateRequest,
@@ -21,6 +24,7 @@ from app.schemas.user import (
     ProxyUserResponse,
     ProxyUserUpdate,
 )
+from app.schemas.user_device import UserDeviceResponse
 from app.settings_store import get_public_url
 
 router = APIRouter(
@@ -53,8 +57,14 @@ async def create_user(
 
     user = ProxyUser(
         username=payload.username,
+        status=payload.status,
+        # on_hold means expire doesn't start counting yet — the caller
+        # shouldn't (and per validation below, can't meaningfully) also
+        # hand us an absolute expire for that case.
         data_limit=payload.data_limit,
-        expire=payload.expire,
+        expire=payload.expire if payload.status != UserStatus.on_hold else None,
+        on_hold_expire_days=payload.on_hold_expire_days if payload.status == UserStatus.on_hold else None,
+        hwid_limit=payload.hwid_limit,
         note=payload.note,
     )
     user.groups = await resolve_groups(payload.group_ids, db) or []
@@ -90,6 +100,7 @@ async def bulk_create_users(
             username=username,
             data_limit=payload.data_limit,
             expire=payload.expire,
+            hwid_limit=payload.hwid_limit,
             note=payload.note,
         )
         user.groups = list(groups)
@@ -179,6 +190,49 @@ async def update_user(
 async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)) -> None:
     user = await _get_user_or_404(user_id, db)
     await db.delete(user)
+    await db.commit()
+
+
+@router.post("/{user_id}/reset-secret", response_model=ProxyUserResponse)
+async def reset_user_secret(user_id: int, db: AsyncSession = Depends(get_db)) -> ProxyUser:
+    """Regenerates just the secret (the VLESS UUID / Trojan password / sub
+    URL token) — for when a link leaked and needs invalidating, without
+    losing the rest of the user record (traffic history, note, groups) the
+    way delete-and-recreate would. Every existing link/QR the user has is
+    dead the instant this returns; a new one has to be reissued."""
+    user = await _get_user_or_404(user_id, db)
+    user.secret = str(uuid_lib.uuid4())
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.get("/{user_id}/devices", response_model=list[UserDeviceResponse])
+async def list_user_devices(user_id: int, db: AsyncSession = Depends(get_db)) -> list[UserDevice]:
+    await _get_user_or_404(user_id, db)
+    result = await db.execute(
+        select(UserDevice).where(UserDevice.user_id == user_id).order_by(UserDevice.last_seen.desc())
+    )
+    return list(result.scalars().all())
+
+
+@router.delete("/{user_id}/devices/{device_id}", status_code=204)
+async def delete_user_device(user_id: int, device_id: int, db: AsyncSession = Depends(get_db)) -> None:
+    await _get_user_or_404(user_id, db)
+    device = await db.get(UserDevice, device_id)
+    if device is None or device.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Device not found")
+    await db.delete(device)
+    await db.commit()
+
+
+@router.post("/{user_id}/devices/reset", status_code=204)
+async def reset_user_devices(user_id: int, db: AsyncSession = Depends(get_db)) -> None:
+    await _get_user_or_404(user_id, db)
+    result = await db.execute(select(UserDevice).where(UserDevice.user_id == user_id))
+    for device in result.scalars().all():
+        await db.delete(device)
     await db.commit()
 
 
