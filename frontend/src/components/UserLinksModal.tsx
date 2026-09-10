@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useLang } from '../i18n/LangContext'
 import { ApiError, getUserLinks, type UserLinks } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 
 const ACCENT = '#22D3EE'
 
@@ -30,11 +31,7 @@ export default function UserLinksModal({
   }, [userId])
 
   async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // Clipboard API unavailable; the text stays visible to select by hand.
-    }
+    if (!(await copyToClipboard(text))) return
     setCopied(text)
     window.setTimeout(() => setCopied((c) => (c === text ? null : c)), 1500)
   }

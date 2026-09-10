@@ -28,6 +28,7 @@ import {
   type ApiKeyListItem,
   type PermissionScope,
 } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 
 const ACCENT = '#22D3EE'
 
@@ -569,8 +570,8 @@ export default function SettingsPage() {
                 </code>
                 <button
                   type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(justCreatedKey.key)
+                  onClick={async () => {
+                    if (!(await copyToClipboard(justCreatedKey.key))) return
                     setKeyCopied(true)
                     window.setTimeout(() => setKeyCopied(false), 1500)
                   }}

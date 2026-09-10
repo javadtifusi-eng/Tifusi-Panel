@@ -12,6 +12,7 @@ import {
   type Node,
   type NodeStatus,
 } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 
 // Which core a node runs is assigned from the Cores page (a core lists and
 // toggles the nodes running it), not repeated here — this form only owns
@@ -56,6 +57,7 @@ export default function NodesPage() {
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [setupNodeId, setSetupNodeId] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
 
   const coreById = new Map(cores.map((c) => [c.id, c]))
 
@@ -138,13 +140,17 @@ export default function NodesPage() {
   }
 
   async function copySetup(node: Node) {
-    try {
-      await navigator.clipboard.writeText(setupCommand(node))
-    } catch {
-      // Clipboard API unavailable; the command stays visible to select by hand.
+    const ok = await copyToClipboard(setupCommand(node))
+    if (ok) {
+      setCopied(true)
+      setCopyFailed(false)
+      window.setTimeout(() => setCopied(false), 1500)
+    } else {
+      // Both copy methods failed (e.g. the panel's reached over plain HTTP,
+      // where navigator.clipboard doesn't exist at all) — say so instead of
+      // claiming success, and the command below is already there to select.
+      setCopyFailed(true)
     }
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1500)
   }
 
   const setupNode = nodes?.find((n) => n.id === setupNodeId) ?? null
@@ -221,10 +227,12 @@ export default function NodesPage() {
           <div className="mb-2 text-xs text-muted">{t.nodesPage.setupIntro}</div>
           <pre
             dir="ltr"
-            className="mb-2 overflow-x-auto whitespace-pre-wrap rounded-lg border border-cyan-400/20 bg-well-strong p-3 text-left font-mono text-[11px] text-accent"
+            onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
+            className="mb-2 cursor-text overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-cyan-400/20 bg-well-strong p-3 text-left font-mono text-[13px] leading-relaxed text-accent"
           >
             {setupCommand(setupNode)}
           </pre>
+          {copyFailed && <div className="mb-2 text-[11px] text-warning">{t.copyFailedHint}</div>}
           {setupNode.last_error && (
             <div className="mb-2 text-xs text-danger">
               {t.nodesPage.lastError} {setupNode.last_error}

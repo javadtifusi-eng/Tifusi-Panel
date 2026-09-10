@@ -11,7 +11,8 @@ set -euo pipefail
 
 REPO_URL="https://github.com/javadtifusi-eng/Tifusi-Panel.git"
 INSTALL_DIR="${TIFUSI_INSTALL_DIR:-/opt/tifusi-panel}"
-PANEL_URL="http://localhost:8000"
+# Set for real in the "Ports" step below, once the chosen panel port is known.
+PANEL_URL=""
 
 # Only emit color/box-drawing escapes into a real, color-capable terminal —
 # piped into a log file or a dumb terminal, raw escape codes are exactly
@@ -29,7 +30,7 @@ fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
 # One line per install phase (system deps, docker, repo, .env, SSL, build,
 # health check) — a percentage instead of a bare step count so a long build
 # still reads as visible progress rather than a silent hang.
-STEP_TOTAL=7
+STEP_TOTAL=8
 STEP_NUM=0
 step() {
   STEP_NUM=$((STEP_NUM + 1))
@@ -100,6 +101,24 @@ if [ ! -f .env ]; then
   info "Generated a random TIFUSI_SECRET_KEY in .env."
 fi
 
+step "Ports"
+read -r -p "Panel API port [8000]: " panel_port
+panel_port=${panel_port:-8000}
+read -r -p "Dashboard (web UI) port [8080]: " dashboard_port
+dashboard_port=${dashboard_port:-8080}
+awk -v p="$panel_port" -v d="$dashboard_port" '
+  /^TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
+  /^# TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
+  /^TIFUSI_DASHBOARD_PORT=/ { print "TIFUSI_DASHBOARD_PORT=" d; next }
+  /^# TIFUSI_DASHBOARD_PORT=/ { print "TIFUSI_DASHBOARD_PORT=" d; next }
+  { print }
+' .env > .env.tmp
+grep -q '^TIFUSI_PANEL_PORT=' .env.tmp || echo "TIFUSI_PANEL_PORT=$panel_port" >> .env.tmp
+grep -q '^TIFUSI_DASHBOARD_PORT=' .env.tmp || echo "TIFUSI_DASHBOARD_PORT=$dashboard_port" >> .env.tmp
+mv .env.tmp .env
+PANEL_URL="http://localhost:${panel_port}"
+info "Panel API on port $panel_port, dashboard on port $dashboard_port."
+
 step "SSL / domain"
 read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain
 has_domain=${has_domain:-N}
@@ -165,9 +184,9 @@ if [ -n "$PANEL_PUBLIC_URL" ]; then
   printf '\n'
   info "  Dashboard:  $PANEL_PUBLIC_URL"
 else
-  info "  Dashboard:  http://${HOST_IP}:8080"
+  info "  Dashboard:  http://${HOST_IP}:${dashboard_port}"
 fi
-info "  Panel API:  http://${HOST_IP}:8000"
+info "  Panel API:  http://${HOST_IP}:${panel_port}"
 info ""
 info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
 info "  docker exec -it tifusi-panel tifusi-cli generate-admin-key"

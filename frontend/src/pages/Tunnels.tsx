@@ -19,6 +19,7 @@ import {
   type TunnelTestResult,
   type TunnelTransport,
 } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 
 const ACCENT = '#22D3EE'
 
@@ -233,11 +234,7 @@ export default function TunnelsPage() {
   }
 
   async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // Clipboard API unavailable; the text stays visible to select by hand.
-    }
+    if (!(await copyToClipboard(text))) return
     setCopied(text)
     window.setTimeout(() => setCopied((c) => (c === text ? null : c)), 1500)
   }

@@ -3,6 +3,7 @@ import { Logo } from '../components/Logo'
 import { useLang } from '../i18n/LangContext'
 import { useTheme } from '../theme/ThemeContext'
 import { ApiError, createAdmin, getSetupStatus, login as loginApi } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 
 const ACCENT = '#22D3EE'
 const COMMAND = 'docker exec -it tifusi-panel tifusi-cli generate-admin-key'
@@ -76,34 +77,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
   }
 
   async function handleCopy() {
-    let ok = false
-    try {
-      // navigator.clipboard needs a secure context (HTTPS or localhost) —
-      // it silently doesn't exist over plain HTTP, which is exactly how a
-      // lot of people reach this page on first setup, before TLS is on.
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(COMMAND)
-        ok = true
-      }
-    } catch {
-      // fall through to the legacy technique below
-    }
-
-    if (!ok) {
-      const textarea = document.createElement('textarea')
-      textarea.value = COMMAND
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.focus()
-      textarea.select()
-      try {
-        ok = document.execCommand('copy')
-      } catch {
-        ok = false
-      }
-      document.body.removeChild(textarea)
-    }
+    const ok = await copyToClipboard(COMMAND)
 
     if (ok) {
       setCopied(true)
