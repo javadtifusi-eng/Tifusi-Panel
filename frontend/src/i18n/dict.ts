@@ -42,6 +42,7 @@ export const dict = {
       settings: 'تنظیمات',
       logout: 'خروج',
       menu: 'منو',
+      toggleTheme: 'تعویض تم روشن/تاریک',
     },
 
     dashboardStats: {
@@ -582,6 +583,7 @@ export const dict = {
       settings: 'Settings',
       logout: 'Sign Out',
       menu: 'Menu',
+      toggleTheme: 'Toggle light/dark theme',
     },
 
     dashboardStats: {

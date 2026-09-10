@@ -42,13 +42,13 @@ function Gauge({ percent, label, sublabel }: { percent: number; label: string; s
             style={{ transition: 'stroke-dashoffset 0.6s ease, stroke 0.6s ease' }}
           />
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center font-mono text-[11px] font-bold text-slate-100">
+        <div className="absolute inset-0 flex items-center justify-center font-mono text-[11px] font-bold text-primary">
           {Math.round(clamped)}%
         </div>
       </div>
       <div className="text-left">
-        <div className="text-[11px] font-bold text-slate-300">{label}</div>
-        <div dir="ltr" className="font-mono text-[10px] text-slate-500">
+        <div className="text-[11px] font-bold text-secondary">{label}</div>
+        <div dir="ltr" className="font-mono text-[10px] text-faint">
           {sublabel}
         </div>
       </div>
@@ -80,7 +80,7 @@ export default function SystemStatsBar() {
   if (!stats) return null
 
   return (
-    <div className="flex items-center gap-6 rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2.5">
+    <div className="flex items-center gap-6 rounded-xl border border-subtle bg-surface px-4 py-2.5">
       <Gauge
         percent={stats.cpu_percent}
         label={t.dashboardStats.cpu}

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Logo } from '../components/Logo'
 import { useLang } from '../i18n/LangContext'
+import { useTheme } from '../theme/ThemeContext'
 import { ApiError, createAdmin, getSetupStatus, login as loginApi } from '../lib/api'
 
 const ACCENT = '#22D3EE'
@@ -24,15 +25,33 @@ function CheckIcon() {
   )
 }
 
+function SunIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+    </svg>
+  )
+}
+
 type Screen = 'setup' | 'login'
 
 const fieldClass =
-  'w-full rounded-lg border border-white/10 bg-panel-800 px-3.5 py-3 text-sm text-slate-100 outline-none transition-colors focus:border-cyan-400/60'
-const labelClass = 'block text-xs text-slate-400 mb-1'
-const linkClass = 'text-xs text-cyan-300 hover:underline'
+  'w-full rounded-lg border border-subtle bg-field px-3.5 py-3 text-sm text-primary outline-none transition-colors focus:border-cyan-400/60'
+const labelClass = 'block text-xs text-muted mb-1'
+const linkClass = 'text-xs text-accent hover:underline'
 
 export default function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }) {
   const { lang, setLang, t, dir, align } = useLang()
+  const { theme, toggleTheme } = useTheme()
   const [screen, setScreen] = useState<Screen>('setup')
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -130,34 +149,42 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
     <div className="flex justify-center gap-2 lg:justify-start">
       <button
         onClick={() => setLang('en')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-cyan-300' : 'border-white/15 text-slate-400'}`}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
       >
         EN
       </button>
       <button
         onClick={() => setLang('fa')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-cyan-300' : 'border-white/15 text-slate-400'}`}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
       >
         فارسی
+      </button>
+      <button
+        onClick={toggleTheme}
+        aria-label={t.nav.toggleTheme}
+        title={t.nav.toggleTheme}
+        className="flex items-center justify-center rounded-md border border-edge px-3 py-1 text-muted hover:border-cyan-400/50 hover:text-accent"
+      >
+        {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
       </button>
     </div>
   )
 
   if (loadingStatus) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-panel-950 font-body text-sm text-slate-500">
+      <div className="flex min-h-screen w-full items-center justify-center bg-app font-body text-sm text-faint">
         {t.loading}
       </div>
     )
   }
 
   return (
-    <div dir={dir} className="flex min-h-screen w-full bg-panel-950 font-body text-slate-100">
+    <div dir={dir} className="flex min-h-screen w-full bg-app font-body text-primary">
       {/* Brand panel — hidden on narrow viewports, where the compact header below stands in for it. */}
       <div
-        className={`relative hidden flex-col justify-between overflow-hidden bg-panel-900 px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%] ${
+        className={`relative hidden flex-col justify-between overflow-hidden bg-surface px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%] ${
           dir === 'rtl' ? 'border-l' : 'border-r'
-        } border-white/10`}
+        } border-subtle`}
       >
         <img
           src="/logo-tifusi.png"
@@ -171,7 +198,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         <div className="relative flex items-center gap-2.5">
           <Logo accent={ACCENT} size={40} glow={false} />
           <div>
-            <div className="font-display text-sm font-bold tracking-[2px] text-slate-50">TIFUSI</div>
+            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
             <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
               PANEL
             </div>
@@ -179,18 +206,18 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         </div>
 
         <div className="relative">
-          <h1 className={`max-w-sm font-display text-2xl font-bold leading-snug text-slate-50 ${align}`}>{t.welcome}</h1>
-          <p className={`mt-3 max-w-xs text-sm leading-relaxed text-slate-400 ${align}`}>{t.tagline}</p>
+          <h1 className={`max-w-sm font-display text-2xl font-bold leading-snug text-heading ${align}`}>{t.welcome}</h1>
+          <p className={`mt-3 max-w-xs text-sm leading-relaxed text-muted ${align}`}>{t.tagline}</p>
           <div className="mt-6 flex flex-wrap gap-2">
             {PROTOCOLS.map((p) => (
-              <span key={p} className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-slate-400">
+              <span key={p} className="rounded-md border border-subtle px-2.5 py-1 text-[11px] text-muted">
                 {p}
               </span>
             ))}
           </div>
         </div>
 
-        <div className="relative text-[10px] tracking-widest text-slate-600">POWERED BY TIFUSI SYSTEMS</div>
+        <div className="relative text-[10px] tracking-widest text-faint">POWERED BY TIFUSI SYSTEMS</div>
       </div>
 
       {/* Form panel */}
@@ -198,29 +225,29 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         <div className="mb-6 flex flex-col items-center gap-3 lg:hidden">
           <Logo accent={ACCENT} size={52} glow={false} />
           <div className="text-center">
-            <div className="font-display text-sm font-bold tracking-[2px] text-slate-50">TIFUSI PANEL</div>
-            <div className="mt-1 max-w-[220px] text-xs text-slate-400">{t.tagline}</div>
+            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI PANEL</div>
+            <div className="mt-1 max-w-[220px] text-xs text-muted">{t.tagline}</div>
           </div>
         </div>
 
         <div className="w-full max-w-sm">
           {screen === 'setup' ? (
             <form onSubmit={handleCreateAdmin}>
-              <div className="mb-2.5 inline-block rounded-md border border-cyan-400/30 px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-cyan-300">
+              <div className="mb-2.5 inline-block rounded-md border border-cyan-400/30 px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-accent">
                 {t.badgeSetup}
               </div>
-              <div className={`mb-4 text-xl font-bold text-slate-50 ${align}`}>{t.headingSetup}</div>
+              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingSetup}</div>
 
-              <div className="mb-4 rounded-lg border border-white/10 bg-panel-800/60 px-3.5 py-3">
+              <div className="mb-4 rounded-lg border border-subtle bg-field px-3.5 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`text-xs text-slate-400 ${align}`}>{t.step1}</span>
+                  <span className={`text-xs text-muted ${align}`}>{t.step1}</span>
                   <button
                     type="button"
                     onClick={handleCopy}
                     title={COMMAND}
                     aria-label={copied ? t.copied : t.copy}
                     className={`flex-shrink-0 rounded-md p-1.5 transition-colors ${
-                      copied ? 'bg-emerald-400/10 text-emerald-400' : 'bg-cyan-400/10 text-cyan-300'
+                      copied ? 'bg-success-tint text-success' : 'bg-accent-tint text-accent'
                     }`}
                   >
                     {copied ? <CheckIcon /> : <CopyIcon />}
@@ -228,11 +255,11 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 </div>
                 {copyFailed && (
                   <>
-                    <div className={`mt-2.5 text-[11px] text-amber-400 ${align}`}>{t.copyFailedHint}</div>
+                    <div className={`mt-2.5 text-[11px] text-warning ${align}`}>{t.copyFailedHint}</div>
                     <code
                       dir="ltr"
                       onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
-                      className="mt-1.5 block cursor-text select-all break-all rounded-md bg-black/40 p-2 text-left font-mono text-[11px] text-cyan-200"
+                      className="mt-1.5 block cursor-text select-all break-all rounded-md bg-well-strong p-2 text-left font-mono text-[11px] text-accent"
                     >
                       {COMMAND}
                     </code>
@@ -269,7 +296,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 className={`${fieldClass} mb-1 ${align}`}
               />
 
-              {error && <div className="mt-2 text-xs text-red-400">{error}</div>}
+              {error && <div className="mt-2 text-xs text-danger">{error}</div>}
 
               <button
                 type="submit"
@@ -287,7 +314,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
             </form>
           ) : (
             <form onSubmit={handleLogin}>
-              <div className={`mb-4 text-xl font-bold text-slate-50 ${align}`}>{t.headingLogin}</div>
+              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingLogin}</div>
 
               <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
               <input
@@ -314,7 +341,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 </a>
               </div>
 
-              {error && <div className="mb-3 text-xs text-red-400">{error}</div>}
+              {error && <div className="mb-3 text-xs text-danger">{error}</div>}
 
               <button
                 type="submit"

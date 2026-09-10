@@ -3,6 +3,7 @@ import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import { LangProvider } from './i18n/LangContext'
 import { clearToken, getToken, setToken } from './lib/auth'
+import { ThemeProvider } from './theme/ThemeContext'
 
 export default function App() {
   const [token, setTokenState] = useState<string | null>(() => getToken())
@@ -26,8 +27,10 @@ export default function App() {
   }
 
   return (
-    <LangProvider>
-      {!token ? <Login onAuthenticated={handleAuthenticated} /> : <Dashboard onLogout={handleLogout} />}
-    </LangProvider>
+    <ThemeProvider>
+      <LangProvider>
+        {!token ? <Login onAuthenticated={handleAuthenticated} /> : <Dashboard onLogout={handleLogout} />}
+      </LangProvider>
+    </ThemeProvider>
   )
 }

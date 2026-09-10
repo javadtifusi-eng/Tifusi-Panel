@@ -3,12 +3,30 @@ import LiveClock from '../components/LiveClock'
 import { Logo } from '../components/Logo'
 import SystemStatsBar from '../components/SystemStats'
 import { useLang } from '../i18n/LangContext'
+import { useTheme } from '../theme/ThemeContext'
 import { getAdminProfile, type AdminProfile } from '../lib/api'
 
 function MenuIcon() {
   return (
     <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
       <path d="M3 6h18M3 12h18M3 18h18" />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
     </svg>
   )
 }
@@ -27,6 +45,7 @@ type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' |
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { lang, setLang, t, dir } = useLang()
+  const { theme, toggleTheme } = useTheme()
   const [active, setActive] = useState<ActiveTab>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<AdminProfile | null>(null)
@@ -65,38 +84,38 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const closedTranslate = dir === 'rtl' ? 'translate-x-full' : '-translate-x-full'
 
   return (
-    <div dir={dir} className="flex min-h-screen w-full bg-panel-950 font-body text-slate-100">
+    <div dir={dir} className="flex min-h-screen w-full bg-app font-body text-primary">
       {/* Mobile top bar — the fixed w-60 sidebar below doesn't fit next to real
           content on a phone-width screen, so under lg it's an off-canvas
           drawer instead, opened from here. */}
-      <div className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-white/10 bg-panel-950/95 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-subtle bg-app/95 px-4 py-3 backdrop-blur lg:hidden">
         <button
           onClick={() => setSidebarOpen(true)}
           aria-label={t.nav.menu}
-          className="rounded-lg border border-white/10 p-2 text-slate-300"
+          className="rounded-lg border border-subtle p-2 text-secondary"
         >
           <MenuIcon />
         </button>
         <div className="flex items-center gap-2">
           <Logo accent={ACCENT} size={26} glow={false} />
-          <span className="font-display text-xs font-bold tracking-[2px] text-slate-50">TIFUSI</span>
+          <span className="font-display text-xs font-bold tracking-[2px] text-heading">TIFUSI</span>
         </div>
         <div className="w-9" />
       </div>
 
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-well-strong lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <aside
-        className={`fixed inset-y-0 z-50 flex w-64 flex-shrink-0 flex-col bg-slate-950 px-4 py-6 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:translate-x-0 lg:bg-slate-950/60 ${sideEdge} border-white/10 ${
+        className={`fixed inset-y-0 z-50 flex w-64 flex-shrink-0 flex-col bg-surface px-4 py-6 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:translate-x-0 lg:bg-surface ${sideEdge} border-subtle ${
           sidebarOpen ? 'translate-x-0' : closedTranslate
         } lg:transition-none`}
       >
         <div className="mb-8 flex items-center gap-2.5 px-2">
           <Logo accent={ACCENT} size={36} />
           <div>
-            <div className="font-display text-sm font-bold tracking-[2px] text-slate-50">TIFUSI</div>
+            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
             <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
               PANEL
             </div>
@@ -109,7 +128,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
               key={item.id}
               onClick={() => selectTab(item.id)}
               className={`rounded-lg px-3 py-2.5 text-sm transition-colors ${dir === 'rtl' ? 'text-right' : 'text-left'} ${
-                active === item.id ? 'bg-cyan-400/10 text-cyan-300' : 'text-slate-300 hover:bg-white/5'
+                active === item.id ? 'bg-accent-tint text-accent' : 'text-secondary hover:bg-field'
               }`}
             >
               {item.label}
@@ -120,21 +139,29 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         <div className="mb-2 flex justify-center gap-2">
           <button
             onClick={() => setLang('en')}
-            className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-cyan-300' : 'border-white/20 text-slate-400'}`}
+            className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
           >
             EN
           </button>
           <button
             onClick={() => setLang('fa')}
-            className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-cyan-300' : 'border-white/20 text-slate-400'}`}
+            className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
           >
             فارسی
+          </button>
+          <button
+            onClick={toggleTheme}
+            aria-label={t.nav.toggleTheme}
+            title={t.nav.toggleTheme}
+            className="flex items-center justify-center rounded-md border border-edge px-3 py-1 text-muted hover:border-cyan-400/50 hover:text-accent"
+          >
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
         </div>
 
         <button
           onClick={onLogout}
-          className={`rounded-lg border border-white/10 px-3 py-2.5 text-sm text-slate-400 hover:bg-white/5 ${dir === 'rtl' ? 'text-right' : 'text-left'}`}
+          className={`rounded-lg border border-subtle px-3 py-2.5 text-sm text-muted hover:bg-field ${dir === 'rtl' ? 'text-right' : 'text-left'}`}
         >
           {t.nav.logout}
         </button>

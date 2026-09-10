@@ -23,10 +23,10 @@ import {
 const ACCENT = '#22D3EE'
 
 const statusStyles: Record<UserStatus, string> = {
-  active: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/30',
-  disabled: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
-  expired: 'bg-red-400/10 text-red-300 border-red-400/30',
-  limited: 'bg-amber-400/10 text-amber-300 border-amber-400/30',
+  active: 'bg-success-tint text-success border-success',
+  disabled: 'bg-neutral-tint text-muted border-neutral',
+  expired: 'bg-danger-tint text-danger border-danger',
+  limited: 'bg-warning-tint text-warning border-warning',
 }
 
 export default function UsersPage() {
@@ -336,11 +336,11 @@ export default function UsersPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.usersPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.usersPage.title}</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowTemplates((v) => !v)}
-            className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-slate-300 hover:border-white/30"
+            className="rounded-lg border border-edge px-4 py-2 text-sm font-bold text-secondary hover:border-strong"
           >
             {t.usersPage.templatesBtn}
           </button>
@@ -365,28 +365,28 @@ export default function UsersPage() {
       </div>
 
       {showTemplates && (
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-white/15 bg-slate-950/60 p-4">
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-edge bg-surface p-4">
           <div>
-            <div className="text-sm font-bold text-slate-200">{t.usersPage.templatesTitle}</div>
-            <div className="mt-0.5 text-xs text-slate-500">{t.usersPage.templatesDesc}</div>
+            <div className="text-sm font-bold text-body">{t.usersPage.templatesTitle}</div>
+            <div className="mt-0.5 text-xs text-faint">{t.usersPage.templatesDesc}</div>
           </div>
 
-          {templates.length === 0 && <div className="text-xs text-slate-500">{t.usersPage.noTemplatesYet}</div>}
+          {templates.length === 0 && <div className="text-xs text-faint">{t.usersPage.noTemplatesYet}</div>}
           {templates.length > 0 && (
             <div className="flex flex-col gap-2">
               {templates.map((tpl) => (
                 <div
                   key={tpl.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-subtle bg-well px-3 py-2"
                 >
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-bold text-slate-200">{tpl.name}</span>
-                    <span className="text-slate-500">{formatLimit(tpl.data_limit)}</span>
-                    <span className="text-slate-500">
+                    <span className="font-bold text-body">{tpl.name}</span>
+                    <span className="text-faint">{formatLimit(tpl.data_limit)}</span>
+                    <span className="text-faint">
                       {tpl.expire_days != null ? `${tpl.expire_days}d` : t.usersPage.unlimited}
                     </span>
                   </div>
-                  <button onClick={() => handleDeleteTemplate(tpl)} className="text-xs text-red-400 hover:underline">
+                  <button onClick={() => handleDeleteTemplate(tpl)} className="text-xs text-danger hover:underline">
                     {t.common.delete}
                   </button>
                 </div>
@@ -394,54 +394,54 @@ export default function UsersPage() {
             </div>
           )}
 
-          <form onSubmit={handleCreateTemplate} className="flex flex-wrap items-end gap-3 border-t border-white/10 pt-3">
+          <form onSubmit={handleCreateTemplate} className="flex flex-wrap items-end gap-3 border-t border-subtle pt-3">
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.templateNameLabel}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.templateNameLabel}</label>
               <input
                 value={tplName}
                 onChange={(e) => setTplName(e.target.value)}
                 placeholder={t.usersPage.templateNamePlaceholder}
                 required
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.dataLimit}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.dataLimit}</label>
               <input
                 value={tplDataLimitGb}
                 onChange={(e) => setTplDataLimitGb(e.target.value)}
                 type="number"
                 min="0"
                 step="0.5"
-                className="w-40 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="w-40 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.expireDaysLabel}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.expireDaysLabel}</label>
               <input
                 value={tplExpireDays}
                 onChange={(e) => setTplExpireDays(e.target.value)}
                 type="number"
                 min="0"
-                className="w-56 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="w-56 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.note}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.note}</label>
               <input
                 value={tplNote}
                 onChange={(e) => setTplNote(e.target.value)}
-                className="w-48 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="w-48 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div className="w-full">
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.groupsLabel}</label>
-              <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
-                {groups.length === 0 && <div className="px-1 py-1 text-xs text-slate-500">{t.usersPage.noGroups}</div>}
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.groupsLabel}</label>
+              <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-subtle bg-well p-2">
+                {groups.length === 0 && <div className="px-1 py-1 text-xs text-faint">{t.usersPage.noGroups}</div>}
                 {groups.map((g) => (
                   <label key={g.id} className="flex cursor-pointer items-center gap-1.5 text-sm">
                     <input type="checkbox" checked={tplGroupIds.has(g.id)} onChange={() => toggleTplGroup(g.id)} />
-                    <span className="text-slate-200">{g.name}</span>
+                    <span className="text-body">{g.name}</span>
                   </label>
                 ))}
               </div>
@@ -461,17 +461,17 @@ export default function UsersPage() {
       {showBulkCreate && (
         <form
           onSubmit={handleBulkCreateSubmit}
-          className="mb-6 flex flex-col gap-3 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
+          className="mb-6 flex flex-col gap-3 rounded-xl border border-cyan-400/20 bg-surface p-4"
         >
-          <div className="text-sm font-bold text-slate-200">{t.usersPage.bulkCreateTitle}</div>
+          <div className="text-sm font-bold text-body">{t.usersPage.bulkCreateTitle}</div>
           <div className="flex flex-wrap items-end gap-3">
             {templates.length > 0 && (
               <div>
-                <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.applyTemplateLabel}</label>
+                <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.applyTemplateLabel}</label>
                 <select
                   onChange={(e) => applyTemplateToBulkCreate(e.target.value ? Number(e.target.value) : null)}
                   defaultValue=""
-                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                  className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
                 >
                   <option value="">{t.usersPage.noTemplate}</option>
                   {templates.map((tpl) => (
@@ -483,60 +483,60 @@ export default function UsersPage() {
               </div>
             )}
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.prefixLabel}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.prefixLabel}</label>
               <input
                 value={bulkPrefix}
                 onChange={(e) => setBulkPrefix(e.target.value)}
                 dir="ltr"
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.countLabel}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.countLabel}</label>
               <input
                 value={bulkCount}
                 onChange={(e) => setBulkCount(e.target.value)}
                 type="number"
                 min="1"
                 max="500"
-                className="w-24 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="w-24 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.startAtLabel}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.startAtLabel}</label>
               <input
                 value={bulkStartAt}
                 onChange={(e) => setBulkStartAt(e.target.value)}
                 type="number"
                 min="1"
-                className="w-24 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="w-24 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.dataLimit}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.dataLimit}</label>
               <input
                 value={bulkCreateDataLimitGb}
                 onChange={(e) => setBulkCreateDataLimitGb(e.target.value)}
                 type="number"
                 min="0"
                 step="0.5"
-                className="w-44 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.expire}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.expire}</label>
               <input
                 value={bulkCreateExpire}
                 onChange={(e) => setBulkCreateExpire(e.target.value)}
                 type="date"
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
             </div>
           </div>
           <div>
-            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.groupsLabel}</label>
-            <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
-              {groups.length === 0 && <div className="px-1 py-1 text-xs text-slate-500">{t.usersPage.noGroups}</div>}
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.groupsLabel}</label>
+            <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-subtle bg-well p-2">
+              {groups.length === 0 && <div className="px-1 py-1 text-xs text-faint">{t.usersPage.noGroups}</div>}
               {groups.map((g) => (
                 <label key={g.id} className="flex cursor-pointer items-center gap-1.5 text-sm">
                   <input
@@ -544,18 +544,18 @@ export default function UsersPage() {
                     checked={bulkCreateGroupIds.has(g.id)}
                     onChange={() => toggleBulkCreateGroup(g.id)}
                   />
-                  <span className="text-slate-200">{g.name}</span>
+                  <span className="text-body">{g.name}</span>
                 </label>
               ))}
             </div>
           </div>
           {bulkCreateUsernames.length > 0 && (
-            <div dir="ltr" className="rounded-lg border border-white/10 bg-black/20 p-2 text-left font-mono text-[11px] text-slate-400">
+            <div dir="ltr" className="rounded-lg border border-subtle bg-well p-2 text-left font-mono text-[11px] text-muted">
               {t.usersPage.previewLabel}: {bulkCreateUsernames.slice(0, 8).join(', ')}
               {bulkCreateUsernames.length > 8 && ` … (+${bulkCreateUsernames.length - 8})`}
             </div>
           )}
-          {bulkCreateMsg && <div className="text-xs text-emerald-300">{bulkCreateMsg}</div>}
+          {bulkCreateMsg && <div className="text-xs text-success">{bulkCreateMsg}</div>}
           <div>
             <button
               type="submit"
@@ -572,15 +572,15 @@ export default function UsersPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
+          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-surface p-4"
         >
           {!editingId && templates.length > 0 && (
             <div>
-              <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.applyTemplateLabel}</label>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.applyTemplateLabel}</label>
               <select
                 onChange={(e) => applyTemplateToSingle(e.target.value ? Number(e.target.value) : null)}
                 defaultValue=""
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
               >
                 <option value="">{t.usersPage.noTemplate}</option>
                 {templates.map((tpl) => (
@@ -592,52 +592,52 @@ export default function UsersPage() {
             </div>
           )}
           <div>
-            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.username}</label>
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.username}</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
               disabled={editingId !== null}
               pattern="[a-zA-Z0-9_-]+"
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60 disabled:opacity-50"
+              className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60 disabled:opacity-50"
             />
           </div>
           <div>
-            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.dataLimit}</label>
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.dataLimit}</label>
             <input
               value={dataLimitGb}
               onChange={(e) => setDataLimitGb(e.target.value)}
               type="number"
               min="0"
               step="0.5"
-              className="w-44 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
             />
           </div>
           <div>
-            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.expire}</label>
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.expire}</label>
             <input
               value={expire}
               onChange={(e) => setExpire(e.target.value)}
               type="date"
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
             />
           </div>
           <div>
-            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.note}</label>
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.note}</label>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-48 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+              className="w-48 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
             />
           </div>
           <div className="w-full">
-            <label className={`mb-1.5 block text-xs text-slate-400 ${align}`}>{t.usersPage.groupsLabel}</label>
-            <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
-              {groups.length === 0 && <div className="px-1 py-1 text-xs text-slate-500">{t.usersPage.noGroups}</div>}
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.groupsLabel}</label>
+            <div className="flex max-h-32 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-subtle bg-well p-2">
+              {groups.length === 0 && <div className="px-1 py-1 text-xs text-faint">{t.usersPage.noGroups}</div>}
               {groups.map((g) => (
                 <label key={g.id} className="flex cursor-pointer items-center gap-1.5 text-sm">
                   <input type="checkbox" checked={groupIds.has(g.id)} onChange={() => toggleGroup(g.id)} />
-                  <span className="text-slate-200">{g.name}</span>
+                  <span className="text-body">{g.name}</span>
                 </label>
               ))}
             </div>
@@ -654,63 +654,63 @@ export default function UsersPage() {
         </form>
       )}
 
-      {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
+      {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      {users === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {users === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
       {users !== null && users.length === 0 && (
-        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+        <div className="rounded-xl border border-subtle py-8 text-center text-faint">
           {t.usersPage.noUsersYet}
         </div>
       )}
 
       {users !== null && users.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
-          <label className="flex items-center gap-1.5 text-xs text-slate-300">
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-subtle bg-well p-3">
+          <label className="flex items-center gap-1.5 text-xs text-secondary">
             <input type="checkbox" checked={selected.size === users.length} onChange={toggleSelectAll} />
             {t.usersPage.selectAll}
           </label>
           {selected.size > 0 && (
             <>
-              <span className="text-xs text-slate-400">{t.usersPage.selectedCount(selected.size)}</span>
+              <span className="text-xs text-muted">{t.usersPage.selectedCount(selected.size)}</span>
               <button
                 disabled={bulkBusy}
                 onClick={() => runBulkUpdate({ status: 'active' })}
-                className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-slate-300 hover:border-white/30 disabled:opacity-50"
+                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
               >
                 {t.usersPage.bulkActivate}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => runBulkUpdate({ status: 'disabled' })}
-                className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-slate-300 hover:border-white/30 disabled:opacity-50"
+                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
               >
                 {t.usersPage.bulkDisable}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => setBulkPanel((p) => (p === 'limit' ? null : 'limit'))}
-                className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-slate-300 hover:border-white/30 disabled:opacity-50"
+                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
               >
                 {t.usersPage.bulkSetLimit}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => setBulkPanel((p) => (p === 'expire' ? null : 'expire'))}
-                className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-slate-300 hover:border-white/30 disabled:opacity-50"
+                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
               >
                 {t.usersPage.bulkSetExpire}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => setBulkPanel((p) => (p === 'group' ? null : 'group'))}
-                className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-slate-300 hover:border-white/30 disabled:opacity-50"
+                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
               >
                 {t.usersPage.groupsLabel}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={handleBulkDelete}
-                className="rounded-md border border-red-400/30 px-2.5 py-1 text-xs text-red-400 hover:bg-red-400/10 disabled:opacity-50"
+                className="rounded-md border border-danger px-2.5 py-1 text-xs text-danger hover:bg-danger-tint disabled:opacity-50"
               >
                 {t.usersPage.bulkDeleteBtn}
               </button>
@@ -726,7 +726,7 @@ export default function UsersPage() {
                 value={bulkLimitGb}
                 onChange={(e) => setBulkLimitGb(e.target.value)}
                 placeholder={t.usersPage.gbSuffix}
-                className="w-32 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="w-32 rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
               <button
                 disabled={bulkBusy}
@@ -738,7 +738,7 @@ export default function UsersPage() {
               >
                 {t.usersPage.apply}
               </button>
-              <button onClick={resetBulkPanel} className="text-xs text-slate-500">
+              <button onClick={resetBulkPanel} className="text-xs text-faint">
                 {t.usersPage.cancelAction}
               </button>
             </div>
@@ -749,7 +749,7 @@ export default function UsersPage() {
                 type="date"
                 value={bulkExpire}
                 onChange={(e) => setBulkExpire(e.target.value)}
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-cyan-400/60"
               />
               <button
                 disabled={bulkBusy}
@@ -761,7 +761,7 @@ export default function UsersPage() {
               >
                 {t.usersPage.apply}
               </button>
-              <button onClick={resetBulkPanel} className="text-xs text-slate-500">
+              <button onClick={resetBulkPanel} className="text-xs text-faint">
                 {t.usersPage.cancelAction}
               </button>
             </div>
@@ -771,7 +771,7 @@ export default function UsersPage() {
               <select
                 value={bulkGroupId ?? ''}
                 onChange={(e) => setBulkGroupId(e.target.value ? Number(e.target.value) : null)}
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-cyan-400/60"
               >
                 <option value="">—</option>
                 {groups.map((g) => (
@@ -791,11 +791,11 @@ export default function UsersPage() {
               <button
                 disabled={bulkBusy || bulkGroupId == null}
                 onClick={() => runBulkUpdate({ remove_group_ids: bulkGroupId != null ? [bulkGroupId] : [] })}
-                className="text-xs text-red-400 disabled:opacity-50"
+                className="text-xs text-danger disabled:opacity-50"
               >
                 {t.usersPage.bulkRemoveGroup}
               </button>
-              <button onClick={resetBulkPanel} className="text-xs text-slate-500">
+              <button onClick={resetBulkPanel} className="text-xs text-faint">
                 {t.usersPage.cancelAction}
               </button>
             </div>
@@ -805,9 +805,9 @@ export default function UsersPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {users?.map((u) => (
-          <div key={u.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+          <div key={u.id} className="rounded-xl border border-subtle bg-surface p-4">
             <div className="mb-2 flex items-center justify-between">
-              <span className="flex items-center gap-2 font-bold text-slate-100">
+              <span className="flex items-center gap-2 font-bold text-primary">
                 <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} />
                 {u.username}
               </span>
@@ -818,17 +818,17 @@ export default function UsersPage() {
                 {t.usersPage.status[u.status]}
               </button>
             </div>
-            <div dir="ltr" className="mb-3 text-left text-xs text-slate-400">
+            <div dir="ltr" className="mb-3 text-left text-xs text-muted">
               {formatUsed(u.used_traffic)} / {formatLimit(u.data_limit)}
             </div>
-            <div className="flex gap-3 border-t border-white/5 pt-3">
+            <div className="flex gap-3 border-t border-hair pt-3">
               <button onClick={() => setLinksUser(u)} className="text-xs hover:underline" style={{ color: ACCENT }}>
                 {t.usersPage.linksBtn}
               </button>
-              <button onClick={() => startEdit(u)} className="text-xs text-slate-400 hover:underline">
+              <button onClick={() => startEdit(u)} className="text-xs text-muted hover:underline">
                 {t.common.edit}
               </button>
-              <button onClick={() => handleDelete(u)} className="text-xs text-red-400 hover:underline">
+              <button onClick={() => handleDelete(u)} className="text-xs text-danger hover:underline">
                 {t.common.delete}
               </button>
             </div>

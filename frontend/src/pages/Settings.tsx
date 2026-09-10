@@ -31,9 +31,9 @@ import {
 const ACCENT = '#22D3EE'
 
 const inputClass =
-  'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
-const labelClass = 'mb-1.5 block text-xs text-slate-400'
-const cardClass = 'rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+const labelClass = 'mb-1.5 block text-xs text-muted'
+const cardClass = 'rounded-xl border border-cyan-400/20 bg-surface p-4'
 const buttonClass = 'rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60'
 
 export default function SettingsPage() {
@@ -417,10 +417,10 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.settingsPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.settingsPage.title}</h1>
         {profile && (
-          <span className="text-xs text-slate-400">
-            {t.settingsPage.signedInAs} <span className="text-slate-200">{profile.username}</span>
+          <span className="text-xs text-muted">
+            {t.settingsPage.signedInAs} <span className="text-body">{profile.username}</span>
           </span>
         )}
       </div>
@@ -428,8 +428,8 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-6">
         {canSettings && (
         <form onSubmit={handleSaveUrl} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.publicUrlTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.publicUrlDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.publicUrlTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.publicUrlDesc}</p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1" style={{ minWidth: 240 }}>
               <label className={labelClass}>{t.settingsPage.publicUrlLabel}</label>
@@ -445,13 +445,13 @@ export default function SettingsPage() {
               {urlSaving ? t.common.saving : urlSaved ? t.common.saved : t.common.save}
             </button>
           </div>
-          {urlError && <div className="mt-3 text-xs text-red-400">{urlError}</div>}
+          {urlError && <div className="mt-3 text-xs text-danger">{urlError}</div>}
         </form>
         )}
 
         <form onSubmit={handleChangePassword} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.changePasswordTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.changePasswordDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.changePasswordTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.changePasswordDesc}</p>
           <div className="flex flex-wrap gap-3">
             <div>
               <label className={labelClass}>{t.settingsPage.currentPassword}</label>
@@ -486,7 +486,7 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-          {pwError && <div className="mt-3 text-xs text-red-400">{pwError}</div>}
+          {pwError && <div className="mt-3 text-xs text-danger">{pwError}</div>}
           <button
             type="submit"
             disabled={pwSubmitting}
@@ -498,8 +498,8 @@ export default function SettingsPage() {
         </form>
 
         <div className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.apiKeysTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.apiKeysDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.apiKeysTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.apiKeysDesc}</p>
 
           <form onSubmit={handleCreateApiKey} className="mb-3 flex flex-wrap items-end gap-3">
             <div>
@@ -516,13 +516,13 @@ export default function SettingsPage() {
               {keyCreating ? t.settingsPage.creating : t.settingsPage.newApiKeyBtn}
             </button>
           </form>
-          {keyError && <div className="mb-3 text-xs text-red-400">{keyError}</div>}
+          {keyError && <div className="mb-3 text-xs text-danger">{keyError}</div>}
 
           {justCreatedKey && (
-            <div className="mb-3 rounded-lg border border-cyan-400/30 bg-cyan-400/5 p-3">
-              <div className={`mb-1.5 text-xs text-slate-300 ${align}`}>{t.settingsPage.apiKeyShowOnceWarning}</div>
+            <div className="mb-3 rounded-lg border border-cyan-400/30 bg-accent-tint p-3">
+              <div className={`mb-1.5 text-xs text-secondary ${align}`}>{t.settingsPage.apiKeyShowOnceWarning}</div>
               <div className="flex items-center gap-2">
-                <code dir="ltr" className="flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-black/40 px-2.5 py-1.5 text-left text-xs text-cyan-200">
+                <code dir="ltr" className="flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-well-strong px-2.5 py-1.5 text-left text-xs text-accent">
                   {justCreatedKey.key}
                 </code>
                 <button
@@ -542,17 +542,17 @@ export default function SettingsPage() {
           )}
 
           <div className="flex flex-col gap-2">
-            {apiKeys?.length === 0 && <div className="text-xs text-slate-500">{t.settingsPage.noApiKeysYet}</div>}
+            {apiKeys?.length === 0 && <div className="text-xs text-faint">{t.settingsPage.noApiKeysYet}</div>}
             {apiKeys?.map((k) => (
-              <div key={k.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+              <div key={k.id} className="flex items-center justify-between rounded-lg border border-subtle bg-field px-3 py-2">
                 <div>
-                  <div className="text-sm text-slate-100">{k.name}</div>
-                  <div dir="ltr" className="text-left font-mono text-[11px] text-slate-500">
+                  <div className="text-sm text-primary">{k.name}</div>
+                  <div dir="ltr" className="text-left font-mono text-[11px] text-faint">
                     {k.key_prefix}…{' '}
                     {k.last_used_at ? t.settingsPage.lastUsed(new Date(k.last_used_at).toLocaleDateString()) : t.settingsPage.neverUsed}
                   </div>
                 </div>
-                <button onClick={() => handleDeleteApiKey(k)} className="text-xs text-red-400 hover:underline">
+                <button onClick={() => handleDeleteApiKey(k)} className="text-xs text-danger hover:underline">
                   {t.common.delete}
                 </button>
               </div>
@@ -563,8 +563,8 @@ export default function SettingsPage() {
         {canSettings && (
         <>
         <form onSubmit={handleSaveTelegram} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.telegramTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.telegramTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>
             {t.settingsPage.telegramDesc1}{' '}
             <span dir="ltr" className="font-mono">
               @BotFather
@@ -609,12 +609,12 @@ export default function SettingsPage() {
               {telegramTesting ? t.settingsPage.sending : telegramTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
           </div>
-          {telegramError && <div className="mt-3 text-xs text-red-400">{telegramError}</div>}
+          {telegramError && <div className="mt-3 text-xs text-danger">{telegramError}</div>}
         </form>
 
         <form onSubmit={handleSaveWebhook} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.webhookTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.webhookDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.webhookTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.webhookDesc}</p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1" style={{ minWidth: 240 }}>
               <label className={labelClass}>{t.settingsPage.webhookUrlLabel}</label>
@@ -648,12 +648,12 @@ export default function SettingsPage() {
               {webhookTesting ? t.settingsPage.sending : webhookTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
           </div>
-          {webhookError && <div className="mt-3 text-xs text-red-400">{webhookError}</div>}
+          {webhookError && <div className="mt-3 text-xs text-danger">{webhookError}</div>}
         </form>
 
         <div className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.backupTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.backupDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.backupTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.backupDesc}</p>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -685,13 +685,13 @@ export default function SettingsPage() {
               }}
             />
           </div>
-          {backupError && <div className="mt-3 text-xs text-red-400">{backupError}</div>}
-          {restoreDone && <div className="mt-3 text-xs text-slate-400">{t.settingsPage.restoreDoneNote}</div>}
+          {backupError && <div className="mt-3 text-xs text-danger">{backupError}</div>}
+          {restoreDone && <div className="mt-3 text-xs text-muted">{t.settingsPage.restoreDoneNote}</div>}
         </div>
 
         <form onSubmit={handleUploadTls} className={cardClass}>
           <div className={`mb-1 flex items-center justify-between ${align}`}>
-            <h2 className="text-sm font-bold text-slate-100">{t.settingsPage.tlsTitle}</h2>
+            <h2 className="text-sm font-bold text-primary">{t.settingsPage.tlsTitle}</h2>
             {tlsEnabled !== null && (
               <span
                 className="rounded-full border px-2.5 py-1 text-[11px]"
@@ -705,7 +705,7 @@ export default function SettingsPage() {
               </span>
             )}
           </div>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.tlsDesc}</p>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.tlsDesc}</p>
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className={labelClass}>{t.settingsPage.tlsCertLabel}</label>
@@ -714,7 +714,7 @@ export default function SettingsPage() {
                 accept=".pem,.crt,.cer"
                 onChange={(e) => setTlsCertFile(e.target.files?.[0] ?? null)}
                 required
-                className="block text-xs text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-slate-200"
+                className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
               />
             </div>
             <div>
@@ -724,7 +724,7 @@ export default function SettingsPage() {
                 accept=".pem,.key"
                 onChange={(e) => setTlsKeyFile(e.target.files?.[0] ?? null)}
                 required
-                className="block text-xs text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-slate-200"
+                className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
               />
             </div>
             <button
@@ -746,15 +746,15 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
-          {tlsError && <div className="mt-3 text-xs text-red-400">{tlsError}</div>}
+          {tlsError && <div className="mt-3 text-xs text-danger">{tlsError}</div>}
         </form>
         </>
         )}
 
         {profile?.is_owner && (
           <div className={cardClass}>
-            <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.adminsTitle}</h2>
-            <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.adminsDesc}</p>
+            <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.adminsTitle}</h2>
+            <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.adminsDesc}</p>
 
             <form onSubmit={handleCreateAdmin} className="mb-4 flex flex-wrap items-end gap-3">
               <div>
@@ -780,7 +780,7 @@ export default function SettingsPage() {
               </div>
               <div className="w-full">
                 <label className={labelClass}>{t.settingsPage.permissionsLabel}</label>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-white/10 bg-black/20 p-2">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-subtle bg-well p-2">
                   {PERMISSION_SCOPES.map((scope) => (
                     <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
                       <input
@@ -788,30 +788,30 @@ export default function SettingsPage() {
                         checked={newAdminPermissions.has(scope)}
                         onChange={() => toggleNewAdminPermission(scope)}
                       />
-                      <span className="text-slate-200">{t.settingsPage.permissionScopes[scope]}</span>
+                      <span className="text-body">{t.settingsPage.permissionScopes[scope]}</span>
                     </label>
                   ))}
                 </div>
-                <div className="mt-1 text-[11px] text-slate-500">{t.settingsPage.permissionsHint}</div>
+                <div className="mt-1 text-[11px] text-faint">{t.settingsPage.permissionsHint}</div>
               </div>
               <button type="submit" disabled={adminSubmitting} className={buttonClass} style={{ backgroundColor: ACCENT }}>
                 {adminSubmitting ? t.settingsPage.creating : t.settingsPage.newAdminBtn}
               </button>
             </form>
-            {adminError && <div className="mb-3 text-xs text-red-400">{adminError}</div>}
+            {adminError && <div className="mb-3 text-xs text-danger">{adminError}</div>}
 
             <div className="flex flex-col gap-2">
               {admins?.map((a) => (
-                <div key={a.id} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                <div key={a.id} className="rounded-lg border border-subtle bg-field px-3 py-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-100">{a.username}</span>
+                      <span className="text-sm text-primary">{a.username}</span>
                       {a.is_owner ? (
-                        <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-slate-400">
+                        <span className="rounded-full border border-edge px-2 py-0.5 text-[10px] text-muted">
                           owner
                         </span>
                       ) : (
-                        <span className="text-[11px] text-slate-500">
+                        <span className="text-[11px] text-faint">
                           {a.permissions === null
                             ? t.settingsPage.fullAccess
                             : a.permissions.map((s) => t.settingsPage.permissionScopes[s]).join(', ') ||
@@ -828,14 +828,14 @@ export default function SettingsPage() {
                         >
                           {t.settingsPage.editPermissions}
                         </button>
-                        <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-red-400 hover:underline">
+                        <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-danger hover:underline">
                           {t.common.delete}
                         </button>
                       </div>
                     )}
                   </div>
                   {editingPermsId === a.id && (
-                    <div className="mt-2 border-t border-white/10 pt-2">
+                    <div className="mt-2 border-t border-subtle pt-2">
                       <div className="flex flex-wrap gap-x-4 gap-y-1">
                         {PERMISSION_SCOPES.map((scope) => (
                           <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
@@ -844,7 +844,7 @@ export default function SettingsPage() {
                               checked={editingPermsSet.has(scope)}
                               onChange={() => toggleEditingPermission(scope)}
                             />
-                            <span className="text-slate-200">{t.settingsPage.permissionScopes[scope]}</span>
+                            <span className="text-body">{t.settingsPage.permissionScopes[scope]}</span>
                           </label>
                         ))}
                       </div>

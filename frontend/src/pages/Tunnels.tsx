@@ -31,14 +31,14 @@ const statusDot: Record<TunnelStatus, string> = {
 }
 
 const statusBadge: Record<TunnelStatus, string> = {
-  connected: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/30',
-  pending: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
-  error: 'bg-red-400/10 text-red-300 border-red-400/30',
+  connected: 'bg-success-tint text-success border-success',
+  pending: 'bg-neutral-tint text-muted border-neutral',
+  error: 'bg-danger-tint text-danger border-danger',
 }
 
 const inputClass =
-  'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
-const labelClass = 'mb-1.5 block text-xs text-slate-400'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+const labelClass = 'mb-1.5 block text-xs text-muted'
 
 type ForeignSource = 'node' | 'address'
 
@@ -249,7 +249,7 @@ export default function TunnelsPage() {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.tunnelsPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.tunnelsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
@@ -258,12 +258,12 @@ export default function TunnelsPage() {
           {t.tunnelsPage.newBtn}
         </button>
       </div>
-      <p className="mb-6 text-sm text-slate-400">{t.tunnelsPage.intro}</p>
+      <p className="mb-6 text-sm text-muted">{t.tunnelsPage.intro}</p>
 
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mb-6 flex flex-col gap-4 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
+          className="mb-6 flex flex-col gap-4 rounded-xl border border-cyan-400/20 bg-surface p-4"
         >
           <div className="flex flex-wrap items-end gap-3">
             <div>
@@ -306,8 +306,8 @@ export default function TunnelsPage() {
                     onClick={() => setForeignSource(src)}
                     className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
                       foreignSource === src
-                        ? 'border-cyan-400/60 bg-cyan-400/10 text-cyan-300'
-                        : 'border-white/15 text-slate-400 hover:border-white/30'
+                        ? 'border-cyan-400/60 bg-accent-tint text-accent'
+                        : 'border-edge text-muted hover:border-strong'
                     }`}
                   >
                     {src === 'node' ? t.tunnelsPage.foreignNodeOption : t.tunnelsPage.foreignAddressOption}
@@ -348,7 +348,7 @@ export default function TunnelsPage() {
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="block text-xs text-slate-400" title={t.tunnelsPage.transportHint}>
+              <label className="block text-xs text-muted" title={t.tunnelsPage.transportHint}>
                 {t.tunnelsPage.transportLabel}
               </label>
               <button
@@ -362,18 +362,18 @@ export default function TunnelsPage() {
               </button>
             </div>
             {recommendResult && (
-              <div className="mb-2 flex flex-col gap-1 rounded-lg border border-white/10 bg-black/20 p-2 text-[11px]">
+              <div className="mb-2 flex flex-col gap-1 rounded-lg border border-subtle bg-well p-2 text-[11px]">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">{t.tunnelsPage.testResultIran}</span>
-                  <span className={recommendResult.iran_reachable ? 'text-emerald-300' : 'text-red-400'}>
+                  <span className="text-muted">{t.tunnelsPage.testResultIran}</span>
+                  <span className={recommendResult.iran_reachable ? 'text-success' : 'text-danger'}>
                     {recommendResult.iran_reachable
                       ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.iran_latency_ms ?? 0)}ms)`
                       : t.tunnelsPage.unreachable}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">{t.tunnelsPage.testResultForeign}</span>
-                  <span className={recommendResult.foreign_reachable ? 'text-emerald-300' : 'text-red-400'}>
+                  <span className="text-muted">{t.tunnelsPage.testResultForeign}</span>
+                  <span className={recommendResult.foreign_reachable ? 'text-success' : 'text-danger'}>
                     {recommendResult.foreign_reachable
                       ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.foreign_latency_ms ?? 0)}ms)`
                       : t.tunnelsPage.unreachable}
@@ -386,7 +386,7 @@ export default function TunnelsPage() {
                       type="button"
                       onClick={() => setTransport(r.transport)}
                       className={`rounded-md border px-2 py-1 text-[10.5px] font-bold ${
-                        transport === r.transport ? 'border-cyan-400/60 bg-cyan-400/10 text-cyan-300' : 'border-white/15 text-slate-400'
+                        transport === r.transport ? 'border-cyan-400/60 bg-accent-tint text-accent' : 'border-edge text-muted'
                       }`}
                     >
                       {i === 0 ? '★ ' : ''}
@@ -405,15 +405,15 @@ export default function TunnelsPage() {
                   title={t.tunnelsPage.transportHints[tr]}
                   className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
                     transport === tr
-                      ? 'border-cyan-400/60 bg-cyan-400/10 text-cyan-300'
-                      : 'border-white/15 text-slate-400 hover:border-white/30'
+                      ? 'border-cyan-400/60 bg-accent-tint text-accent'
+                      : 'border-edge text-muted hover:border-strong'
                   }`}
                 >
                   {t.tunnelsPage.transportLabels[tr]}
                 </button>
               ))}
             </div>
-            {transport && <div className="mt-1.5 text-[11px] text-slate-500">{t.tunnelsPage.transportHints[transport]}</div>}
+            {transport && <div className="mt-1.5 text-[11px] text-faint">{t.tunnelsPage.transportHints[transport]}</div>}
           </div>
 
           {transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
@@ -471,7 +471,7 @@ export default function TunnelsPage() {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <label className="text-xs text-slate-400">{t.tunnelsPage.forwardsLabel}</label>
+              <label className="text-xs text-muted">{t.tunnelsPage.forwardsLabel}</label>
               <button
                 type="button"
                 onClick={() => setForwards((fs) => [...fs, emptyForward()])}
@@ -483,7 +483,7 @@ export default function TunnelsPage() {
             </div>
             <div className="flex flex-col gap-2">
               {forwards.map((fwd, idx) => (
-                <div key={idx} className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 p-2">
+                <div key={idx} className="flex flex-wrap items-end gap-2 rounded-lg border border-subtle p-2">
                   <input
                     value={fwd.name}
                     onChange={(e) => updateForward(idx, { name: e.target.value })}
@@ -517,7 +517,7 @@ export default function TunnelsPage() {
                   <button
                     type="button"
                     onClick={() => setForwards((fs) => fs.filter((_, i) => i !== idx))}
-                    className="text-xs text-red-400 hover:underline"
+                    className="text-xs text-danger hover:underline"
                   >
                     {t.tunnelsPage.removeForward}
                   </button>
@@ -539,11 +539,11 @@ export default function TunnelsPage() {
         </form>
       )}
 
-      {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
+      {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      {tunnels === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {tunnels === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
       {tunnels !== null && tunnels.length === 0 && (
-        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">{t.tunnelsPage.noTunnelsYet}</div>
+        <div className="rounded-xl border border-subtle py-8 text-center text-faint">{t.tunnelsPage.noTunnelsYet}</div>
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -552,7 +552,7 @@ export default function TunnelsPage() {
           const isTesting = testingId === tunnel.id
           const result = testResults[tunnel.id]
           return (
-            <div key={tunnel.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+            <div key={tunnel.id} className="rounded-xl border border-subtle bg-surface p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
@@ -560,34 +560,34 @@ export default function TunnelsPage() {
                       isTesting ? 'animate-pulse bg-cyan-400' : statusDot[tunnel.status]
                     }`}
                   />
-                  <span className="font-bold text-slate-100">{tunnel.name}</span>
+                  <span className="font-bold text-primary">{tunnel.name}</span>
                 </div>
                 <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge[tunnel.status]}`}>
                   {isTesting ? t.tunnelsPage.testing : t.tunnelsPage.status[tunnel.status]}
                 </span>
               </div>
 
-              <div dir="ltr" className="mb-1 text-left font-mono text-xs text-slate-400">
+              <div dir="ltr" className="mb-1 text-left font-mono text-xs text-muted">
                 {tunnel.iran_address}:{tunnel.iran_port} → {foreignNode ? foreignNode.address : tunnel.foreign_address}
               </div>
-              <div className="mb-3 text-xs text-slate-500">
+              <div className="mb-3 text-xs text-faint">
                 {t.tunnelsPage.transportLabels[tunnel.transport]}
                 {tunnel.forwards.length > 0 && ` · ${tunnel.forwards.length}`}
               </div>
 
               {result && (
-                <div className="mb-3 flex flex-col gap-1 rounded-lg border border-white/10 bg-black/20 p-2 text-[11px]">
+                <div className="mb-3 flex flex-col gap-1 rounded-lg border border-subtle bg-well p-2 text-[11px]">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">{t.tunnelsPage.testResultIran}</span>
-                    <span className={result.iran_reachable ? 'text-emerald-300' : 'text-red-400'}>
+                    <span className="text-muted">{t.tunnelsPage.testResultIran}</span>
+                    <span className={result.iran_reachable ? 'text-success' : 'text-danger'}>
                       {result.iran_reachable
                         ? `${t.tunnelsPage.reachable} (${Math.round(result.iran_latency_ms ?? 0)}ms)`
                         : t.tunnelsPage.unreachable}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">{t.tunnelsPage.testResultForeign}</span>
-                    <span className={result.foreign_reachable ? 'text-emerald-300' : 'text-red-400'}>
+                    <span className="text-muted">{t.tunnelsPage.testResultForeign}</span>
+                    <span className={result.foreign_reachable ? 'text-success' : 'text-danger'}>
                       {result.foreign_reachable
                         ? `${t.tunnelsPage.reachable} (${Math.round(result.foreign_latency_ms ?? 0)}ms)`
                         : t.tunnelsPage.unreachable}
@@ -600,7 +600,7 @@ export default function TunnelsPage() {
                 <div className="mb-3 flex flex-col gap-2">
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500">{t.tunnelsPage.iranConfigLabel}</span>
+                      <span className="text-[10px] text-faint">{t.tunnelsPage.iranConfigLabel}</span>
                       <button
                         onClick={() => copy(JSON.stringify(configData.iran_config, null, 2))}
                         className="text-[10px] font-bold"
@@ -611,14 +611,14 @@ export default function TunnelsPage() {
                     </div>
                     <pre
                       dir="ltr"
-                      className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-slate-400"
+                      className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-muted"
                     >
                       {JSON.stringify(configData.iran_config, null, 2)}
                     </pre>
                   </div>
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500">{t.tunnelsPage.foreignConfigLabel}</span>
+                      <span className="text-[10px] text-faint">{t.tunnelsPage.foreignConfigLabel}</span>
                       <button
                         onClick={() => copy(JSON.stringify(configData.foreign_config, null, 2))}
                         className="text-[10px] font-bold"
@@ -629,14 +629,14 @@ export default function TunnelsPage() {
                     </div>
                     <pre
                       dir="ltr"
-                      className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-slate-400"
+                      className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-muted"
                     >
                       {JSON.stringify(configData.foreign_config, null, 2)}
                     </pre>
                   </div>
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500">{t.tunnelsPage.iranInstallCommandLabel}</span>
+                      <span className="text-[10px] text-faint">{t.tunnelsPage.iranInstallCommandLabel}</span>
                       <button
                         onClick={() => copy(configData.iran_install_command)}
                         className="text-[10px] font-bold"
@@ -647,14 +647,14 @@ export default function TunnelsPage() {
                     </div>
                     <pre
                       dir="ltr"
-                      className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-cyan-200"
+                      className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-accent"
                     >
                       {configData.iran_install_command}
                     </pre>
                   </div>
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500">{t.tunnelsPage.foreignInstallCommandLabel}</span>
+                      <span className="text-[10px] text-faint">{t.tunnelsPage.foreignInstallCommandLabel}</span>
                       <button
                         onClick={() => copy(configData.foreign_install_command)}
                         className="text-[10px] font-bold"
@@ -665,7 +665,7 @@ export default function TunnelsPage() {
                     </div>
                     <pre
                       dir="ltr"
-                      className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-black/30 p-2 text-left font-mono text-[10px] text-cyan-200"
+                      className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-accent"
                     >
                       {configData.foreign_install_command}
                     </pre>
@@ -673,17 +673,17 @@ export default function TunnelsPage() {
                 </div>
               )}
 
-              <div className="flex items-center gap-3 border-t border-white/5 pt-3">
-                <button onClick={() => handleTest(tunnel)} className="text-xs text-slate-400 hover:underline">
+              <div className="flex items-center gap-3 border-t border-hair pt-3">
+                <button onClick={() => handleTest(tunnel)} className="text-xs text-muted hover:underline">
                   {t.tunnelsPage.test}
                 </button>
-                <button onClick={() => toggleConfig(tunnel)} className="text-xs text-slate-400 hover:underline">
+                <button onClick={() => toggleConfig(tunnel)} className="text-xs text-muted hover:underline">
                   {t.tunnelsPage.showConfig}
                 </button>
-                <button onClick={() => startEdit(tunnel)} className="text-xs text-slate-400 hover:underline">
+                <button onClick={() => startEdit(tunnel)} className="text-xs text-muted hover:underline">
                   {t.common.edit}
                 </button>
-                <button onClick={() => handleDelete(tunnel)} className="text-xs text-red-400 hover:underline">
+                <button onClick={() => handleDelete(tunnel)} className="text-xs text-danger hover:underline">
                   {t.common.delete}
                 </button>
               </div>

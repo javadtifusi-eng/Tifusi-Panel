@@ -20,10 +20,10 @@ import {
 const ACCENT = '#22D3EE'
 
 const inputClass =
-  'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
-const labelClass = 'mb-1.5 block text-xs text-slate-400'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+const labelClass = 'mb-1.5 block text-xs text-muted'
 const monoTextarea =
-  'w-full rounded-lg border border-white/15 bg-black/30 p-3 font-mono text-xs text-cyan-100 outline-none focus:border-cyan-400/60'
+  'w-full rounded-lg border border-edge bg-well p-3 font-mono text-xs text-accent outline-none focus:border-cyan-400/60'
 
 const CORE_TYPES: CoreType[] = ['xray', 'l2tp', 'ikev2']
 
@@ -176,20 +176,20 @@ function RoutingEditor({
   }
 
   return (
-    <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
+    <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
       <div className="mb-1 flex items-center justify-between">
-        <div className="text-xs font-bold text-slate-300">{t.coresPage.routingTitle}</div>
+        <div className="text-xs font-bold text-secondary">{t.coresPage.routingTitle}</div>
         <button type="button" onClick={addRule} className="text-xs font-bold" style={{ color: ACCENT }}>
           {t.coresPage.addRuleBtn}
         </button>
       </div>
-      <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.routingHint}</div>
-      {rules.length === 0 && <div className="text-xs text-slate-500">{t.coresPage.noRulesYet}</div>}
+      <div className="mb-3 text-[11px] text-faint">{t.coresPage.routingHint}</div>
+      {rules.length === 0 && <div className="text-xs text-faint">{t.coresPage.noRulesYet}</div>}
       <div className="flex flex-col gap-2">
         {rules.map((r, i) => (
-          <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 p-2">
+          <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-subtle p-2">
             <div>
-              <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.ruleDomainLabel}</label>
+              <label className="mb-1 block text-[10px] text-faint">{t.coresPage.ruleDomainLabel}</label>
               <input
                 dir="ltr"
                 value={(r.domain ?? []).join(', ')}
@@ -199,7 +199,7 @@ function RoutingEditor({
               />
             </div>
             <div>
-              <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.ruleIpLabel}</label>
+              <label className="mb-1 block text-[10px] text-faint">{t.coresPage.ruleIpLabel}</label>
               <input
                 dir="ltr"
                 value={(r.ip ?? []).join(', ')}
@@ -209,7 +209,7 @@ function RoutingEditor({
               />
             </div>
             <div>
-              <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.ruleOutboundLabel}</label>
+              <label className="mb-1 block text-[10px] text-faint">{t.coresPage.ruleOutboundLabel}</label>
               <select
                 dir="ltr"
                 value={r.outboundTag ?? tagOptions[0]}
@@ -224,13 +224,13 @@ function RoutingEditor({
               </select>
             </div>
             <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => moveRule(i, -1)} className="text-xs text-slate-400 hover:text-slate-200">
+              <button type="button" onClick={() => moveRule(i, -1)} className="text-xs text-muted hover:text-body">
                 ↑
               </button>
-              <button type="button" onClick={() => moveRule(i, 1)} className="text-xs text-slate-400 hover:text-slate-200">
+              <button type="button" onClick={() => moveRule(i, 1)} className="text-xs text-muted hover:text-body">
                 ↓
               </button>
-              <button type="button" onClick={() => removeRule(i)} className="text-xs text-red-400 hover:underline">
+              <button type="button" onClick={() => removeRule(i)} className="text-xs text-danger hover:underline">
                 {t.common.delete}
               </button>
             </div>
@@ -332,23 +332,23 @@ function OutboundsEditor({
   }
 
   return (
-    <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
+    <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
       <div className="mb-1 flex items-center justify-between">
-        <div className="text-xs font-bold text-slate-300">{t.coresPage.outboundsTitle}</div>
+        <div className="text-xs font-bold text-secondary">{t.coresPage.outboundsTitle}</div>
         <button type="button" onClick={addOutbound} className="text-xs font-bold" style={{ color: ACCENT }}>
           {t.coresPage.addOutboundBtn}
         </button>
       </div>
-      <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.outboundsHint}</div>
-      {outbounds.length === 0 && <div className="text-xs text-slate-500">{t.coresPage.noOutboundsYet}</div>}
+      <div className="mb-3 text-[11px] text-faint">{t.coresPage.outboundsHint}</div>
+      {outbounds.length === 0 && <div className="text-xs text-faint">{t.coresPage.noOutboundsYet}</div>}
       <div className="flex flex-col gap-2">
         {outbounds.map((o, i) => {
           const needsServer = o.protocol !== 'freedom' && o.protocol !== 'blackhole'
           const fields = outboundServerFields(o.protocol, o.settings ?? {})
           return (
-            <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 p-2">
+            <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-subtle p-2">
               <div>
-                <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundTagLabel}</label>
+                <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundTagLabel}</label>
                 <input
                   dir="ltr"
                   value={o.tag ?? ''}
@@ -357,7 +357,7 @@ function OutboundsEditor({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundProtocolLabel}</label>
+                <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundProtocolLabel}</label>
                 <select
                   dir="ltr"
                   value={o.protocol ?? 'freedom'}
@@ -374,7 +374,7 @@ function OutboundsEditor({
               {needsServer && (
                 <>
                   <div>
-                    <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundAddressLabel}</label>
+                    <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundAddressLabel}</label>
                     <input
                       dir="ltr"
                       value={fields.address}
@@ -385,7 +385,7 @@ function OutboundsEditor({
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundPortLabel}</label>
+                    <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundPortLabel}</label>
                     <input
                       dir="ltr"
                       type="number"
@@ -398,7 +398,7 @@ function OutboundsEditor({
                   </div>
                   {(o.protocol === 'vless' || o.protocol === 'vmess' || o.protocol === 'trojan' || o.protocol === 'shadowsocks') && (
                     <div>
-                      <label className="mb-1 block text-[10px] text-slate-500">{t.coresPage.outboundSecretLabel}</label>
+                      <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundSecretLabel}</label>
                       <input
                         dir="ltr"
                         value={fields.secret}
@@ -412,13 +412,13 @@ function OutboundsEditor({
                 </>
               )}
               <div className="flex items-center gap-1.5">
-                <button type="button" onClick={() => moveOutbound(i, -1)} className="text-xs text-slate-400 hover:text-slate-200">
+                <button type="button" onClick={() => moveOutbound(i, -1)} className="text-xs text-muted hover:text-body">
                   ↑
                 </button>
-                <button type="button" onClick={() => moveOutbound(i, 1)} className="text-xs text-slate-400 hover:text-slate-200">
+                <button type="button" onClick={() => moveOutbound(i, 1)} className="text-xs text-muted hover:text-body">
                   ↓
                 </button>
-                <button type="button" onClick={() => removeOutbound(i)} className="text-xs text-red-400 hover:underline">
+                <button type="button" onClick={() => removeOutbound(i)} className="text-xs text-danger hover:underline">
                   {t.common.delete}
                 </button>
               </div>
@@ -452,8 +452,8 @@ function DnsLogEditor({
   }
 
   return (
-    <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
-      <div className="mb-3 text-xs font-bold text-slate-300">{t.coresPage.generalSettingsTitle}</div>
+    <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
+      <div className="mb-3 text-xs font-bold text-secondary">{t.coresPage.generalSettingsTitle}</div>
       <div className="flex flex-wrap gap-3">
         <div>
           <label className={labelClass}>{t.coresPage.dnsServersLabel}</label>
@@ -527,15 +527,15 @@ function NodeAssignmentEditor({
   }
 
   return (
-    <div className="mt-3 border-t border-white/5 pt-3">
-      <div className="mb-2 text-xs font-bold text-slate-300">{t.coresPage.assignedNodesTitle}</div>
-      {nodes.length === 0 && <div className="text-xs text-slate-500">{t.nodesPage.noNodesYet}</div>}
+    <div className="mt-3 border-t border-hair pt-3">
+      <div className="mb-2 text-xs font-bold text-secondary">{t.coresPage.assignedNodesTitle}</div>
+      {nodes.length === 0 && <div className="text-xs text-faint">{t.nodesPage.noNodesYet}</div>}
       <div className="flex flex-col gap-1.5">
         {nodes.map((n) => {
           const assignedHere = isIpsec ? n.ipsec_core_id === core.id : n.core_id === core.id
           const assignedElsewhere = !assignedHere && (isIpsec ? n.ipsec_core_id != null : n.core_id != null)
           return (
-            <div key={n.id} className="rounded-lg border border-white/10 p-2">
+            <div key={n.id} className="rounded-lg border border-subtle p-2">
               <label className="flex cursor-pointer items-center justify-between gap-2 text-xs">
                 <span className="flex items-center gap-2">
                   <input
@@ -544,16 +544,16 @@ function NodeAssignmentEditor({
                     disabled={busyId === n.id}
                     onChange={(e) => toggle(n, e.target.checked)}
                   />
-                  <span className="text-slate-200">{n.name}</span>
-                  <span dir="ltr" className="font-mono text-[10px] text-slate-500">
+                  <span className="text-body">{n.name}</span>
+                  <span dir="ltr" className="font-mono text-[10px] text-faint">
                     {n.address}
                   </span>
                 </span>
-                {assignedElsewhere && <span className="text-[10px] text-amber-400">{t.coresPage.assignedElsewhere}</span>}
+                {assignedElsewhere && <span className="text-[10px] text-warning">{t.coresPage.assignedElsewhere}</span>}
               </label>
               {core.core_type === 'l2tp' && assignedHere && (
                 <div className="mt-2">
-                  <label className="mb-1 block text-[10px] text-slate-500" title={t.nodesPage.l2tpEgressHint}>
+                  <label className="mb-1 block text-[10px] text-faint" title={t.nodesPage.l2tpEgressHint}>
                     {t.nodesPage.l2tpEgressLabel}
                   </label>
                   <div className="flex gap-1.5">
@@ -795,7 +795,7 @@ export default function CoresPage() {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.coresPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.coresPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
@@ -804,10 +804,10 @@ export default function CoresPage() {
           {t.coresPage.newBtn}
         </button>
       </div>
-      <p className="mb-6 text-sm text-slate-400">{t.coresPage.intro}</p>
+      <p className="mb-6 text-sm text-muted">{t.coresPage.intro}</p>
 
       {showForm && (
-        <div className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
+        <div className="mb-6 rounded-xl border border-cyan-400/20 bg-surface p-4">
           <div className="mb-4">
             <label className={labelClass}>{t.coresPage.coreTypeLabel}</label>
             <div className="flex flex-wrap gap-2">
@@ -828,13 +828,13 @@ export default function CoresPage() {
                 </button>
               ))}
             </div>
-            {editingId && <div className="mt-1.5 text-[11px] text-slate-500">{t.coresPage.coreTypeHint}</div>}
+            {editingId && <div className="mt-1.5 text-[11px] text-faint">{t.coresPage.coreTypeHint}</div>}
           </div>
 
           {form.coreType === 'xray' && (
-          <div className="mb-4 rounded-lg border border-white/10 bg-black/20 p-3">
-            <div className="mb-1 text-xs font-bold text-slate-300">{t.coresPage.wizardTitle}</div>
-            <div className="mb-3 text-[11px] text-slate-500">{t.coresPage.wizardHint}</div>
+          <div className="mb-4 rounded-lg border border-subtle bg-well p-3">
+            <div className="mb-1 text-xs font-bold text-secondary">{t.coresPage.wizardTitle}</div>
+            <div className="mb-3 text-[11px] text-faint">{t.coresPage.wizardHint}</div>
 
             <div className="flex flex-wrap gap-3">
               <div>
@@ -977,8 +977,8 @@ export default function CoresPage() {
             )}
 
             {isTransportProtocol && wizard.security === 'reality' && (
-              <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
-                <div className="mb-2 text-xs font-bold text-slate-300">{t.coresPage.realityToolsTitle}</div>
+              <div className="mt-3 rounded-lg border border-subtle bg-well p-3">
+                <div className="mb-2 text-xs font-bold text-secondary">{t.coresPage.realityToolsTitle}</div>
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
@@ -998,7 +998,7 @@ export default function CoresPage() {
                   >
                     {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
                   </button>
-                  <div className="text-[11px] text-slate-500">
+                  <div className="text-[11px] text-faint">
                     <span dir="ltr" className="font-mono">
                       privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'} · shortId:{' '}
                       {wizard.realityShortId || '—'}
@@ -1014,7 +1014,7 @@ export default function CoresPage() {
                         type="button"
                         onClick={() => copy(generatedKey[key], key)}
                         dir="ltr"
-                        className="truncate rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-left font-mono text-[11px] text-cyan-200 hover:border-cyan-400/40"
+                        className="truncate rounded-lg border border-subtle bg-well px-2 py-1.5 text-left font-mono text-[11px] text-accent hover:border-cyan-400/40"
                         title={generatedKey[key]}
                       >
                         {copiedField === key ? t.coresPage.copied : `${key}: ${generatedKey[key]}`}
@@ -1024,10 +1024,10 @@ export default function CoresPage() {
                 )}
 
                 {scanResults !== null && scanResults.length > 0 && (
-                  <div className="mt-3 max-h-64 overflow-y-auto overflow-x-auto rounded-lg border border-white/10">
+                  <div className="mt-3 max-h-64 overflow-y-auto overflow-x-auto rounded-lg border border-subtle">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b border-white/10 text-slate-400">
+                        <tr className="border-b border-subtle text-muted">
                           <th className="px-3 py-2 text-left font-medium" dir="ltr">
                             {t.coresPage.scanColHost}
                           </th>
@@ -1039,8 +1039,8 @@ export default function CoresPage() {
                       </thead>
                       <tbody>
                         {scanResults.map((r) => (
-                          <tr key={r.host} className="border-b border-white/5 last:border-0">
-                            <td dir="ltr" className="px-3 py-2 text-left font-mono text-slate-200">
+                          <tr key={r.host} className="border-b border-hair last:border-0">
+                            <td dir="ltr" className="px-3 py-2 text-left font-mono text-body">
                               {r.host}
                             </td>
                             <td className="px-3 py-2 text-center">
@@ -1049,15 +1049,15 @@ export default function CoresPage() {
                                   {t.coresPage.scanStatusRecommended}
                                 </span>
                               ) : r.reachable ? (
-                                <span className="text-slate-300">{t.coresPage.scanStatusUsable}</span>
+                                <span className="text-secondary">{t.coresPage.scanStatusUsable}</span>
                               ) : (
-                                <span className="text-red-400">{t.coresPage.scanStatusUnreachable}</span>
+                                <span className="text-danger">{t.coresPage.scanStatusUnreachable}</span>
                               )}
                             </td>
-                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
+                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
                               {r.tls_version ?? '—'}
                             </td>
-                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
+                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
                               {r.latency_ms != null ? `${r.latency_ms}ms` : '—'}
                             </td>
                             <td className="px-3 py-2 text-left">
@@ -1206,7 +1206,7 @@ export default function CoresPage() {
                     className={`${inputClass} w-64 font-mono text-xs`}
                   />
                 </div>
-                <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.l2tpHint}</div>
+                <div className="self-end pb-2 text-[10px] text-faint">{t.hostsPage.l2tpHint}</div>
               </div>
             )}
 
@@ -1231,12 +1231,12 @@ export default function CoresPage() {
                     className={`${inputClass} w-56 text-left`}
                   />
                 </div>
-                <div className="self-end pb-2 text-[10px] text-slate-500">{t.hostsPage.ikev2PortsHint}</div>
+                <div className="self-end pb-2 text-[10px] text-faint">{t.hostsPage.ikev2PortsHint}</div>
               </div>
             )}
 
             {lastWarnings.length > 0 && (
-              <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200">
+              <div className="mt-3 rounded-lg border border-warning bg-warning-tint p-3 text-xs text-warning">
                 <div className="mb-1 font-bold">{t.coresPage.warningsTitle}</div>
                 <ul className="list-inside list-disc">
                   {lastWarnings.map((w, i) => (
@@ -1246,7 +1246,7 @@ export default function CoresPage() {
               </div>
             )}
 
-            {error && <div className="mt-3 text-xs text-red-400">{error}</div>}
+            {error && <div className="mt-3 text-xs text-danger">{error}</div>}
 
             <button
               type="submit"
@@ -1261,52 +1261,52 @@ export default function CoresPage() {
         </div>
       )}
 
-      {!showForm && error && <div className="mb-4 text-sm text-red-400">{error}</div>}
+      {!showForm && error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      {cores === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {cores === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
       {cores !== null && cores.length === 0 && (
-        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+        <div className="rounded-xl border border-subtle py-8 text-center text-faint">
           {t.coresPage.noCoresYet}
         </div>
       )}
 
       <div className="flex flex-col gap-4">
         {cores?.map((c) => (
-          <div key={c.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+          <div key={c.id} className="rounded-xl border border-subtle bg-surface p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-100">{c.name}</span>
-                  <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-slate-300">
+                  <span className="font-bold text-primary">{c.name}</span>
+                  <span className="rounded-full border border-edge bg-field px-2 py-0.5 text-[10px] text-secondary">
                     {t.coresPage.coreTypeLabels[c.core_type]}
                   </span>
                 </div>
-                {c.note && <div className="text-xs text-slate-500">{c.note}</div>}
+                {c.note && <div className="text-xs text-faint">{c.note}</div>}
               </div>
               <div className="flex items-center gap-4">
                 {c.core_type === 'xray' ? (
-                  <span className="text-xs text-slate-400">
-                    {t.coresPage.colNodes}: <span className="text-slate-200">{c.node_count}</span>
+                  <span className="text-xs text-muted">
+                    {t.coresPage.colNodes}: <span className="text-body">{c.node_count}</span>
                   </span>
                 ) : (
-                  <span className="text-xs text-slate-400">
-                    {t.coresPage.colHosts}: <span className="text-slate-200">{c.host_count}</span>
+                  <span className="text-xs text-muted">
+                    {t.coresPage.colHosts}: <span className="text-body">{c.host_count}</span>
                   </span>
                 )}
-                <button onClick={() => startEdit(c)} className="text-xs text-slate-400 hover:underline">
+                <button onClick={() => startEdit(c)} className="text-xs text-muted hover:underline">
                   {t.common.edit}
                 </button>
-                <button onClick={() => handleDelete(c)} className="text-xs text-red-400 hover:underline">
+                <button onClick={() => handleDelete(c)} className="text-xs text-danger hover:underline">
                   {t.common.delete}
                 </button>
               </div>
             </div>
 
             {c.core_type === 'l2tp' && (
-              <div className="text-xs text-slate-400">PSK: {c.l2tp_psk ? '••••••••' : '—'}</div>
+              <div className="text-xs text-muted">PSK: {c.l2tp_psk ? '••••••••' : '—'}</div>
             )}
             {c.core_type === 'ikev2' && (
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-muted">
                 PSK: {c.ikev2_psk ? '••••••••' : '—'}
                 {c.ikev2_remote_id && (
                   <span dir="ltr" className="font-mono">
@@ -1318,12 +1318,12 @@ export default function CoresPage() {
             )}
 
             {c.core_type === 'xray' && c.inbounds.length === 0 ? (
-              <div className="text-xs text-slate-500">{t.coresPage.noInbounds}</div>
+              <div className="text-xs text-faint">{t.coresPage.noInbounds}</div>
             ) : c.core_type === 'xray' ? (
-              <div className="overflow-x-auto rounded-lg border border-white/10">
+              <div className="overflow-x-auto rounded-lg border border-subtle">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-white/10 text-slate-400">
+                    <tr className="border-b border-subtle text-muted">
                       <th className="px-3 py-2 text-left font-medium" dir="ltr">
                         {t.coresPage.inboundColTag}
                       </th>
@@ -1336,27 +1336,27 @@ export default function CoresPage() {
                   </thead>
                   <tbody>
                     {c.inbounds.map((i) => (
-                      <tr key={i.id} className="border-b border-white/5 last:border-0">
-                        <td dir="ltr" className="px-3 py-2 text-left font-mono text-slate-200">
+                      <tr key={i.id} className="border-b border-hair last:border-0">
+                        <td dir="ltr" className="px-3 py-2 text-left font-mono text-body">
                           {i.tag}
                         </td>
-                        <td className="px-3 py-2 text-center text-slate-300">
+                        <td className="px-3 py-2 text-center text-secondary">
                           {protocolLabels[i.protocol as keyof typeof protocolLabels] ?? i.protocol}
                         </td>
-                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
+                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
                           {i.network}
                         </td>
-                        <td className="px-3 py-2 text-center text-slate-400">
+                        <td className="px-3 py-2 text-center text-muted">
                           {i.security === 'reality' ? (
                             <span style={{ color: ACCENT }}>REALITY</span>
                           ) : (
                             i.security
                           )}
                         </td>
-                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-slate-400">
+                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
                           {i.port ?? '—'}
                         </td>
-                        <td className="px-3 py-2 text-center text-slate-400">{i.host_count}</td>
+                        <td className="px-3 py-2 text-center text-muted">{i.host_count}</td>
                       </tr>
                     ))}
                   </tbody>

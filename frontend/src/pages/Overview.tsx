@@ -25,16 +25,16 @@ const statusDot: Record<NodeStatus, string> = {
 }
 
 const statusBadge: Record<NodeStatus, string> = {
-  connected: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/30',
-  pending: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
-  error: 'bg-red-400/10 text-red-300 border-red-400/30',
+  connected: 'bg-success-tint text-success border-success',
+  pending: 'bg-neutral-tint text-muted border-neutral',
+  error: 'bg-danger-tint text-danger border-danger',
 }
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-      <div className="text-2xl font-bold text-slate-50">{value}</div>
-      <div className="mt-1 text-xs text-slate-400">{label}</div>
+    <div className="rounded-xl border border-subtle bg-surface p-4">
+      <div className="text-2xl font-bold text-heading">{value}</div>
+      <div className="mt-1 text-xs text-muted">{label}</div>
     </div>
   )
 }
@@ -42,15 +42,15 @@ function StatTile({ label, value }: { label: string; value: number }) {
 function BreakdownCard({ title, rows }: { title: string; rows: { label: string; count: number }[] }) {
   const { t } = useLang()
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-      <div className="mb-3 text-sm font-bold text-slate-100">{title}</div>
+    <div className="rounded-xl border border-subtle bg-surface p-4">
+      <div className="mb-3 text-sm font-bold text-primary">{title}</div>
       {rows.length === 0 ? (
-        <div className="text-xs text-slate-500">{t.overviewPage.noneYet}</div>
+        <div className="text-xs text-faint">{t.overviewPage.noneYet}</div>
       ) : (
         <div className="flex flex-col gap-2">
           {rows.map((r) => (
             <div key={r.label} className="flex items-center justify-between text-sm">
-              <span className="text-slate-300">{r.label}</span>
+              <span className="text-secondary">{r.label}</span>
               <span className="font-bold" style={{ color: ACCENT }}>
                 {r.count}
               </span>
@@ -78,16 +78,16 @@ function TrafficChart({ points }: { points: TrafficHistoryPoint[] }) {
   const barGapPx = 4
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+    <div className="rounded-xl border border-subtle bg-surface p-4">
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-bold text-slate-100">{t.overviewPage.trafficHistoryTitle}</div>
+        <div className="text-sm font-bold text-primary">{t.overviewPage.trafficHistoryTitle}</div>
         <div dir="ltr" className="font-mono text-xs" style={{ fontVariantNumeric: 'tabular-nums', color: ACCENT }}>
           {t.overviewPage.trafficHistoryTotal(formatBytes(total))}
         </div>
       </div>
 
       {!hasData ? (
-        <div className={`py-6 text-center text-xs text-slate-500 ${align}`}>{t.overviewPage.trafficHistoryNoData}</div>
+        <div className={`py-6 text-center text-xs text-faint ${align}`}>{t.overviewPage.trafficHistoryNoData}</div>
       ) : (
         <div dir="ltr" className="flex items-end" style={{ height: chartHeight, gap: barGapPx }}>
           {points.map((p) => {
@@ -112,7 +112,7 @@ function TrafficChart({ points }: { points: TrafficHistoryPoint[] }) {
         </div>
       )}
       {hasData && (
-        <div dir="ltr" className="mt-2 flex justify-between text-[10px] text-slate-500">
+        <div dir="ltr" className="mt-2 flex justify-between text-[10px] text-faint">
           <span>{new Date(points[0].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
           <span>{new Date(points[points.length - 1].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
         </div>
@@ -171,9 +171,9 @@ export default function OverviewPage() {
 
   return (
     <div dir={dir}>
-      <h1 className="mb-6 text-xl font-bold text-slate-50">{t.overviewPage.title}</h1>
+      <h1 className="mb-6 text-xl font-bold text-heading">{t.overviewPage.title}</h1>
 
-      {loading && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {loading && <div className="py-8 text-center text-faint">{t.loading}</div>}
 
       {!loading && (
         <>
@@ -222,17 +222,17 @@ export default function OverviewPage() {
           </div>
 
           {nodes && (
-            <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-              <div className="mb-3 text-sm font-bold text-slate-100">{t.overviewPage.nodesStatusTitle}</div>
+            <div className="rounded-xl border border-subtle bg-surface p-4">
+              <div className="mb-3 text-sm font-bold text-primary">{t.overviewPage.nodesStatusTitle}</div>
               {nodes.length === 0 ? (
-                <div className="text-xs text-slate-500">{t.overviewPage.noneYet}</div>
+                <div className="text-xs text-faint">{t.overviewPage.noneYet}</div>
               ) : (
                 <div className="flex flex-col gap-2">
                   {nodes.map((n) => (
-                    <div key={n.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                    <div key={n.id} className="flex items-center justify-between rounded-lg border border-hair bg-field px-3 py-2">
                       <div className="flex items-center gap-2">
                         <span className={`h-2 w-2 rounded-full ${statusDot[n.status]}`} />
-                        <span className="text-sm text-slate-200">{n.name}</span>
+                        <span className="text-sm text-body">{n.name}</span>
                       </div>
                       <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge[n.status]}`}>
                         {nodeStatusLabels[n.status]}
