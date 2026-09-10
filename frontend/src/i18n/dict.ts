@@ -421,6 +421,8 @@ export const dict = {
 
       routingTitle: 'مسیریابی (Routing)',
       routingHint: 'قانون‌ها به ترتیب از بالا به پایین چک می‌شن — اولین قانونی که مچ بشه برنده‌ست.',
+      applyRecommendedBtn: 'اعمال تنظیمات پیشنهادی',
+      applyRecommendedHint: 'بلاک آی‌پی‌های لوکال و تبلیغات + مسیر مستقیم برای ترافیک ایران، به‌علاوه‌ی سرور DNS پیش‌فرض — فقط چیزایی که کم داری اضافه می‌شه، هر چی خودت قبلاً ساختی دست‌نخورده می‌مونه.',
       addRuleBtn: '+ قانون جدید',
       noRulesYet: 'هنوز قانون مسیریابی‌ای اضافه نشده',
       ruleDomainLabel: 'دامنه (با کاما جدا کن)',
@@ -962,6 +964,8 @@ export const dict = {
 
       routingTitle: 'Routing',
       routingHint: 'Rules are checked top to bottom — the first one that matches wins.',
+      applyRecommendedBtn: 'Apply recommended settings',
+      applyRecommendedHint: 'Blocks private IPs and ads, routes Iranian traffic directly, and sets a default DNS server — only adds what you\'re missing, anything you already set up is left untouched.',
       addRuleBtn: '+ Add rule',
       noRulesYet: 'No routing rules yet',
       ruleDomainLabel: 'Domain (comma-separated)',

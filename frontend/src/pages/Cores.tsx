@@ -135,6 +135,50 @@ type RoutingRule = {
   outboundTag?: string
 }
 
+// A standard, admin-agnostic starting point — nothing here ever contains a
+// real address/key, so it's safe to ship as a one-click option rather than
+// a value someone has to type in. Order matters (first match wins): block
+// leaks/ads before the two "route locally, don't tunnel" rules.
+const RECOMMENDED_RULES: RoutingRule[] = [
+  { type: 'field', ip: ['geoip:private'], outboundTag: 'block' },
+  { type: 'field', domain: ['geosite:category-ads-all'], outboundTag: 'block' },
+  { type: 'field', ip: ['geoip:ir'], outboundTag: 'direct' },
+  { type: 'field', domain: ['geosite:ir'], outboundTag: 'direct' },
+]
+const RECOMMENDED_DNS_SERVERS = ['1.1.1.1', '8.8.8.8']
+
+function ruleSignature(r: RoutingRule): string {
+  return JSON.stringify({ domain: r.domain ?? [], ip: r.ip ?? [], outboundTag: r.outboundTag ?? '' })
+}
+
+// Merges the recommended rules/outbounds/DNS into whatever's already there
+// instead of replacing it — existing custom rules, outbounds and DNS
+// servers are left exactly as the admin set them; only what's missing gets
+// added (and rule order among the recommended ones is preserved).
+function applyRecommendedRouting(configText: string): string {
+  const config = parseConfig(configText)
+
+  const outbounds = Array.isArray(config.outbounds) ? [...(config.outbounds as OutboundEntry[])] : []
+  const existingTags = new Set(outbounds.map((o) => o.tag))
+  if (!existingTags.has('direct')) outbounds.push({ tag: 'direct', protocol: 'freedom', settings: {} })
+  if (!existingTags.has('block')) outbounds.push({ tag: 'block', protocol: 'blackhole', settings: {} })
+
+  const routing = (config.routing as { rules?: RoutingRule[] } | undefined) ?? {}
+  const existingRules = Array.isArray(routing.rules) ? routing.rules : []
+  const existingSignatures = new Set(existingRules.map(ruleSignature))
+  const missingRules = RECOMMENDED_RULES.filter((r) => !existingSignatures.has(ruleSignature(r)))
+  const rules = [...existingRules, ...missingRules]
+
+  const dns = (config.dns as { servers?: string[] } | undefined) ?? {}
+  const dnsServers = Array.isArray(dns.servers) && dns.servers.length > 0 ? dns.servers : RECOMMENDED_DNS_SERVERS
+
+  return JSON.stringify(
+    { ...config, outbounds, routing: { ...routing, rules }, dns: { ...dns, servers: dnsServers } },
+    null,
+    2,
+  )
+}
+
 // RoutingEditor edits config.routing.rules directly on the same raw JSON
 // string the rest of the form (and the inbound wizard above it) already
 // treats as the single source of truth - no separate state to drift out
@@ -179,9 +223,19 @@ function RoutingEditor({
     <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
       <div className="mb-1 flex items-center justify-between">
         <div className="text-xs font-bold text-secondary">{t.coresPage.routingTitle}</div>
-        <button type="button" onClick={addRule} className="text-xs font-bold" style={{ color: ACCENT }}>
-          {t.coresPage.addRuleBtn}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setConfigText(applyRecommendedRouting(configText))}
+            title={t.coresPage.applyRecommendedHint}
+            className="text-xs font-bold text-muted hover:text-body"
+          >
+            {t.coresPage.applyRecommendedBtn}
+          </button>
+          <button type="button" onClick={addRule} className="text-xs font-bold" style={{ color: ACCENT }}>
+            {t.coresPage.addRuleBtn}
+          </button>
+        </div>
       </div>
       <div className="mb-3 text-[11px] text-faint">{t.coresPage.routingHint}</div>
       {rules.length === 0 && <div className="text-xs text-faint">{t.coresPage.noRulesYet}</div>}
