@@ -19,8 +19,9 @@ PANEL_URL=""
 # the "garbled unclear lines" this is here to avoid.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_CYAN=$'\033[1;36m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
+  C_BOLD=$'\033[1m'
 else
-  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""
+  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""
 fi
 
 info() { printf '%s[Tifusi]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
@@ -38,20 +39,21 @@ step() {
 }
 
 banner() {
-  local title=" TIFUSI PANEL " line
-  line=$(printf '%*s' "${#title}" '' | tr ' ' '=')
-  printf '\n%s+%s+\n|%s|\n+%s+%s\n\n' "$C_CYAN" "$line" "$title" "$line" "$C_RESET"
-}
-
-# A single labeled box, sized to its own content — used for the SSL summary
-# at the end so it actually stands out from the surrounding plain info lines
-# instead of blending into a wall of text.
-box() {
-  local label="$1" value="$2" content width bar
-  content="  ${label}: ${value}  "
-  width=${#content}
+  # Kept narrow on purpose (~20 cols) despite wanting to stand out more —
+  # a wider box wraps mid-line on a narrow terminal (a phone SSH client,
+  # for instance) and comes out looking like garbled rows of "=" instead
+  # of a box. Extra blank padding rows plus bold/colored title text make
+  # it read as bigger without widening it.
+  local title="TIFUSI PANEL" text width bar blank
+  text="   ${title}   "
+  width=${#text}
   bar=$(printf '%*s' "$width" '' | tr ' ' '=')
-  printf '%s+%s+\n|%s|\n+%s+%s\n' "$C_CYAN" "$bar" "$content" "$bar" "$C_RESET"
+  blank=$(printf '%*s' "$width" '')
+  printf '\n%s+%s+\n' "$C_CYAN" "$bar"
+  printf '|%s|\n' "$blank"
+  printf '|%s%s%s%s|\n' "$C_YELLOW" "$C_BOLD" "$text" "$C_RESET$C_CYAN"
+  printf '|%s|\n' "$blank"
+  printf '+%s+%s\n\n' "$bar" "$C_RESET"
 }
 
 banner
@@ -102,10 +104,37 @@ if [ ! -f .env ]; then
 fi
 
 step "Ports"
-read -r -p "Panel API port [8000]: " panel_port
-panel_port=${panel_port:-8000}
-read -r -p "Dashboard (web UI) port [8080]: " dashboard_port
-dashboard_port=${dashboard_port:-8080}
+# A port already in use on this server would make the container fail to
+# start later with a confusing Docker error — check now instead, and if
+# the caller just hits Enter (wants the default), pick the next free port
+# starting from it rather than blindly handing back something taken.
+port_in_use() {
+  (command -v ss >/dev/null 2>&1 && ss -tlnH "( sport = :$1 )" 2>/dev/null | grep -q .) \
+    || (command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1)
+}
+next_free_port() {
+  local p="$1"
+  while port_in_use "$p"; do p=$((p + 1)); done
+  echo "$p"
+}
+
+read -r -p "Panel API port (Enter to auto-pick, starting from 8000): " panel_port
+if [ -z "$panel_port" ]; then
+  panel_port=$(next_free_port 8000)
+  info "Auto-picked port $panel_port for the panel API."
+elif port_in_use "$panel_port"; then
+  warn "Port $panel_port is already in use on this server — pick a different one."
+  read -r -p "Panel API port: " panel_port
+fi
+
+read -r -p "Dashboard (web UI) port (Enter to auto-pick, starting from 8080): " dashboard_port
+if [ -z "$dashboard_port" ]; then
+  dashboard_port=$(next_free_port 8080)
+  info "Auto-picked port $dashboard_port for the dashboard."
+elif port_in_use "$dashboard_port"; then
+  warn "Port $dashboard_port is already in use on this server — pick a different one."
+  read -r -p "Dashboard port: " dashboard_port
+fi
 awk -v p="$panel_port" -v d="$dashboard_port" '
   /^TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
   /^# TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
@@ -185,10 +214,8 @@ HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 HOST_IP="${HOST_IP:-<server-ip>}"
 info "The panel is up."
 if [ -n "$PANEL_PUBLIC_URL" ]; then
-  printf '\n'
-  box "SSL" "enabled (Let's Encrypt, ${domain:-})"
-  box "Certificate path" "${INSTALL_DIR}/certs/fullchain.pem + privkey.pem"
-  printf '\n'
+  info "  SSL:        enabled (Let's Encrypt, ${domain:-})"
+  info "  Certs:      ${INSTALL_DIR}/certs/fullchain.pem + privkey.pem"
   info "  Dashboard:  $PANEL_PUBLIC_URL"
 else
   info "  Dashboard:  http://${HOST_IP}:${dashboard_port}"

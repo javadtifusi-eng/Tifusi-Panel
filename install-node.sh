@@ -17,8 +17,9 @@ trap 'rm -rf "$CLONE_DIR"' EXIT
 # the "garbled unclear lines" this is here to avoid.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_CYAN=$'\033[1;36m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
+  C_BOLD=$'\033[1m'
 else
-  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""
+  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""
 fi
 
 info() { printf '%s[Tifusi Node]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
@@ -26,9 +27,21 @@ warn() { printf '%s[Warning]%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
 fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
 
 banner() {
-  local title=" TIFUSI NODE " line
-  line=$(printf '%*s' "${#title}" '' | tr ' ' '=')
-  printf '\n%s+%s+\n|%s|\n+%s+%s\n\n' "$C_CYAN" "$line" "$title" "$line" "$C_RESET"
+  # Kept narrow on purpose (~20 cols) despite wanting to stand out more —
+  # a wider box wraps mid-line on a narrow terminal (a phone SSH client,
+  # for instance) and comes out looking like garbled rows of "=" instead
+  # of a box. Extra blank padding rows plus bold/colored title text make
+  # it read as bigger without widening it.
+  local title="TIFUSI NODE" text width bar blank
+  text="   ${title}   "
+  width=${#text}
+  bar=$(printf '%*s' "$width" '' | tr ' ' '=')
+  blank=$(printf '%*s' "$width" '')
+  printf '\n%s+%s+\n' "$C_CYAN" "$bar"
+  printf '|%s|\n' "$blank"
+  printf '|%s%s%s%s|\n' "$C_YELLOW" "$C_BOLD" "$text" "$C_RESET$C_CYAN"
+  printf '|%s|\n' "$blank"
+  printf '+%s+%s\n\n' "$bar" "$C_RESET"
 }
 
 banner
