@@ -1,6 +1,11 @@
 services:
   panel:
     build: ./backend
+    # Lets `docker compose pull` grab the prebuilt image (built by
+    # .github/workflows/build-images.yml) instead of building locally —
+    # `docker compose up -d --build` still always rebuilds from ./backend
+    # regardless, for local changes. See install.sh.
+    image: ${TIFUSI_PANEL_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-backend:latest}
     container_name: tifusi-panel
     restart: unless-stopped
     ports:
@@ -17,6 +22,7 @@ services:
 
   dashboard:
     build: ./frontend
+    image: ${TIFUSI_DASHBOARD_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-frontend:latest}
     container_name: tifusi-dashboard
     restart: unless-stopped
     ports:

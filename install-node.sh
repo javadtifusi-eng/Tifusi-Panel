@@ -53,18 +53,31 @@ if [ -z "$API_KEY" ]; then
 fi
 [ -n "$API_KEY" ] || fail "Can't continue without an API key."
 
-info "Downloading source..."
-git clone --depth 1 "$REPO_URL" "$CLONE_DIR" >/dev/null
+# Prebuilt (by .github/workflows/build-images.yml) beats building locally —
+# this Dockerfile compiles strongSwan from source for EAP-MSCHAPv2 support,
+# which on a small single-vCPU VPS is several minutes of single-threaded
+# compilation every single install. Falls back to a real local build (and
+# the git clone it needs) if the pull fails — offline registry, a fork
+# with no images published yet, or this repo's Packages not made Public.
+PREBUILT_IMAGE="ghcr.io/javadtifusi-eng/tifusi-node-agent:latest"
+info "Trying the prebuilt node image first (faster than compiling strongSwan locally)..."
+if docker pull "$PREBUILT_IMAGE" >/dev/null 2>&1; then
+  docker tag "$PREBUILT_IMAGE" tifusi-node-agent
+  info "Pulled the prebuilt node image."
+else
+  info "Prebuilt image unavailable — building locally instead. This compiles strongSwan from source and can take several minutes."
+  info "Downloading source..."
+  git clone --depth 1 "$REPO_URL" "$CLONE_DIR" >/dev/null
 
-info "Building the node image (downloads the real Xray-core binary)..."
-BUILD_LOG="$(mktemp)"
-if ! docker build -t tifusi-node-agent -f "$CLONE_DIR/backend/node_agent/Dockerfile" "$CLONE_DIR/backend" > "$BUILD_LOG" 2>&1; then
-  warn "Build failed — full output:"
-  cat "$BUILD_LOG"
+  BUILD_LOG="$(mktemp)"
+  if ! docker build -t tifusi-node-agent -f "$CLONE_DIR/backend/node_agent/Dockerfile" "$CLONE_DIR/backend" > "$BUILD_LOG" 2>&1; then
+    warn "Build failed — full output:"
+    cat "$BUILD_LOG"
+    rm -f "$BUILD_LOG"
+    exit 1
+  fi
   rm -f "$BUILD_LOG"
-  exit 1
 fi
-rm -f "$BUILD_LOG"
 
 if docker ps -a --format '{{.Names}}' | grep -qx tifusi-node; then
   info "A container named tifusi-node already exists, replacing it..."

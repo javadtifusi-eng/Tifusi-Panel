@@ -152,9 +152,16 @@ fi
 PANEL_PUBLIC_URL="${PANEL_PUBLIC_URL:-}"
 
 step "Building & starting containers"
-info "Bringing the panel up with Docker Compose (this can take a few minutes)..."
 BUILD_LOG="$(mktemp)"
-if ! docker compose up -d --build > "$BUILD_LOG" 2>&1; then
+info "Trying prebuilt images first (faster than building locally, especially on a low-core server)..."
+if docker compose pull > "$BUILD_LOG" 2>&1; then
+  info "Pulled prebuilt images."
+  BUILD_CMD=(docker compose up -d)
+else
+  info "Prebuilt images aren't available (offline registry, or this repo's Packages aren't Public yet) — building locally instead. This can take a few minutes."
+  BUILD_CMD=(docker compose up -d --build)
+fi
+if ! "${BUILD_CMD[@]}" > "$BUILD_LOG" 2>&1; then
   warn "Build failed — full output:"
   cat "$BUILD_LOG"
   rm -f "$BUILD_LOG"
