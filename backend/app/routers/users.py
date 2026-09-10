@@ -8,6 +8,7 @@ from app.database import get_db
 from app.dependencies import require_permission
 from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_links_for_user, render_remark
+from app.models.admin import Admin
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
@@ -34,22 +35,35 @@ router = APIRouter(
 )
 
 
+def _owned_query(admin: Admin, stmt):
+    """Every listing/lookup goes through this: the owner sees every user,
+    a non-owner admin only ever sees ones they created. A pre-existing row
+    from before admin_id existed (NULL) is nobody's — visible only to the
+    owner, never silently handed to whichever admin happens to look."""
+    if admin.is_owner:
+        return stmt
+    return stmt.where(ProxyUser.admin_id == admin.id)
+
+
 @router.get("", response_model=ProxyUserList)
 async def list_users(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> ProxyUserList:
-    total = await db.scalar(select(func.count()).select_from(ProxyUser))
+    total = await db.scalar(_owned_query(admin, select(func.count()).select_from(ProxyUser)))
     result = await db.execute(
-        select(ProxyUser).order_by(ProxyUser.id.desc()).offset(offset).limit(limit)
+        _owned_query(admin, select(ProxyUser)).order_by(ProxyUser.id.desc()).offset(offset).limit(limit)
     )
     return ProxyUserList(total=total or 0, users=list(result.scalars().all()))
 
 
 @router.post("", response_model=ProxyUserResponse, status_code=201)
 async def create_user(
-    payload: ProxyUserCreate, db: AsyncSession = Depends(get_db)
+    payload: ProxyUserCreate,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
 ) -> ProxyUser:
     existing = await db.scalar(select(ProxyUser).where(ProxyUser.username == payload.username))
     if existing is not None:
@@ -66,6 +80,7 @@ async def create_user(
         on_hold_expire_days=payload.on_hold_expire_days if payload.status == UserStatus.on_hold else None,
         hwid_limit=payload.hwid_limit,
         note=payload.note,
+        admin_id=admin.id,
     )
     user.groups = await resolve_groups(payload.group_ids, db) or []
     db.add(user)
@@ -77,7 +92,9 @@ async def create_user(
 
 @router.post("/bulk-create", response_model=BulkCreateResult, status_code=201)
 async def bulk_create_users(
-    payload: BulkCreateRequest, db: AsyncSession = Depends(get_db)
+    payload: BulkCreateRequest,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
 ) -> BulkCreateResult:
     groups = await resolve_groups(payload.group_ids, db) or []
     existing = set(
@@ -102,6 +119,7 @@ async def bulk_create_users(
             expire=payload.expire,
             hwid_limit=payload.hwid_limit,
             note=payload.note,
+            admin_id=admin.id,
         )
         user.groups = list(groups)
         db.add(user)
@@ -117,10 +135,19 @@ async def bulk_create_users(
 
 @router.post("/bulk-update", response_model=BulkUpdateResult)
 async def bulk_update_users(
-    payload: BulkUpdateRequest, db: AsyncSession = Depends(get_db)
+    payload: BulkUpdateRequest,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
 ) -> BulkUpdateResult:
+    # Silently drops any id the admin doesn't own rather than erroring — the
+    # same shape as asking for a page of "my users" that includes a stale
+    # id: it just doesn't come back, no need to fail the whole batch over it.
     users = list(
-        (await db.execute(select(ProxyUser).where(ProxyUser.id.in_(payload.user_ids)))).scalars().all()
+        (
+            await db.execute(_owned_query(admin, select(ProxyUser).where(ProxyUser.id.in_(payload.user_ids))))
+        )
+        .scalars()
+        .all()
     )
     field_updates = payload.model_dump(
         exclude_unset=True, exclude={"user_ids", "add_group_ids", "remove_group_ids"}
@@ -144,10 +171,16 @@ async def bulk_update_users(
 
 @router.post("/bulk-delete", response_model=BulkDeleteResult)
 async def bulk_delete_users(
-    payload: BulkDeleteRequest, db: AsyncSession = Depends(get_db)
+    payload: BulkDeleteRequest,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
 ) -> BulkDeleteResult:
     users = list(
-        (await db.execute(select(ProxyUser).where(ProxyUser.id.in_(payload.user_ids)))).scalars().all()
+        (
+            await db.execute(_owned_query(admin, select(ProxyUser).where(ProxyUser.id.in_(payload.user_ids))))
+        )
+        .scalars()
+        .all()
     )
     for user in users:
         await db.delete(user)
@@ -155,23 +188,31 @@ async def bulk_delete_users(
     return BulkDeleteResult(deleted=len(users))
 
 
-async def _get_user_or_404(user_id: int, db: AsyncSession) -> ProxyUser:
+async def _get_user_or_404(user_id: int, admin: Admin, db: AsyncSession) -> ProxyUser:
     user = await db.get(ProxyUser, user_id)
-    if user is None:
+    # 404, not 403, for a user outside this admin's ownership — same
+    # response as it not existing at all, so a non-owner admin can't probe
+    # for ids belonging to someone else's customers.
+    if user is None or (not admin.is_owner and user.admin_id != admin.id):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
 
 @router.get("/{user_id}", response_model=ProxyUserResponse)
-async def get_user(user_id: int, db: AsyncSession = Depends(get_db)) -> ProxyUser:
-    return await _get_user_or_404(user_id, db)
+async def get_user(
+    user_id: int, admin: Admin = Depends(require_permission("users")), db: AsyncSession = Depends(get_db)
+) -> ProxyUser:
+    return await _get_user_or_404(user_id, admin, db)
 
 
 @router.put("/{user_id}", response_model=ProxyUserResponse)
 async def update_user(
-    user_id: int, payload: ProxyUserUpdate, db: AsyncSession = Depends(get_db)
+    user_id: int,
+    payload: ProxyUserUpdate,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
 ) -> ProxyUser:
-    user = await _get_user_or_404(user_id, db)
+    user = await _get_user_or_404(user_id, admin, db)
 
     for field, value in payload.model_dump(exclude_unset=True, exclude={"group_ids"}).items():
         setattr(user, field, value)
@@ -187,20 +228,24 @@ async def update_user(
 
 
 @router.delete("/{user_id}", status_code=204)
-async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)) -> None:
-    user = await _get_user_or_404(user_id, db)
+async def delete_user(
+    user_id: int, admin: Admin = Depends(require_permission("users")), db: AsyncSession = Depends(get_db)
+) -> None:
+    user = await _get_user_or_404(user_id, admin, db)
     await db.delete(user)
     await db.commit()
 
 
 @router.post("/{user_id}/reset-secret", response_model=ProxyUserResponse)
-async def reset_user_secret(user_id: int, db: AsyncSession = Depends(get_db)) -> ProxyUser:
+async def reset_user_secret(
+    user_id: int, admin: Admin = Depends(require_permission("users")), db: AsyncSession = Depends(get_db)
+) -> ProxyUser:
     """Regenerates just the secret (the VLESS UUID / Trojan password / sub
     URL token) — for when a link leaked and needs invalidating, without
     losing the rest of the user record (traffic history, note, groups) the
     way delete-and-recreate would. Every existing link/QR the user has is
     dead the instant this returns; a new one has to be reissued."""
-    user = await _get_user_or_404(user_id, db)
+    user = await _get_user_or_404(user_id, admin, db)
     user.secret = str(uuid_lib.uuid4())
     db.add(user)
     await db.commit()
@@ -209,8 +254,10 @@ async def reset_user_secret(user_id: int, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.get("/{user_id}/devices", response_model=list[UserDeviceResponse])
-async def list_user_devices(user_id: int, db: AsyncSession = Depends(get_db)) -> list[UserDevice]:
-    await _get_user_or_404(user_id, db)
+async def list_user_devices(
+    user_id: int, admin: Admin = Depends(require_permission("users")), db: AsyncSession = Depends(get_db)
+) -> list[UserDevice]:
+    await _get_user_or_404(user_id, admin, db)
     result = await db.execute(
         select(UserDevice).where(UserDevice.user_id == user_id).order_by(UserDevice.last_seen.desc())
     )
@@ -218,8 +265,13 @@ async def list_user_devices(user_id: int, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.delete("/{user_id}/devices/{device_id}", status_code=204)
-async def delete_user_device(user_id: int, device_id: int, db: AsyncSession = Depends(get_db)) -> None:
-    await _get_user_or_404(user_id, db)
+async def delete_user_device(
+    user_id: int,
+    device_id: int,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await _get_user_or_404(user_id, admin, db)
     device = await db.get(UserDevice, device_id)
     if device is None or device.user_id != user_id:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -228,8 +280,10 @@ async def delete_user_device(user_id: int, device_id: int, db: AsyncSession = De
 
 
 @router.post("/{user_id}/devices/reset", status_code=204)
-async def reset_user_devices(user_id: int, db: AsyncSession = Depends(get_db)) -> None:
-    await _get_user_or_404(user_id, db)
+async def reset_user_devices(
+    user_id: int, admin: Admin = Depends(require_permission("users")), db: AsyncSession = Depends(get_db)
+) -> None:
+    await _get_user_or_404(user_id, admin, db)
     result = await db.execute(select(UserDevice).where(UserDevice.user_id == user_id))
     for device in result.scalars().all():
         await db.delete(device)
@@ -237,8 +291,13 @@ async def reset_user_devices(user_id: int, db: AsyncSession = Depends(get_db)) -
 
 
 @router.get("/{user_id}/links")
-async def get_user_links(user_id: int, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
-    user = await _get_user_or_404(user_id, db)
+async def get_user_links(
+    user_id: int,
+    request: Request,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    user = await _get_user_or_404(user_id, admin, db)
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
     public_url = await get_public_url(db)

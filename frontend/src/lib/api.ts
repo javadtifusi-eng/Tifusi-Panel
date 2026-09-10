@@ -98,6 +98,7 @@ export interface ProxyUser {
   note: string | null
   created_at: string
   group_ids: number[]
+  admin_id: number | null
 }
 
 export interface ProxyUserList {

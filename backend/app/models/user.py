@@ -2,7 +2,7 @@ import enum
 import uuid as uuid_lib
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, String, Text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -50,6 +50,14 @@ class ProxyUser(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Which admin created this user — a non-owner admin only ever sees/
+    # manages users where this matches their own id (reseller-style
+    # isolation between admins); the owner always sees everyone regardless.
+    # NULL only happens for rows that existed before this column did.
+    admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admins.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # Empty = no restriction beyond global (ungrouped) hosts. See app/groups/access.py.

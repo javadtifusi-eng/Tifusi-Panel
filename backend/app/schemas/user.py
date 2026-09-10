@@ -51,6 +51,7 @@ class ProxyUserResponse(BaseModel):
     note: str | None
     created_at: datetime
     group_ids: list[int]
+    admin_id: int | None
 
 
 class ProxyUserList(BaseModel):
