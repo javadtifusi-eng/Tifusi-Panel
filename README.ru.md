@@ -19,7 +19,7 @@
 
 <hr>
 
-Панель управления прокси — единый веб-интерфейс + REST API, построен на FastAPI и React. Та же архитектура, что и у PasarGuard (бэкенд на Python/FastAPI, дашборд на React, развёртывание через Docker), но с полностью оригинальным интерфейсом и процессом первого запуска. Поддерживаемые протоколы: **VLESS, Trojan, Hysteria2, L2TP/IPsec, IKEv2/IPsec** (без VMess, Shadowsocks и WireGuard).
+Панель управления прокси — единый веб-интерфейс + REST API, построен на FastAPI и React, с полностью оригинальным интерфейсом и процессом первого запуска. Поддерживаемые протоколы: **VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP/IPsec, IKEv2/IPsec** (без WireGuard).
 
 ## Скриншоты
 

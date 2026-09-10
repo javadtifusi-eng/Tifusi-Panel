@@ -9,7 +9,7 @@ from app.database import Base
 # direct Group<->Host link. vless/vmess/trojan/shadowsocks hosts are
 # gated through group_inbounds instead (see app/models/inbound.py) — a Group
 # grants whole Inbounds, and every Host under a granted Inbound becomes
-# visible, matching PasarGuard's actual access model.
+# visible.
 group_hosts = Table(
     "group_hosts",
     Base.metadata,

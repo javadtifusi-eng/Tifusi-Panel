@@ -19,7 +19,7 @@
 
 <hr>
 
-A proxy management panel — unified web UI + REST API, built with FastAPI and React. Same architectural pattern as PasarGuard (Python/FastAPI backend, React dashboard, Docker deployment), original UI and onboarding flow. Supported protocols: **VLESS, Trojan, Hysteria2, L2TP/IPsec, IKEv2/IPsec** (no VMess, Shadowsocks, or WireGuard).
+A proxy management panel — unified web UI + REST API, built with FastAPI and React, with its own original UI and onboarding flow. Supported protocols: **VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP/IPsec, IKEv2/IPsec** (no WireGuard).
 
 ## Screenshots
 
@@ -43,16 +43,21 @@ A proxy management panel — unified web UI + REST API, built with FastAPI and R
 
 - **Backend** (`backend/`): FastAPI + SQLAlchemy (async, SQLite by default), JWT auth, Alembic migrations.
 - **Frontend** (`frontend/`): React + Vite + Tailwind, "Obsidian Glow" visual direction, bilingual (fa/en) login.
-- **Users**: create/list/enable-disable/delete proxy users, with a traffic cap and usage tracking, and automatic `expired`/`limited` transitions once a user passes their expire date or data limit.
-- **Hosts**: VLESS/Trojan/Hysteria2/L2TP/IKEv2 endpoints. For VLESS/Trojan you pick the transport (tcp/ws/grpc) and security (none/tls/reality); L2TP/IKEv2 hosts pick a Core holding the shared PSK.
+- **Users**: create/list/enable-disable/delete proxy users (one by one or in bulk), with a traffic cap and usage tracking, automatic `expired`/`limited` transitions, and saved **user templates** (a name, data limit, expiry-in-days and group set) to apply in one click instead of retyping the same plan every time.
+- **Hosts**: VLESS/VMess/Trojan/Shadowsocks/Hysteria2/L2TP/IKEv2 endpoints. VLESS/VMess/Trojan/Shadowsocks hosts pick an Inbound parsed straight out of a Core's real Xray JSON (transport/security/REALITY come from there); L2TP/IKEv2 hosts pick a Core holding the shared PSK.
+- **Cores**: a Core holds either the full raw Xray config (with visual editors for routing/outbounds/DNS on top of the JSON) or the shared fields for an L2TP/IKEv2 server — and which nodes run it.
 - **Groups**: real access control, not just organization — a host with no group is global (every user sees it), once it joins a group only users sharing that group can see or use it. The same rule applies to link generation and to the actual Xray config pushed to nodes.
 - **REALITY scanner**: latency-tests ~160 candidate domains and recommends the fastest one as a REALITY target, right from the Hosts form.
-- **Subscription links**: every user gets a `vless://`/`trojan://`/`hysteria2://` link per host, plain connection fields (server/PSK/username/password) for L2TP/IKEv2 hosts, plus one subscription URL (`/sub/<secret>`, no admin auth needed — client apps hit it directly) with a QR code.
-- **Nodes**: register a server, get a `docker run` command to launch the node agent there, then "sync" to push the generated Xray config to it and see it come back **connected** with its Xray version. Health is polled automatically afterward, and real per-user traffic is pulled from Xray's own stats API on an interval. See [Nodes & the node agent](#nodes--the-node-agent) below for what that agent actually does and its current limits.
-- **Settings**: change the panel's public URL and the admin password at runtime, plus one-click database backup/restore — all from the dashboard, no redeploy.
+- **Subscription links**: every user gets a `vless://`/`vmess://`/`trojan://`/`ss://`/`hysteria2://` link per host, plain connection fields (server/PSK/username/password) for L2TP/IKEv2 hosts, plus one subscription URL (`/sub/<secret>`, no admin auth needed — client apps hit it directly) with a QR code.
+- **Nodes**: register a server, get an install command to launch the node agent there, then "sync" to push the generated Xray config to it and see it come back **connected** with its Xray version. Health is polled automatically afterward, and real per-user traffic is pulled from Xray's own stats API on an interval — the same cycle rolls a daily total into the dashboard's traffic chart. See [Nodes & the node agent](#nodes--the-node-agent) below for what that agent actually does and its current limits.
+- **Tunnels**: a reverse tunnel publishes a foreign VPN server through an Iran-side relay (the foreign server dials out, so no inbound port needs to be open on it) — the panel generates a silent, config-embedded install command for each side and recommends a transport based on a live latency probe.
+- **Admin accounts**: the owner can create additional admins scoped to a fixed set of permissions (users/hosts/nodes/cores/groups/tunnels/settings), and any admin can issue their own long-lived API keys for scripts/bots to use instead of a short-lived login token.
+- **Webhooks & Telegram**: get notified (via a JSON POST to your own URL, or a Telegram chat) on user created/expired/limited and node connected/disconnected.
+- **Settings**: change the panel's public URL and the admin password at runtime, upload a TLS cert, one-click database backup/restore — all from the dashboard, no redeploy.
+- **Light/dark theme**: a toggle next to the language switcher, persisted per browser.
 - **Docker**: `docker-compose.yml` runs the panel + dashboard. The node agent (`backend/node_agent/`) is built and run separately, once per node — see below.
 
-Not built yet: per-admin permission scoping — see `ROADMAP.md` for the full list and some bigger ideas being considered.
+See `ROADMAP.md` for what's not built yet and some bigger ideas being considered.
 
 ## Quick install
 

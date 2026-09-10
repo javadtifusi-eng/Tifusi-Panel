@@ -16,7 +16,7 @@ user_template_groups = Table(
 class UserTemplate(Base):
     """A saved preset (data limit / expiry / groups) an admin picks from
     when creating a user or a batch of users, instead of retyping the same
-    values every time — see PasarGuard's user templates."""
+    values every time."""
 
     __tablename__ = "user_templates"
 

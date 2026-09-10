@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Tifusi Panel — a proxy/VPN management panel: FastAPI backend + React dashboard, same architectural pattern as PasarGuard. Supported protocols: **VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP/IPsec, IKEv2/IPsec**. WireGuard was deliberately removed entirely (model, migrations, config, docs) and must not be reintroduced.
+Tifusi Panel — a proxy/VPN management panel: FastAPI backend + React dashboard. Supported protocols: **VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP/IPsec, IKEv2/IPsec**. WireGuard was deliberately removed entirely (model, migrations, config, docs) and must not be reintroduced. Refer to this project as Tifusi Panel — don't describe it as based on or shaped like any other panel, in commits, docs, or chat.
 
 Full user-facing docs (install script, first-run flow, Docker deployment, HTTPS setup) are in `README.md` (`README.fa.md`/`README.ru.md` are translations — keep them in sync when the English one changes). `ROADMAP.md` tracks bigger unbuilt ideas.
 

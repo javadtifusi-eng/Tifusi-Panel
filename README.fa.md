@@ -19,7 +19,7 @@
 
 <hr>
 
-پنل مدیریت پروکسی — رابط وب یکپارچه + REST API، ساخته‌شده با FastAPI و React. همون الگوی معماری PasarGuard (بک‌اند Python/FastAPI، داشبورد React، دیپلوی با Docker)، ولی با ظاهر و روند راه‌اندازی کاملاً اختصاصی. پروتکل‌های پشتیبانی‌شده: **VLESS، Trojan، Hysteria2، L2TP/IPsec، IKEv2/IPsec** (بدون VMess، Shadowsocks یا WireGuard).
+پنل مدیریت پروکسی — رابط وب یکپارچه + REST API، ساخته‌شده با FastAPI و React، با ظاهر و روند راه‌اندازی کاملاً اختصاصی. پروتکل‌های پشتیبانی‌شده: **VLESS، VMess، Trojan، Shadowsocks، Hysteria2، L2TP/IPsec، IKEv2/IPsec** (بدون WireGuard).
 
 ## اسکرین‌شات‌ها
 
