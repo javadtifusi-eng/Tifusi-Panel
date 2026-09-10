@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.cores.ikev2_cert import generate_self_signed_ikev2_cert
 from app.cores.sync import sync_inbounds
 from app.database import get_db
 from app.dependencies import require_permission
@@ -18,6 +20,8 @@ _CORE_FIELDS = (
     "l2tp_psk",
     "ikev2_psk",
     "ikev2_remote_id",
+    "ikev2_certificate",
+    "ikev2_certificate_key",
 )
 
 
@@ -81,6 +85,8 @@ async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None 
         l2tp_psk=core.l2tp_psk,
         ikev2_psk=core.ikev2_psk,
         ikev2_remote_id=core.ikev2_remote_id,
+        ikev2_certificate=core.ikev2_certificate,
+        ikev2_certificate_key=core.ikev2_certificate_key,
     )
 
 
@@ -156,6 +162,21 @@ async def update_core(core_id: int, payload: CoreUpdate, db: AsyncSession = Depe
     await db.commit()
     await db.refresh(core)
     return await _to_response(core, db, warnings)
+
+
+class GenerateIkev2CertRequest(BaseModel):
+    host: str | None = None
+
+
+class GenerateIkev2CertResponse(BaseModel):
+    certificate: str
+    key: str
+
+
+@router.post("/generate-ikev2-cert", response_model=GenerateIkev2CertResponse)
+async def generate_ikev2_cert(payload: GenerateIkev2CertRequest) -> GenerateIkev2CertResponse:
+    certificate, key = generate_self_signed_ikev2_cert(payload.host or "")
+    return GenerateIkev2CertResponse(certificate=certificate, key=key)
 
 
 @router.delete("/{core_id}", status_code=204)

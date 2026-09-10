@@ -10,3 +10,5 @@ dist/
 .DS_Store
 *.log
 *.tsbuildinfo
+certs/
+letsencrypt-work/

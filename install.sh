@@ -26,6 +26,16 @@ info() { printf '%s[Tifusi]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
 warn() { printf '%s[Warning]%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
 fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
 
+# One line per install phase (system deps, docker, repo, .env, SSL, build,
+# health check) — a percentage instead of a bare step count so a long build
+# still reads as visible progress rather than a silent hang.
+STEP_TOTAL=7
+STEP_NUM=0
+step() {
+  STEP_NUM=$((STEP_NUM + 1))
+  printf '%s[%d/%d · %d%%]%s %s\n' "$C_CYAN" "$STEP_NUM" "$STEP_TOTAL" $((STEP_NUM * 100 / STEP_TOTAL)) "$C_RESET" "$1"
+}
+
 banner() {
   local title=" TIFUSI PANEL " line
   line=$(printf '%*s' "${#title}" '' | tr ' ' '=')
@@ -46,11 +56,13 @@ box() {
 banner
 info "Installing Tifusi Panel..."
 
+step "System packages"
 if command -v apt-get >/dev/null 2>&1; then
   info "Updating the system's package list (apt-get update)..."
   DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || warn "apt-get update failed — continuing anyway."
 fi
 
+step "Docker"
 if ! command -v docker >/dev/null 2>&1; then
   info "Docker isn't installed — installing it with the official script..."
   DOCKER_INSTALL_LOG="$(mktemp)"
@@ -65,6 +77,7 @@ fi
 docker compose version >/dev/null 2>&1 \
   || fail "Docker is installed but the docker compose plugin isn't (or is too old) — update Docker."
 
+step "Repository"
 if [ -f "docker-compose.yml" ] && [ -d "backend" ] && [ -d "frontend" ]; then
   INSTALL_DIR="$(pwd)"
   info "Installing from the current directory ($INSTALL_DIR)."
@@ -78,6 +91,7 @@ fi
 
 cd "$INSTALL_DIR"
 
+step "Configuration (.env)"
 if [ ! -f .env ]; then
   cp .env.example .env
   SECRET=$(openssl rand -hex 32 2>/dev/null || head -c32 /dev/urandom | od -An -tx1 | tr -d ' \n')
@@ -86,6 +100,7 @@ if [ ! -f .env ]; then
   info "Generated a random TIFUSI_SECRET_KEY in .env."
 fi
 
+step "SSL / domain"
 read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain
 has_domain=${has_domain:-N}
 if [[ "$has_domain" =~ ^[Yy]$ ]]; then
@@ -117,6 +132,7 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
 fi
 PANEL_PUBLIC_URL="${PANEL_PUBLIC_URL:-}"
 
+step "Building & starting containers"
 info "Bringing the panel up with Docker Compose (this can take a few minutes)..."
 BUILD_LOG="$(mktemp)"
 if ! docker compose up -d --build > "$BUILD_LOG" 2>&1; then
@@ -127,6 +143,7 @@ if ! docker compose up -d --build > "$BUILD_LOG" 2>&1; then
 fi
 rm -f "$BUILD_LOG"
 
+step "Health check"
 info "Waiting for the panel to come up..."
 ready=""
 for _ in $(seq 1 60); do

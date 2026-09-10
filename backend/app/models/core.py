@@ -2,7 +2,7 @@ import enum
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, Integer, String
+from sqlalchemy import DateTime, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -50,6 +50,14 @@ class Core(Base):
     # identity; ports are the protocol's fixed standard UDP 500/4500 ---
     ikev2_psk: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ikev2_remote_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Server certificate for IKEv2's local `auth = pubkey` round (see
+    # node_agent/ipsec.py). Both null: the node self-signs one, CN/SAN'd off
+    # ikev2_remote_id, on every apply. Set: this exact PEM pair is pushed
+    # and used verbatim instead — for a real CA-issued cert (e.g. Let's
+    # Encrypt, once the node has a domain), which needs no client-side CA
+    # trust step, unlike the node's self-signed fallback.
+    ikev2_certificate: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ikev2_certificate_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     inbounds: Mapped[list["Inbound"]] = relationship(  # noqa: F821
         "Inbound", back_populates="core", cascade="all, delete-orphan", lazy="selectin"

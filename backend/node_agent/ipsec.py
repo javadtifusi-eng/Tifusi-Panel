@@ -23,14 +23,24 @@ and what makes the sysctl/iptables calls below affect the real host
 network stack instead of an isolated container-only one.
 """
 
+import ipaddress
 import subprocess
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 
 from node_agent import vless_egress
 
 CHARON_BIN = "/usr/libexec/ipsec/charon"
 SWANCTL_CONF = Path("/etc/swanctl/swanctl.conf")
+SWANCTL_X509 = Path("/etc/swanctl/x509")
+SWANCTL_PRIVATE = Path("/etc/swanctl/private")
+IKEV2_CERT_BASE = "ikev2-server"
 XL2TPD_CONF = Path("/etc/xl2tpd/xl2tpd.conf")
 PPP_OPTIONS = Path("/etc/ppp/options.xl2tpd")
 CHAP_SECRETS = Path("/etc/ppp/chap-secrets")
@@ -64,6 +74,102 @@ def _eap_secrets(users: list[dict]) -> str:
     return "".join(blocks)
 
 
+IKEV2_CA_CERT = SWANCTL_X509 / f"{IKEV2_CERT_BASE}-ca.pem"
+IKEV2_LEAF_CERT = SWANCTL_X509 / f"{IKEV2_CERT_BASE}.pem"
+IKEV2_LEAF_KEY = SWANCTL_PRIVATE / f"{IKEV2_CERT_BASE}.key"
+
+
+def _cert_matches_host(host: str) -> bool:
+    try:
+        cert = x509.load_pem_x509_certificate(IKEV2_LEAF_CERT.read_bytes())
+    except (OSError, ValueError):
+        return False
+    if cert.not_valid_after_utc <= datetime.now(timezone.utc) + timedelta(days=30):
+        return False
+    try:
+        sans = set(cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName))
+    except x509.ExtensionNotFound:
+        sans = set()
+    return host in sans
+
+
+def _ensure_ikev2_cert(host: str, certificate: str | None = None, certificate_key: str | None = None) -> None:
+    """Publishes the server cert for IKEv2's `auth = pubkey` local round.
+    With certificate/certificate_key given (the Core's admin-provided
+    fields, e.g. a real domain's Let's Encrypt cert), publishes those
+    verbatim. Otherwise self-signs a CA + leaf, regenerating only when
+    missing/expiring/host-mismatched so an in-flight negotiation never reads
+    a half-written file across repeated syncs. A self-signed CA still needs
+    clients to trust it explicitly, unlike a real cert.
+    """
+    if certificate and certificate_key:
+        SWANCTL_X509.mkdir(parents=True, exist_ok=True)
+        SWANCTL_PRIVATE.mkdir(parents=True, exist_ok=True)
+        _write(IKEV2_LEAF_CERT, certificate.strip() + "\n")
+        _write(IKEV2_LEAF_KEY, certificate_key.strip() + "\n", mode=0o600)
+        return
+    host = host or "ikev2-server"
+    if _cert_matches_host(host):
+        return
+    SWANCTL_X509.mkdir(parents=True, exist_ok=True)
+    SWANCTL_PRIVATE.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+
+    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Tifusi IKEv2 CA")])
+    ca_cert = (
+        x509.CertificateBuilder()
+        .subject_name(ca_name)
+        .issuer_name(ca_name)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(hours=1))
+        .not_valid_after(now + timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(x509.KeyUsage(
+            digital_signature=False, content_commitment=False, key_encipherment=False,
+            data_encipherment=False, key_agreement=False, key_cert_sign=True, crl_sign=True,
+            encipher_only=False, decipher_only=False,
+        ), critical=True)
+        .sign(ca_key, hashes.SHA256())
+    )
+
+    leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    san: list[x509.GeneralName] = [x509.DNSName(host)]
+    try:
+        san.append(x509.IPAddress(ipaddress.ip_address(host)))
+    except ValueError:
+        pass
+    leaf_cert = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, host)]))
+        .issuer_name(ca_name)
+        .public_key(leaf_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(hours=1))
+        .not_valid_after(now + timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.SubjectAlternativeName(san), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+        .add_extension(x509.KeyUsage(
+            digital_signature=True, content_commitment=False, key_encipherment=True,
+            data_encipherment=False, key_agreement=False, key_cert_sign=False, crl_sign=False,
+            encipher_only=False, decipher_only=False,
+        ), critical=True)
+        .sign(ca_key, hashes.SHA256())
+    )
+
+    _write(IKEV2_CA_CERT, ca_cert.public_bytes(serialization.Encoding.PEM).decode())
+    _write(IKEV2_LEAF_CERT, leaf_cert.public_bytes(serialization.Encoding.PEM).decode())
+    _write(
+        IKEV2_LEAF_KEY,
+        leaf_key.private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()
+        ).decode(),
+        mode=0o600,
+    )
+
+
 def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users: list[dict] | None = None) -> str:
     escaped_psk = psk.replace('"', '\\"')
     if core_type == "l2tp":
@@ -91,32 +197,56 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users:
             f'  ike-l2tp {{ secret = "{escaped_psk}" }}\n'
             "}\n"
         )
-    # ikev2 — the Core's PSK authenticates the SERVER to the client (IKE
-    # local auth, `local.auth = psk`); each ProxyUser then authenticates
-    # to the server over EAP-MSCHAPv2 with their own username/password
-    # (`remote.auth = eap-mschapv2`), the same per-user login model as
-    # l2tp instead of one shared secret nobody can be told apart by.
-    # local.id only matters if the admin set a Remote ID — a client that
-    # fills in a "Remote ID" field must match whatever this is, so it
-    # needs to be a real identity (the server's own domain/IP), not left
-    # for strongSwan to default silently.
-    local_id_line = f"      id = {remote_id}\n" if remote_id else ""
+    # ikev2 — local auth is a server certificate (`local.auth = pubkey`),
+    # not the Core's PSK: native iOS/Windows IKEv2 clients validate the
+    # server's identity via a certificate, and their own VPN setup UI has
+    # no PSK field to offer one. Each ProxyUser authenticates to the server
+    # over EAP-MSCHAPv2 with their own username/password instead, same
+    # per-user login model as l2tp. The Core's psk field is unused here
+    # (still used above for l2tp). local.id must be a real domain/IP — it's
+    # both the identity a client's "Remote ID" field has to match, and the
+    # cert's CN/SAN (see _ensure_ikev2_cert, called by the caller before
+    # this function so the cert file already exists when charon loads it).
+    host = (remote_id or "").strip()
+    local_id_line = f"      id = {host}\n" if host else ""
     return (
         "connections {\n"
         "  ikev2-eap {\n"
         "    version = 2\n"
-        "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384\n"
+        "    unique = never\n"
+        "    send_cert = always\n"
+        "    fragmentation = yes\n"
+        "    dpd_delay = 300s\n"
+        # modp1024 fallbacks matter in practice: Windows' native IKEv2
+        # client falls back to its own legacy default proposal set
+        # (DH group 2 / MODP_1024) on retries regardless of the DHGroup
+        # configured via Set-VpnConnectionIPsecConfiguration, and without
+        # a matching proposal here charon hard-rejects it with NO_PROP —
+        # surfaced client-side as Windows' generic "policy match error".
+        # `default` on the end is a last-resort catch-all, matching vpn-ui.
+        "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384,"
+        "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha1-modp1024,default\n"
         "    local_addrs = %any\n"
         "    remote_addrs = %any\n"
         "    local {\n"
-        "      auth = psk\n"
+        "      auth = pubkey\n"
+        f"      certs = {IKEV2_LEAF_CERT.name}\n"
         f"{local_id_line}"
         "    }\n"
-        "    remote { auth = eap-mschapv2 }\n"
+        # eap_id = %any forces a real EAP-Identity request/response round
+        # trip instead of defaulting to the client's raw IKE identity
+        # (IDi) — an arbitrary self-chosen value, never the real username.
+        # Windows/iOS native IKEv2 stacks expect EAP-Identity first and
+        # silently drop a bare EAP-Request/MSCHAPv2 without it.
+        "    remote {\n"
+        "      auth = eap-mschapv2\n"
+        "      eap_id = %any\n"
+        "    }\n"
         "    children {\n"
         "      net {\n"
         "        local_ts = 0.0.0.0/0,::/0\n"
-        "        esp_proposals = aes256gcm16-prfsha384-ecp384,aes256-sha256-modp2048,aes128-sha256-modp2048\n"
+        "        esp_proposals = aes256gcm16-prfsha384-ecp384,aes256-sha256-modp2048,aes128-sha256-modp2048,"
+        "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha256,aes128-sha256,aes256-sha1,aes128-sha1,default\n"
         "      }\n"
         "    }\n"
         f"    pools = ikev2-pool\n"
@@ -129,7 +259,6 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users:
         "  }\n"
         "}\n"
         "secrets {\n"
-        f'  ike-ikev2 {{ secret = "{escaped_psk}" }}\n'
         f"{_eap_secrets(users or [])}"
         "}\n"
     )
@@ -257,8 +386,15 @@ def _restart_xl2tpd() -> None:
 
 
 def _load_swanctl_config(
-    core_type: str, psk: str, remote_id: str | None = None, users: list[dict] | None = None
+    core_type: str,
+    psk: str,
+    remote_id: str | None = None,
+    users: list[dict] | None = None,
+    certificate: str | None = None,
+    certificate_key: str | None = None,
 ) -> None:
+    if core_type == "ikev2":
+        _ensure_ikev2_cert(remote_id or "", certificate, certificate_key)
     _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users), mode=0o600)
     _restart_charon()
 
@@ -299,8 +435,14 @@ def apply_l2tp(psk: str, users: list[dict], egress_vless: str | None = None) -> 
     _restart_xl2tpd()
 
 
-def apply_ikev2(psk: str, remote_id: str | None, users: list[dict]) -> None:
-    _load_swanctl_config("ikev2", psk, remote_id, users)
+def apply_ikev2(
+    psk: str,
+    remote_id: str | None,
+    users: list[dict],
+    certificate: str | None = None,
+    certificate_key: str | None = None,
+) -> None:
+    _load_swanctl_config("ikev2", psk, remote_id, users, certificate, certificate_key)
     _ensure_forwarding_and_nat(_IKEV2_SUBNET)
 
 

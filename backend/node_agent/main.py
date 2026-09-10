@@ -103,7 +103,13 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
                 payload.get("psk") or "", payload.get("users") or [], payload.get("egress_vless")
             )
         else:
-            ipsec.apply_ikev2(payload.get("psk") or "", payload.get("remote_id"), payload.get("users") or [])
+            ipsec.apply_ikev2(
+                payload.get("psk") or "",
+                payload.get("remote_id"),
+                payload.get("users") or [],
+                payload.get("certificate"),
+                payload.get("certificate_key"),
+            )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=f"required binary not found: {exc}") from exc
 

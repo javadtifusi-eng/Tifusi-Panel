@@ -5,6 +5,7 @@ import {
   createCore,
   deleteCore,
   FINGERPRINTS,
+  generateIkev2Cert,
   getRealityKeypair,
   listCores,
   listNodes,
@@ -36,6 +37,8 @@ function emptyForm() {
     l2tpPsk: '',
     ikev2Psk: '',
     ikev2RemoteId: '',
+    ikev2Certificate: '',
+    ikev2CertificateKey: '',
   }
 }
 
@@ -671,6 +674,7 @@ export default function CoresPage() {
     null,
   )
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
 
   function updateWizard<K extends keyof ReturnType<typeof emptyWizard>>(
     key: K,
@@ -745,6 +749,8 @@ export default function CoresPage() {
       l2tpPsk: core.l2tp_psk ?? '',
       ikev2Psk: core.ikev2_psk ?? '',
       ikev2RemoteId: core.ikev2_remote_id ?? '',
+      ikev2Certificate: core.ikev2_certificate ?? '',
+      ikev2CertificateKey: core.ikev2_certificate_key ?? '',
     })
     setWizard(emptyWizard())
     setLastWarnings([])
@@ -798,6 +804,19 @@ export default function CoresPage() {
     }
   }
 
+  async function generateIkev2ServerCert() {
+    setGeneratingIkev2Cert(true)
+    setError(null)
+    try {
+      const pair = await generateIkev2Cert(form.ikev2RemoteId)
+      setForm((f) => ({ ...f, ikev2Certificate: pair.certificate, ikev2CertificateKey: pair.key }))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
+    } finally {
+      setGeneratingIkev2Cert(false)
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -824,6 +843,8 @@ export default function CoresPage() {
         l2tp_psk: form.coreType === 'l2tp' ? form.l2tpPsk || null : null,
         ikev2_psk: form.coreType === 'ikev2' ? form.ikev2Psk || null : null,
         ikev2_remote_id: form.coreType === 'ikev2' ? form.ikev2RemoteId || null : null,
+        ikev2_certificate: form.coreType === 'ikev2' ? form.ikev2Certificate || null : null,
+        ikev2_certificate_key: form.coreType === 'ikev2' ? form.ikev2CertificateKey || null : null,
       }
       const result = editingId ? await updateCore(editingId, payload) : await createCore(payload)
       setLastWarnings(result.warnings)
@@ -1265,27 +1286,68 @@ export default function CoresPage() {
             )}
 
             {form.coreType === 'ikev2' && (
-              <div className="mt-3 flex flex-wrap gap-3">
-                <div>
-                  <label className={labelClass}>{t.hostsPage.ikev2PskLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={form.ikev2Psk}
-                    onChange={(e) => setForm((f) => ({ ...f, ikev2Psk: e.target.value }))}
-                    required
-                    className={`${inputClass} w-64 font-mono text-xs`}
-                  />
+              <div className="mt-3 flex flex-col gap-3">
+                <div className="flex flex-wrap gap-3">
+                  <div>
+                    <label className={labelClass}>{t.coresPage.ikev2RemoteIdLabel}</label>
+                    <input
+                      dir="ltr"
+                      value={form.ikev2RemoteId}
+                      onChange={(e) => setForm((f) => ({ ...f, ikev2RemoteId: e.target.value }))}
+                      required
+                      className={`${inputClass} w-56 text-left`}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>{t.hostsPage.ikev2PskLabel}</label>
+                    <input
+                      dir="ltr"
+                      value={form.ikev2Psk}
+                      onChange={(e) => setForm((f) => ({ ...f, ikev2Psk: e.target.value }))}
+                      className={`${inputClass} w-64 font-mono text-xs`}
+                    />
+                  </div>
+                  <div className="self-end pb-2 text-[10px] text-faint">{t.hostsPage.ikev2PortsHint}</div>
                 </div>
+
                 <div>
-                  <label className={labelClass}>{t.coresPage.ikev2RemoteIdLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={form.ikev2RemoteId}
-                    onChange={(e) => setForm((f) => ({ ...f, ikev2RemoteId: e.target.value }))}
-                    className={`${inputClass} w-56 text-left`}
-                  />
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className={labelClass}>{t.coresPage.ikev2CertSourceLabel}</label>
+                    <button
+                      type="button"
+                      onClick={generateIkev2ServerCert}
+                      disabled={generatingIkev2Cert}
+                      className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
+                    >
+                      {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
+                    </button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>{t.coresPage.ikev2CertificateLabel}</label>
+                      <textarea
+                        dir="ltr"
+                        rows={4}
+                        value={form.ikev2Certificate}
+                        onChange={(e) => setForm((f) => ({ ...f, ikev2Certificate: e.target.value }))}
+                        placeholder="-----BEGIN CERTIFICATE-----"
+                        className={monoTextarea}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>{t.coresPage.ikev2CertificateKeyLabel}</label>
+                      <textarea
+                        dir="ltr"
+                        rows={4}
+                        value={form.ikev2CertificateKey}
+                        onChange={(e) => setForm((f) => ({ ...f, ikev2CertificateKey: e.target.value }))}
+                        placeholder="-----BEGIN PRIVATE KEY-----"
+                        className={monoTextarea}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2CertHint}</div>
                 </div>
-                <div className="self-end pb-2 text-[10px] text-faint">{t.hostsPage.ikev2PortsHint}</div>
               </div>
             )}
 
@@ -1361,7 +1423,7 @@ export default function CoresPage() {
             )}
             {c.core_type === 'ikev2' && (
               <div className="text-xs text-muted">
-                PSK: {c.ikev2_psk ? '••••••••' : '—'}
+                {c.ikev2_certificate ? t.coresPage.ikev2CertStatusCustom : t.coresPage.ikev2CertStatusAuto}
                 {c.ikev2_remote_id && (
                   <span dir="ltr" className="font-mono">
                     {' '}

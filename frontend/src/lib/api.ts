@@ -675,6 +675,8 @@ export interface Core {
 
   ikev2_psk: string | null
   ikev2_remote_id: string | null
+  ikev2_certificate: string | null
+  ikev2_certificate_key: string | null
 }
 
 export interface CoreList {
@@ -692,6 +694,21 @@ export interface CorePayload {
 
   ikev2_psk?: string | null
   ikev2_remote_id?: string | null
+  ikev2_certificate?: string | null
+  ikev2_certificate_key?: string | null
+}
+
+export interface Ikev2CertKeypair {
+  certificate: string
+  key: string
+}
+
+export async function generateIkev2Cert(host: string): Promise<Ikev2CertKeypair> {
+  const res = await authorizedFetch('/cores/generate-ikev2-cert', {
+    method: 'POST',
+    body: JSON.stringify({ host }),
+  })
+  return res.json()
 }
 
 export async function listCores(): Promise<CoreList> {
