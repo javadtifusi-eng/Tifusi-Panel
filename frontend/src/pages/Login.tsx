@@ -45,10 +45,14 @@ function MoonIcon() {
 
 type Screen = 'setup' | 'login'
 
+// Fixed white-on-blue, not theme tokens — this page keeps one deliberate
+// brand look regardless of the light/dark toggle (see the wrapper's own
+// comment), so `text-primary`/`bg-field` etc. (which flip to near-black
+// on the light theme) would go invisible against it.
 const fieldClass =
-  'w-full rounded-lg border border-subtle bg-field px-3.5 py-3 text-sm text-primary outline-none transition-colors focus:border-cyan-400/60'
-const labelClass = 'block text-xs text-muted mb-1'
-const linkClass = 'text-xs text-accent hover:underline'
+  'w-full rounded-lg border border-white/15 bg-white/10 px-3.5 py-3 text-sm text-white placeholder-white/40 outline-none backdrop-blur-sm transition-colors focus:border-cyan-300/70 focus:bg-white/15'
+const labelClass = 'block text-xs text-white/70 mb-1'
+const linkClass = 'text-xs text-cyan-300 hover:underline'
 
 export default function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }) {
   const { lang, setLang, t, dir, align } = useLang()
@@ -123,13 +127,13 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
     <div className="flex justify-center gap-2 lg:justify-start">
       <button
         onClick={() => setLang('en')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-300/60 text-cyan-200' : 'border-white/20 text-white/60'}`}
       >
         EN
       </button>
       <button
         onClick={() => setLang('fa')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-300/60 text-cyan-200' : 'border-white/20 text-white/60'}`}
       >
         فارسی
       </button>
@@ -137,7 +141,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         onClick={toggleTheme}
         aria-label={t.nav.toggleTheme}
         title={t.nav.toggleTheme}
-        className="flex items-center justify-center rounded-md border border-edge px-3 py-1 text-muted hover:border-cyan-400/50 hover:text-accent"
+        className="flex items-center justify-center rounded-md border border-white/20 px-3 py-1 text-white/60 hover:border-cyan-300/60 hover:text-cyan-200"
       >
         {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
       </button>
@@ -153,28 +157,36 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
   }
 
   return (
-    <div dir={dir} className="flex min-h-screen w-full bg-app font-body text-primary">
+    // h-screen + overflow-hidden, not min-h-screen: the page's real content
+    // height came out a bit taller than 100vh (measured — not a viewport
+    // quirk), which every earlier attempt at a full-viewport background
+    // missed, since a background painted on (or fixed to) the viewport can
+    // never cover content the *document* pushes past it. Nothing on this
+    // screen needs to scroll, so capping it at exactly 100vh and clipping
+    // the small overflow is correct, not lossy.
+    <div
+      dir={dir}
+      className="flex h-screen w-full overflow-hidden font-body text-white"
+      style={{
+        // One continuous brand gradient across the whole screen — this
+        // page keeps one deliberate look regardless of the light/dark
+        // toggle (which still applies to the rest of the app after
+        // login), same as most products treat their login/marketing
+        // surface as brand-fixed. The glow sits off-center toward where
+        // the griffin mark actually is, not dead-center.
+        background:
+          'radial-gradient(130% 110% at 80% 55%, #3f8ee0 0%, #1f4fb3 32%, #12306e 62%, #081735 100%)',
+      }}
+    >
       {/* Brand panel — hidden on narrow viewports, where the compact header below stands in for it. */}
-      <div
-        className={`relative hidden flex-col justify-between overflow-hidden px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%] ${
-          dir === 'rtl' ? 'border-l' : 'border-r'
-        } border-subtle`}
-        style={{
-          // Flat and uniform across the whole panel — no gradient, no
-          // fading to the dark `c-surface` base anywhere, so there's no
-          // corner that reads as plain black. Pale on purpose (12%, not
-          // the much darker/more saturated mix tried right before this):
-          // a light, airy blue tint, not a solid teal block.
-          backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, rgb(var(--c-surface)))`,
-        }}
-      >
+      <div className="relative hidden flex-col justify-between overflow-hidden px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%]">
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
           <div
             style={{
-              width: '22rem',
-              height: '22rem',
-              opacity: 0.1,
-              backgroundColor: ACCENT,
+              width: '26rem',
+              height: '26rem',
+              opacity: 0.9,
+              backgroundColor: '#ffffff',
               WebkitMaskImage: 'url(/logo-tifusi.png)',
               maskImage: 'url(/logo-tifusi.png)',
               WebkitMaskSize: 'contain',
@@ -188,9 +200,9 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         </div>
 
         <div className="relative flex items-center gap-2.5">
-          <Logo accent={ACCENT} size={40} glow={false} />
+          <Logo color="#ffffff" size={40} glow={false} />
           <div>
-            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
+            <div className="font-display text-sm font-bold tracking-[2px] text-white">TIFUSI</div>
             <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
               PANEL
             </div>
@@ -198,48 +210,48 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         </div>
 
         <div className="relative">
-          <h1 className={`max-w-sm font-display text-2xl font-bold leading-snug text-heading ${align}`}>{t.welcome}</h1>
-          <p className={`mt-3 max-w-xs text-sm leading-relaxed text-muted ${align}`}>{t.tagline}</p>
+          <h1 className={`max-w-sm font-display text-2xl font-bold leading-snug text-white ${align}`}>{t.welcome}</h1>
+          <p className={`mt-3 max-w-xs text-sm leading-relaxed text-white/70 ${align}`}>{t.tagline}</p>
           <div className="mt-6 flex flex-wrap gap-2">
             {PROTOCOLS.map((p) => (
-              <span key={p} className="rounded-md border border-subtle px-2.5 py-1 text-[11px] text-muted">
+              <span key={p} className="rounded-md border border-white/20 px-2.5 py-1 text-[11px] text-white/80">
                 {p}
               </span>
             ))}
           </div>
         </div>
 
-        <div className="relative text-[10px] tracking-widest text-faint">POWERED BY TIFUSI SYSTEMS</div>
+        <div className="relative text-[10px] tracking-widest text-white/50">POWERED BY TIFUSI SYSTEMS</div>
       </div>
 
       {/* Form panel */}
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
         <div className="mb-6 flex flex-col items-center gap-3 lg:hidden">
-          <Logo accent={ACCENT} size={52} glow={false} />
+          <Logo color="#ffffff" size={52} glow={false} />
           <div className="text-center">
-            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI PANEL</div>
-            <div className="mt-1 max-w-[220px] text-xs text-muted">{t.tagline}</div>
+            <div className="font-display text-sm font-bold tracking-[2px] text-white">TIFUSI PANEL</div>
+            <div className="mt-1 max-w-[220px] text-xs text-white/70">{t.tagline}</div>
           </div>
         </div>
 
         <div className="w-full max-w-sm">
           {screen === 'setup' ? (
             <form onSubmit={handleCreateAdmin}>
-              <div className="mb-2.5 inline-block rounded-md border border-cyan-400/30 px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-accent">
+              <div className="mb-2.5 inline-block rounded-md border border-cyan-300/40 px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-cyan-200">
                 {t.badgeSetup}
               </div>
-              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingSetup}</div>
+              <div className={`mb-4 text-xl font-bold text-white ${align}`}>{t.headingSetup}</div>
 
-              <div className="mb-4 rounded-lg border border-subtle bg-field px-3.5 py-3">
+              <div className="mb-4 rounded-lg border border-white/15 bg-white/10 px-3.5 py-3 backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`text-xs text-muted ${align}`}>{t.step1}</span>
+                  <span className={`text-xs text-white/70 ${align}`}>{t.step1}</span>
                   <button
                     type="button"
                     onClick={handleCopy}
                     title={COMMAND}
                     aria-label={copied ? t.copied : t.copy}
                     className={`flex-shrink-0 rounded-md p-1.5 transition-colors ${
-                      copied ? 'bg-success-tint text-success' : 'bg-accent-tint text-accent'
+                      copied ? 'bg-emerald-400/20 text-emerald-300' : 'bg-cyan-400/20 text-cyan-200'
                     }`}
                   >
                     {copied ? <CheckIcon /> : <CopyIcon />}
@@ -247,11 +259,11 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 </div>
                 {copyFailed && (
                   <>
-                    <div className={`mt-2.5 text-[11px] text-warning ${align}`}>{t.copyFailedHint}</div>
+                    <div className={`mt-2.5 text-[11px] text-amber-300 ${align}`}>{t.copyFailedHint}</div>
                     <code
                       dir="ltr"
                       onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
-                      className="mt-1.5 block cursor-text select-all break-all rounded-md bg-well-strong p-2 text-left font-mono text-[11px] text-accent"
+                      className="mt-1.5 block cursor-text select-all break-all rounded-md bg-black/30 p-2 text-left font-mono text-[11px] text-cyan-200"
                     >
                       {COMMAND}
                     </code>
@@ -288,7 +300,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 className={`${fieldClass} mb-1 ${align}`}
               />
 
-              {error && <div className="mt-2 text-xs text-danger">{error}</div>}
+              {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
 
               <button
                 type="submit"
@@ -306,7 +318,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
             </form>
           ) : (
             <form onSubmit={handleLogin}>
-              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingLogin}</div>
+              <div className={`mb-4 text-xl font-bold text-white ${align}`}>{t.headingLogin}</div>
 
               <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
               <input
@@ -333,7 +345,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 </a>
               </div>
 
-              {error && <div className="mb-3 text-xs text-danger">{error}</div>}
+              {error && <div className="mb-3 text-xs text-red-300">{error}</div>}
 
               <button
                 type="submit"

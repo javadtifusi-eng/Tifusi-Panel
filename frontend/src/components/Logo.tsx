@@ -16,10 +16,15 @@ export function Logo({
   accent = '#22D3EE',
   size = 128,
   glow = true,
+  color,
 }: {
   accent?: string
   size?: number
   glow?: boolean
+  /** Overrides the `--c-text-heading` token fill — for a fixed-brand
+   * surface like the login page, which keeps one deliberate look
+   * regardless of the light/dark toggle rather than following it. */
+  color?: string
 }) {
   return (
     <div
@@ -49,7 +54,7 @@ export function Logo({
           position: 'relative',
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgb(var(--c-text-heading))',
+          backgroundColor: color ?? 'rgb(var(--c-text-heading))',
           WebkitMaskImage: 'url(/logo-tifusi.png)',
           maskImage: 'url(/logo-tifusi.png)',
           WebkitMaskSize: 'contain',
