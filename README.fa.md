@@ -23,21 +23,10 @@
 
 ## اسکرین‌شات‌ها
 
-![ورود](docs/screenshots/login.png)
-
-![کاربران](docs/screenshots/users.png)
-
-![هاست‌ها](docs/screenshots/hosts.png)
-
-![گروه‌ها](docs/screenshots/groups.png)
-
-![نودها](docs/screenshots/nodes.png)
-
-![اسکنر REALITY](docs/screenshots/reality-scanner.png)
-
-![تنظیمات](docs/screenshots/settings.png)
-
-![لینک‌ها و QR کاربر](docs/screenshots/user-links.png)
+<p align="center">
+  <img src="docs/screenshots/login.png" width="49%" alt="صفحه‌ی ورود" />
+  <img src="docs/screenshots/panel.png" width="49%" alt="داخل پنل" />
+</p>
 
 ## امکانات
 

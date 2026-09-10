@@ -23,21 +23,10 @@ Tifusi Panel — это панель управления прокси, кото
 
 ## Скриншоты
 
-![Вход](docs/screenshots/login.png)
-
-![Пользователи](docs/screenshots/users.png)
-
-![Хосты](docs/screenshots/hosts.png)
-
-![Группы](docs/screenshots/groups.png)
-
-![Ноды](docs/screenshots/nodes.png)
-
-![Сканер REALITY](docs/screenshots/reality-scanner.png)
-
-![Настройки](docs/screenshots/settings.png)
-
-![Ссылки и QR-код пользователя](docs/screenshots/user-links.png)
+<p align="center">
+  <img src="docs/screenshots/login.png" width="49%" alt="Экран входа" />
+  <img src="docs/screenshots/panel.png" width="49%" alt="Внутри панели" />
+</p>
 
 ## Возможности
 

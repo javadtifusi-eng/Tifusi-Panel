@@ -23,21 +23,10 @@ Tifusi Panel is a self-hosted proxy management panel: a web dashboard plus a RES
 
 ## Screenshots
 
-![Login](docs/screenshots/login.png)
-
-![Users](docs/screenshots/users.png)
-
-![Hosts](docs/screenshots/hosts.png)
-
-![Groups](docs/screenshots/groups.png)
-
-![Nodes](docs/screenshots/nodes.png)
-
-![REALITY scanner](docs/screenshots/reality-scanner.png)
-
-![Settings](docs/screenshots/settings.png)
-
-![User links & QR code](docs/screenshots/user-links.png)
+<p align="center">
+  <img src="docs/screenshots/login.png" width="49%" alt="Login screen" />
+  <img src="docs/screenshots/panel.png" width="49%" alt="Inside the panel" />
+</p>
 
 ## Features
 
