@@ -32,6 +32,17 @@ banner() {
   printf '\n%s+%s+\n|%s|\n+%s+%s\n\n' "$C_CYAN" "$line" "$title" "$line" "$C_RESET"
 }
 
+# A single labeled box, sized to its own content — used for the SSL summary
+# at the end so it actually stands out from the surrounding plain info lines
+# instead of blending into a wall of text.
+box() {
+  local label="$1" value="$2" content width bar
+  content="  ${label}: ${value}  "
+  width=${#content}
+  bar=$(printf '%*s' "$width" '' | tr ' ' '=')
+  printf '%s+%s+\n|%s|\n+%s+%s\n' "$C_CYAN" "$bar" "$content" "$bar" "$C_RESET"
+}
+
 banner
 info "Installing Tifusi Panel..."
 
@@ -131,6 +142,10 @@ HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 HOST_IP="${HOST_IP:-<server-ip>}"
 info "The panel is up."
 if [ -n "$PANEL_PUBLIC_URL" ]; then
+  printf '\n'
+  box "SSL" "enabled (Let's Encrypt, ${domain:-})"
+  box "Certificate path" "${INSTALL_DIR}/certs/fullchain.pem + privkey.pem"
+  printf '\n'
   info "  Dashboard:  $PANEL_PUBLIC_URL"
 else
   info "  Dashboard:  http://${HOST_IP}:8080"
