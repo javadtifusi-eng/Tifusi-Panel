@@ -1351,19 +1351,6 @@ export default function CoresPage() {
                   </div>
                   <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2CertHint}</div>
                 </div>
-
-                <div>
-                  <label className={labelClass}>{t.coresPage.ikev2EgressVlessLabel}</label>
-                  <textarea
-                    dir="ltr"
-                    rows={2}
-                    value={form.ikev2EgressVless}
-                    onChange={(e) => setForm((f) => ({ ...f, ikev2EgressVless: e.target.value }))}
-                    placeholder="vless://uuid@host:port?..."
-                    className={monoTextarea}
-                  />
-                  <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2EgressVlessHint}</div>
-                </div>
               </div>
             )}
 

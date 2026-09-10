@@ -6,8 +6,13 @@ the first packet even reaches the server (DNS + iOS's own connect flow,
 confirmed by server-side charon logs completing full handshakes in well
 under a second), so removing the manual tap is the actual fix.
 """
+import base64
+import re
 import uuid
 from xml.sax.saxutils import escape
+
+from cryptography import x509
+from cryptography.hazmat.primitives.serialization import Encoding
 
 from app.models.host import Host
 from app.models.user import ProxyUser
@@ -16,6 +21,21 @@ from app.models.user import ProxyUser
 # reinstalling an unchanged profile updates it in place instead of piling
 # up duplicate VPN entries on the device.
 _NAMESPACE = uuid.UUID("6f6e9f2e-0f1a-4b7a-9c7a-1f6a8b2f9d3e")
+
+_PEM_CERT_RE = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.DOTALL)
+
+
+def _ca_certificate_der(cert_pem: str | None) -> bytes | None:
+    """`Core.ikev2_certificate` is the leaf cert with its issuing CA appended
+    (see app/cores/ikev2_cert.py) — the last PEM block in it is that CA.
+    A publicly-trusted certificate needs nothing extra, but a self-signed
+    one has to have this CA bundled straight into the profile, or iOS/macOS
+    silently reject the server's identity and the VPN just never connects."""
+    blocks = _PEM_CERT_RE.findall(cert_pem or "")
+    if len(blocks) < 2:
+        return None
+    ca_cert = x509.load_pem_x509_certificate(blocks[-1].encode())
+    return ca_cert.public_bytes(Encoding.DER)
 
 
 def _uuid_for(*parts: str) -> str:
@@ -33,13 +53,38 @@ def build_ikev2_mobileconfig(user: ProxyUser, host: Host) -> str:
     profile_uuid = _uuid_for("profile", str(host.id), str(user.id))
     display_name = escape(f"{host.remark} ({user.username})")
 
+    ca_der = _ca_certificate_der(host.core.ikev2_certificate if host.core else None)
+    ca_payload = ""
+    if ca_der is not None:
+        ca_uuid = _uuid_for("ca", str(host.id))
+        ca_b64 = base64.b64encode(ca_der).decode()
+        ca_payload = f"""        <dict>
+            <key>PayloadCertificateFileName</key>
+            <string>ca.cer</string>
+            <key>PayloadContent</key>
+            <data>{ca_b64}</data>
+            <key>PayloadDescription</key>
+            <string>Trusts the certificate authority this IKEv2 server signs its own certificate with</string>
+            <key>PayloadDisplayName</key>
+            <string>{display_name} Root CA</string>
+            <key>PayloadIdentifier</key>
+            <string>ir.tifusi.vpn.ca.{ca_uuid}</string>
+            <key>PayloadType</key>
+            <string>com.apple.security.root</string>
+            <key>PayloadUUID</key>
+            <string>{ca_uuid}</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+        </dict>
+"""
+
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>PayloadContent</key>
     <array>
-        <dict>
+{ca_payload}        <dict>
             <key>IKEv2</key>
             <dict>
                 <key>AuthenticationMethod</key>
