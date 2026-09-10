@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.groups.access import hosts_for_user
 from app.links.generator import build_links_for_user, build_subscription_content
-from app.models.host import Host
+from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.subscription.clash import build_clash_config
+from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.singbox import build_singbox_config
 
 # Deliberately not behind get_current_admin: client apps hit this URL directly
@@ -128,4 +129,25 @@ async def get_subscription(
 
     return Response(
         content=content, media_type=media_type, headers={"Subscription-Userinfo": _userinfo_header(user)}
+    )
+
+
+@router.get("/sub/{secret}/ikev2.mobileconfig")
+async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> Response:
+    """A tap-to-install iOS/macOS profile — same secret-as-credential model
+    as the main subscription link — so IKEv2 users skip typing server/
+    remote-ID/username/password into Settings > VPN by hand."""
+    user = await _user_or_404(secret, db)
+
+    hosts = list((await db.execute(select(Host))).scalars().all())
+    allowed_hosts = hosts_for_user(user, hosts)
+    host = next((h for h in allowed_hosts if h.protocol == HostProtocol.ikev2), None)
+    if host is None:
+        raise HTTPException(status_code=404, detail="No IKEv2 host available for this user")
+
+    content = build_ikev2_mobileconfig(user, host)
+    return Response(
+        content=content,
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": 'attachment; filename="ikev2.mobileconfig"'},
     )

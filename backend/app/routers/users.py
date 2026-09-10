@@ -315,6 +315,9 @@ async def get_user_links(
             "psk": host.core.ikev2_psk if host.core else None,
             "username": user.username,
             "password": user.secret,
+            # Tap-to-install iOS/macOS profile (Connect On Demand included) —
+            # an alternative to typing the fields above into Settings > VPN.
+            "mobileconfig_url": f"{base}sub/{user.secret}/ikev2.mobileconfig",
         }
         for host in allowed_hosts
         if host.protocol == HostProtocol.ikev2
