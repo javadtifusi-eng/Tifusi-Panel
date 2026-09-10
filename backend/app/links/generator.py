@@ -196,3 +196,41 @@ def build_links_for_user(user: ProxyUser, hosts: list[Host]) -> list[str]:
 
 def build_subscription_content(links: list[str]) -> str:
     return base64.b64encode("\n".join(links).encode()).decode()
+
+
+def build_ipsec_configs_for_user(
+    user: ProxyUser, hosts: list[Host], base_url: str
+) -> tuple[list[dict], list[dict]]:
+    """ikev2/l2tp have no URI scheme — iOS/Android/strongSwan set them up
+    from plain fields (server, PSK, and a per-user username/password for
+    EAP-MSCHAPv2/CHAP login), not an importable link, so each gets its own
+    field of raw connection info instead of joining build_links_for_user's
+    list. Shared by the admin-facing links endpoint (app/routers/users.py)
+    and the public subscription HTML page (app/routers/subscription.py) so
+    the two don't drift. `base_url` must already end in "/"."""
+    ikev2_configs = [
+        {
+            "remark": render_remark(host, user),
+            "server": host.address,
+            "psk": host.core.ikev2_psk if host.core else None,
+            "username": user.username,
+            "password": user.secret,
+            # Tap-to-install iOS/macOS profile (Connect On Demand included) —
+            # an alternative to typing the fields above into Settings > VPN.
+            "mobileconfig_url": f"{base_url}sub/{user.secret}/ikev2.mobileconfig",
+        }
+        for host in hosts
+        if host.protocol == HostProtocol.ikev2
+    ]
+    l2tp_configs = [
+        {
+            "remark": render_remark(host, user),
+            "server": host.address,
+            "psk": host.core.l2tp_psk if host.core else None,
+            "username": user.username,
+            "password": user.secret,
+        }
+        for host in hosts
+        if host.protocol == HostProtocol.l2tp
+    ]
+    return ikev2_configs, l2tp_configs

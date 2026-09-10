@@ -1,10 +1,17 @@
-import { useTheme } from '../theme/ThemeContext'
-
 // The real Tifusi griffin mark (frontend/public/logo-tifusi.png), background
 // keyed out to transparent. Not a redrawn approximation — the actual asset.
-// The art itself is near-white strokes on transparent (made for a dark
-// sidebar), so on the light theme it's inverted to near-black — that flips
-// only the opaque pixels' color, the transparent background is untouched.
+//
+// Rendered as a CSS mask (background-color clipped to the PNG's alpha
+// channel) rather than an <img> with a color filter: only the shape's
+// alpha matters this way, so it always comes out in the exact color of
+// the `--c-text-heading` token — near-white on the dark theme, near-black
+// on light — guaranteed readable against `bg-surface`/`bg-app` in both,
+// the same guarantee every other themed element gets from that token. An
+// `invert()` filter on the raw image was tried here before and was only
+// exactly correct if the source pixels were pure white/black; anything
+// off that (anti-aliased edges, a non-pure-white fill) inverted to a
+// dim, low-contrast grey instead of the crisp near-black light theme
+// needs.
 export function Logo({
   accent = '#22D3EE',
   size = 128,
@@ -14,7 +21,6 @@ export function Logo({
   size?: number
   glow?: boolean
 }) {
-  const { theme } = useTheme()
   return (
     <div
       style={{
@@ -36,15 +42,22 @@ export function Logo({
           }}
         />
       )}
-      <img
-        src="/logo-tifusi.png"
-        alt="Tifusi"
+      <div
+        role="img"
+        aria-label="Tifusi"
         style={{
           position: 'relative',
           width: '100%',
           height: '100%',
-          objectFit: 'contain',
-          filter: theme === 'light' ? 'invert(1)' : undefined,
+          backgroundColor: 'rgb(var(--c-text-heading))',
+          WebkitMaskImage: 'url(/logo-tifusi.png)',
+          maskImage: 'url(/logo-tifusi.png)',
+          WebkitMaskSize: 'contain',
+          maskSize: 'contain',
+          WebkitMaskRepeat: 'no-repeat',
+          maskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+          maskPosition: 'center',
         }}
       />
     </div>

@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import require_permission
 from app.groups.access import hosts_for_user, resolve_groups
-from app.links.generator import build_links_for_user, render_remark
+from app.links.generator import build_ipsec_configs_for_user, build_links_for_user
 from app.models.admin import Admin
-from app.models.host import Host, HostProtocol
+from app.models.host import Host
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.notifications.webhook import send_webhook_event
@@ -303,36 +303,7 @@ async def get_user_links(
     public_url = await get_public_url(db)
     base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
 
-    # ikev2/l2tp have no URI scheme either — iOS/Android/strongSwan set them
-    # up from plain fields (server, PSK, and a per-user username/password
-    # for EAP-MSCHAPv2/CHAP login), not an importable link, so each gets
-    # its own field of raw connection info instead of joining the base64
-    # link list.
-    ikev2_configs = [
-        {
-            "remark": render_remark(host, user),
-            "server": host.address,
-            "psk": host.core.ikev2_psk if host.core else None,
-            "username": user.username,
-            "password": user.secret,
-            # Tap-to-install iOS/macOS profile (Connect On Demand included) —
-            # an alternative to typing the fields above into Settings > VPN.
-            "mobileconfig_url": f"{base}sub/{user.secret}/ikev2.mobileconfig",
-        }
-        for host in allowed_hosts
-        if host.protocol == HostProtocol.ikev2
-    ]
-    l2tp_configs = [
-        {
-            "remark": render_remark(host, user),
-            "server": host.address,
-            "psk": host.core.l2tp_psk if host.core else None,
-            "username": user.username,
-            "password": user.secret,
-        }
-        for host in allowed_hosts
-        if host.protocol == HostProtocol.l2tp
-    ]
+    ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
 
     return {
         "subscription_url": f"{base}sub/{user.secret}",

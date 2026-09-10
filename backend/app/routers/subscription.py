@@ -6,13 +6,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.groups.access import hosts_for_user
-from app.links.generator import build_links_for_user, build_subscription_content
+from app.links.generator import build_ipsec_configs_for_user, build_links_for_user, build_subscription_content
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
+from app.settings_store import get_public_url
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
+from app.subscription.info_page import build_info_page_html
 from app.subscription.singbox import build_singbox_config
+
+_STATUS_LABELS_FA = {
+    UserStatus.active: "فعال",
+    UserStatus.disabled: "غیرفعال",
+    UserStatus.expired: "منقضی",
+    UserStatus.limited: "اتمام حجم",
+    UserStatus.on_hold: "در انتظار فعال‌سازی",
+}
 
 # Deliberately not behind get_current_admin: client apps hit this URL directly
 # using the unguessable secret as the only credential, the same way every
@@ -116,6 +126,30 @@ async def get_subscription(
 
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
+
+    # A real browser opening this URL by hand sends `Accept: text/html,...`
+    # first — practically no VPN client's HTTP fetch does, so this is a
+    # reliable enough signal to show a real page instead of the raw
+    # base64/YAML/JSON body a client actually needs. Checked ahead of the
+    # client-marker branches below since a human explicitly asking for html
+    # takes priority over guessing from User-Agent.
+    accept = request.headers.get("accept") or ""
+    if "text/html" in accept:
+        public_url = await get_public_url(db)
+        base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
+        ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
+        html = build_info_page_html(
+            username=user.username,
+            status=_STATUS_LABELS_FA.get(user.status, user.status.value),
+            used_traffic=user.used_traffic,
+            data_limit=user.data_limit,
+            expire_text=user.expire.strftime("%Y-%m-%d") if user.expire else "بدون انقضا",
+            subscription_url=f"{base}sub/{user.secret}",
+            links=build_links_for_user(user, allowed_hosts),
+            ikev2_configs=ikev2_configs,
+            l2tp_configs=l2tp_configs,
+        )
+        return Response(content=html, media_type="text/html; charset=utf-8")
 
     if _wants(user_agent, _CLASH_USER_AGENTS):
         content = build_clash_config(user, allowed_hosts)

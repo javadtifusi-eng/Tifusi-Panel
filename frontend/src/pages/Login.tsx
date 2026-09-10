@@ -156,9 +156,12 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
     <div dir={dir} className="flex min-h-screen w-full bg-app font-body text-primary">
       {/* Brand panel — hidden on narrow viewports, where the compact header below stands in for it. */}
       <div
-        className={`relative hidden flex-col justify-between overflow-hidden bg-surface px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%] ${
+        className={`relative hidden flex-col justify-between overflow-hidden px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%] ${
           dir === 'rtl' ? 'border-l' : 'border-r'
         } border-subtle`}
+        style={{
+          background: `radial-gradient(circle at 50% 50%, ${ACCENT}26 0%, transparent 60%), rgb(var(--c-surface))`,
+        }}
       >
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
           <div

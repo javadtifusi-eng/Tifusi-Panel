@@ -57,9 +57,11 @@ export default function UserLinksModal({
         {data && (
           <>
             <div className="mb-6 flex flex-col items-center gap-3 rounded-xl border border-cyan-400/20 bg-well p-4">
-              <div className="rounded-lg bg-white p-3">
-                <QRCodeSVG value={data.subscription_url} size={160} />
-              </div>
+              {data.links.length > 0 && (
+                <div className="rounded-lg bg-white p-3">
+                  <QRCodeSVG value={data.subscription_url} size={160} />
+                </div>
+              )}
               <div className="text-xs text-muted">{t.userLinksModal.subscriptionLinkLabel}</div>
               <div
                 dir="ltr"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Logo } from '../components/Logo'
 import { useLang } from '../i18n/LangContext'
 import {
   getTrafficHistory,
@@ -212,6 +213,11 @@ export default function OverviewPage() {
 
   return (
     <div dir={dir}>
+      <div className="mb-6 flex flex-col items-center gap-2">
+        <Logo accent={ACCENT} size={96} />
+        <span className="font-display text-sm font-bold tracking-[3px] text-heading">TIFUSI</span>
+      </div>
+
       <h1 className="mb-6 text-xl font-bold text-heading">{t.overviewPage.title}</h1>
 
       {loading && <div className="py-8 text-center text-faint">{t.loading}</div>}

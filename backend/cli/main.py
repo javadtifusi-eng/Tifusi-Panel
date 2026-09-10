@@ -21,11 +21,34 @@ def _print_banner() -> None:
     # typer.secho already strips these escapes when stdout isn't a real
     # terminal (piped into a log, NO_COLOR set, etc.) — no extra check
     # needed here the way the plain-printf shell installers require.
+    #
+    # Kept narrow on purpose (~20 cols) despite wanting to stand out more —
+    # a wider box wraps mid-line on a narrow terminal (a phone SSH client
+    # running `docker exec -it`, for instance) and comes out looking like
+    # garbled rows of "=" instead of a box — same tradeoff install.sh's own
+    # banner() makes. Extra blank padding rows plus a bold title read as
+    # bigger without widening it.
     title = "TIFUSI PANEL"
-    width = len(title) + 8
+    text = f"   {title}   "
+    width = len(text)
+    blank = " " * width
+
+    def side(inner: str) -> str:
+        # Each piece styled (and reset) on its own, then joined — nesting a
+        # differently-colored segment inside one typer.secho(fg=...) call
+        # would have the inner segment's own reset code prematurely cancel
+        # the outer color for whatever comes after it.
+        return (
+            typer.style("  ║", fg=typer.colors.CYAN, bold=True)
+            + inner
+            + typer.style("║", fg=typer.colors.CYAN, bold=True)
+        )
+
     typer.echo("")
     typer.secho("  ╔" + "═" * width + "╗", fg=typer.colors.CYAN, bold=True)
-    typer.secho("  ║" + title.center(width) + "║", fg=typer.colors.CYAN, bold=True)
+    typer.echo(side(typer.style(blank, fg=typer.colors.CYAN, bold=True)))
+    typer.echo(side(typer.style(text, fg=typer.colors.YELLOW, bold=True)))
+    typer.echo(side(typer.style(blank, fg=typer.colors.CYAN, bold=True)))
     typer.secho("  ╚" + "═" * width + "╝", fg=typer.colors.CYAN, bold=True)
 
 

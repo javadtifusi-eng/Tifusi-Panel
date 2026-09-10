@@ -97,7 +97,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
           <MenuIcon />
         </button>
         <div className="flex items-center gap-2">
-          <Logo accent={ACCENT} size={26} glow={false} />
+          <Logo accent={ACCENT} size={32} glow={false} />
           <span className="font-display text-xs font-bold tracking-[2px] text-heading">TIFUSI</span>
         </div>
         <div className="w-9" />
@@ -113,7 +113,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         } lg:transition-none`}
       >
         <div className="mb-8 flex items-center gap-2.5 px-2">
-          <Logo accent={ACCENT} size={36} />
+          <Logo accent={ACCENT} size={46} />
           <div>
             <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
             <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
