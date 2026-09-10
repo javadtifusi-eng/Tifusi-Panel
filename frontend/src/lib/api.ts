@@ -679,6 +679,20 @@ export async function deleteCore(id: number): Promise<void> {
   await authorizedFetch(`/cores/${id}`, { method: 'DELETE' })
 }
 
+export interface TrafficHistoryPoint {
+  date: string
+  total_bytes: number
+}
+
+export interface TrafficHistory {
+  points: TrafficHistoryPoint[]
+}
+
+export async function getTrafficHistory(days = 14): Promise<TrafficHistory> {
+  const res = await authorizedFetch(`/stats/traffic-history?days=${days}`)
+  return res.json()
+}
+
 export interface PanelSettings {
   public_url: string | null
   telegram_bot_token: string | null

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLang } from '../i18n/LangContext'
 import {
+  getTrafficHistory,
   listCores,
   listGroups,
   listHosts,
@@ -11,6 +12,7 @@ import {
   type Node,
   type NodeStatus,
   type ProxyUser,
+  type TrafficHistoryPoint,
   type UserStatus,
 } from '../lib/api'
 
@@ -60,6 +62,65 @@ function BreakdownCard({ title, rows }: { title: string; rows: { label: string; 
   )
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 GB'
+  const gb = bytes / 1024 ** 3
+  if (gb < 0.1) return '<0.1 GB'
+  return `${gb.toFixed(gb >= 100 ? 0 : 1)} GB`
+}
+
+function TrafficChart({ points }: { points: TrafficHistoryPoint[] }) {
+  const { t, align } = useLang()
+  const max = Math.max(1, ...points.map((p) => p.total_bytes))
+  const total = points.reduce((sum, p) => sum + p.total_bytes, 0)
+  const hasData = total > 0
+  const chartHeight = 140
+  const barGapPx = 4
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-sm font-bold text-slate-100">{t.overviewPage.trafficHistoryTitle}</div>
+        <div dir="ltr" className="font-mono text-xs" style={{ fontVariantNumeric: 'tabular-nums', color: ACCENT }}>
+          {t.overviewPage.trafficHistoryTotal(formatBytes(total))}
+        </div>
+      </div>
+
+      {!hasData ? (
+        <div className={`py-6 text-center text-xs text-slate-500 ${align}`}>{t.overviewPage.trafficHistoryNoData}</div>
+      ) : (
+        <div dir="ltr" className="flex items-end" style={{ height: chartHeight, gap: barGapPx }}>
+          {points.map((p) => {
+            const heightPct = Math.max(2, (p.total_bytes / max) * 100)
+            const isLast = p === points[points.length - 1]
+            const d = new Date(p.date)
+            const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            return (
+              <div key={p.date} className="flex flex-1 flex-col items-center justify-end" style={{ height: '100%' }}>
+                <div
+                  title={`${label}: ${formatBytes(p.total_bytes)}`}
+                  className="w-full rounded-t"
+                  style={{
+                    height: `${heightPct}%`,
+                    minHeight: 2,
+                    backgroundColor: isLast ? ACCENT : 'rgba(34,211,238,0.35)',
+                  }}
+                />
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {hasData && (
+        <div dir="ltr" className="mt-2 flex justify-between text-[10px] text-slate-500">
+          <span>{new Date(points[0].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+          <span>{new Date(points[points.length - 1].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function countBy<T, K extends string>(items: T[], key: (item: T) => K): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const item of items) {
@@ -81,6 +142,7 @@ export default function OverviewPage() {
   const [groupsCount, setGroupsCount] = useState<number | null>(null)
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [cores, setCores] = useState<Core[] | null>(null)
+  const [trafficHistory, setTrafficHistory] = useState<TrafficHistoryPoint[] | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -88,13 +150,14 @@ export default function OverviewPage() {
     // resources gets 403s on the rest, which shouldn't blank the whole
     // tab; each section below just stays out (its StatTile/BreakdownCard
     // simply isn't rendered) instead of the page showing a hard error.
-    Promise.allSettled([listUsers(), listHosts(), listGroups(), listNodes(), listCores()]).then(
-      ([u, h, g, n, c]) => {
+    Promise.allSettled([listUsers(), listHosts(), listGroups(), listNodes(), listCores(), getTrafficHistory(14)]).then(
+      ([u, h, g, n, c, th]) => {
         if (u.status === 'fulfilled') setUsers(u.value.users)
         if (h.status === 'fulfilled') setHosts(h.value.hosts)
         if (g.status === 'fulfilled') setGroupsCount(g.value.total)
         if (n.status === 'fulfilled') setNodes(n.value.nodes)
         if (c.status === 'fulfilled') setCores(c.value.cores)
+        if (th.status === 'fulfilled') setTrafficHistory(th.value.points)
         setLoaded(true)
       },
     )
@@ -121,6 +184,12 @@ export default function OverviewPage() {
             {nodes && <StatTile label={t.overviewPage.totalNodes} value={nodes.length} />}
             {cores && <StatTile label={t.overviewPage.totalCores} value={cores.length} />}
           </div>
+
+          {trafficHistory && (
+            <div className="mb-6">
+              <TrafficChart points={trafficHistory} />
+            </div>
+          )}
 
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {users && (

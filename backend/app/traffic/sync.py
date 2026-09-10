@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.node import Node, NodeStatus
+from app.models.traffic_snapshot import TrafficSnapshot
 from app.models.user import ProxyUser, UserStatus
 from app.nodes.sync import check_all_node_health, resync_connected_nodes
 from app.notifications.telegram import send_telegram_message
@@ -44,6 +45,14 @@ async def collect_traffic(db: AsyncSession) -> None:
     users = list((await db.execute(select(ProxyUser).where(ProxyUser.username.in_(deltas.keys())))).scalars().all())
     for user in users:
         user.used_traffic += deltas[user.username]
+
+    today = datetime.now(timezone.utc).date()
+    snapshot = await db.scalar(select(TrafficSnapshot).where(TrafficSnapshot.date == today))
+    if snapshot is None:
+        snapshot = TrafficSnapshot(date=today, total_bytes=0)
+        db.add(snapshot)
+    snapshot.total_bytes += sum(deltas.values())
+
     await db.commit()
 
 
