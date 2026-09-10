@@ -160,7 +160,12 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
           dir === 'rtl' ? 'border-l' : 'border-r'
         } border-subtle`}
         style={{
-          background: `radial-gradient(circle at 50% 50%, ${ACCENT}26 0%, transparent 60%), rgb(var(--c-surface))`,
+          // A flat, uniform tint across the whole panel rather than a
+          // gradient — a gradient that fades toward the dark `c-surface`
+          // base still reads as "mostly plain dark, blue in one corner"
+          // at the size of a real screen, not the deliberately colored
+          // panel this is meant to be.
+          backgroundColor: `color-mix(in srgb, ${ACCENT} 22%, rgb(var(--c-surface)))`,
         }}
       >
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
@@ -168,7 +173,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
             style={{
               width: '22rem',
               height: '22rem',
-              opacity: 0.16,
+              opacity: 0.1,
               backgroundColor: ACCENT,
               WebkitMaskImage: 'url(/logo-tifusi.png)',
               maskImage: 'url(/logo-tifusi.png)',
