@@ -9,6 +9,7 @@ class PanelSettingsResponse(BaseModel):
     telegram_chat_id: str | None
     webhook_url: str | None
     webhook_secret: str | None
+    discord_webhook_url: str | None
 
 
 class PanelSettingsUpdate(BaseModel):
@@ -17,3 +18,4 @@ class PanelSettingsUpdate(BaseModel):
     telegram_chat_id: str | None = None
     webhook_url: str | None = None
     webhook_secret: str | None = None
+    discord_webhook_url: str | None = None

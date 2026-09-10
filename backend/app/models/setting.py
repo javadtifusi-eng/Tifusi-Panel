@@ -28,3 +28,7 @@ class PanelSetting(Base):
     # receiver can verify a request actually came from this panel.
     webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     webhook_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # A Discord incoming-webhook URL — same events as Telegram/the generic
+    # webhook, see app/notifications/discord.py.
+    discord_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

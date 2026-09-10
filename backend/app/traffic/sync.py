@@ -9,6 +9,7 @@ from app.models.node_traffic_snapshot import NodeTrafficSnapshot
 from app.models.traffic_snapshot import TrafficSnapshot
 from app.models.user import ProxyUser, UserStatus
 from app.nodes.sync import check_all_node_health, resync_connected_nodes
+from app.notifications.discord import send_discord_message
 from app.notifications.telegram import send_telegram_message
 from app.notifications.webhook import send_webhook_event
 
@@ -111,6 +112,7 @@ async def enforce_limits(db: AsyncSession) -> bool:
         await db.commit()
         for text in notifications:
             await send_telegram_message(db, text)
+            await send_discord_message(db, text)
         for event, payload in events:
             await send_webhook_event(db, event, payload)
     return changed

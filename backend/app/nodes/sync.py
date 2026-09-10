@@ -10,6 +10,7 @@ from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.node import Node, NodeStatus
 from app.models.user import ProxyUser
+from app.notifications.discord import send_discord_message
 from app.notifications.telegram import send_telegram_message
 from app.notifications.webhook import send_webhook_event
 from app.xray_config.builder import build_xray_config
@@ -177,6 +178,7 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
         await db.commit()
         if previous_status != NodeStatus.error:
             await send_telegram_message(db, f"🔴 نود «{node.name}» از دسترس خارج شد.")
+            await send_discord_message(db, f"🔴 نود «{node.name}» از دسترس خارج شد.")
             await send_webhook_event(db, "node_disconnected", {"node_id": node.id, "name": node.name})
         return
 
@@ -186,9 +188,11 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
     if node.status != previous_status:
         if node.status == NodeStatus.connected:
             await send_telegram_message(db, f"🟢 نود «{node.name}» دوباره متصل شد.")
+            await send_discord_message(db, f"🟢 نود «{node.name}» دوباره متصل شد.")
             await send_webhook_event(db, "node_connected", {"node_id": node.id, "name": node.name})
         else:
             await send_telegram_message(db, f"🔴 نود «{node.name}» از دسترس خارج شد.")
+            await send_discord_message(db, f"🔴 نود «{node.name}» از دسترس خارج شد.")
             await send_webhook_event(db, "node_disconnected", {"node_id": node.id, "name": node.name})
 
 

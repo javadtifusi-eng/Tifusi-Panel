@@ -733,6 +733,7 @@ export interface PanelSettings {
   telegram_chat_id: string | null
   webhook_url: string | null
   webhook_secret: string | null
+  discord_webhook_url: string | null
 }
 
 export async function getSettings(): Promise<PanelSettings> {
@@ -751,6 +752,10 @@ export async function testTelegram(): Promise<void> {
 
 export async function testWebhook(): Promise<void> {
   await authorizedFetch('/settings/webhook/test', { method: 'POST' })
+}
+
+export async function testDiscord(): Promise<void> {
+  await authorizedFetch('/settings/discord/test', { method: 'POST' })
 }
 
 // Matches app/permissions.py PERMISSION_SCOPES — keep in sync.

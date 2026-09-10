@@ -16,6 +16,7 @@ import {
   PERMISSION_SCOPES,
   removeTls,
   restoreBackup,
+  testDiscord,
   testTelegram,
   testWebhook,
   updateAdminPermissions,
@@ -101,6 +102,13 @@ export default function SettingsPage() {
   const [webhookTestOk, setWebhookTestOk] = useState(false)
   const [webhookError, setWebhookError] = useState<string | null>(null)
 
+  const [discordUrl, setDiscordUrl] = useState('')
+  const [discordSaving, setDiscordSaving] = useState(false)
+  const [discordSaved, setDiscordSaved] = useState(false)
+  const [discordTesting, setDiscordTesting] = useState(false)
+  const [discordTestOk, setDiscordTestOk] = useState(false)
+  const [discordError, setDiscordError] = useState<string | null>(null)
+
   async function refreshAdmins() {
     try {
       const res = await listAdmins()
@@ -122,6 +130,7 @@ export default function SettingsPage() {
         setChatId(s.telegram_chat_id ?? '')
         setWebhookUrl(s.webhook_url ?? '')
         setWebhookSecret(s.webhook_secret ?? '')
+        setDiscordUrl(s.discord_webhook_url ?? '')
       })
       .catch(() => undefined)
     getTlsStatus()
@@ -414,6 +423,39 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveDiscord(e: FormEvent) {
+    e.preventDefault()
+    setDiscordSaving(true)
+    setDiscordError(null)
+    setDiscordSaved(false)
+    setDiscordTestOk(false)
+    try {
+      const res = await updateSettings({ discord_webhook_url: discordUrl.trim() || null })
+      setDiscordUrl(res.discord_webhook_url ?? '')
+      setDiscordSaved(true)
+      window.setTimeout(() => setDiscordSaved(false), 2000)
+    } catch (err) {
+      setDiscordError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setDiscordSaving(false)
+    }
+  }
+
+  async function handleTestDiscord() {
+    setDiscordTesting(true)
+    setDiscordError(null)
+    setDiscordTestOk(false)
+    try {
+      await testDiscord()
+      setDiscordTestOk(true)
+      window.setTimeout(() => setDiscordTestOk(false), 3000)
+    } catch (err) {
+      setDiscordError(err instanceof ApiError ? err.message : t.settingsPage.testDiscordFailed)
+    } finally {
+      setDiscordTesting(false)
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -649,6 +691,36 @@ export default function SettingsPage() {
             </button>
           </div>
           {webhookError && <div className="mt-3 text-xs text-danger">{webhookError}</div>}
+        </form>
+
+        <form onSubmit={handleSaveDiscord} className={cardClass}>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.discordTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.discordDesc}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1" style={{ minWidth: 240 }}>
+              <label className={labelClass}>{t.settingsPage.discordUrlLabel}</label>
+              <input
+                dir="ltr"
+                value={discordUrl}
+                onChange={(e) => setDiscordUrl(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/..."
+                className={`${inputClass} w-full text-left`}
+              />
+            </div>
+            <button type="submit" disabled={discordSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {discordSaving ? t.common.saving : discordSaved ? t.common.saved : t.common.save}
+            </button>
+            <button
+              type="button"
+              onClick={handleTestDiscord}
+              disabled={discordTesting}
+              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
+              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+            >
+              {discordTesting ? t.settingsPage.sending : discordTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
+            </button>
+          </div>
+          {discordError && <div className="mt-3 text-xs text-danger">{discordError}</div>}
         </form>
 
         <div className={cardClass}>

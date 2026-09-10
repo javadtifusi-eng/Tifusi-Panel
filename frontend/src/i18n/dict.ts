@@ -482,6 +482,10 @@ export const dict = {
       webhookUrlLabel: 'آدرس وبهوک',
       webhookSecretLabel: 'کلید مخفی (اختیاری)',
       testWebhookFailed: 'ارسال وبهوک تستی با خطا مواجه شد',
+      discordTitle: 'اعلان‌های دیسکورد',
+      discordDesc: 'آدرس یه Incoming Webhook دیسکورد رو اینجا بذار تا همون رویدادهای بالا (کاربر/نود) به یه کانال دیسکورد هم فرستاده بشن.',
+      discordUrlLabel: 'آدرس وبهوک دیسکورد',
+      testDiscordFailed: 'ارسال پیام تستی دیسکورد با خطا مواجه شد',
       backupTitle: 'بک‌آپ و بازیابی',
       backupDesc:
         'یه نسخه از کل دیتابیس پنل (کاربرها، هاست‌ها، نودها، تنظیمات) دانلود کن، یا از یه بک‌آپ قبلی بازیابی کن. بازیابی همه‌چیزِ فعلی رو با محتوای فایل جایگزین می‌کنه — برگشت‌ناپذیره.',
@@ -1045,6 +1049,10 @@ export const dict = {
       webhookUrlLabel: 'Webhook URL',
       webhookSecretLabel: 'Secret (optional)',
       testWebhookFailed: 'Sending the test webhook failed',
+      discordTitle: 'Discord Notifications',
+      discordDesc: 'Set a Discord incoming-webhook URL to also send the same events (users/nodes) above to a Discord channel.',
+      discordUrlLabel: 'Discord Webhook URL',
+      testDiscordFailed: 'Sending the test Discord message failed',
       backupTitle: 'Backup & Restore',
       backupDesc:
         "Download a copy of the panel's whole database (users, hosts, nodes, settings), or restore from a previous backup. Restoring replaces everything currently there with the file's contents — this can't be undone.",
