@@ -16,6 +16,8 @@ import {
   type UserStatus,
 } from '../lib/api'
 
+const TRAFFIC_DAYS = 14
+
 const ACCENT = '#22D3EE'
 
 const statusDot: Record<NodeStatus, string> = {
@@ -69,7 +71,17 @@ function formatBytes(bytes: number): string {
   return `${gb.toFixed(gb >= 100 ? 0 : 1)} GB`
 }
 
-function TrafficChart({ points }: { points: TrafficHistoryPoint[] }) {
+function TrafficChart({
+  points,
+  nodes,
+  nodeId,
+  onNodeChange,
+}: {
+  points: TrafficHistoryPoint[]
+  nodes: Node[]
+  nodeId: number | null
+  onNodeChange: (id: number | null) => void
+}) {
   const { t, align } = useLang()
   const max = Math.max(1, ...points.map((p) => p.total_bytes))
   const total = points.reduce((sum, p) => sum + p.total_bytes, 0)
@@ -79,10 +91,26 @@ function TrafficChart({ points }: { points: TrafficHistoryPoint[] }) {
 
   return (
     <div className="rounded-xl border border-subtle bg-surface p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-bold text-primary">{t.overviewPage.trafficHistoryTitle}</div>
-        <div dir="ltr" className="font-mono text-xs" style={{ fontVariantNumeric: 'tabular-nums', color: ACCENT }}>
-          {t.overviewPage.trafficHistoryTotal(formatBytes(total))}
+        <div className="flex items-center gap-3">
+          {nodes.length > 0 && (
+            <select
+              value={nodeId ?? ''}
+              onChange={(e) => onNodeChange(e.target.value ? Number(e.target.value) : null)}
+              className="rounded-md border border-edge bg-field px-2 py-1 text-xs text-primary outline-none focus:border-cyan-400/60"
+            >
+              <option value="">{t.overviewPage.allNodesOption}</option>
+              {nodes.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <div dir="ltr" className="font-mono text-xs" style={{ fontVariantNumeric: 'tabular-nums', color: ACCENT }}>
+            {t.overviewPage.trafficHistoryTotal(formatBytes(total))}
+          </div>
         </div>
       </div>
 
@@ -143,6 +171,7 @@ export default function OverviewPage() {
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [cores, setCores] = useState<Core[] | null>(null)
   const [trafficHistory, setTrafficHistory] = useState<TrafficHistoryPoint[] | null>(null)
+  const [trafficNodeId, setTrafficNodeId] = useState<number | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -150,18 +179,30 @@ export default function OverviewPage() {
     // resources gets 403s on the rest, which shouldn't blank the whole
     // tab; each section below just stays out (its StatTile/BreakdownCard
     // simply isn't rendered) instead of the page showing a hard error.
-    Promise.allSettled([listUsers(), listHosts(), listGroups(), listNodes(), listCores(), getTrafficHistory(14)]).then(
-      ([u, h, g, n, c, th]) => {
-        if (u.status === 'fulfilled') setUsers(u.value.users)
-        if (h.status === 'fulfilled') setHosts(h.value.hosts)
-        if (g.status === 'fulfilled') setGroupsCount(g.value.total)
-        if (n.status === 'fulfilled') setNodes(n.value.nodes)
-        if (c.status === 'fulfilled') setCores(c.value.cores)
-        if (th.status === 'fulfilled') setTrafficHistory(th.value.points)
-        setLoaded(true)
-      },
-    )
+    Promise.allSettled([
+      listUsers(),
+      listHosts(),
+      listGroups(),
+      listNodes(),
+      listCores(),
+      getTrafficHistory(TRAFFIC_DAYS),
+    ]).then(([u, h, g, n, c, th]) => {
+      if (u.status === 'fulfilled') setUsers(u.value.users)
+      if (h.status === 'fulfilled') setHosts(h.value.hosts)
+      if (g.status === 'fulfilled') setGroupsCount(g.value.total)
+      if (n.status === 'fulfilled') setNodes(n.value.nodes)
+      if (c.status === 'fulfilled') setCores(c.value.cores)
+      if (th.status === 'fulfilled') setTrafficHistory(th.value.points)
+      setLoaded(true)
+    })
   }, [])
+
+  function changeTrafficNode(id: number | null) {
+    setTrafficNodeId(id)
+    getTrafficHistory(TRAFFIC_DAYS, id)
+      .then((res) => setTrafficHistory(res.points))
+      .catch(() => undefined)
+  }
 
   const loading = !loaded
 
@@ -187,7 +228,12 @@ export default function OverviewPage() {
 
           {trafficHistory && (
             <div className="mb-6">
-              <TrafficChart points={trafficHistory} />
+              <TrafficChart
+                points={trafficHistory}
+                nodes={nodes ?? []}
+                nodeId={trafficNodeId}
+                onNodeChange={changeTrafficNode}
+              />
             </div>
           )}
 

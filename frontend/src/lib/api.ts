@@ -721,8 +721,9 @@ export interface TrafficHistory {
   points: TrafficHistoryPoint[]
 }
 
-export async function getTrafficHistory(days = 14): Promise<TrafficHistory> {
-  const res = await authorizedFetch(`/stats/traffic-history?days=${days}`)
+export async function getTrafficHistory(days = 14, nodeId?: number | null): Promise<TrafficHistory> {
+  const suffix = nodeId != null ? `&node_id=${nodeId}` : ''
+  const res = await authorizedFetch(`/stats/traffic-history?days=${days}${suffix}`)
   return res.json()
 }
 

@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_admin
+from app.models.node import Node
+from app.models.node_traffic_snapshot import NodeTrafficSnapshot
 from app.models.traffic_snapshot import TrafficSnapshot
 from app.schemas.stats import TrafficHistory, TrafficHistoryPoint
 
@@ -14,12 +16,23 @@ router = APIRouter(prefix="/api/stats", tags=["stats"], dependencies=[Depends(ge
 
 @router.get("/traffic-history", response_model=TrafficHistory)
 async def traffic_history(
-    days: int = Query(default=30, ge=1, le=365), db: AsyncSession = Depends(get_db)
+    days: int = Query(default=30, ge=1, le=365),
+    node_id: int | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
 ) -> TrafficHistory:
     start = datetime.now(timezone.utc).date() - timedelta(days=days - 1)
-    result = await db.execute(
-        select(TrafficSnapshot).where(TrafficSnapshot.date >= start).order_by(TrafficSnapshot.date)
-    )
+
+    if node_id is not None:
+        if await db.get(Node, node_id) is None:
+            raise HTTPException(status_code=404, detail="Node not found")
+        result = await db.execute(
+            select(NodeTrafficSnapshot).where(
+                NodeTrafficSnapshot.node_id == node_id, NodeTrafficSnapshot.date >= start
+            )
+        )
+    else:
+        result = await db.execute(select(TrafficSnapshot).where(TrafficSnapshot.date >= start))
+
     by_date = {row.date: row.total_bytes for row in result.scalars().all()}
 
     # Fill in every day in the range, even ones with no traffic-sync cycle

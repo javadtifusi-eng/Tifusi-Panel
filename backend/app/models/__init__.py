@@ -5,6 +5,7 @@ from app.models.group import Group
 from app.models.host import Host, HostProtocol, HostSecurity
 from app.models.inbound import Inbound
 from app.models.node import Node, NodeStatus
+from app.models.node_traffic_snapshot import NodeTrafficSnapshot
 from app.models.setting import PanelSetting
 from app.models.setup_key import SetupKey
 from app.models.traffic_snapshot import TrafficSnapshot
@@ -28,6 +29,7 @@ __all__ = [
     "Inbound",
     "Node",
     "NodeStatus",
+    "NodeTrafficSnapshot",
     "Core",
     "Group",
     "PanelSetting",

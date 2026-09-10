@@ -67,6 +67,7 @@ export const dict = {
       trafficHistoryTitle: 'ترافیک ۱۴ روز اخیر',
       trafficHistoryTotal: (v: string) => `مجموع: ${v}`,
       trafficHistoryNoData: 'هنوز داده‌ای ثبت نشده — بعد از اولین همگام‌سازی ترافیک نمودار پر می‌شه.',
+      allNodesOption: 'همه‌ی نودها',
     },
 
     common: {
@@ -628,6 +629,7 @@ export const dict = {
       trafficHistoryTitle: 'Traffic, Last 14 Days',
       trafficHistoryTotal: (v: string) => `Total: ${v}`,
       trafficHistoryNoData: 'No data recorded yet — the chart fills in after the first traffic sync.',
+      allNodesOption: 'All nodes',
     },
 
     common: {

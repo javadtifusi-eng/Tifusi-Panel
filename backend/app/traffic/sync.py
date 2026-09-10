@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.node import Node, NodeStatus
+from app.models.node_traffic_snapshot import NodeTrafficSnapshot
 from app.models.traffic_snapshot import TrafficSnapshot
 from app.models.user import ProxyUser, UserStatus
 from app.nodes.sync import check_all_node_health, resync_connected_nodes
@@ -31,13 +32,16 @@ async def collect_traffic(db: AsyncSession) -> None:
         return
 
     deltas: dict[str, int] = {}
+    node_deltas: dict[int, int] = {}
     for node in nodes:
         try:
             stats = await _fetch_node_stats(node)
         except Exception:
             continue
         for username, counters in stats.items():
-            deltas[username] = deltas.get(username, 0) + counters.get("uplink", 0) + counters.get("downlink", 0)
+            delta = counters.get("uplink", 0) + counters.get("downlink", 0)
+            deltas[username] = deltas.get(username, 0) + delta
+            node_deltas[node.id] = node_deltas.get(node.id, 0) + delta
 
     if not deltas:
         return
@@ -52,6 +56,19 @@ async def collect_traffic(db: AsyncSession) -> None:
         snapshot = TrafficSnapshot(date=today, total_bytes=0)
         db.add(snapshot)
     snapshot.total_bytes += sum(deltas.values())
+
+    for node_id, node_total in node_deltas.items():
+        if not node_total:
+            continue
+        node_snapshot = await db.scalar(
+            select(NodeTrafficSnapshot).where(
+                NodeTrafficSnapshot.node_id == node_id, NodeTrafficSnapshot.date == today
+            )
+        )
+        if node_snapshot is None:
+            node_snapshot = NodeTrafficSnapshot(node_id=node_id, date=today, total_bytes=0)
+            db.add(node_snapshot)
+        node_snapshot.total_bytes += node_total
 
     await db.commit()
 
