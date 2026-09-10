@@ -7,7 +7,32 @@ import { copyToClipboard } from '../lib/clipboard'
 
 const ACCENT = '#22D3EE'
 const COMMAND = 'docker exec -it tifusi-panel tifusi-cli generate-admin-key'
-const PROTOCOLS = ['VLESS', 'Trojan', 'Hysteria2', 'IKEv2']
+
+function UserIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  )
+}
+
+function ArrowIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  )
+}
 
 function CopyIcon() {
   return (
@@ -52,10 +77,12 @@ type Screen = 'setup' | 'login'
 const fieldClass =
   'w-full rounded-lg border border-edge bg-field px-3.5 py-3 text-sm text-primary placeholder-faint outline-none transition-colors focus:border-cyan-400/60'
 const labelClass = 'block text-xs text-muted mb-1'
-const linkClass = 'text-xs text-accent hover:underline'
+const linkClass = 'text-sm font-bold text-accent hover:underline'
 
 export default function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }) {
   const { lang, setLang, t, dir, align } = useLang()
+  const iconSideClass = dir === 'rtl' ? 'right-3.5' : 'left-3.5'
+  const iconPadClass = dir === 'rtl' ? 'pr-10' : 'pl-10'
   const { theme, toggleTheme } = useTheme()
   const [screen, setScreen] = useState<Screen>('setup')
   const [loadingStatus, setLoadingStatus] = useState(true)
@@ -127,13 +154,13 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
     <div className="flex justify-center gap-2">
       <button
         onClick={() => setLang('en')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
+        className={`rounded-full border px-3.5 py-1.5 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 bg-accent-tint text-accent' : 'border-edge text-muted'}`}
       >
         EN
       </button>
       <button
         onClick={() => setLang('fa')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
+        className={`rounded-full border px-3.5 py-1.5 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 bg-accent-tint text-accent' : 'border-edge text-muted'}`}
       >
         فارسی
       </button>
@@ -141,7 +168,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         onClick={toggleTheme}
         aria-label={t.nav.toggleTheme}
         title={t.nav.toggleTheme}
-        className="flex items-center justify-center rounded-md border border-edge px-3 py-1 text-muted hover:border-cyan-400/50 hover:text-accent"
+        className="flex items-center justify-center rounded-full border border-edge px-3 py-1.5 text-muted hover:border-cyan-400/50 hover:text-accent"
       >
         {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
       </button>
@@ -158,30 +185,24 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
 
   return (
     <div dir={dir} className="flex min-h-screen w-full flex-col items-center justify-center bg-app px-6 py-12 font-body text-primary">
-      <div className="w-full max-w-md">
-        {/* Brand header — logo, welcome heading and tagline sit above the
-            card on every viewport, instead of a separate side panel that
-            only showed on wide screens. */}
+      <div className="w-full max-w-md lg:max-w-xl">
         <div className="mb-8 flex flex-col items-center gap-1 text-center">
-          <Logo accent={ACCENT} size={56} />
-          <div className="mb-2">
-            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
-            <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
+          <div className="lg:hidden">
+            <Logo accent={ACCENT} size={64} />
+          </div>
+          <div className="hidden lg:block">
+            <Logo accent={ACCENT} size={104} />
+          </div>
+          <div className="mt-1">
+            <div className="font-display text-2xl font-bold tracking-[3px] text-heading">TIFUSI</div>
+            <div className="font-display text-[10px] font-semibold tracking-[4px]" style={{ color: ACCENT }}>
               PANEL
             </div>
           </div>
-          <h1 className="font-display text-xl font-bold text-heading">{t.welcome}</h1>
-          <p className="max-w-xs text-sm leading-relaxed text-muted">{t.tagline}</p>
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
-            {PROTOCOLS.map((p) => (
-              <span key={p} className="rounded-md border border-edge bg-field px-2.5 py-1 text-[11px] text-secondary">
-                {p}
-              </span>
-            ))}
-          </div>
+          <h1 className="mt-3 font-display text-xl font-bold text-heading">{t.welcome}</h1>
         </div>
 
-        <div className="rounded-2xl border border-subtle bg-surface p-8 shadow-2xl">
+        <div className="rounded-2xl border border-subtle bg-surface p-8 shadow-2xl lg:p-12">
           {screen === 'setup' ? (
             <form onSubmit={handleCreateAdmin}>
               <div className="mb-2.5 inline-block rounded-md border border-cyan-400/40 bg-accent-tint px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-accent">
@@ -228,34 +249,44 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
               />
 
               <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                placeholder={t.userPlaceholder}
-                className={`${fieldClass} mb-3 ${align}`}
-              />
+              <div className="relative mb-3">
+                <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-faint ${iconSideClass}`}>
+                  <UserIcon />
+                </span>
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  placeholder={t.userPlaceholder}
+                  className={`${fieldClass} ${iconPadClass} ${align}`}
+                />
+              </div>
 
               <label className={`${labelClass} ${align}`}>{t.passLabel}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                placeholder={t.passPlaceholder}
-                className={`${fieldClass} mb-1 ${align}`}
-              />
+              <div className="relative mb-1">
+                <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-faint ${iconSideClass}`}>
+                  <LockIcon />
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  placeholder={t.passPlaceholder}
+                  className={`${fieldClass} ${iconPadClass} ${align}`}
+                />
+              </div>
 
               {error && <div className="mt-2 text-xs text-danger">{error}</div>}
 
               <button
                 type="submit"
                 disabled={submitting}
-                style={{ backgroundColor: ACCENT }}
-                className="mt-4 w-full rounded-lg py-3 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500 py-3 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {t.createBtn}
+                <ArrowIcon />
               </button>
 
               <div className="mt-4 text-center">
@@ -269,23 +300,33 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
               <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingLogin}</div>
 
               <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                placeholder={t.userPlaceholder}
-                className={`${fieldClass} mb-3 ${align}`}
-              />
+              <div className="relative mb-3">
+                <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-faint ${iconSideClass}`}>
+                  <UserIcon />
+                </span>
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  placeholder={t.userPlaceholder}
+                  className={`${fieldClass} ${iconPadClass} ${align}`}
+                />
+              </div>
 
               <label className={`${labelClass} ${align}`}>{t.passLabel}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder={t.passPlaceholder}
-                className={`${fieldClass} mb-3 ${align}`}
-              />
+              <div className="relative mb-3">
+                <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-faint ${iconSideClass}`}>
+                  <LockIcon />
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder={t.passPlaceholder}
+                  className={`${fieldClass} ${iconPadClass} ${align}`}
+                />
+              </div>
 
               <div className={`mb-4 ${align}`}>
                 <a href="#" className={linkClass}>
@@ -298,10 +339,10 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
               <button
                 type="submit"
                 disabled={submitting}
-                style={{ backgroundColor: ACCENT }}
-                className="w-full rounded-lg py-3 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500 py-3 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {t.signInBtn}
+                <ArrowIcon />
               </button>
 
               <div className="mt-4 text-center">
@@ -314,8 +355,6 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
 
           <div className="mt-6 flex justify-center">{langToggle}</div>
         </div>
-
-        <div className="mt-8 text-center text-[10px] tracking-widest text-faint">POWERED BY TIFUSI SYSTEMS</div>
       </div>
     </div>
   )
