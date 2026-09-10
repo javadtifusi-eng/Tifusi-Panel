@@ -12,13 +12,35 @@ REPO_URL="https://github.com/javadtifusi-eng/Tifusi-Panel.git"
 CLONE_DIR="$(mktemp -d)"
 trap 'rm -rf "$CLONE_DIR"' EXIT
 
-info() { printf '\033[1;36m[Tifusi Node]\033[0m %s\n' "$1"; }
-warn() { printf '\033[1;33m[Warning]\033[0m %s\n' "$1"; }
-fail() { printf '\033[1;31m[Error]\033[0m %s\n' "$1"; exit 1; }
+# Only emit color/box-drawing escapes into a real, color-capable terminal —
+# piped into a log file or a dumb terminal, raw escape codes are exactly
+# the "garbled unclear lines" this is here to avoid.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_CYAN=$'\033[1;36m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
+else
+  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""
+fi
+
+info() { printf '%s[Tifusi Node]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
+warn() { printf '%s[Warning]%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
+fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
+
+banner() {
+  local title=" TIFUSI NODE " line
+  line=$(printf '%*s' "${#title}" '' | tr ' ' '=')
+  printf '\n%s+%s+\n|%s|\n+%s+%s\n\n' "$C_CYAN" "$line" "$title" "$line" "$C_RESET"
+}
+
+banner
 
 if ! command -v docker >/dev/null 2>&1; then
-  info "Docker isn't installed — installing it with the official script (curl -fsSL https://get.docker.com | sh)..."
-  curl -fsSL https://get.docker.com | sh
+  info "Docker isn't installed — installing it with the official script..."
+  DOCKER_INSTALL_LOG="$(mktemp)"
+  if ! curl -fsSL https://get.docker.com | sh > "$DOCKER_INSTALL_LOG" 2>&1; then
+    warn "Docker's own installer output:"
+    cat "$DOCKER_INSTALL_LOG"
+  fi
+  rm -f "$DOCKER_INSTALL_LOG"
   command -v docker >/dev/null 2>&1 \
     || fail "Automatic Docker install failed — try it manually: curl -fsSL https://get.docker.com | sh"
 fi
@@ -70,7 +92,7 @@ info "Starting the node on the host's real network (agent on port $PORT)..."
 # panel's pushed config gives it, decided AFTER this container starts, and
 # Docker can't pre-publish a port it doesn't know about yet. Host networking
 # means every port Xray (or the agent) binds to is reachable directly,
-# exactly like PasarGuard's own node containers.
+# without having to predict and republish them one by one.
 #
 # NET_ADMIN/NET_RAW: only needed if the panel later assigns this node an
 # l2tp/ikev2 Core — strongSwan/xl2tpd need them to touch IPsec kernel state

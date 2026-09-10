@@ -13,18 +13,41 @@ REPO_URL="https://github.com/javadtifusi-eng/Tifusi-Panel.git"
 INSTALL_DIR="${TIFUSI_INSTALL_DIR:-/opt/tifusi-panel}"
 PANEL_URL="http://localhost:8000"
 
-info() { printf '\033[1;36m[Tifusi]\033[0m %s\n' "$1"; }
-warn() { printf '\033[1;33m[Warning]\033[0m %s\n' "$1"; }
-fail() { printf '\033[1;31m[Error]\033[0m %s\n' "$1"; exit 1; }
+# Only emit color/box-drawing escapes into a real, color-capable terminal —
+# piped into a log file or a dumb terminal, raw escape codes are exactly
+# the "garbled unclear lines" this is here to avoid.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_CYAN=$'\033[1;36m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
+else
+  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""
+fi
+
+info() { printf '%s[Tifusi]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
+warn() { printf '%s[Warning]%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
+fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
+
+banner() {
+  local title=" TIFUSI PANEL " line
+  line=$(printf '%*s' "${#title}" '' | tr ' ' '=')
+  printf '\n%s+%s+\n|%s|\n+%s+%s\n\n' "$C_CYAN" "$line" "$title" "$line" "$C_RESET"
+}
+
+banner
+info "Installing Tifusi Panel..."
 
 if command -v apt-get >/dev/null 2>&1; then
   info "Updating the system's package list (apt-get update)..."
-  apt-get update -y >/dev/null 2>&1 || warn "apt-get update failed — continuing anyway."
+  DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || warn "apt-get update failed — continuing anyway."
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  info "Docker isn't installed — installing it with the official script (curl -fsSL https://get.docker.com | sh)..."
-  curl -fsSL https://get.docker.com | sh
+  info "Docker isn't installed — installing it with the official script..."
+  DOCKER_INSTALL_LOG="$(mktemp)"
+  if ! curl -fsSL https://get.docker.com | sh > "$DOCKER_INSTALL_LOG" 2>&1; then
+    warn "Docker's own installer output:"
+    cat "$DOCKER_INSTALL_LOG"
+  fi
+  rm -f "$DOCKER_INSTALL_LOG"
   command -v docker >/dev/null 2>&1 \
     || fail "Automatic Docker install failed — try it manually: curl -fsSL https://get.docker.com | sh"
 fi
