@@ -160,14 +160,24 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
           dir === 'rtl' ? 'border-l' : 'border-r'
         } border-subtle`}
       >
-        <img
-          src="/logo-tifusi.png"
-          alt=""
-          aria-hidden="true"
-          className={`pointer-events-none absolute -bottom-14 h-72 w-72 object-contain opacity-[0.05] grayscale ${
-            dir === 'rtl' ? '-left-14' : '-right-14'
-          }`}
-        />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
+          <div
+            style={{
+              width: '22rem',
+              height: '22rem',
+              opacity: 0.16,
+              backgroundColor: ACCENT,
+              WebkitMaskImage: 'url(/logo-tifusi.png)',
+              maskImage: 'url(/logo-tifusi.png)',
+              WebkitMaskSize: 'contain',
+              maskSize: 'contain',
+              WebkitMaskRepeat: 'no-repeat',
+              maskRepeat: 'no-repeat',
+              WebkitMaskPosition: 'center',
+              maskPosition: 'center',
+            }}
+          />
+        </div>
 
         <div className="relative flex items-center gap-2.5">
           <Logo accent={ACCENT} size={40} glow={false} />
