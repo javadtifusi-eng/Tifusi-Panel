@@ -45,14 +45,14 @@ function MoonIcon() {
 
 type Screen = 'setup' | 'login'
 
-// Fixed white-on-blue, not theme tokens — this page keeps one deliberate
-// brand look regardless of the light/dark toggle (see the wrapper's own
-// comment), so `text-primary`/`bg-field` etc. (which flip to near-black
-// on the light theme) would go invisible against it.
+// Semantic theme tokens, same as the rest of the app — this page now
+// follows the light/dark toggle instead of a fixed brand color, so it
+// looks like one product with the panel behind it rather than a separate
+// marketing surface bolted onto the front of it.
 const fieldClass =
-  'w-full rounded-lg border border-white/15 bg-white/10 px-3.5 py-3 text-sm text-white placeholder-white/40 outline-none backdrop-blur-sm transition-colors focus:border-cyan-300/70 focus:bg-white/15'
-const labelClass = 'block text-xs text-white/70 mb-1'
-const linkClass = 'text-xs text-cyan-300 hover:underline'
+  'w-full rounded-lg border border-edge bg-field px-3.5 py-3 text-sm text-primary placeholder-faint outline-none transition-colors focus:border-cyan-400/60'
+const labelClass = 'block text-xs text-muted mb-1'
+const linkClass = 'text-xs text-accent hover:underline'
 
 export default function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }) {
   const { lang, setLang, t, dir, align } = useLang()
@@ -124,16 +124,16 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
   }
 
   const langToggle = (
-    <div className="flex justify-center gap-2 lg:justify-start">
+    <div className="flex justify-center gap-2">
       <button
         onClick={() => setLang('en')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-300/60 text-cyan-200' : 'border-white/20 text-white/60'}`}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
       >
         EN
       </button>
       <button
         onClick={() => setLang('fa')}
-        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-300/60 text-cyan-200' : 'border-white/20 text-white/60'}`}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
       >
         فارسی
       </button>
@@ -141,7 +141,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         onClick={toggleTheme}
         aria-label={t.nav.toggleTheme}
         title={t.nav.toggleTheme}
-        className="flex items-center justify-center rounded-md border border-white/20 px-3 py-1 text-white/60 hover:border-cyan-300/60 hover:text-cyan-200"
+        className="flex items-center justify-center rounded-md border border-edge px-3 py-1 text-muted hover:border-cyan-400/50 hover:text-accent"
       >
         {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
       </button>
@@ -157,101 +157,48 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
   }
 
   return (
-    // h-screen + overflow-hidden, not min-h-screen: the page's real content
-    // height came out a bit taller than 100vh (measured — not a viewport
-    // quirk), which every earlier attempt at a full-viewport background
-    // missed, since a background painted on (or fixed to) the viewport can
-    // never cover content the *document* pushes past it. Nothing on this
-    // screen needs to scroll, so capping it at exactly 100vh and clipping
-    // the small overflow is correct, not lossy.
-    <div
-      dir={dir}
-      className="flex h-screen w-full overflow-hidden font-body text-white"
-      style={{
-        // One continuous brand gradient across the whole screen — this
-        // page keeps one deliberate look regardless of the light/dark
-        // toggle (which still applies to the rest of the app after
-        // login), same as most products treat their login/marketing
-        // surface as brand-fixed. The glow sits off-center toward where
-        // the griffin mark actually is, not dead-center.
-        background:
-          'radial-gradient(130% 110% at 80% 55%, #3f8ee0 0%, #1f4fb3 32%, #12306e 62%, #081735 100%)',
-      }}
-    >
-      {/* Brand panel — hidden on narrow viewports, where the compact header below stands in for it. */}
-      <div className="relative hidden flex-col justify-between overflow-hidden px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%]">
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
-          <div
-            style={{
-              width: '26rem',
-              height: '26rem',
-              opacity: 0.9,
-              backgroundColor: '#ffffff',
-              WebkitMaskImage: 'url(/logo-tifusi.png)',
-              maskImage: 'url(/logo-tifusi.png)',
-              WebkitMaskSize: 'contain',
-              maskSize: 'contain',
-              WebkitMaskRepeat: 'no-repeat',
-              maskRepeat: 'no-repeat',
-              WebkitMaskPosition: 'center',
-              maskPosition: 'center',
-            }}
-          />
-        </div>
-
-        <div className="relative flex items-center gap-2.5">
-          <Logo color="#ffffff" size={40} glow={false} />
-          <div>
-            <div className="font-display text-sm font-bold tracking-[2px] text-white">TIFUSI</div>
+    <div dir={dir} className="flex min-h-screen w-full flex-col items-center justify-center bg-app px-6 py-12 font-body text-primary">
+      <div className="w-full max-w-md">
+        {/* Brand header — logo, welcome heading and tagline sit above the
+            card on every viewport, instead of a separate side panel that
+            only showed on wide screens. */}
+        <div className="mb-8 flex flex-col items-center gap-1 text-center">
+          <Logo accent={ACCENT} size={56} />
+          <div className="mb-2">
+            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
             <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
               PANEL
             </div>
           </div>
-        </div>
-
-        <div className="relative">
-          <h1 className={`max-w-sm font-display text-2xl font-bold leading-snug text-white ${align}`}>{t.welcome}</h1>
-          <p className={`mt-3 max-w-xs text-sm leading-relaxed text-white/70 ${align}`}>{t.tagline}</p>
-          <div className="mt-6 flex flex-wrap gap-2">
+          <h1 className="font-display text-xl font-bold text-heading">{t.welcome}</h1>
+          <p className="max-w-xs text-sm leading-relaxed text-muted">{t.tagline}</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
             {PROTOCOLS.map((p) => (
-              <span key={p} className="rounded-md border border-white/20 px-2.5 py-1 text-[11px] text-white/80">
+              <span key={p} className="rounded-md border border-edge bg-field px-2.5 py-1 text-[11px] text-secondary">
                 {p}
               </span>
             ))}
           </div>
         </div>
 
-        <div className="relative text-[10px] tracking-widest text-white/50">POWERED BY TIFUSI SYSTEMS</div>
-      </div>
-
-      {/* Form panel */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
-        <div className="mb-6 flex flex-col items-center gap-3 lg:hidden">
-          <Logo color="#ffffff" size={52} glow={false} />
-          <div className="text-center">
-            <div className="font-display text-sm font-bold tracking-[2px] text-white">TIFUSI PANEL</div>
-            <div className="mt-1 max-w-[220px] text-xs text-white/70">{t.tagline}</div>
-          </div>
-        </div>
-
-        <div className="w-full max-w-sm">
+        <div className="rounded-2xl border border-subtle bg-surface p-8 shadow-2xl">
           {screen === 'setup' ? (
             <form onSubmit={handleCreateAdmin}>
-              <div className="mb-2.5 inline-block rounded-md border border-cyan-300/40 px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-cyan-200">
+              <div className="mb-2.5 inline-block rounded-md border border-cyan-400/40 bg-accent-tint px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-accent">
                 {t.badgeSetup}
               </div>
-              <div className={`mb-4 text-xl font-bold text-white ${align}`}>{t.headingSetup}</div>
+              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingSetup}</div>
 
-              <div className="mb-4 rounded-lg border border-white/15 bg-white/10 px-3.5 py-3 backdrop-blur-sm">
+              <div className="mb-4 rounded-lg border border-subtle bg-field px-3.5 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`text-xs text-white/70 ${align}`}>{t.step1}</span>
+                  <span className={`text-xs text-secondary ${align}`}>{t.step1}</span>
                   <button
                     type="button"
                     onClick={handleCopy}
                     title={COMMAND}
                     aria-label={copied ? t.copied : t.copy}
                     className={`flex-shrink-0 rounded-md p-1.5 transition-colors ${
-                      copied ? 'bg-emerald-400/20 text-emerald-300' : 'bg-cyan-400/20 text-cyan-200'
+                      copied ? 'bg-success-tint text-success' : 'bg-accent-tint text-accent'
                     }`}
                   >
                     {copied ? <CheckIcon /> : <CopyIcon />}
@@ -259,11 +206,11 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 </div>
                 {copyFailed && (
                   <>
-                    <div className={`mt-2.5 text-[11px] text-amber-300 ${align}`}>{t.copyFailedHint}</div>
+                    <div className={`mt-2.5 text-[11px] text-warning ${align}`}>{t.copyFailedHint}</div>
                     <code
                       dir="ltr"
                       onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
-                      className="mt-1.5 block cursor-text select-all break-all rounded-md bg-black/30 p-2 text-left font-mono text-[11px] text-cyan-200"
+                      className="mt-1.5 block cursor-text select-all break-all rounded-md bg-well p-2 text-left font-mono text-[11px] text-accent"
                     >
                       {COMMAND}
                     </code>
@@ -300,12 +247,13 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 className={`${fieldClass} mb-1 ${align}`}
               />
 
-              {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
+              {error && <div className="mt-2 text-xs text-danger">{error}</div>}
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-4 w-full rounded-lg bg-cyan-400 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-cyan-300 disabled:opacity-60"
+                style={{ backgroundColor: ACCENT }}
+                className="mt-4 w-full rounded-lg py-3 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {t.createBtn}
               </button>
@@ -318,7 +266,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
             </form>
           ) : (
             <form onSubmit={handleLogin}>
-              <div className={`mb-4 text-xl font-bold text-white ${align}`}>{t.headingLogin}</div>
+              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingLogin}</div>
 
               <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
               <input
@@ -345,12 +293,13 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                 </a>
               </div>
 
-              {error && <div className="mb-3 text-xs text-red-300">{error}</div>}
+              {error && <div className="mb-3 text-xs text-danger">{error}</div>}
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-lg bg-cyan-400 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-cyan-300 disabled:opacity-60"
+                style={{ backgroundColor: ACCENT }}
+                className="w-full rounded-lg py-3 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {t.signInBtn}
               </button>
@@ -365,6 +314,8 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
 
           <div className="mt-6 flex justify-center">{langToggle}</div>
         </div>
+
+        <div className="mt-8 text-center text-[10px] tracking-widest text-faint">POWERED BY TIFUSI SYSTEMS</div>
       </div>
     </div>
   )

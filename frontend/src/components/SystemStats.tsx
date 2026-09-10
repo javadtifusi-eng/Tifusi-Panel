@@ -80,7 +80,7 @@ export default function SystemStatsBar() {
   if (!stats) return null
 
   return (
-    <div className="flex items-center gap-6 rounded-xl border border-subtle bg-surface px-4 py-2.5">
+    <div className="flex max-w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-subtle bg-surface px-4 py-2.5 sm:gap-x-6">
       <Gauge
         percent={stats.cpu_percent}
         label={t.dashboardStats.cpu}

@@ -169,9 +169,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
 
       <main className="w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pt-20 lg:p-8 lg:pt-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="max-w-full overflow-x-auto">
-            <SystemStatsBar />
-          </div>
+          <SystemStatsBar />
           <LiveClock />
         </div>
         {active === 'overview' && <OverviewPage />}
