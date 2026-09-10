@@ -109,6 +109,7 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
                 payload.get("users") or [],
                 payload.get("certificate"),
                 payload.get("certificate_key"),
+                payload.get("egress_vless"),
             )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=f"required binary not found: {exc}") from exc
@@ -140,7 +141,7 @@ async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
     else:
         ipsec_running = None
     ipsec_state = {"mode": _ipsec_mode, "running": ipsec_running}
-    if _ipsec_mode == "l2tp":
+    if _ipsec_mode in ("l2tp", "ikev2"):
         ipsec_state["egress_running"] = ipsec.vless_egress.is_egress_running()
 
     return {"xray": xray, "ipsec": ipsec_state}

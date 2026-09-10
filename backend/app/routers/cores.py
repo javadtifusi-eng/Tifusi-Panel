@@ -22,6 +22,7 @@ _CORE_FIELDS = (
     "ikev2_remote_id",
     "ikev2_certificate",
     "ikev2_certificate_key",
+    "ikev2_egress_vless",
 )
 
 
@@ -87,6 +88,7 @@ async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None 
         ikev2_remote_id=core.ikev2_remote_id,
         ikev2_certificate=core.ikev2_certificate,
         ikev2_certificate_key=core.ikev2_certificate_key,
+        ikev2_egress_vless=core.ikev2_egress_vless,
     )
 
 

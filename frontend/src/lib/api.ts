@@ -677,6 +677,7 @@ export interface Core {
   ikev2_remote_id: string | null
   ikev2_certificate: string | null
   ikev2_certificate_key: string | null
+  ikev2_egress_vless: string | null
 }
 
 export interface CoreList {
@@ -696,6 +697,7 @@ export interface CorePayload {
   ikev2_remote_id?: string | null
   ikev2_certificate?: string | null
   ikev2_certificate_key?: string | null
+  ikev2_egress_vless?: string | null
 }
 
 export interface Ikev2CertKeypair {

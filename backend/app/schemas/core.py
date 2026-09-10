@@ -23,6 +23,7 @@ class CoreCreate(BaseModel):
     ikev2_remote_id: str | None = None
     ikev2_certificate: str | None = None
     ikev2_certificate_key: str | None = None
+    ikev2_egress_vless: str | None = None
 
     @model_validator(mode="after")
     def _check_required_fields(self) -> "CoreCreate":
@@ -54,6 +55,7 @@ class CoreUpdate(BaseModel):
     ikev2_remote_id: str | None = None
     ikev2_certificate: str | None = None
     ikev2_certificate_key: str | None = None
+    ikev2_egress_vless: str | None = None
 
 
 class InboundResponse(BaseModel):
@@ -99,6 +101,7 @@ class CoreResponse(BaseModel):
     ikev2_remote_id: str | None
     ikev2_certificate: str | None
     ikev2_certificate_key: str | None
+    ikev2_egress_vless: str | None
 
 
 class CoreList(BaseModel):

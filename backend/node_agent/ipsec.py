@@ -441,9 +441,19 @@ def apply_ikev2(
     users: list[dict],
     certificate: str | None = None,
     certificate_key: str | None = None,
+    egress_vless: str | None = None,
 ) -> None:
     _load_swanctl_config("ikev2", psk, remote_id, users, certificate, certificate_key)
     _ensure_forwarding_and_nat(_IKEV2_SUBNET)
+    # Chained egress (see vless_egress.py) — same mechanism apply_l2tp uses,
+    # just against the ikev2 subnet. A node's l2tp/ikev2 slot is exclusive
+    # (app/cores/resolve.py resolves it to one Core), so the two never both
+    # try to run the shared TPROXY egress process at once. Best effort: a
+    # bad/unreachable egress link must never take down ikev2 itself.
+    try:
+        vless_egress.apply(egress_vless, _IKEV2_SUBNET)
+    except Exception:
+        pass
 
 
 def is_ipsec_running() -> bool:

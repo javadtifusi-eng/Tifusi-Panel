@@ -59,6 +59,18 @@ class Core(Base):
     ikev2_certificate: Mapped[str | None] = mapped_column(Text, nullable=True)
     ikev2_certificate_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Optional chained egress for this Core's IKEv2 clients: a vless://
+    # share link to a *different* panel's server — same idea and same
+    # node_agent/vless_egress.py machinery as Node.l2tp_egress_vless (see
+    # app/models/node.py), just keyed off the IKEv2 Core instead of the
+    # Node, since unlike l2tp a node can serve more than one IKEv2 Core's
+    # worth of hosts and each one may want a different (or no) exit. When
+    # set, the node stops NAT'ing the IKEv2 subnet straight to the internet
+    # and instead TPROXYs it into a second, isolated Xray process whose
+    # only outbound is that link — the far VLESS server becomes the real
+    # egress point. Null keeps today's plain-NAT behavior.
+    ikev2_egress_vless: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
     inbounds: Mapped[list["Inbound"]] = relationship(  # noqa: F821
         "Inbound", back_populates="core", cascade="all, delete-orphan", lazy="selectin"
     )

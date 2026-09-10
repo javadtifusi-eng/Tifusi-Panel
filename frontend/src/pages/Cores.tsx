@@ -39,6 +39,7 @@ function emptyForm() {
     ikev2RemoteId: '',
     ikev2Certificate: '',
     ikev2CertificateKey: '',
+    ikev2EgressVless: '',
   }
 }
 
@@ -751,6 +752,7 @@ export default function CoresPage() {
       ikev2RemoteId: core.ikev2_remote_id ?? '',
       ikev2Certificate: core.ikev2_certificate ?? '',
       ikev2CertificateKey: core.ikev2_certificate_key ?? '',
+      ikev2EgressVless: core.ikev2_egress_vless ?? '',
     })
     setWizard(emptyWizard())
     setLastWarnings([])
@@ -845,6 +847,7 @@ export default function CoresPage() {
         ikev2_remote_id: form.coreType === 'ikev2' ? form.ikev2RemoteId || null : null,
         ikev2_certificate: form.coreType === 'ikev2' ? form.ikev2Certificate || null : null,
         ikev2_certificate_key: form.coreType === 'ikev2' ? form.ikev2CertificateKey || null : null,
+        ikev2_egress_vless: form.coreType === 'ikev2' ? form.ikev2EgressVless || null : null,
       }
       const result = editingId ? await updateCore(editingId, payload) : await createCore(payload)
       setLastWarnings(result.warnings)
@@ -1347,6 +1350,19 @@ export default function CoresPage() {
                     </div>
                   </div>
                   <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2CertHint}</div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>{t.coresPage.ikev2EgressVlessLabel}</label>
+                  <textarea
+                    dir="ltr"
+                    rows={2}
+                    value={form.ikev2EgressVless}
+                    onChange={(e) => setForm((f) => ({ ...f, ikev2EgressVless: e.target.value }))}
+                    placeholder="vless://uuid@host:port?..."
+                    className={monoTextarea}
+                  />
+                  <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2EgressVlessHint}</div>
                 </div>
               </div>
             )}

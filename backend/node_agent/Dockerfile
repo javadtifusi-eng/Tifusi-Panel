@@ -35,7 +35,7 @@ FROM python:3.12-slim
 # — installed unconditionally so a node never needs a second
 # install/rebuild just to switch which kind of core it serves). iproute2
 # is for the `ip rule`/`ip route` policy-routing table node_agent/vless_egress.py
-# sets up when a node's l2tp is chained through another panel's VLESS.
+# sets up when a node's l2tp/ikev2 is chained through another panel's VLESS.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl unzip ca-certificates \
       libgmp10 libssl3 \

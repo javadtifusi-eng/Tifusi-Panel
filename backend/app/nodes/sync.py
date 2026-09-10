@@ -67,6 +67,7 @@ async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict
         "certificate": core.ikev2_certificate,
         "certificate_key": core.ikev2_certificate_key,
         "users": user_payload,
+        "egress_vless": core.ikev2_egress_vless,
     }
 
 
