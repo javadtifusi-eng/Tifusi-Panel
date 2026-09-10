@@ -20,3 +20,15 @@ class PanelSetting(Base):
     # your bot for the target chat (a user, group, or channel it's in).
     telegram_bot_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # A generic outbound webhook — fired on the same events the Telegram
+    # notifications above cover (user expired/limited/created, node up/
+    # down), for admins wiring the panel into their own bot/CRM instead of
+    # (or alongside) Telegram. The secret is sent back as a header so the
+    # receiver can verify a request actually came from this panel.
+    webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    webhook_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # A Discord incoming-webhook URL — same events as Telegram/the generic
+    # webhook, see app/notifications/discord.py.
+    discord_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

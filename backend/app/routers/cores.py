@@ -5,20 +5,16 @@ from sqlalchemy.orm import selectinload
 
 from app.cores.sync import sync_inbounds
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.models.core import Core, CoreType
 from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.node import Node
 from app.schemas.core import CoreCreate, CoreList, CoreResponse, CoreUpdate, InboundResponse
 
-router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(require_permission("cores"))])
 
 _CORE_FIELDS = (
-    "wireguard_public_key",
-    "wireguard_private_key",
-    "wireguard_port",
-    "wireguard_subnet",
     "l2tp_psk",
     "ikev2_psk",
     "ikev2_remote_id",
@@ -82,10 +78,6 @@ async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None 
         node_count=node_count or 0,
         host_count=host_count or 0,
         warnings=warnings or [],
-        wireguard_public_key=core.wireguard_public_key,
-        wireguard_private_key=core.wireguard_private_key,
-        wireguard_port=core.wireguard_port,
-        wireguard_subnet=core.wireguard_subnet,
         l2tp_psk=core.l2tp_psk,
         ikev2_psk=core.ikev2_psk,
         ikev2_remote_id=core.ikev2_remote_id,

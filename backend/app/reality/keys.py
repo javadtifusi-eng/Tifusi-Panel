@@ -16,8 +16,8 @@ def _b64url_decode(data: str) -> bytes:
 
 def derive_x25519_public_key(private_key_b64url: str) -> str:
     """The public key is never stored separately from a pasted Xray config —
-    like PasarGuard, it's derived from realitySettings.privateKey on read,
-    the same value `xray x25519 -i <privateKey>` would print."""
+    it's derived from realitySettings.privateKey on read, the same value
+    `xray x25519 -i <privateKey>` would print."""
     private_bytes = _b64url_decode(private_key_b64url)
     private_key = X25519PrivateKey.from_private_bytes(private_bytes)
     public_bytes = private_key.public_key().public_bytes(

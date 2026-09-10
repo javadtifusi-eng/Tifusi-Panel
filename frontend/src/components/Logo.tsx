@@ -1,6 +1,20 @@
+import { useTheme } from '../theme/ThemeContext'
+
 // The real Tifusi griffin mark (frontend/public/logo-tifusi.png), background
 // keyed out to transparent. Not a redrawn approximation — the actual asset.
-export function Logo({ accent = '#22D3EE', size = 128 }: { accent?: string; size?: number }) {
+// The art itself is near-white strokes on transparent (made for a dark
+// sidebar), so on the light theme it's inverted to near-black — that flips
+// only the opaque pixels' color, the transparent background is untouched.
+export function Logo({
+  accent = '#22D3EE',
+  size = 128,
+  glow = true,
+}: {
+  accent?: string
+  size?: number
+  glow?: boolean
+}) {
+  const { theme } = useTheme()
   return (
     <div
       style={{
@@ -12,18 +26,26 @@ export function Logo({ accent = '#22D3EE', size = 128 }: { accent?: string; size
         justifyContent: 'center',
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          inset: '-30%',
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${accent}59 0%, transparent 65%)`,
-        }}
-      />
+      {glow && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: '-30%',
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${accent}59 0%, transparent 65%)`,
+          }}
+        />
+      )}
       <img
         src="/logo-tifusi.png"
         alt="Tifusi"
-        style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'contain' }}
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          filter: theme === 'light' ? 'invert(1)' : undefined,
+        }}
       />
     </div>
   )

@@ -13,7 +13,6 @@ class HostProtocol(str, enum.Enum):
     vmess = "vmess"
     trojan = "trojan"
     shadowsocks = "shadowsocks"
-    wireguard = "wireguard"
     hysteria2 = "hysteria2"
     ikev2 = "ikev2"
     l2tp = "l2tp"
@@ -25,8 +24,8 @@ XRAY_PROTOCOLS = {HostProtocol.vless, HostProtocol.vmess, HostProtocol.trojan, H
 
 # Standalone servers this panel doesn't run itself — a Host just picks a
 # Core of the matching core_type, which holds the shared technical fields
-# (keys/PSK/port/subnet) once instead of repeating them per Host.
-CORE_LINKED_PROTOCOLS = {HostProtocol.wireguard, HostProtocol.l2tp, HostProtocol.ikev2}
+# (PSK/port) once instead of repeating them per Host.
+CORE_LINKED_PROTOCOLS = {HostProtocol.l2tp, HostProtocol.ikev2}
 
 FINGERPRINTS = (
     "chrome",
@@ -60,11 +59,11 @@ class Host(Base):
     path, security, allowinsecure). Nothing about *how* the proxy actually
     runs lives on the Host for these — that's the Inbound's JSON.
 
-    wireguard/l2tp/ikev2 aren't Xray inbounds at all (separate standalone
-    servers this panel doesn't start) — a Host for these just picks a Core
-    of the matching core_type (see app/models/core.py), which holds the
-    shared fields. hysteria2 is the one exception: no Core concept for it
-    yet, so it still keeps its own fields directly on the Host.
+    l2tp/ikev2 aren't Xray inbounds at all (separate standalone servers
+    this panel doesn't start) — a Host for these just picks a Core of the
+    matching core_type (see app/models/core.py), which holds the shared
+    fields. hysteria2 is the one exception: no Core concept for it yet,
+    so it still keeps its own fields directly on the Host.
     """
 
     __tablename__ = "hosts"
@@ -88,8 +87,8 @@ class Host(Base):
     security_override: Mapped[HostSecurity | None] = mapped_column(Enum(HostSecurity), nullable=True)
     allowinsecure: Mapped[bool] = mapped_column(default=False)
 
-    # --- wireguard/l2tp/ikev2: which Core (of the matching core_type)
-    # this Host is built on — that Core holds the actual keys/PSK/port/subnet.
+    # --- l2tp/ikev2: which Core (of the matching core_type) this Host is
+    # built on — that Core holds the actual PSK.
     core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
     core: Mapped["Core | None"] = relationship("Core", lazy="selectin")  # noqa: F821
 
@@ -104,7 +103,7 @@ class Host(Base):
     # Empty = global/ungrouped, visible and usable by every user. See app/groups/access.py.
     # For xray-backed hosts, access is really controlled at the Inbound level
     # (a Group grants access to Inbounds) — this direct Host<->Group link only
-    # matters for wireguard/hysteria2 hosts, which have no Inbound to grant.
+    # matters for hysteria2 hosts, which have no Inbound to grant.
     groups: Mapped[list["Group"]] = relationship(  # noqa: F821
         "Group", secondary=group_hosts, back_populates="hosts", lazy="selectin"
     )
@@ -128,8 +127,6 @@ class Host(Base):
 
     @property
     def effective_port(self) -> int | None:
-        if self.protocol == HostProtocol.wireguard:
-            return self.core.wireguard_port if self.core else None
         if self.protocol == HostProtocol.hysteria2:
             return self.hysteria2_port
         if self.port_override is not None:

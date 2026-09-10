@@ -1022,7 +1022,47 @@ menu() {
   done
 }
 
+# ------------------------------------------------------------- unattended
+
+# unattended_install installs and starts the tunnel with zero prompts, from
+# a config.json already fully decided elsewhere (the panel) - the admin
+# pastes ONE command per server and never sees this script's interactive
+# menu at all. Contrast with the normal path (menu -> setup_server/
+# setup_client), which asks for every field one at a time.
+unattended_install() {
+  local b64="$1" cfg mode port proto
+  cfg=$(printf '%s' "$b64" | base64 -d 2>/dev/null) || die "invalid config (not valid base64)"
+  echo "$cfg" | jq -e . >/dev/null 2>&1 || die "invalid config (not valid JSON)"
+
+  install_binary
+  save_cfg "$cfg"
+
+  mode=$(echo "$cfg" | jq -r '.mode')
+  if [ "$mode" = "server" ]; then
+    port=$(echo "$cfg" | jq -r '.listen' | sed 's/.*://')
+    open_port "$port" tcp
+    [ "$(echo "$cfg" | jq -r '.domain // empty')" != "" ] && open_port 80 tcp
+    while read -r port proto; do
+      [ -n "$port" ] && open_port "$port" "$proto"
+    done < <(echo "$cfg" | jq -r '.forwards[]? | (.listen | split(":")[1]) + " " + .net')
+  fi
+
+  restart_service
+  echo
+  ok "Tifusi Tunnel installed and running (mode: $mode)"
+  echo "   ${D}manage it later with:${N} ${W}bm${N}"
+}
+
 require_root
 ensure_deps
+
+# `bash <(curl ...) -- <base64-config>` (same convention as install-node.sh)
+# skips the interactive menu entirely and installs unattended from that one
+# argument - this is what the panel's per-server install commands use.
+if [ -n "${1:-}" ]; then
+  unattended_install "$1"
+  exit 0
+fi
+
 install_shortcut >/dev/null 2>&1
 menu

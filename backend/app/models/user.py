@@ -2,7 +2,7 @@ import enum
 import uuid as uuid_lib
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, String, Text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -14,6 +14,7 @@ class UserStatus(str, enum.Enum):
     disabled = "disabled"
     expired = "expired"
     limited = "limited"
+    on_hold = "on_hold"
 
 
 class ProxyUser(Base):
@@ -36,8 +37,27 @@ class ProxyUser(Base):
     expire: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Only meaningful while status == on_hold: how many days to give the
+    # user once their expire clock actually starts (their first
+    # subscription fetch — see app/routers/subscription.py), instead of
+    # from the moment an admin creates the account. None while on_hold
+    # means "no expiry once activated", same as expire=None normally does.
+    on_hold_expire_days: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    # None/0 means unlimited devices — see app/models/user_device.py and
+    # the enforcement in app/routers/subscription.py.
+    hwid_limit: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Which admin created this user — a non-owner admin only ever sees/
+    # manages users where this matches their own id (reseller-style
+    # isolation between admins); the owner always sees everyone regardless.
+    # NULL only happens for rows that existed before this column did.
+    admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admins.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # Empty = no restriction beyond global (ungrouped) hosts. See app/groups/access.py.

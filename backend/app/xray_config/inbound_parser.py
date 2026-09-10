@@ -1,7 +1,6 @@
 """Parses protocol/transport/security/REALITY out of a raw Xray inbound
-JSON object — mirroring PasarGuard's app/core/xray.py XRayConfig._read_inbound,
-since in real Xray those fields live in the config JSON, not in anything a
-panel invents. This is the single source of truth the panel reads to build
+JSON object, since in real Xray those fields live in the config JSON, not
+in anything a panel invents. This is the single source of truth the panel reads to build
 its Inbound registry (app/models/inbound.py) when a Core's config is saved,
 and it's what link generation (app/links/generator.py) and the node config
 builder (app/xray_config/builder.py) both read back off that registry.
@@ -14,8 +13,8 @@ from dataclasses import dataclass
 from app.reality.keys import derive_x25519_public_key
 
 # vmess/vless/trojan/shadowsocks are what Xray-core itself terminates as a
-# TLS/TCP-style proxy inbound — hysteria/wireguard/mtproto are handled by
-# entirely separate server processes this panel doesn't manage through Core.
+# TLS/TCP-style proxy inbound — hysteria2/l2tp/ikev2 are handled by entirely
+# separate server processes this panel doesn't manage through Core.
 SUPPORTED_PROTOCOLS = {"vless", "vmess", "trojan", "shadowsocks"}
 
 
@@ -96,8 +95,9 @@ def _parse_network_settings(network: str, net_settings: dict, parsed: ParsedInbo
 
 def parse_inbound(inbound: dict) -> ParsedInbound | None:
     """None means "not a proxy inbound this panel manages" (unknown tag or
-    unsupported protocol) — silently skipped, same as PasarGuard does for
-    inbounds it doesn't recognize (e.g. a plain dokodemo-door)."""
+    unsupported protocol) — silently skipped rather than erroring, since an
+    inbound the admin added for something else (e.g. a plain dokodemo-door)
+    is still valid Xray config, just not one this panel needs to track."""
     protocol = inbound.get("protocol")
     tag = inbound.get("tag")
     if not tag or protocol not in SUPPORTED_PROTOCOLS:

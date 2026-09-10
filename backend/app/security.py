@@ -1,9 +1,29 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
 
 from app.config import settings
+
+# A recognizable prefix, checked before even trying a JWT decode — lets
+# get_current_admin tell "this is an API key" from "this is a session
+# token" without touching the database for the common (JWT) case.
+API_KEY_PREFIX = "tifusi_"
+
+
+def generate_api_key() -> str:
+    return API_KEY_PREFIX + secrets.token_urlsafe(32)
+
+
+def hash_api_key(key: str) -> str:
+    # sha256, not bcrypt: the key itself already has 32 bytes of real
+    # entropy (unlike a human password), so a fast, deterministic hash
+    # that supports an indexed equality lookup is the right tool here —
+    # bcrypt's per-hash salt would mean scanning every stored key to find
+    # a match instead of one indexed query.
+    return hashlib.sha256(key.encode()).hexdigest()
 
 
 def hash_password(password: str) -> str:

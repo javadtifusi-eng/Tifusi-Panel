@@ -5,9 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.node import Node, NodeStatus
+from app.models.node_traffic_snapshot import NodeTrafficSnapshot
+from app.models.traffic_snapshot import TrafficSnapshot
 from app.models.user import ProxyUser, UserStatus
 from app.nodes.sync import check_all_node_health, resync_connected_nodes
+from app.notifications.discord import send_discord_message
 from app.notifications.telegram import send_telegram_message
+from app.notifications.webhook import send_webhook_event
 
 
 async def _fetch_node_stats(node: Node) -> dict[str, dict[str, int]]:
@@ -29,13 +33,16 @@ async def collect_traffic(db: AsyncSession) -> None:
         return
 
     deltas: dict[str, int] = {}
+    node_deltas: dict[int, int] = {}
     for node in nodes:
         try:
             stats = await _fetch_node_stats(node)
         except Exception:
             continue
         for username, counters in stats.items():
-            deltas[username] = deltas.get(username, 0) + counters.get("uplink", 0) + counters.get("downlink", 0)
+            delta = counters.get("uplink", 0) + counters.get("downlink", 0)
+            deltas[username] = deltas.get(username, 0) + delta
+            node_deltas[node.id] = node_deltas.get(node.id, 0) + delta
 
     if not deltas:
         return
@@ -43,6 +50,27 @@ async def collect_traffic(db: AsyncSession) -> None:
     users = list((await db.execute(select(ProxyUser).where(ProxyUser.username.in_(deltas.keys())))).scalars().all())
     for user in users:
         user.used_traffic += deltas[user.username]
+
+    today = datetime.now(timezone.utc).date()
+    snapshot = await db.scalar(select(TrafficSnapshot).where(TrafficSnapshot.date == today))
+    if snapshot is None:
+        snapshot = TrafficSnapshot(date=today, total_bytes=0)
+        db.add(snapshot)
+    snapshot.total_bytes += sum(deltas.values())
+
+    for node_id, node_total in node_deltas.items():
+        if not node_total:
+            continue
+        node_snapshot = await db.scalar(
+            select(NodeTrafficSnapshot).where(
+                NodeTrafficSnapshot.node_id == node_id, NodeTrafficSnapshot.date == today
+            )
+        )
+        if node_snapshot is None:
+            node_snapshot = NodeTrafficSnapshot(node_id=node_id, date=today, total_bytes=0)
+            db.add(node_snapshot)
+        node_snapshot.total_bytes += node_total
+
     await db.commit()
 
 
@@ -65,20 +93,28 @@ async def enforce_limits(db: AsyncSession) -> bool:
 
     changed = False
     notifications: list[str] = []
+    events: list[tuple[str, dict]] = []
     for user in users:
         if user.expire is not None and _as_utc(user.expire) <= now:
             user.status = UserStatus.expired
             changed = True
             notifications.append(f"⏰ کاربر «{user.username}» منقضی شد.")
+            events.append(("user_expired", {"username": user.username, "expire": user.expire.isoformat()}))
         elif user.data_limit and user.used_traffic >= user.data_limit:
             user.status = UserStatus.limited
             changed = True
             notifications.append(f"📊 کاربر «{user.username}» به سقف حجم مصرفی‌اش رسید.")
+            events.append(
+                ("user_limited", {"username": user.username, "data_limit": user.data_limit, "used_traffic": user.used_traffic})
+            )
 
     if changed:
         await db.commit()
         for text in notifications:
             await send_telegram_message(db, text)
+            await send_discord_message(db, text)
+        for event, payload in events:
+            await send_webhook_event(db, event, payload)
     return changed
 
 

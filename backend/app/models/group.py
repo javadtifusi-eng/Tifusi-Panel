@@ -5,11 +5,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
-# wireguard/hysteria2 hosts have no Inbound to grant access through, so they
-# keep a direct Group<->Host link. vless/vmess/trojan/shadowsocks hosts are
+# hysteria2 hosts have no Inbound to grant access through, so they keep a
+# direct Group<->Host link. vless/vmess/trojan/shadowsocks hosts are
 # gated through group_inbounds instead (see app/models/inbound.py) — a Group
 # grants whole Inbounds, and every Host under a granted Inbound becomes
-# visible, matching PasarGuard's actual access model.
+# visible.
 group_hosts = Table(
     "group_hosts",
     Base.metadata,
@@ -26,7 +26,7 @@ group_users = Table(
 
 
 class Group(Base):
-    """Bundles inbounds/wireguard+hysteria2 hosts and users together. An
+    """Bundles inbounds/hysteria2 hosts and users together. An
     inbound or standalone host with no group is global (visible to every
     user); once it joins a group, only users sharing that group can see or
     actually use it — see app/groups/access.py."""

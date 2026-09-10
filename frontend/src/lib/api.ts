@@ -83,7 +83,7 @@ export async function login(payload: { username: string; password: string }): Pr
   return res.json()
 }
 
-export type UserStatus = 'active' | 'disabled' | 'expired' | 'limited'
+export type UserStatus = 'active' | 'disabled' | 'expired' | 'limited' | 'on_hold'
 
 export interface ProxyUser {
   id: number
@@ -93,9 +93,12 @@ export interface ProxyUser {
   data_limit: number | null
   used_traffic: number
   expire: string | null
+  on_hold_expire_days: number | null
+  hwid_limit: number | null
   note: string | null
   created_at: string
   group_ids: number[]
+  admin_id: number | null
 }
 
 export interface ProxyUserList {
@@ -110,8 +113,11 @@ export async function listUsers(): Promise<ProxyUserList> {
 
 export async function createUser(payload: {
   username: string
+  status?: 'active' | 'on_hold'
   data_limit?: number | null
   expire?: string | null
+  on_hold_expire_days?: number | null
+  hwid_limit?: number | null
   note?: string | null
   group_ids?: number[]
 }): Promise<ProxyUser> {
@@ -119,9 +125,109 @@ export async function createUser(payload: {
   return res.json()
 }
 
+export async function resetUserSecret(id: number): Promise<ProxyUser> {
+  const res = await authorizedFetch(`/users/${id}/reset-secret`, { method: 'POST' })
+  return res.json()
+}
+
+export interface UserDevice {
+  id: number
+  identifier: string
+  label: string | null
+  first_seen: string
+  last_seen: string
+}
+
+export async function listUserDevices(userId: number): Promise<UserDevice[]> {
+  const res = await authorizedFetch(`/users/${userId}/devices`)
+  return res.json()
+}
+
+export async function deleteUserDevice(userId: number, deviceId: number): Promise<void> {
+  await authorizedFetch(`/users/${userId}/devices/${deviceId}`, { method: 'DELETE' })
+}
+
+export async function resetUserDevices(userId: number): Promise<void> {
+  await authorizedFetch(`/users/${userId}/devices/reset`, { method: 'POST' })
+}
+
+export interface BulkCreateResult {
+  created: ProxyUser[]
+  skipped: string[]
+}
+
+export async function bulkCreateUsers(payload: {
+  usernames: string[]
+  data_limit?: number | null
+  expire?: string | null
+  hwid_limit?: number | null
+  note?: string | null
+  group_ids?: number[]
+}): Promise<BulkCreateResult> {
+  const res = await authorizedFetch('/users/bulk-create', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function bulkUpdateUsers(payload: {
+  user_ids: number[]
+  status?: UserStatus
+  data_limit?: number | null
+  expire?: string | null
+  hwid_limit?: number | null
+  note?: string | null
+  add_group_ids?: number[]
+  remove_group_ids?: number[]
+}): Promise<{ updated: number }> {
+  const res = await authorizedFetch('/users/bulk-update', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function bulkDeleteUsers(userIds: number[]): Promise<{ deleted: number }> {
+  const res = await authorizedFetch('/users/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ user_ids: userIds }),
+  })
+  return res.json()
+}
+
+export interface UserTemplate {
+  id: number
+  name: string
+  data_limit: number | null
+  expire_days: number | null
+  note: string | null
+  created_at: string
+  group_ids: number[]
+}
+
+export interface UserTemplateList {
+  total: number
+  templates: UserTemplate[]
+}
+
+export async function listUserTemplates(): Promise<UserTemplateList> {
+  const res = await authorizedFetch('/user-templates')
+  return res.json()
+}
+
+export async function createUserTemplate(payload: {
+  name: string
+  data_limit?: number | null
+  expire_days?: number | null
+  note?: string | null
+  group_ids?: number[]
+}): Promise<UserTemplate> {
+  const res = await authorizedFetch('/user-templates', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteUserTemplate(id: number): Promise<void> {
+  await authorizedFetch(`/user-templates/${id}`, { method: 'DELETE' })
+}
+
 export async function updateUser(
   id: number,
-  payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'note' | 'group_ids'>>,
+  payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'hwid_limit' | 'note' | 'group_ids'>>,
 ): Promise<ProxyUser> {
   const res = await authorizedFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()
@@ -129,11 +235,6 @@ export async function updateUser(
 
 export async function deleteUser(id: number): Promise<void> {
   await authorizedFetch(`/users/${id}`, { method: 'DELETE' })
-}
-
-export interface WireGuardConfig {
-  remark: string
-  config: string
 }
 
 export interface Ikev2Config {
@@ -155,7 +256,6 @@ export interface L2tpConfig {
 export interface UserLinks {
   subscription_url: string
   links: string[]
-  wireguard_configs: WireGuardConfig[]
   ikev2_configs: Ikev2Config[]
   l2tp_configs: L2tpConfig[]
 }
@@ -189,7 +289,7 @@ export async function scanReality(sampleSize?: number): Promise<RealityScanRespo
   return res.json()
 }
 
-export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'wireguard' | 'hysteria2' | 'ikev2' | 'l2tp'
+export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'hysteria2' | 'ikev2' | 'l2tp'
 export type HostSecurity = 'none' | 'tls' | 'reality'
 
 export const FINGERPRINTS = [
@@ -251,11 +351,6 @@ export interface RealityKeypair {
   short_id: string
 }
 
-export interface WireGuardKeypair {
-  private_key: string
-  public_key: string
-}
-
 export async function listHosts(): Promise<HostList> {
   const res = await authorizedFetch('/hosts')
   return res.json()
@@ -299,11 +394,6 @@ export async function deleteHost(id: number): Promise<void> {
 
 export async function getRealityKeypair(): Promise<RealityKeypair> {
   const res = await authorizedFetch('/hosts/reality-keypair')
-  return res.json()
-}
-
-export async function getWireGuardKeypair(): Promise<WireGuardKeypair> {
-  const res = await authorizedFetch('/hosts/wireguard-keypair')
   return res.json()
 }
 
@@ -422,7 +512,21 @@ export interface TunnelTestResult {
 export interface TunnelConfig {
   iran_config: Record<string, unknown>
   foreign_config: Record<string, unknown>
-  install_command: string
+  iran_install_command: string
+  foreign_install_command: string
+}
+
+export interface TunnelRankedTransport {
+  transport: TunnelTransport
+  reason: string
+}
+
+export interface TunnelRecommendResult {
+  iran_reachable: boolean
+  iran_latency_ms: number | null
+  foreign_reachable: boolean
+  foreign_latency_ms: number | null
+  ranked: TunnelRankedTransport[]
 }
 
 export type TunnelPayload = {
@@ -465,6 +569,16 @@ export async function getTunnelConfig(id: number): Promise<TunnelConfig> {
 
 export async function testTunnel(id: number): Promise<TunnelTestResult> {
   const res = await authorizedFetch(`/tunnels/${id}/test`, { method: 'POST' })
+  return res.json()
+}
+
+export async function recommendTunnelTransport(payload: {
+  iran_address: string
+  iran_port: number
+  foreign_node_id?: number | null
+  foreign_address?: string | null
+}): Promise<TunnelRecommendResult> {
+  const res = await authorizedFetch('/tunnels/recommend', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }
 
@@ -543,7 +657,7 @@ export interface Inbound {
   group_ids: number[]
 }
 
-export type CoreType = 'xray' | 'wireguard' | 'l2tp' | 'ikev2'
+export type CoreType = 'xray' | 'l2tp' | 'ikev2'
 
 export interface Core {
   id: number
@@ -556,11 +670,6 @@ export interface Core {
   node_count: number
   host_count: number
   warnings: string[]
-
-  wireguard_public_key: string | null
-  wireguard_private_key: string | null
-  wireguard_port: number | null
-  wireguard_subnet: string | null
 
   l2tp_psk: string | null
 
@@ -578,11 +687,6 @@ export interface CorePayload {
   note?: string | null
   core_type: CoreType
   config?: Record<string, unknown> | null
-
-  wireguard_public_key?: string | null
-  wireguard_private_key?: string | null
-  wireguard_port?: number | null
-  wireguard_subnet?: string | null
 
   l2tp_psk?: string | null
 
@@ -609,10 +713,28 @@ export async function deleteCore(id: number): Promise<void> {
   await authorizedFetch(`/cores/${id}`, { method: 'DELETE' })
 }
 
+export interface TrafficHistoryPoint {
+  date: string
+  total_bytes: number
+}
+
+export interface TrafficHistory {
+  points: TrafficHistoryPoint[]
+}
+
+export async function getTrafficHistory(days = 14, nodeId?: number | null): Promise<TrafficHistory> {
+  const suffix = nodeId != null ? `&node_id=${nodeId}` : ''
+  const res = await authorizedFetch(`/stats/traffic-history?days=${days}${suffix}`)
+  return res.json()
+}
+
 export interface PanelSettings {
   public_url: string | null
   telegram_bot_token: string | null
   telegram_chat_id: string | null
+  webhook_url: string | null
+  webhook_secret: string | null
+  discord_webhook_url: string | null
 }
 
 export async function getSettings(): Promise<PanelSettings> {
@@ -629,9 +751,22 @@ export async function testTelegram(): Promise<void> {
   await authorizedFetch('/settings/telegram/test', { method: 'POST' })
 }
 
+export async function testWebhook(): Promise<void> {
+  await authorizedFetch('/settings/webhook/test', { method: 'POST' })
+}
+
+export async function testDiscord(): Promise<void> {
+  await authorizedFetch('/settings/discord/test', { method: 'POST' })
+}
+
+// Matches app/permissions.py PERMISSION_SCOPES — keep in sync.
+export const PERMISSION_SCOPES = ['users', 'hosts', 'nodes', 'cores', 'groups', 'tunnels', 'settings'] as const
+export type PermissionScope = (typeof PERMISSION_SCOPES)[number]
+
 export interface AdminProfile {
   username: string
   is_owner: boolean
+  permissions: PermissionScope[] | null
 }
 
 export async function getAdminProfile(): Promise<AdminProfile> {
@@ -647,6 +782,7 @@ export interface AdminListItem {
   id: number
   username: string
   is_owner: boolean
+  permissions: PermissionScope[] | null
   created_at: string
 }
 
@@ -660,13 +796,59 @@ export async function listAdmins(): Promise<AdminListResponse> {
   return res.json()
 }
 
-export async function createAdminAccount(payload: { username: string; password: string }): Promise<AdminListItem> {
+export async function createAdminAccount(payload: {
+  username: string
+  password: string
+  permissions?: PermissionScope[] | null
+}): Promise<AdminListItem> {
   const res = await authorizedFetch('/admin', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function updateAdminPermissions(
+  id: number,
+  permissions: PermissionScope[] | null,
+): Promise<AdminListItem> {
+  const res = await authorizedFetch(`/admin/${id}/permissions`, {
+    method: 'PUT',
+    body: JSON.stringify({ permissions }),
+  })
   return res.json()
 }
 
 export async function deleteAdminAccount(id: number): Promise<void> {
   await authorizedFetch(`/admin/${id}`, { method: 'DELETE' })
+}
+
+export interface ApiKeyListItem {
+  id: number
+  name: string
+  key_prefix: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface ApiKeyListResponse {
+  total: number
+  keys: ApiKeyListItem[]
+}
+
+export interface ApiKeyCreateResponse extends ApiKeyListItem {
+  key: string
+}
+
+export async function listApiKeys(): Promise<ApiKeyListResponse> {
+  const res = await authorizedFetch('/api-keys')
+  return res.json()
+}
+
+export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> {
+  const res = await authorizedFetch('/api-keys', { method: 'POST', body: JSON.stringify({ name }) })
+  return res.json()
+}
+
+export async function deleteApiKey(id: number): Promise<void> {
+  await authorizedFetch(`/api-keys/${id}`, { method: 'DELETE' })
 }
 
 export async function downloadBackup(): Promise<void> {

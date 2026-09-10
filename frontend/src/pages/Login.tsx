@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { FeatureIcon, Logo } from '../components/Logo'
+import { Logo } from '../components/Logo'
 import { useLang } from '../i18n/LangContext'
+import { useTheme } from '../theme/ThemeContext'
 import { ApiError, createAdmin, getSetupStatus, login as loginApi } from '../lib/api'
 
 const ACCENT = '#22D3EE'
 const COMMAND = 'docker exec -it tifusi-panel tifusi-cli generate-admin-key'
+const PROTOCOLS = ['VLESS', 'Trojan', 'Hysteria2', 'IKEv2']
 
 function CopyIcon() {
   return (
@@ -23,15 +25,33 @@ function CheckIcon() {
   )
 }
 
+function SunIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+    </svg>
+  )
+}
+
 type Screen = 'setup' | 'login'
 
 const fieldClass =
-  'w-full rounded-lg border border-white/15 bg-white/5 px-3.5 py-3 text-sm text-slate-100 outline-none transition-colors focus:border-cyan-400/60'
-const labelClass = 'block text-xs text-slate-400 mb-1'
-const linkClass = 'text-xs text-cyan-300 hover:underline'
+  'w-full rounded-lg border border-subtle bg-field px-3.5 py-3 text-sm text-primary outline-none transition-colors focus:border-cyan-400/60'
+const labelClass = 'block text-xs text-muted mb-1'
+const linkClass = 'text-xs text-accent hover:underline'
 
 export default function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }) {
   const { lang, setLang, t, dir, align } = useLang()
+  const { theme, toggleTheme } = useTheme()
   const [screen, setScreen] = useState<Screen>('setup')
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -125,220 +145,222 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
     }
   }
 
+  const langToggle = (
+    <div className="flex justify-center gap-2 lg:justify-start">
+      <button
+        onClick={() => setLang('en')}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
+      >
+        EN
+      </button>
+      <button
+        onClick={() => setLang('fa')}
+        className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
+      >
+        فارسی
+      </button>
+      <button
+        onClick={toggleTheme}
+        aria-label={t.nav.toggleTheme}
+        title={t.nav.toggleTheme}
+        className="flex items-center justify-center rounded-md border border-edge px-3 py-1 text-muted hover:border-cyan-400/50 hover:text-accent"
+      >
+        {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+      </button>
+    </div>
+  )
+
   if (loadingStatus) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-panel-950 font-body text-sm text-slate-500">
+      <div className="flex min-h-screen w-full items-center justify-center bg-app font-body text-sm text-faint">
         {t.loading}
       </div>
     )
   }
 
   return (
-    <div
-      dir={dir}
-      className="relative flex min-h-screen w-full flex-col items-center overflow-hidden px-9 pb-5 pt-6 font-body text-slate-100"
-      style={{
-        background:
-          'radial-gradient(ellipse 70% 50% at 50% 0%, #0e1e30 0%, #060b13 55%, #030507 100%)',
-      }}
-    >
-      <div className="pointer-events-none absolute -top-36 left-1/2 h-[620px] w-[620px] -translate-x-1/2 rounded-full border border-cyan-400/10" />
-      <div className="pointer-events-none absolute -top-16 left-1/2 h-[440px] w-[440px] -translate-x-1/2 rounded-full border border-cyan-400/15" />
+    <div dir={dir} className="flex min-h-screen w-full bg-app font-body text-primary">
+      {/* Brand panel — hidden on narrow viewports, where the compact header below stands in for it. */}
+      <div
+        className={`relative hidden flex-col justify-between overflow-hidden bg-surface px-14 py-12 lg:flex lg:w-[42%] xl:w-[38%] ${
+          dir === 'rtl' ? 'border-l' : 'border-r'
+        } border-subtle`}
+      >
+        <img
+          src="/logo-tifusi.png"
+          alt=""
+          aria-hidden="true"
+          className={`pointer-events-none absolute -bottom-14 h-72 w-72 object-contain opacity-[0.05] grayscale ${
+            dir === 'rtl' ? '-left-14' : '-right-14'
+          }`}
+        />
 
-      <div className="relative z-10 animate-scale-in">
-        <Logo accent={ACCENT} size={80} />
-      </div>
-      <div
-        className="relative z-10 mt-1 bg-clip-text font-display text-2xl font-bold tracking-[4px] text-transparent [background-image:linear-gradient(110deg,#f8fafc_35%,#22D3EE_50%,#f8fafc_65%)] [background-size:250%_100%]"
-        style={{
-          animation: 'fade-up 0.7s cubic-bezier(0.16,1,0.3,1) 150ms both, shimmer 3s ease-in-out 1.2s infinite',
-        }}
-      >
-        TIFUSI
-      </div>
-      <div
-        className="relative z-10 mt-0.5 animate-fade-up font-display text-xs font-semibold tracking-[9px] [animation-delay:250ms]"
-        style={{ color: ACCENT }}
-      >
-        PANEL
-      </div>
-      <div
-        className="relative z-10 my-2 h-0.5 w-14 origin-center animate-grow-x opacity-55 [animation-delay:400ms]"
-        style={{ backgroundColor: ACCENT }}
-      />
-      <div className="relative z-10 mb-0.5 animate-fade-up text-center text-sm font-bold text-slate-100 [animation-delay:500ms]">
-        {t.welcome}
-      </div>
-      <div className="relative z-10 mb-4 max-w-xs animate-fade-up text-center text-xs text-slate-400 [animation-delay:600ms]">
-        {t.tagline}
-      </div>
-
-      <div
-        className="relative z-10 w-full max-w-sm animate-fade-up rounded-[20px] border border-cyan-400/20 bg-slate-950/70 px-6 py-5 backdrop-blur-xl [animation-delay:700ms]"
-        style={{ boxShadow: '0 0 44px rgba(34,211,238,0.07), 0 20px 40px rgba(0,0,0,0.35)' }}
-      >
-        {screen === 'setup' ? (
-          <form onSubmit={handleCreateAdmin}>
-            <div
-              className="mb-2.5 inline-block rounded-full border px-2.5 py-1 text-[10.5px] font-bold tracking-wider"
-              style={{ color: ACCENT, borderColor: 'rgba(34,211,238,0.3)', backgroundColor: 'rgba(34,211,238,0.12)' }}
-            >
-              {t.badgeSetup}
+        <div className="relative flex items-center gap-2.5">
+          <Logo accent={ACCENT} size={40} glow={false} />
+          <div>
+            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
+            <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
+              PANEL
             </div>
-            <div className={`mb-3 text-lg font-bold text-slate-50 ${align}`}>{t.headingSetup}</div>
+          </div>
+        </div>
 
-            <div className="mb-3 rounded-lg border border-cyan-400/25 bg-black/35 px-3.5 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className={`text-xs text-slate-400 ${align}`}>{t.step1}</span>
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  title={COMMAND}
-                  aria-label={copied ? t.copied : t.copy}
-                  className="flex-shrink-0 rounded-md p-1.5 transition-colors"
-                  style={{
-                    color: copied ? '#34d399' : ACCENT,
-                    backgroundColor: copied ? 'rgba(52,211,153,0.12)' : 'rgba(34,211,238,0.12)',
-                  }}
-                >
-                  {copied ? <CheckIcon /> : <CopyIcon />}
+        <div className="relative">
+          <h1 className={`max-w-sm font-display text-2xl font-bold leading-snug text-heading ${align}`}>{t.welcome}</h1>
+          <p className={`mt-3 max-w-xs text-sm leading-relaxed text-muted ${align}`}>{t.tagline}</p>
+          <div className="mt-6 flex flex-wrap gap-2">
+            {PROTOCOLS.map((p) => (
+              <span key={p} className="rounded-md border border-subtle px-2.5 py-1 text-[11px] text-muted">
+                {p}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative text-[10px] tracking-widest text-faint">POWERED BY TIFUSI SYSTEMS</div>
+      </div>
+
+      {/* Form panel */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+        <div className="mb-6 flex flex-col items-center gap-3 lg:hidden">
+          <Logo accent={ACCENT} size={52} glow={false} />
+          <div className="text-center">
+            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI PANEL</div>
+            <div className="mt-1 max-w-[220px] text-xs text-muted">{t.tagline}</div>
+          </div>
+        </div>
+
+        <div className="w-full max-w-sm">
+          {screen === 'setup' ? (
+            <form onSubmit={handleCreateAdmin}>
+              <div className="mb-2.5 inline-block rounded-md border border-cyan-400/30 px-2.5 py-1 text-[10.5px] font-bold tracking-wider text-accent">
+                {t.badgeSetup}
+              </div>
+              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingSetup}</div>
+
+              <div className="mb-4 rounded-lg border border-subtle bg-field px-3.5 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`text-xs text-muted ${align}`}>{t.step1}</span>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    title={COMMAND}
+                    aria-label={copied ? t.copied : t.copy}
+                    className={`flex-shrink-0 rounded-md p-1.5 transition-colors ${
+                      copied ? 'bg-success-tint text-success' : 'bg-accent-tint text-accent'
+                    }`}
+                  >
+                    {copied ? <CheckIcon /> : <CopyIcon />}
+                  </button>
+                </div>
+                {copyFailed && (
+                  <>
+                    <div className={`mt-2.5 text-[11px] text-warning ${align}`}>{t.copyFailedHint}</div>
+                    <code
+                      dir="ltr"
+                      onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
+                      className="mt-1.5 block cursor-text select-all break-all rounded-md bg-well-strong p-2 text-left font-mono text-[11px] text-accent"
+                    >
+                      {COMMAND}
+                    </code>
+                  </>
+                )}
+              </div>
+
+              <label className={`${labelClass} ${align}`}>{t.step2Label}</label>
+              <input
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                required
+                placeholder={t.step2Placeholder}
+                className={`${fieldClass} mb-3 ${align}`}
+              />
+
+              <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                placeholder={t.userPlaceholder}
+                className={`${fieldClass} mb-3 ${align}`}
+              />
+
+              <label className={`${labelClass} ${align}`}>{t.passLabel}</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                placeholder={t.passPlaceholder}
+                className={`${fieldClass} mb-1 ${align}`}
+              />
+
+              {error && <div className="mt-2 text-xs text-danger">{error}</div>}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="mt-4 w-full rounded-lg bg-cyan-400 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-cyan-300 disabled:opacity-60"
+              >
+                {t.createBtn}
+              </button>
+
+              <div className="mt-4 text-center">
+                <button type="button" onClick={() => switchScreen('login')} className={linkClass}>
+                  {t.switchToLogin}
                 </button>
               </div>
-              {copyFailed && (
-                <>
-                  <div className={`mt-2.5 text-[11px] text-amber-400 ${align}`}>{t.copyFailedHint}</div>
-                  <code
-                    dir="ltr"
-                    onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
-                    className="mt-1.5 block cursor-text select-all break-all rounded-md bg-black/40 p-2 text-left font-mono text-[11px] text-cyan-200"
-                  >
-                    {COMMAND}
-                  </code>
-                </>
-              )}
-            </div>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin}>
+              <div className={`mb-4 text-xl font-bold text-heading ${align}`}>{t.headingLogin}</div>
 
-            <label className={`${labelClass} ${align}`}>{t.step2Label}</label>
-            <input
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              required
-              placeholder={t.step2Placeholder}
-              className={`${fieldClass} mb-2 ${align}`}
-            />
+              <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                placeholder={t.userPlaceholder}
+                className={`${fieldClass} mb-3 ${align}`}
+              />
 
-            <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              placeholder={t.userPlaceholder}
-              className={`${fieldClass} mb-2 ${align}`}
-            />
+              <label className={`${labelClass} ${align}`}>{t.passLabel}</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder={t.passPlaceholder}
+                className={`${fieldClass} mb-3 ${align}`}
+              />
 
-            <label className={`${labelClass} ${align}`}>{t.passLabel}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              placeholder={t.passPlaceholder}
-              className={`${fieldClass} mb-1 ${align}`}
-            />
+              <div className={`mb-4 ${align}`}>
+                <a href="#" className={linkClass}>
+                  {t.forgot}
+                </a>
+              </div>
 
-            {error && <div className="mt-2 text-xs text-red-400">{error}</div>}
+              {error && <div className="mb-3 text-xs text-danger">{error}</div>}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="mt-3 w-full rounded-lg py-3 text-sm font-bold text-slate-950 disabled:opacity-60"
-              style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
-            >
-              {t.createBtn}
-            </button>
-
-            <div className="mt-3 text-center">
-              <button type="button" onClick={() => switchScreen('login')} className={linkClass}>
-                {t.switchToLogin}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full rounded-lg bg-cyan-400 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-cyan-300 disabled:opacity-60"
+              >
+                {t.signInBtn}
               </button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={handleLogin}>
-            <div className={`mb-3 text-lg font-bold text-slate-50 ${align}`}>{t.headingLogin}</div>
 
-            <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              placeholder={t.userPlaceholder}
-              className={`${fieldClass} mb-2 ${align}`}
-            />
+              <div className="mt-4 text-center">
+                <button type="button" onClick={() => switchScreen('setup')} className={linkClass}>
+                  {t.switchToSetup}
+                </button>
+              </div>
+            </form>
+          )}
 
-            <label className={`${labelClass} ${align}`}>{t.passLabel}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder={t.passPlaceholder}
-              className={`${fieldClass} mb-2 ${align}`}
-            />
-
-            <div className={`mb-3 ${align}`}>
-              <a href="#" className={linkClass}>
-                {t.forgot}
-              </a>
-            </div>
-
-            {error && <div className="mb-2 text-xs text-red-400">{error}</div>}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-lg py-3 text-sm font-bold text-slate-950 disabled:opacity-60"
-              style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
-            >
-              {t.signInBtn}
-            </button>
-
-            <div className="mt-3 text-center">
-              <button type="button" onClick={() => switchScreen('setup')} className={linkClass}>
-                {t.switchToSetup}
-              </button>
-            </div>
-          </form>
-        )}
-
-        <div className="mt-3 flex justify-center gap-2">
-          <button
-            onClick={() => setLang('en')}
-            className="rounded-md border border-white/20 px-3 py-1 text-[11px] text-slate-300"
-          >
-            EN
-          </button>
-          <button
-            onClick={() => setLang('fa')}
-            className="rounded-md border border-white/20 px-3 py-1 text-[11px] text-slate-300"
-          >
-            فارسی
-          </button>
+          <div className="mt-6 flex justify-center">{langToggle}</div>
         </div>
-      </div>
-
-      <div className="hide-on-short-viewport relative z-10 mt-4 flex flex-wrap justify-center gap-5">
-        {(['secure', 'monitor', 'perf', 'crypto'] as const).map((f) => (
-          <div key={f} className="flex w-[70px] flex-col items-center gap-1">
-            <FeatureIcon type={f} accent={ACCENT} />
-            <div className="text-center text-[10px] text-slate-400">{t.features[f]}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="hide-on-short-viewport relative z-10 mt-3 text-[10px] tracking-widest text-slate-600">
-        POWERED BY TIFUSI SYSTEMS
       </div>
     </div>
   )

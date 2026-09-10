@@ -4,17 +4,100 @@
 @tailwind components;
 @tailwind utilities;
 
-/* The panel is always dark-themed, but native form controls (a <select>'s
-   dropdown list, date pickers, etc.) don't know that — they inherit our
-   light text color into their own browser-default white popup, so options
-   render as invisible white-on-white. This tells the browser to draw those
-   native widgets with its dark palette instead. */
+/* Semantic color tokens — see tailwind.config.js's `colors` block, where
+   each of these becomes a `rgb(var(--c-x) / <alpha-value>)` utility (e.g.
+   `bg-surface`, `text-muted`). Every component reads colors through those
+   utilities, never a raw slate/white/black-opacity class, so switching
+   themes is just swapping which block of variables is in effect — no
+   component needs to know which theme is active.
+
+   Values are "R G B" (space-separated, no commas, no rgb()) — that's the
+   shape Tailwind's <alpha-value> substitution requires. */
 :root {
   color-scheme: dark;
+
+  --c-app: 3 5 7;
+  --c-surface: 15 23 42;
+  --c-field: 13 22 34;
+  --c-well: 6 10 18;
+  --c-well-strong: 4 6 12;
+
+  --c-border-hair: 21 27 38;
+  --c-border-subtle: 35 43 58;
+  --c-border-default: 49 59 78;
+  --c-border-strong: 74 85 104;
+
+  --c-text-heading: 248 250 252;
+  --c-text-primary: 241 245 249;
+  --c-text-body: 226 232 240;
+  --c-text-secondary: 203 213 225;
+  --c-text-muted: 148 163 184;
+  --c-text-faint: 100 116 139;
+
+  --c-accent: 103 232 249;
+  --c-accent-tint: 11 37 48;
+
+  --c-success: 110 231 183;
+  --c-success-tint: 13 43 34;
+  --c-danger: 252 165 165;
+  --c-danger-tint: 43 20 20;
+  --c-warning: 252 211 77;
+  --c-warning-tint: 43 34 16;
+  --c-neutral: 148 163 184;
+  --c-neutral-tint: 30 37 50;
+}
+
+/* An explicit light choice (data-theme="light") always wins. There's no
+   prefers-color-scheme fallback — this is an authenticated admin tool with
+   its own in-app toggle (see ThemeToggle), not a themed public page that
+   should silently follow the OS. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --c-app: 248 250 252;
+  --c-surface: 255 255 255;
+  --c-field: 241 245 249;
+  --c-well: 238 242 246;
+  --c-well-strong: 226 232 240;
+
+  --c-border-hair: 238 241 245;
+  --c-border-subtle: 226 232 240;
+  --c-border-default: 203 213 225;
+  --c-border-strong: 148 163 184;
+
+  --c-text-heading: 15 23 42;
+  --c-text-primary: 30 41 59;
+  --c-text-body: 51 65 85;
+  --c-text-secondary: 71 85 105;
+  --c-text-muted: 100 116 139;
+  --c-text-faint: 148 163 184;
+
+  --c-accent: 14 116 144;
+  --c-accent-tint: 236 254 255;
+
+  --c-success: 4 120 87;
+  --c-success-tint: 236 253 245;
+  --c-danger: 185 28 28;
+  --c-danger-tint: 254 242 242;
+  --c-warning: 180 83 9;
+  --c-warning-tint: 255 251 235;
+  --c-neutral: 100 116 139;
+  --c-neutral-tint: 241 245 249;
+}
+
+/* color-scheme isn't enough everywhere — some mobile browsers/WebViews
+   still pop a <select>'s option list in their light default regardless.
+   Setting the colors directly on select/option is honored much more
+   consistently, so it stays as a second line of defense. */
+select,
+option {
+  background-color: rgb(var(--c-surface));
+  color: rgb(var(--c-text-primary));
 }
 
 body {
   margin: 0;
+  background-color: rgb(var(--c-app));
 }
 
 @media (max-height: 820px) {

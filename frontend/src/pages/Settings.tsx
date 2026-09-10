@@ -4,32 +4,43 @@ import {
   ApiError,
   changePassword,
   createAdminAccount,
+  createApiKey,
   deleteAdminAccount,
+  deleteApiKey,
   downloadBackup,
   getAdminProfile,
   getSettings,
   getTlsStatus,
   listAdmins,
+  listApiKeys,
+  PERMISSION_SCOPES,
   removeTls,
   restoreBackup,
+  testDiscord,
   testTelegram,
+  testWebhook,
+  updateAdminPermissions,
   updateSettings,
   uploadTls,
   type AdminListItem,
   type AdminProfile,
+  type ApiKeyCreateResponse,
+  type ApiKeyListItem,
+  type PermissionScope,
 } from '../lib/api'
 
 const ACCENT = '#22D3EE'
 
 const inputClass =
-  'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
-const labelClass = 'mb-1.5 block text-xs text-slate-400'
-const cardClass = 'rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+const labelClass = 'mb-1.5 block text-xs text-muted'
+const cardClass = 'rounded-xl border border-cyan-400/20 bg-surface p-4'
 const buttonClass = 'rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60'
 
 export default function SettingsPage() {
   const { t, align } = useLang()
   const [profile, setProfile] = useState<AdminProfile | null>(null)
+  const canSettings = !profile || profile.is_owner || profile.permissions === null || profile.permissions.includes('settings')
 
   const [publicUrl, setPublicUrl] = useState('')
   const [urlSaving, setUrlSaving] = useState(false)
@@ -59,8 +70,21 @@ export default function SettingsPage() {
   const [admins, setAdmins] = useState<AdminListItem[] | null>(null)
   const [newAdminUsername, setNewAdminUsername] = useState('')
   const [newAdminPassword, setNewAdminPassword] = useState('')
+  const [newAdminPermissions, setNewAdminPermissions] = useState<Set<PermissionScope>>(
+    new Set(PERMISSION_SCOPES),
+  )
   const [adminSubmitting, setAdminSubmitting] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
+  const [editingPermsId, setEditingPermsId] = useState<number | null>(null)
+  const [editingPermsSet, setEditingPermsSet] = useState<Set<PermissionScope>>(new Set())
+  const [permsSaving, setPermsSaving] = useState(false)
+
+  const [apiKeys, setApiKeys] = useState<ApiKeyListItem[] | null>(null)
+  const [newKeyName, setNewKeyName] = useState('')
+  const [keyCreating, setKeyCreating] = useState(false)
+  const [keyError, setKeyError] = useState<string | null>(null)
+  const [justCreatedKey, setJustCreatedKey] = useState<ApiKeyCreateResponse | null>(null)
+  const [keyCopied, setKeyCopied] = useState(false)
 
   const [botToken, setBotToken] = useState('')
   const [chatId, setChatId] = useState('')
@@ -69,6 +93,21 @@ export default function SettingsPage() {
   const [telegramTesting, setTelegramTesting] = useState(false)
   const [telegramTestOk, setTelegramTestOk] = useState(false)
   const [telegramError, setTelegramError] = useState<string | null>(null)
+
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookSecret, setWebhookSecret] = useState('')
+  const [webhookSaving, setWebhookSaving] = useState(false)
+  const [webhookSaved, setWebhookSaved] = useState(false)
+  const [webhookTesting, setWebhookTesting] = useState(false)
+  const [webhookTestOk, setWebhookTestOk] = useState(false)
+  const [webhookError, setWebhookError] = useState<string | null>(null)
+
+  const [discordUrl, setDiscordUrl] = useState('')
+  const [discordSaving, setDiscordSaving] = useState(false)
+  const [discordSaved, setDiscordSaved] = useState(false)
+  const [discordTesting, setDiscordTesting] = useState(false)
+  const [discordTestOk, setDiscordTestOk] = useState(false)
+  const [discordError, setDiscordError] = useState<string | null>(null)
 
   async function refreshAdmins() {
     try {
@@ -89,12 +128,26 @@ export default function SettingsPage() {
         setPublicUrl(s.public_url ?? '')
         setBotToken(s.telegram_bot_token ?? '')
         setChatId(s.telegram_chat_id ?? '')
+        setWebhookUrl(s.webhook_url ?? '')
+        setWebhookSecret(s.webhook_secret ?? '')
+        setDiscordUrl(s.discord_webhook_url ?? '')
       })
       .catch(() => undefined)
     getTlsStatus()
       .then((s) => setTlsEnabled(s.enabled))
       .catch(() => undefined)
+    refreshApiKeys()
   }, [])
+
+  async function refreshApiKeys() {
+    try {
+      const res = await listApiKeys()
+      setApiKeys(res.keys)
+    } catch {
+      // never expected to fail (every admin owns their own keys), but
+      // don't let it take the rest of the page down if it somehow does
+    }
+  }
 
   async function handleSaveUrl(e: FormEvent) {
     e.preventDefault()
@@ -198,14 +251,29 @@ export default function SettingsPage() {
     }
   }
 
+  function toggleNewAdminPermission(scope: PermissionScope) {
+    setNewAdminPermissions((prev) => {
+      const next = new Set(prev)
+      if (next.has(scope)) next.delete(scope)
+      else next.add(scope)
+      return next
+    })
+  }
+
   async function handleCreateAdmin(e: FormEvent) {
     e.preventDefault()
     setAdminSubmitting(true)
     setAdminError(null)
+    const allChecked = newAdminPermissions.size === PERMISSION_SCOPES.length
     try {
-      await createAdminAccount({ username: newAdminUsername, password: newAdminPassword })
+      await createAdminAccount({
+        username: newAdminUsername,
+        password: newAdminPassword,
+        permissions: allChecked ? null : Array.from(newAdminPermissions),
+      })
       setNewAdminUsername('')
       setNewAdminPassword('')
+      setNewAdminPermissions(new Set(PERMISSION_SCOPES))
       await refreshAdmins()
     } catch (err) {
       setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
@@ -221,6 +289,63 @@ export default function SettingsPage() {
       await refreshAdmins()
     } catch (err) {
       setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
+    }
+  }
+
+  function startEditPerms(a: AdminListItem) {
+    setEditingPermsId(a.id)
+    setEditingPermsSet(new Set(a.permissions ?? PERMISSION_SCOPES))
+  }
+
+  function toggleEditingPermission(scope: PermissionScope) {
+    setEditingPermsSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(scope)) next.delete(scope)
+      else next.add(scope)
+      return next
+    })
+  }
+
+  async function saveEditingPerms() {
+    if (editingPermsId == null) return
+    setPermsSaving(true)
+    setAdminError(null)
+    const allChecked = editingPermsSet.size === PERMISSION_SCOPES.length
+    try {
+      await updateAdminPermissions(editingPermsId, allChecked ? null : Array.from(editingPermsSet))
+      setEditingPermsId(null)
+      await refreshAdmins()
+    } catch (err) {
+      setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setPermsSaving(false)
+    }
+  }
+
+  async function handleCreateApiKey(e: FormEvent) {
+    e.preventDefault()
+    setKeyCreating(true)
+    setKeyError(null)
+    try {
+      const res = await createApiKey(newKeyName)
+      setJustCreatedKey(res)
+      setNewKeyName('')
+      await refreshApiKeys()
+    } catch (err) {
+      setKeyError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setKeyCreating(false)
+    }
+  }
+
+  async function handleDeleteApiKey(key: ApiKeyListItem) {
+    if (!window.confirm(t.settingsPage.confirmDeleteApiKey(key.name))) return
+    try {
+      await deleteApiKey(key.id)
+      if (justCreatedKey?.id === key.id) setJustCreatedKey(null)
+      await refreshApiKeys()
+    } catch (err) {
+      setKeyError(err instanceof ApiError ? err.message : t.common.genericError)
     }
   }
 
@@ -261,21 +386,92 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveWebhook(e: FormEvent) {
+    e.preventDefault()
+    setWebhookSaving(true)
+    setWebhookError(null)
+    setWebhookSaved(false)
+    setWebhookTestOk(false)
+    try {
+      const res = await updateSettings({
+        webhook_url: webhookUrl.trim() || null,
+        webhook_secret: webhookSecret.trim() || null,
+      })
+      setWebhookUrl(res.webhook_url ?? '')
+      setWebhookSecret(res.webhook_secret ?? '')
+      setWebhookSaved(true)
+      window.setTimeout(() => setWebhookSaved(false), 2000)
+    } catch (err) {
+      setWebhookError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setWebhookSaving(false)
+    }
+  }
+
+  async function handleTestWebhook() {
+    setWebhookTesting(true)
+    setWebhookError(null)
+    setWebhookTestOk(false)
+    try {
+      await testWebhook()
+      setWebhookTestOk(true)
+      window.setTimeout(() => setWebhookTestOk(false), 3000)
+    } catch (err) {
+      setWebhookError(err instanceof ApiError ? err.message : t.settingsPage.testWebhookFailed)
+    } finally {
+      setWebhookTesting(false)
+    }
+  }
+
+  async function handleSaveDiscord(e: FormEvent) {
+    e.preventDefault()
+    setDiscordSaving(true)
+    setDiscordError(null)
+    setDiscordSaved(false)
+    setDiscordTestOk(false)
+    try {
+      const res = await updateSettings({ discord_webhook_url: discordUrl.trim() || null })
+      setDiscordUrl(res.discord_webhook_url ?? '')
+      setDiscordSaved(true)
+      window.setTimeout(() => setDiscordSaved(false), 2000)
+    } catch (err) {
+      setDiscordError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setDiscordSaving(false)
+    }
+  }
+
+  async function handleTestDiscord() {
+    setDiscordTesting(true)
+    setDiscordError(null)
+    setDiscordTestOk(false)
+    try {
+      await testDiscord()
+      setDiscordTestOk(true)
+      window.setTimeout(() => setDiscordTestOk(false), 3000)
+    } catch (err) {
+      setDiscordError(err instanceof ApiError ? err.message : t.settingsPage.testDiscordFailed)
+    } finally {
+      setDiscordTesting(false)
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.settingsPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.settingsPage.title}</h1>
         {profile && (
-          <span className="text-xs text-slate-400">
-            {t.settingsPage.signedInAs} <span className="text-slate-200">{profile.username}</span>
+          <span className="text-xs text-muted">
+            {t.settingsPage.signedInAs} <span className="text-body">{profile.username}</span>
           </span>
         )}
       </div>
 
       <div className="flex flex-col gap-6">
+        {canSettings && (
         <form onSubmit={handleSaveUrl} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.publicUrlTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.publicUrlDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.publicUrlTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.publicUrlDesc}</p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1" style={{ minWidth: 240 }}>
               <label className={labelClass}>{t.settingsPage.publicUrlLabel}</label>
@@ -291,12 +487,13 @@ export default function SettingsPage() {
               {urlSaving ? t.common.saving : urlSaved ? t.common.saved : t.common.save}
             </button>
           </div>
-          {urlError && <div className="mt-3 text-xs text-red-400">{urlError}</div>}
+          {urlError && <div className="mt-3 text-xs text-danger">{urlError}</div>}
         </form>
+        )}
 
         <form onSubmit={handleChangePassword} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.changePasswordTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.changePasswordDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.changePasswordTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.changePasswordDesc}</p>
           <div className="flex flex-wrap gap-3">
             <div>
               <label className={labelClass}>{t.settingsPage.currentPassword}</label>
@@ -331,7 +528,7 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-          {pwError && <div className="mt-3 text-xs text-red-400">{pwError}</div>}
+          {pwError && <div className="mt-3 text-xs text-danger">{pwError}</div>}
           <button
             type="submit"
             disabled={pwSubmitting}
@@ -342,9 +539,74 @@ export default function SettingsPage() {
           </button>
         </form>
 
+        <div className={cardClass}>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.apiKeysTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.apiKeysDesc}</p>
+
+          <form onSubmit={handleCreateApiKey} className="mb-3 flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelClass}>{t.settingsPage.apiKeyNameLabel}</label>
+              <input
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                required
+                placeholder={t.settingsPage.apiKeyNamePlaceholder}
+                className={inputClass}
+              />
+            </div>
+            <button type="submit" disabled={keyCreating} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {keyCreating ? t.settingsPage.creating : t.settingsPage.newApiKeyBtn}
+            </button>
+          </form>
+          {keyError && <div className="mb-3 text-xs text-danger">{keyError}</div>}
+
+          {justCreatedKey && (
+            <div className="mb-3 rounded-lg border border-cyan-400/30 bg-accent-tint p-3">
+              <div className={`mb-1.5 text-xs text-secondary ${align}`}>{t.settingsPage.apiKeyShowOnceWarning}</div>
+              <div className="flex items-center gap-2">
+                <code dir="ltr" className="flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-well-strong px-2.5 py-1.5 text-left text-xs text-accent">
+                  {justCreatedKey.key}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(justCreatedKey.key)
+                    setKeyCopied(true)
+                    window.setTimeout(() => setKeyCopied(false), 1500)
+                  }}
+                  className="flex-shrink-0 text-xs font-bold"
+                  style={{ color: ACCENT }}
+                >
+                  {keyCopied ? t.common.copiedCheck : t.settingsPage.copyKey}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            {apiKeys?.length === 0 && <div className="text-xs text-faint">{t.settingsPage.noApiKeysYet}</div>}
+            {apiKeys?.map((k) => (
+              <div key={k.id} className="flex items-center justify-between rounded-lg border border-subtle bg-field px-3 py-2">
+                <div>
+                  <div className="text-sm text-primary">{k.name}</div>
+                  <div dir="ltr" className="text-left font-mono text-[11px] text-faint">
+                    {k.key_prefix}…{' '}
+                    {k.last_used_at ? t.settingsPage.lastUsed(new Date(k.last_used_at).toLocaleDateString()) : t.settingsPage.neverUsed}
+                  </div>
+                </div>
+                <button onClick={() => handleDeleteApiKey(k)} className="text-xs text-danger hover:underline">
+                  {t.common.delete}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {canSettings && (
+        <>
         <form onSubmit={handleSaveTelegram} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.telegramTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.telegramTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>
             {t.settingsPage.telegramDesc1}{' '}
             <span dir="ltr" className="font-mono">
               @BotFather
@@ -389,12 +651,81 @@ export default function SettingsPage() {
               {telegramTesting ? t.settingsPage.sending : telegramTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
           </div>
-          {telegramError && <div className="mt-3 text-xs text-red-400">{telegramError}</div>}
+          {telegramError && <div className="mt-3 text-xs text-danger">{telegramError}</div>}
+        </form>
+
+        <form onSubmit={handleSaveWebhook} className={cardClass}>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.webhookTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.webhookDesc}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1" style={{ minWidth: 240 }}>
+              <label className={labelClass}>{t.settingsPage.webhookUrlLabel}</label>
+              <input
+                dir="ltr"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://example.com/hook"
+                className={`${inputClass} w-full text-left`}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t.settingsPage.webhookSecretLabel}</label>
+              <input
+                dir="ltr"
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+                className={`${inputClass} w-48 text-left font-mono text-xs`}
+              />
+            </div>
+            <button type="submit" disabled={webhookSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {webhookSaving ? t.common.saving : webhookSaved ? t.common.saved : t.common.save}
+            </button>
+            <button
+              type="button"
+              onClick={handleTestWebhook}
+              disabled={webhookTesting}
+              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
+              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+            >
+              {webhookTesting ? t.settingsPage.sending : webhookTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
+            </button>
+          </div>
+          {webhookError && <div className="mt-3 text-xs text-danger">{webhookError}</div>}
+        </form>
+
+        <form onSubmit={handleSaveDiscord} className={cardClass}>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.discordTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.discordDesc}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1" style={{ minWidth: 240 }}>
+              <label className={labelClass}>{t.settingsPage.discordUrlLabel}</label>
+              <input
+                dir="ltr"
+                value={discordUrl}
+                onChange={(e) => setDiscordUrl(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/..."
+                className={`${inputClass} w-full text-left`}
+              />
+            </div>
+            <button type="submit" disabled={discordSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              {discordSaving ? t.common.saving : discordSaved ? t.common.saved : t.common.save}
+            </button>
+            <button
+              type="button"
+              onClick={handleTestDiscord}
+              disabled={discordTesting}
+              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
+              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+            >
+              {discordTesting ? t.settingsPage.sending : discordTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
+            </button>
+          </div>
+          {discordError && <div className="mt-3 text-xs text-danger">{discordError}</div>}
         </form>
 
         <div className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.backupTitle}</h2>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.backupDesc}</p>
+          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.backupTitle}</h2>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.backupDesc}</p>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -426,13 +757,13 @@ export default function SettingsPage() {
               }}
             />
           </div>
-          {backupError && <div className="mt-3 text-xs text-red-400">{backupError}</div>}
-          {restoreDone && <div className="mt-3 text-xs text-slate-400">{t.settingsPage.restoreDoneNote}</div>}
+          {backupError && <div className="mt-3 text-xs text-danger">{backupError}</div>}
+          {restoreDone && <div className="mt-3 text-xs text-muted">{t.settingsPage.restoreDoneNote}</div>}
         </div>
 
         <form onSubmit={handleUploadTls} className={cardClass}>
           <div className={`mb-1 flex items-center justify-between ${align}`}>
-            <h2 className="text-sm font-bold text-slate-100">{t.settingsPage.tlsTitle}</h2>
+            <h2 className="text-sm font-bold text-primary">{t.settingsPage.tlsTitle}</h2>
             {tlsEnabled !== null && (
               <span
                 className="rounded-full border px-2.5 py-1 text-[11px]"
@@ -446,7 +777,7 @@ export default function SettingsPage() {
               </span>
             )}
           </div>
-          <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.tlsDesc}</p>
+          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.tlsDesc}</p>
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className={labelClass}>{t.settingsPage.tlsCertLabel}</label>
@@ -455,7 +786,7 @@ export default function SettingsPage() {
                 accept=".pem,.crt,.cer"
                 onChange={(e) => setTlsCertFile(e.target.files?.[0] ?? null)}
                 required
-                className="block text-xs text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-slate-200"
+                className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
               />
             </div>
             <div>
@@ -465,7 +796,7 @@ export default function SettingsPage() {
                 accept=".pem,.key"
                 onChange={(e) => setTlsKeyFile(e.target.files?.[0] ?? null)}
                 required
-                className="block text-xs text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-slate-200"
+                className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
               />
             </div>
             <button
@@ -487,13 +818,15 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
-          {tlsError && <div className="mt-3 text-xs text-red-400">{tlsError}</div>}
+          {tlsError && <div className="mt-3 text-xs text-danger">{tlsError}</div>}
         </form>
+        </>
+        )}
 
         {profile?.is_owner && (
           <div className={cardClass}>
-            <h2 className={`mb-1 text-sm font-bold text-slate-100 ${align}`}>{t.settingsPage.adminsTitle}</h2>
-            <p className={`mb-3 text-xs text-slate-500 ${align}`}>{t.settingsPage.adminsDesc}</p>
+            <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.adminsTitle}</h2>
+            <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.adminsDesc}</p>
 
             <form onSubmit={handleCreateAdmin} className="mb-4 flex flex-wrap items-end gap-3">
               <div>
@@ -517,27 +850,85 @@ export default function SettingsPage() {
                   className={inputClass}
                 />
               </div>
+              <div className="w-full">
+                <label className={labelClass}>{t.settingsPage.permissionsLabel}</label>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-subtle bg-well p-2">
+                  {PERMISSION_SCOPES.map((scope) => (
+                    <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={newAdminPermissions.has(scope)}
+                        onChange={() => toggleNewAdminPermission(scope)}
+                      />
+                      <span className="text-body">{t.settingsPage.permissionScopes[scope]}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-1 text-[11px] text-faint">{t.settingsPage.permissionsHint}</div>
+              </div>
               <button type="submit" disabled={adminSubmitting} className={buttonClass} style={{ backgroundColor: ACCENT }}>
                 {adminSubmitting ? t.settingsPage.creating : t.settingsPage.newAdminBtn}
               </button>
             </form>
-            {adminError && <div className="mb-3 text-xs text-red-400">{adminError}</div>}
+            {adminError && <div className="mb-3 text-xs text-danger">{adminError}</div>}
 
             <div className="flex flex-col gap-2">
               {admins?.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-100">{a.username}</span>
-                    {a.is_owner && (
-                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-slate-400">
-                        owner
-                      </span>
+                <div key={a.id} className="rounded-lg border border-subtle bg-field px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-primary">{a.username}</span>
+                      {a.is_owner ? (
+                        <span className="rounded-full border border-edge px-2 py-0.5 text-[10px] text-muted">
+                          owner
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-faint">
+                          {a.permissions === null
+                            ? t.settingsPage.fullAccess
+                            : a.permissions.map((s) => t.settingsPage.permissionScopes[s]).join(', ') ||
+                              t.settingsPage.noAccess}
+                        </span>
+                      )}
+                    </div>
+                    {!a.is_owner && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => (editingPermsId === a.id ? setEditingPermsId(null) : startEditPerms(a))}
+                          className="text-xs hover:underline"
+                          style={{ color: ACCENT }}
+                        >
+                          {t.settingsPage.editPermissions}
+                        </button>
+                        <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-danger hover:underline">
+                          {t.common.delete}
+                        </button>
+                      </div>
                     )}
                   </div>
-                  {!a.is_owner && (
-                    <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-red-400 hover:underline">
-                      {t.common.delete}
-                    </button>
+                  {editingPermsId === a.id && (
+                    <div className="mt-2 border-t border-subtle pt-2">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {PERMISSION_SCOPES.map((scope) => (
+                          <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={editingPermsSet.has(scope)}
+                              onChange={() => toggleEditingPermission(scope)}
+                            />
+                            <span className="text-body">{t.settingsPage.permissionScopes[scope]}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        onClick={saveEditingPerms}
+                        disabled={permsSaving}
+                        className="mt-2 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-950 disabled:opacity-60"
+                        style={{ backgroundColor: ACCENT }}
+                      >
+                        {t.common.save}
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

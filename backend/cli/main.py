@@ -17,6 +17,18 @@ from app.version import __version__
 cli = typer.Typer(help="Tifusi Panel command line interface")
 
 
+def _print_banner() -> None:
+    # typer.secho already strips these escapes when stdout isn't a real
+    # terminal (piped into a log, NO_COLOR set, etc.) — no extra check
+    # needed here the way the plain-printf shell installers require.
+    title = "TIFUSI PANEL"
+    width = len(title) + 8
+    typer.echo("")
+    typer.secho("  ╔" + "═" * width + "╗", fg=typer.colors.CYAN, bold=True)
+    typer.secho("  ║" + title.center(width) + "║", fg=typer.colors.CYAN, bold=True)
+    typer.secho("  ╚" + "═" * width + "╝", fg=typer.colors.CYAN, bold=True)
+
+
 @cli.command("version")
 def show_version() -> None:
     """Print the installed Tifusi Panel version."""
@@ -42,13 +54,14 @@ async def _generate_admin_key() -> None:
         db.add(SetupKey(key=key, expires_at=expires_at))
         await db.commit()
 
+    _print_banner()
     typer.secho(
-        f"\nSetup key generated (valid for {settings.setup_key_ttl_minutes} minutes):\n",
+        f"\n  Setup key (valid for {settings.setup_key_ttl_minutes} minutes):\n",
         fg=typer.colors.CYAN,
         bold=True,
     )
-    typer.secho(f"  {key}\n", fg=typer.colors.GREEN, bold=True)
-    typer.echo("Paste it into the Tifusi Panel login page to create the admin account.")
+    typer.secho(f"    {key}\n", fg=typer.colors.GREEN, bold=True)
+    typer.echo("  Paste it into the Tifusi Panel login page to create the admin account.\n")
 
 
 if __name__ == "__main__":

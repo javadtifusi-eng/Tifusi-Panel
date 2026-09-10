@@ -18,10 +18,10 @@ import {
 const ACCENT = '#22D3EE'
 
 const inputClass =
-  'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
-const labelClass = 'mb-1.5 block text-xs text-slate-400'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+const labelClass = 'mb-1.5 block text-xs text-muted'
 
-const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'wireguard', 'hysteria2', 'ikev2', 'l2tp']
+const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'hysteria2', 'ikev2', 'l2tp']
 const XRAY_PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks']
 const PLACEHOLDER_KEYS = ['username', 'protocol', 'days_left', 'expire_date', 'data_limit_gb', 'data_left_gb'] as const
 
@@ -62,7 +62,7 @@ export default function HostsPage() {
 
   const allInbounds: Inbound[] = cores.flatMap((c) => c.inbounds)
   const isXray = form.protocol !== '' && XRAY_PROTOCOLS.includes(form.protocol)
-  const isCoreLinked = form.protocol === 'wireguard' || form.protocol === 'l2tp' || form.protocol === 'ikev2'
+  const isCoreLinked = form.protocol === 'l2tp' || form.protocol === 'ikev2'
   const isHysteria2 = form.protocol === 'hysteria2'
   const inboundsForProtocol = allInbounds.filter((i) => i.protocol === form.protocol)
   const coresForProtocol = cores.filter((c) => c.core_type === form.protocol)
@@ -182,7 +182,7 @@ export default function HostsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.hostsPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.hostsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
@@ -193,15 +193,15 @@ export default function HostsPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
+        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-surface p-4">
           <div className="flex flex-wrap gap-3">
             <div className="relative">
               <div className="mb-1.5 flex items-center gap-1.5">
-                <label className="text-xs text-slate-400">{t.hostsPage.remark}</label>
+                <label className="text-xs text-muted">{t.hostsPage.remark}</label>
                 <button
                   type="button"
                   onClick={() => setShowPlaceholders((v) => !v)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full border border-white/20 text-[10px] text-slate-400 hover:border-cyan-400/50 hover:text-cyan-300"
+                  className="flex h-4 w-4 items-center justify-center rounded-full border border-edge text-[10px] text-muted hover:border-cyan-400/50 hover:text-accent"
                 >
                   ?
                 </button>
@@ -213,19 +213,19 @@ export default function HostsPage() {
                 className={inputClass}
               />
               {showPlaceholders && (
-                <div className="absolute top-full z-10 mt-1 w-64 rounded-lg border border-cyan-400/20 bg-slate-900 p-2 shadow-xl">
-                  <div className="mb-1.5 text-[10px] text-slate-500">{t.hostsPage.remarkPlaceholdersTitle}</div>
+                <div className="absolute top-full z-10 mt-1 w-64 rounded-lg border border-cyan-400/20 bg-surface p-2 shadow-xl">
+                  <div className="mb-1.5 text-[10px] text-faint">{t.hostsPage.remarkPlaceholdersTitle}</div>
                   {PLACEHOLDER_KEYS.map((key) => (
                     <button
                       key={key}
                       type="button"
                       onClick={() => insertPlaceholder(key)}
-                      className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs hover:bg-white/5"
+                      className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs hover:bg-field"
                     >
                       <span dir="ltr" className="font-mono" style={{ color: ACCENT }}>
                         {`{${key}}`}
                       </span>
-                      <span className="text-slate-400">
+                      <span className="text-muted">
                         {copiedToken === key ? t.hostsPage.remarkPlaceholderCopied : t.hostsPage.placeholders[key]}
                       </span>
                     </button>
@@ -288,7 +288,7 @@ export default function HostsPage() {
                   ))}
                 </select>
                 {inboundsForProtocol.length === 0 && (
-                  <div className="mt-1 text-[10px] text-amber-400">{t.hostsPage.noInboundsForProtocol}</div>
+                  <div className="mt-1 text-[10px] text-warning">{t.hostsPage.noInboundsForProtocol}</div>
                 )}
               </div>
               <div>
@@ -368,7 +368,7 @@ export default function HostsPage() {
                 </select>
               </div>
               <div className="flex items-end pb-2">
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-secondary">
                   <input
                     type="checkbox"
                     checked={form.allowinsecure}
@@ -400,7 +400,7 @@ export default function HostsPage() {
                   ))}
                 </select>
                 {coresForProtocol.length === 0 && (
-                  <div className="mt-1 text-[10px] text-amber-400">{t.hostsPage.noCoresForProtocol}</div>
+                  <div className="mt-1 text-[10px] text-warning">{t.hostsPage.noCoresForProtocol}</div>
                 )}
               </div>
             </div>
@@ -431,7 +431,7 @@ export default function HostsPage() {
             </div>
           )}
 
-          {error && <div className="mt-3 text-xs text-red-400">{error}</div>}
+          {error && <div className="mt-3 text-xs text-danger">{error}</div>}
 
           <button
             type="submit"
@@ -444,29 +444,29 @@ export default function HostsPage() {
         </form>
       )}
 
-      {!showForm && error && <div className="mb-4 text-sm text-red-400">{error}</div>}
+      {!showForm && error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      {hosts === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {hosts === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
       {hosts !== null && hosts.length === 0 && (
-        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+        <div className="rounded-xl border border-subtle py-8 text-center text-faint">
           {t.hostsPage.noHostsYet}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {hosts?.map((h) => (
-          <div key={h.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+          <div key={h.id} className="rounded-xl border border-subtle bg-surface p-4">
             <div className="mb-2 flex items-center justify-between">
-              <span className="font-bold text-slate-100">{h.remark}</span>
-              <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">
+              <span className="font-bold text-primary">{h.remark}</span>
+              <span className="rounded-full border border-edge bg-field px-2.5 py-1 text-[11px] text-secondary">
                 {protocolLabels[h.protocol]}
               </span>
             </div>
-            <div dir="ltr" className="mb-1 text-left font-mono text-xs text-slate-400">
+            <div dir="ltr" className="mb-1 text-left font-mono text-xs text-muted">
               {h.address}
               {h.effective_port != null ? `:${h.effective_port}` : ''}
             </div>
-            <div className="mb-3 text-xs text-slate-400">
+            <div className="mb-3 text-xs text-muted">
               {h.effective_security === 'reality' ? (
                 <span dir="ltr" className="font-mono" style={{ color: ACCENT }}>
                   REALITY · {h.effective_sni ?? '—'}
@@ -475,11 +475,11 @@ export default function HostsPage() {
                 (h.effective_security ?? '—')
               )}
             </div>
-            <div className="flex gap-3 border-t border-white/5 pt-3">
-              <button onClick={() => startEdit(h)} className="text-xs text-slate-400 hover:underline">
+            <div className="flex gap-3 border-t border-hair pt-3">
+              <button onClick={() => startEdit(h)} className="text-xs text-muted hover:underline">
                 {t.common.edit}
               </button>
-              <button onClick={() => handleDelete(h)} className="text-xs text-red-400 hover:underline">
+              <button onClick={() => handleDelete(h)} className="text-xs text-danger hover:underline">
                 {t.common.delete}
               </button>
             </div>

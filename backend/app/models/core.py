@@ -11,7 +11,6 @@ from app.database import Base
 
 class CoreType(str, enum.Enum):
     xray = "xray"
-    wireguard = "wireguard"
     l2tp = "l2tp"
     ikev2 = "ikev2"
 
@@ -26,10 +25,10 @@ class Core(Base):
       into Inbound rows (app/models/inbound.py) purely for the panel's own
       bookkeeping — which tags exist, what a Host can pick, what a Group
       can grant.
-    - wireguard/l2tp/ikev2: standalone servers this panel doesn't run
-      itself (the admin already has strongSwan/xl2tpd/wg-quick set up) —
-      just the shared technical fields every Host built on this Core needs,
-      so they're entered once instead of repeated per Host.
+    - l2tp/ikev2: standalone servers this panel doesn't run itself (the
+      admin already has strongSwan/xl2tpd set up) — just the shared
+      technical fields every Host built on this Core needs, so they're
+      entered once instead of repeated per Host.
     """
 
     __tablename__ = "cores"
@@ -42,12 +41,6 @@ class Core(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
-
-    # --- wireguard only: the server's own keypair, not any peer's ---
-    wireguard_public_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    wireguard_private_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    wireguard_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    wireguard_subnet: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # --- l2tp only: shared IPsec PSK; ports are the protocol's fixed
     # standard UDP 500/1701/4500 ---

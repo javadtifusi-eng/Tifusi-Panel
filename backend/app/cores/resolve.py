@@ -27,6 +27,5 @@ async def resolve_xray_core_id(core_id: int | None, db: AsyncSession) -> int | N
 async def resolve_ipsec_core_id(core_id: int | None, db: AsyncSession) -> int | None:
     """The Node's l2tp/ikev2 slot — independent of its Xray slot, so a
     single node's agent can run Xray *and* manage strongSwan/xl2tpd at the
-    same time. WireGuard stays standalone (the admin runs wg-quick
-    themselves), so it's rejected here same as for the Xray slot."""
+    same time."""
     return await _resolve(core_id, db, {CoreType.l2tp, CoreType.ikev2}, "l2tp/ikev2")

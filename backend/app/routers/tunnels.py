@@ -5,21 +5,24 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.models.node import Node
 from app.models.tunnel import Tunnel, TunnelStatus
 from app.schemas.tunnel import (
+    RankedTransport,
     TunnelConfig,
     TunnelCreate,
     TunnelList,
+    TunnelRecommendRequest,
+    TunnelRecommendResult,
     TunnelResponse,
     TunnelTestResult,
     TunnelUpdate,
 )
-from app.tunnels.config import build_foreign_config, build_iran_config
-from app.tunnels.probe import tcp_probe
+from app.tunnels.config import build_foreign_config, build_iran_config, build_install_command
+from app.tunnels.probe import recommend_transports, tcp_probe
 
-router = APIRouter(prefix="/api/tunnels", tags=["tunnels"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/tunnels", tags=["tunnels"], dependencies=[Depends(require_permission("tunnels"))])
 
 
 async def _resolve_foreign_node_id(node_id: int | None, db: AsyncSession) -> int | None:
@@ -113,13 +116,45 @@ async def delete_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> N
 @router.get("/{tunnel_id}/config", response_model=TunnelConfig)
 async def get_tunnel_config(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> TunnelConfig:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)
+    iran_config = build_iran_config(tunnel)
+    foreign_config = build_foreign_config(tunnel)
     return TunnelConfig(
-        iran_config=build_iran_config(tunnel),
-        foreign_config=build_foreign_config(tunnel),
-        install_command=(
-            'bash <(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/'
-            'Tifusi-Panel/main/backend/tunnel_agent/install.sh)'
-        ),
+        iran_config=iran_config,
+        foreign_config=foreign_config,
+        iran_install_command=build_install_command(iran_config),
+        foreign_install_command=build_install_command(foreign_config),
+    )
+
+
+@router.post("/recommend", response_model=TunnelRecommendResult)
+async def recommend_tunnel_transport(
+    payload: TunnelRecommendRequest, db: AsyncSession = Depends(get_db)
+) -> TunnelRecommendResult:
+    """Probes both sides before a tunnel exists (nothing is listening on
+    the tunnel port yet - that only starts once the install commands
+    below have actually run) and ranks transports by what's honestly
+    measurable this early: raw reachability and latency to each address,
+    not per-transport DPI behavior no panel can promise from outside Iran.
+    """
+    _validate_foreign(payload.foreign_node_id, payload.foreign_address)
+
+    if payload.foreign_node_id is not None:
+        node = await db.get(Node, payload.foreign_node_id)
+        if node is None:
+            raise HTTPException(status_code=400, detail="foreign_node_id not found")
+        foreign_host, foreign_port = node.address, node.port
+    else:
+        foreign_host, foreign_port = payload.foreign_address, 22
+
+    iran_reachable, iran_latency, foreign_reachable, foreign_latency, ranked = (
+        await recommend_transports(payload.iran_address, payload.iran_port, foreign_host, foreign_port)
+    )
+    return TunnelRecommendResult(
+        iran_reachable=iran_reachable,
+        iran_latency_ms=iran_latency,
+        foreign_reachable=foreign_reachable,
+        foreign_latency_ms=foreign_latency,
+        ranked=[RankedTransport(transport=r.transport, reason=r.reason) for r in ranked],
     )
 
 

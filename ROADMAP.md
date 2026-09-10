@@ -3,11 +3,10 @@
 ## Done
 
 - Setup flow: CLI-generated admin key entered straight into the login page (no docs/GitHub round-trip)
-- Users, Hosts (VLESS/Trojan/WireGuard/Hysteria2), Nodes, Groups: full CRUD with a real access-control model
+- Users, Hosts (VLESS/Trojan/Hysteria2/L2TP/IKEv2), Nodes, Groups: full CRUD with a real access-control model
 - REALITY target scanner: latency-tests ~160 candidate SNIs and recommends the best one
 - Per-user share links, subscription URL, and QR codes
 - Real Xray-core config generation, pushed to nodes through a small node agent
-- Per-user WireGuard peers: lazy keypair + IP allocation, client `.conf` generation
 - Real traffic accounting: the node agent reads Xray's own StatsService (`xray api statsquery`), the panel polls it on an interval and adds the deltas onto `used_traffic`
 - Automatic `expired`/`limited` status transitions once a user passes their expire date or data limit, with an automatic node resync so it actually takes effect
 - Settings page: admin can change the panel's public URL and their own password at runtime, no redeploy or `.env` edit needed
@@ -20,7 +19,6 @@
 
 ## Known gaps (scoped out on purpose, not overlooked)
 
-- Node-side WireGuard interface management (`wg-quick`) — this panel generates the client config and the peer block to paste, but doesn't touch the kernel interface itself (needs `NET_ADMIN` on the node)
 - Real Xray-core binary was never fetchable in the sandbox this was built in (GitHub releases blocked) — the panel↔node-agent lifecycle was proven with a stub binary; a real deployment still needs its first real-world verification
 - No per-admin permission scoping (e.g. read-only, or restricted to certain hosts/groups) — every non-owner admin has full access
 - No notification channels besides Telegram (e.g. email, a generic webhook), and no "expiring soon"/"almost out of data" warning — only the actual expired/limited transition notifies
@@ -36,12 +34,12 @@ Why nobody's built this: it needs an anonymous telemetry pipeline (no IP, no ide
 ### Domain fronting through a high-cost-to-block CDN (e.g. ArvanCloud)
 Route tunnel traffic through a CDN edge that a huge share of the country's own internet already depends on (banks, government sites, etc.), so from the outside it looks like an ordinary HTTPS request to an unrelated, everyday domain. Blocking it wholesale means blocking the CDN itself — a much higher cost than blocking one VPN provider.
 
-Needs verifying case by case: some CDNs enforce SNI/Host-header matching at the edge specifically to prevent this, so ArvanCloud (or whichever provider) has to actually be tested before betting on it, not assumed. Should always sit behind a working fallback (REALITY/WireGuard), never be the only path.
+Needs verifying case by case: some CDNs enforce SNI/Host-header matching at the edge specifically to prevent this, so ArvanCloud (or whichever provider) has to actually be tested before betting on it, not assumed. Should always sit behind a working fallback (REALITY), never be the only path.
 
 ### Built-in Iran↔abroad tunnel management
 A lot of users currently run a separate tunnel script (GRE/IPIP/etc., or a dedicated tool like this account's own Tifusi-Tunnel) to bridge an Iran-side server to a foreign one, entirely outside the panel. Folding that into Tifusi Panel itself — as a first-class "Tunnel" section — would mean one tool instead of two disconnected ones.
 
-Same honest caveat as WireGuard: this is kernel/interface-level work on the node (needs `NET_ADMIN`), not just config generation, so it's a genuinely bigger lift than anything else on this list.
+Same honest caveat as any kernel/interface-level work on the node (needs `NET_ADMIN`), not just config generation, so it's a genuinely bigger lift than anything else on this list.
 
 ### Multi-exit IP rotation
 Instead of one fixed foreign server IP per host, rotate a user's traffic across several exit IPs (DNS with a short TTL, a load balancer, or — going further — short-lived relays the way Tor's Snowflake does with WebRTC) so there's no single stable IP for a censor to blacklist long enough for it to matter.

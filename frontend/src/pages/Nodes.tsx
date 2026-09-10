@@ -13,6 +13,10 @@ import {
   type NodeStatus,
 } from '../lib/api'
 
+// Which core a node runs is assigned from the Cores page (a core lists and
+// toggles the nodes running it), not repeated here — this form only owns
+// what's actually the node's own identity (name/address/agent port).
+
 const ACCENT = '#22D3EE'
 
 const statusDot: Record<NodeStatus, string> = {
@@ -22,13 +26,13 @@ const statusDot: Record<NodeStatus, string> = {
 }
 
 const statusBadge: Record<NodeStatus, string> = {
-  connected: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/30',
-  pending: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
-  error: 'bg-red-400/10 text-red-300 border-red-400/30',
+  connected: 'bg-success-tint text-success border-success',
+  pending: 'bg-neutral-tint text-muted border-neutral',
+  error: 'bg-danger-tint text-danger border-danger',
 }
 
 const inputClass =
-  'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
 
 function setupCommand(node: Node): string {
   // The one-line installer (not a raw docker build/run) — it clones the
@@ -48,9 +52,6 @@ export default function NodesPage() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [port, setPort] = useState('')
-  const [coreId, setCoreId] = useState<number | null>(null)
-  const [ipsecCoreId, setIpsecCoreId] = useState<number | null>(null)
-  const [l2tpEgressVless, setL2tpEgressVless] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [setupNodeId, setSetupNodeId] = useState<number | null>(null)
@@ -79,9 +80,6 @@ export default function NodesPage() {
     setName('')
     setAddress('')
     setPort('')
-    setCoreId(null)
-    setIpsecCoreId(null)
-    setL2tpEgressVless('')
     setShowForm(false)
   }
 
@@ -90,9 +88,6 @@ export default function NodesPage() {
     setName(node.name)
     setAddress(node.address)
     setPort(String(node.port))
-    setCoreId(node.core_id)
-    setIpsecCoreId(node.ipsec_core_id)
-    setL2tpEgressVless(node.l2tp_egress_vless ?? '')
     setShowForm(true)
   }
 
@@ -102,24 +97,10 @@ export default function NodesPage() {
     setError(null)
     try {
       if (editingId) {
-        await updateNode(editingId, {
-          name,
-          address,
-          port: parseInt(port, 10),
-          core_id: coreId,
-          ipsec_core_id: ipsecCoreId,
-          l2tp_egress_vless: l2tpEgressVless || null,
-        })
+        await updateNode(editingId, { name, address, port: parseInt(port, 10) })
         resetForm()
       } else {
-        const created = await createNode({
-          name,
-          address,
-          port: parseInt(port, 10),
-          core_id: coreId,
-          ipsec_core_id: ipsecCoreId,
-          l2tp_egress_vless: l2tpEgressVless || null,
-        })
+        const created = await createNode({ name, address, port: parseInt(port, 10) })
         resetForm()
         setSetupNodeId(created.id)
       }
@@ -171,7 +152,7 @@ export default function NodesPage() {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.nodesPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.nodesPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
@@ -180,19 +161,19 @@ export default function NodesPage() {
           {t.nodesPage.newBtn}
         </button>
       </div>
-      <p className="mb-6 text-sm text-slate-400">{t.nodesPage.intro}</p>
+      <p className="mb-6 text-sm text-muted">{t.nodesPage.intro}</p>
 
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4"
+          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-surface p-4"
         >
           <div>
-            <label className="mb-1.5 block text-xs text-slate-400">{t.nodesPage.nameLabel}</label>
+            <label className="mb-1.5 block text-xs text-muted">{t.nodesPage.nameLabel}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-slate-400">{t.nodesPage.addressLabel}</label>
+            <label className="mb-1.5 block text-xs text-muted">{t.nodesPage.addressLabel}</label>
             <input
               dir="ltr"
               value={address}
@@ -203,7 +184,7 @@ export default function NodesPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-slate-400">{t.nodesPage.agentPortLabel}</label>
+            <label className="mb-1.5 block text-xs text-muted">{t.nodesPage.agentPortLabel}</label>
             <input
               type="number"
               min="1"
@@ -215,57 +196,7 @@ export default function NodesPage() {
               className={`${inputClass} w-28`}
             />
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-slate-400">{t.nodesPage.coreLabel}</label>
-            <select
-              value={coreId ?? ''}
-              onChange={(e) => setCoreId(e.target.value ? Number(e.target.value) : null)}
-              className={inputClass}
-            >
-              <option value="">{t.coresPage.selectPlaceholder}</option>
-              {cores
-                .filter((c) => c.core_type === 'xray')
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-slate-400" title={t.nodesPage.ipsecCoreHint}>
-              {t.nodesPage.ipsecCoreLabel}
-            </label>
-            <select
-              value={ipsecCoreId ?? ''}
-              onChange={(e) => setIpsecCoreId(e.target.value ? Number(e.target.value) : null)}
-              className={inputClass}
-            >
-              <option value="">{t.coresPage.selectPlaceholder}</option>
-              {cores
-                .filter((c) => c.core_type === 'l2tp' || c.core_type === 'ikev2')
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} — {t.coresPage.coreTypeLabels[c.core_type]}
-                  </option>
-                ))}
-            </select>
-          </div>
-          {cores.find((c) => c.id === ipsecCoreId)?.core_type === 'l2tp' && (
-            <div className="w-full">
-              <label className="mb-1.5 block text-xs text-slate-400" title={t.nodesPage.l2tpEgressHint}>
-                {t.nodesPage.l2tpEgressLabel}
-              </label>
-              <textarea
-                dir="ltr"
-                rows={2}
-                value={l2tpEgressVless}
-                onChange={(e) => setL2tpEgressVless(e.target.value)}
-                placeholder="vless://..."
-                className={`${inputClass} w-full text-left font-mono text-xs`}
-              />
-            </div>
-          )}
+          <div className="w-full text-[11px] text-faint">{t.nodesPage.assignCoreHint}</div>
           <button
             type="submit"
             disabled={submitting}
@@ -277,25 +208,25 @@ export default function NodesPage() {
         </form>
       )}
 
-      {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
+      {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       {setupNode && (
-        <div className="mb-6 rounded-xl border border-cyan-400/20 bg-black/25 p-4">
+        <div className="mb-6 rounded-xl border border-cyan-400/20 bg-well p-4">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-bold text-slate-100">{setupNode.name}</div>
-            <button onClick={() => setSetupNodeId(null)} className="text-xs text-slate-400 hover:underline">
+            <div className="text-sm font-bold text-primary">{setupNode.name}</div>
+            <button onClick={() => setSetupNodeId(null)} className="text-xs text-muted hover:underline">
               ✕
             </button>
           </div>
-          <div className="mb-2 text-xs text-slate-400">{t.nodesPage.setupIntro}</div>
+          <div className="mb-2 text-xs text-muted">{t.nodesPage.setupIntro}</div>
           <pre
             dir="ltr"
-            className="mb-2 overflow-x-auto whitespace-pre-wrap rounded-lg border border-cyan-400/20 bg-black/40 p-3 text-left font-mono text-[11px] text-cyan-200"
+            className="mb-2 overflow-x-auto whitespace-pre-wrap rounded-lg border border-cyan-400/20 bg-well-strong p-3 text-left font-mono text-[11px] text-accent"
           >
             {setupCommand(setupNode)}
           </pre>
           {setupNode.last_error && (
-            <div className="mb-2 text-xs text-red-400">
+            <div className="mb-2 text-xs text-danger">
               {t.nodesPage.lastError} {setupNode.last_error}
             </div>
           )}
@@ -309,9 +240,9 @@ export default function NodesPage() {
         </div>
       )}
 
-      {nodes === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {nodes === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
       {nodes !== null && nodes.length === 0 && (
-        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+        <div className="rounded-xl border border-subtle py-8 text-center text-faint">
           {t.nodesPage.noNodesYet}
         </div>
       )}
@@ -326,7 +257,7 @@ export default function NodesPage() {
               key={node.id}
               onClick={() => handleSync(node)}
               title={t.nodesPage.sync}
-              className="cursor-pointer rounded-xl border border-white/10 bg-slate-950/60 p-4 transition-colors hover:border-cyan-400/40"
+              className="cursor-pointer rounded-xl border border-subtle bg-surface p-4 transition-colors hover:border-cyan-400/40"
             >
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -335,37 +266,37 @@ export default function NodesPage() {
                       isSyncing ? 'animate-pulse bg-cyan-400' : statusDot[node.status]
                     }`}
                   />
-                  <span className="font-bold text-slate-100">{node.name}</span>
+                  <span className="font-bold text-primary">{node.name}</span>
                 </div>
                 <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge[node.status]}`}>
                   {isSyncing ? t.nodesPage.syncing : t.nodesPage.status[node.status]}
                 </span>
               </div>
 
-              <div dir="ltr" className="mb-1 text-left font-mono text-xs text-slate-400">
+              <div dir="ltr" className="mb-1 text-left font-mono text-xs text-muted">
                 {node.address}:{node.port}
               </div>
               {core && (
-                <div className="mb-1 text-xs text-slate-500">
+                <div className="mb-1 text-xs text-faint">
                   {core.name} · {t.nodesPage.inboundsCount(core.inbounds.length)}
                 </div>
               )}
               {ipsecCore && (
-                <div className="mb-1 text-xs text-slate-500">
+                <div className="mb-1 text-xs text-faint">
                   {ipsecCore.name} · {t.coresPage.coreTypeLabels[ipsecCore.core_type]}
                 </div>
               )}
-              <div dir="ltr" className="mb-3 text-left text-xs text-slate-500">
+              <div dir="ltr" className="mb-3 text-left text-xs text-faint">
                 {node.xray_version ?? '—'}
               </div>
 
-              <div className="flex items-center gap-3 border-t border-white/5 pt-3">
+              <div className="flex items-center gap-3 border-t border-hair pt-3">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
                     setSetupNodeId((id) => (id === node.id ? null : node.id))
                   }}
-                  className="text-xs text-slate-400 hover:underline"
+                  className="text-xs text-muted hover:underline"
                 >
                   {t.nodesPage.installCmd}
                 </button>
@@ -374,11 +305,11 @@ export default function NodesPage() {
                     e.stopPropagation()
                     startEdit(node)
                   }}
-                  className="text-xs text-slate-400 hover:underline"
+                  className="text-xs text-muted hover:underline"
                 >
                   {t.common.edit}
                 </button>
-                <button onClick={(e) => handleDelete(node, e)} className="text-xs text-red-400 hover:underline">
+                <button onClick={(e) => handleDelete(node, e)} className="text-xs text-danger hover:underline">
                   {t.common.delete}
                 </button>
               </div>

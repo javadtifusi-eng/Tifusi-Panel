@@ -19,8 +19,8 @@ import {
 const ACCENT = '#22D3EE'
 
 const inputClass =
-  'rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/60'
-const labelClass = 'mb-1.5 block text-xs text-slate-400'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+const labelClass = 'mb-1.5 block text-xs text-muted'
 
 function emptyForm() {
   return { name: '', note: '', inboundIds: new Set<number>(), hostIds: new Set<number>(), userIds: new Set<number>() }
@@ -131,13 +131,13 @@ export default function GroupsPage() {
   }
 
   // xray-protocol hosts are gated through their Inbound's groups, so only
-  // standalone (wireguard/hysteria2) hosts get a direct Group<->Host checklist.
+  // standalone (l2tp/ikev2/hysteria2) hosts get a direct Group<->Host checklist.
   const standaloneHosts = hosts.filter((h) => h.inbound_id == null)
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-50">{t.groupsPage.title}</h1>
+        <h1 className="text-xl font-bold text-heading">{t.groupsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
@@ -146,10 +146,10 @@ export default function GroupsPage() {
           {t.groupsPage.newBtn}
         </button>
       </div>
-      <p className="mb-6 text-sm text-slate-400">{t.groupsPage.intro}</p>
+      <p className="mb-6 text-sm text-muted">{t.groupsPage.intro}</p>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-slate-950/60 p-4">
+        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-surface p-4">
           <div className="flex flex-wrap gap-3">
             <div>
               <label className={labelClass}>{t.groupsPage.nameLabel}</label>
@@ -173,9 +173,9 @@ export default function GroupsPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <div className={labelClass}>{t.groupsPage.inboundsInGroup}</div>
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-subtle bg-well p-2">
                 {cores.every((c) => c.inbounds.length === 0) && (
-                  <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noInboundsInList}</div>
+                  <div className="px-2 py-1 text-xs text-faint">{t.groupsPage.noInboundsInList}</div>
                 )}
                 {cores.map((core) => {
                   if (core.inbounds.length === 0) return null
@@ -183,7 +183,7 @@ export default function GroupsPage() {
                   return (
                     <div key={core.id} className="mb-2 last:mb-0">
                       <div className="flex items-center justify-between px-2 py-1">
-                        <span className="text-xs font-bold text-slate-300">{core.name}</span>
+                        <span className="text-xs font-bold text-secondary">{core.name}</span>
                         <button
                           type="button"
                           onClick={() => toggleCoreInbounds(core.inbounds)}
@@ -196,17 +196,17 @@ export default function GroupsPage() {
                       {core.inbounds.map((i) => (
                         <label
                           key={i.id}
-                          className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"
+                          className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-field"
                         >
                           <input
                             type="checkbox"
                             checked={form.inboundIds.has(i.id)}
                             onChange={() => setForm((f) => ({ ...f, inboundIds: toggle(f.inboundIds, i.id) }))}
                           />
-                          <span dir="ltr" className="font-mono text-slate-200">
+                          <span dir="ltr" className="font-mono text-body">
                             {i.tag}
                           </span>
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-faint">
                             ({protocolLabels[i.protocol as keyof typeof protocolLabels] ?? i.protocol})
                           </span>
                         </label>
@@ -218,42 +218,42 @@ export default function GroupsPage() {
             </div>
             <div>
               <div className={labelClass}>{t.groupsPage.hostsInGroup}</div>
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-subtle bg-well p-2">
                 {standaloneHosts.length === 0 && (
-                  <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noHosts}</div>
+                  <div className="px-2 py-1 text-xs text-faint">{t.groupsPage.noHosts}</div>
                 )}
                 {standaloneHosts.map((h) => (
-                  <label key={h.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
+                  <label key={h.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-field">
                     <input
                       type="checkbox"
                       checked={form.hostIds.has(h.id)}
                       onChange={() => setForm((f) => ({ ...f, hostIds: toggle(f.hostIds, h.id) }))}
                     />
-                    <span className="text-slate-200">{h.remark}</span>
-                    <span className="text-xs text-slate-500">({protocolLabels[h.protocol]})</span>
+                    <span className="text-body">{h.remark}</span>
+                    <span className="text-xs text-faint">({protocolLabels[h.protocol]})</span>
                   </label>
                 ))}
               </div>
             </div>
             <div>
               <div className={labelClass}>{t.groupsPage.usersInGroup}</div>
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2">
-                {users.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">{t.groupsPage.noUsers}</div>}
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-subtle bg-well p-2">
+                {users.length === 0 && <div className="px-2 py-1 text-xs text-faint">{t.groupsPage.noUsers}</div>}
                 {users.map((u) => (
-                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
+                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-field">
                     <input
                       type="checkbox"
                       checked={form.userIds.has(u.id)}
                       onChange={() => setForm((f) => ({ ...f, userIds: toggle(f.userIds, u.id) }))}
                     />
-                    <span className="text-slate-200">{u.username}</span>
+                    <span className="text-body">{u.username}</span>
                   </label>
                 ))}
               </div>
             </div>
           </div>
 
-          {error && <div className="mt-3 text-xs text-red-400">{error}</div>}
+          {error && <div className="mt-3 text-xs text-danger">{error}</div>}
 
           <button
             type="submit"
@@ -266,18 +266,18 @@ export default function GroupsPage() {
         </form>
       )}
 
-      {!showForm && error && <div className="mb-4 text-sm text-red-400">{error}</div>}
+      {!showForm && error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      {groups === null && <div className="py-8 text-center text-slate-500">{t.loading}</div>}
+      {groups === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
       {groups !== null && groups.length === 0 && (
-        <div className="rounded-xl border border-white/10 py-8 text-center text-slate-500">
+        <div className="rounded-xl border border-subtle py-8 text-center text-faint">
           {t.groupsPage.noGroupsYet}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {groups?.map((g) => {
-          // A host counts as "covered" either directly (wireguard/hysteria2,
+          // A host counts as "covered" either directly (l2tp/ikev2/hysteria2,
           // added by host_id) or indirectly through one of the group's
           // granted inbounds (vless/vmess/trojan/shadowsocks) — showing only
           // the direct host_ids count made it look like 0 hosts were in a
@@ -286,25 +286,25 @@ export default function GroupsPage() {
             (h) => g.host_ids.includes(h.id) || (h.inbound_id != null && g.inbound_ids.includes(h.inbound_id)),
           )
           return (
-            <div key={g.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-              <div className="mb-2 font-bold text-slate-100">{g.name}</div>
-              <div className="mb-3 text-xs text-slate-400">{g.note ?? '—'}</div>
-              <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-400">
+            <div key={g.id} className="rounded-xl border border-subtle bg-surface p-4">
+              <div className="mb-2 font-bold text-primary">{g.name}</div>
+              <div className="mb-3 text-xs text-muted">{g.note ?? '—'}</div>
+              <div className="mb-3 flex flex-wrap gap-4 text-xs text-muted">
                 <span>
-                  {t.groupsPage.colHosts}: <span className="text-slate-200">{coveredHosts.length}</span>
+                  {t.groupsPage.colHosts}: <span className="text-body">{coveredHosts.length}</span>
                 </span>
                 <span>
-                  {t.groupsPage.colInbounds}: <span className="text-slate-200">{g.inbound_ids.length}</span>
+                  {t.groupsPage.colInbounds}: <span className="text-body">{g.inbound_ids.length}</span>
                 </span>
                 <span>
-                  {t.groupsPage.colUsers}: <span className="text-slate-200">{g.user_ids.length}</span>
+                  {t.groupsPage.colUsers}: <span className="text-body">{g.user_ids.length}</span>
                 </span>
               </div>
-              <div className="flex gap-3 border-t border-white/5 pt-3">
-                <button onClick={() => startEdit(g)} className="text-xs text-slate-400 hover:underline">
+              <div className="flex gap-3 border-t border-hair pt-3">
+                <button onClick={() => startEdit(g)} className="text-xs text-muted hover:underline">
                   {t.common.edit}
                 </button>
-                <button onClick={() => handleDelete(g)} className="text-xs text-red-400 hover:underline">
+                <button onClick={() => handleDelete(g)} className="text-xs text-danger hover:underline">
                   {t.common.delete}
                 </button>
               </div>

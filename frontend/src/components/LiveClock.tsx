@@ -40,8 +40,8 @@ export default function LiveClock() {
 
   return (
     <div className="text-left">
-      <div className="font-mono text-sm tabular-nums text-slate-200">{timeFormatter.format(now)}</div>
-      <div className="text-[11px] text-slate-500">{dateFormatter.format(now)}</div>
+      <div className="font-mono text-sm tabular-nums text-body">{timeFormatter.format(now)}</div>
+      <div className="text-[11px] text-faint">{dateFormatter.format(now)}</div>
     </div>
   )
 }

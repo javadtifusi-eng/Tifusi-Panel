@@ -173,8 +173,9 @@ def build_hysteria2_link(user: ProxyUser, host: Host) -> str:
     return f"hysteria2://{user.secret}@{host.address}:{host.effective_port}{suffix}#{_fragment(render_remark(host, user))}"
 
 
-# WireGuard needs a per-user keypair and an allocated tunnel IP, which nothing
-# generates yet — it's excluded here rather than emitting a link that can't work.
+# l2tp/ikev2 have no importable URI scheme at all (see the routers, which
+# hand those out as plain connection fields instead) — excluded here rather
+# than emitting a link that can't work.
 _BUILDERS = {
     HostProtocol.vless: build_vless_link,
     HostProtocol.vmess: build_vmess_link,

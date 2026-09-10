@@ -1,12 +1,12 @@
 """Group membership is an access filter, not just an organizational label.
 
-Two independent mechanisms, matching how PasarGuard actually does it:
+Two independent mechanisms:
 - vless/vmess/trojan/shadowsocks hosts: access is controlled by the Inbound
   they use — a Group grants whole Inbound tags, and every user in that
   group gets every host built on top of it. A host doesn't get its own
   separate ACL; its Inbound's groups are the only thing that matters.
-- wireguard/hysteria2 hosts aren't Xray inbounds at all, so they keep the
-  original direct Group<->Host link instead.
+- hysteria2 hosts aren't Xray inbounds at all, so they keep the original
+  direct Group<->Host link instead.
 
 Either way, an Inbound/host in no group at all is global — every user gets
 it, both in their links/subscription and as a client actually pushed to

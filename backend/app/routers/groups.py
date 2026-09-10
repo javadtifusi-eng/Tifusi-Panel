@@ -3,14 +3,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import require_permission
 from app.models.group import Group
 from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.user import ProxyUser
 from app.schemas.group import GroupCreate, GroupList, GroupResponse, GroupUpdate
 
-router = APIRouter(prefix="/api/groups", tags=["groups"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/groups", tags=["groups"], dependencies=[Depends(require_permission("groups"))])
 
 
 async def _resolve_inbounds(ids: list[int], db: AsyncSession) -> list[Inbound]:

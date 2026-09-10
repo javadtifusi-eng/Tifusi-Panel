@@ -17,11 +17,6 @@ class CoreCreate(BaseModel):
     core_type: CoreType
     config: dict[str, Any] | None = None
 
-    wireguard_public_key: str | None = None
-    wireguard_private_key: str | None = None
-    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
-    wireguard_subnet: str | None = None
-
     l2tp_psk: str | None = None
 
     ikev2_psk: str | None = None
@@ -32,11 +27,6 @@ class CoreCreate(BaseModel):
         if self.core_type == CoreType.xray:
             if not isinstance((self.config or {}).get("inbounds"), list):
                 raise ValueError("config.inbounds must be a list — paste a real Xray config")
-        elif self.core_type == CoreType.wireguard:
-            _require(self.wireguard_public_key, "wireguard_public_key", "wireguard")
-            _require(self.wireguard_private_key, "wireguard_private_key", "wireguard")
-            _require(self.wireguard_port, "wireguard_port", "wireguard")
-            _require(self.wireguard_subnet, "wireguard_subnet", "wireguard")
         elif self.core_type == CoreType.l2tp:
             _require(self.l2tp_psk, "l2tp_psk", "l2tp")
         elif self.core_type == CoreType.ikev2:
@@ -48,11 +38,6 @@ class CoreUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     note: str | None = None
     config: dict[str, Any] | None = None
-
-    wireguard_public_key: str | None = None
-    wireguard_private_key: str | None = None
-    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
-    wireguard_subnet: str | None = None
 
     l2tp_psk: str | None = None
 
@@ -96,11 +81,6 @@ class CoreResponse(BaseModel):
     node_count: int
     host_count: int = 0
     warnings: list[str] = Field(default_factory=list)
-
-    wireguard_public_key: str | None
-    wireguard_private_key: str | None
-    wireguard_port: int | None
-    wireguard_subnet: str | None
 
     l2tp_psk: str | None
 
