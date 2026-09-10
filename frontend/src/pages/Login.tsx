@@ -160,12 +160,12 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
           dir === 'rtl' ? 'border-l' : 'border-r'
         } border-subtle`}
         style={{
-          // A flat, uniform tint across the whole panel rather than a
-          // gradient — a gradient that fades toward the dark `c-surface`
-          // base still reads as "mostly plain dark, blue in one corner"
-          // at the size of a real screen, not the deliberately colored
-          // panel this is meant to be.
-          backgroundColor: `color-mix(in srgb, ${ACCENT} 22%, rgb(var(--c-surface)))`,
+          // Flat and uniform across the whole panel — no gradient, no
+          // fading to the dark `c-surface` base anywhere, so there's no
+          // corner that reads as plain black. Pale on purpose (12%, not
+          // the much darker/more saturated mix tried right before this):
+          // a light, airy blue tint, not a solid teal block.
+          backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, rgb(var(--c-surface)))`,
         }}
       >
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
