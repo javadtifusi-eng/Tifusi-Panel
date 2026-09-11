@@ -1,7 +1,12 @@
+import asyncio
+import re
+import subprocess
 from pathlib import Path
 
+from cryptography import x509
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings as env_settings
@@ -113,9 +118,44 @@ async def restore_backup(file: UploadFile = File(...)) -> None:
     tmp_path.replace(path)
 
 
+def _install_cert(cert_bytes: bytes, key_bytes: bytes) -> None:
+    _CERTS_DIR.mkdir(parents=True, exist_ok=True)
+    # Write to temp files first and rename into place, so the dashboard's
+    # reload watcher (polling on a timer, not locked in step with this
+    # request) never sees a half-written cert or key.
+    cert_tmp = _CERT_FILE.with_suffix(".tmp")
+    key_tmp = _KEY_FILE.with_suffix(".tmp")
+    cert_tmp.write_bytes(cert_bytes)
+    key_tmp.write_bytes(key_bytes)
+    cert_tmp.replace(_CERT_FILE)
+    key_tmp.replace(_KEY_FILE)
+
+
+def _cert_info(cert_bytes: bytes) -> dict:
+    cert = x509.load_pem_x509_certificate(cert_bytes)
+    cn = cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+    issuer_cn = cert.issuer.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+    return {
+        "domain": cn[0].value if cn else None,
+        "issuer": issuer_cn[0].value if issuer_cn else None,
+        "expires_at": cert.not_valid_after_utc.isoformat(),
+        "self_signed": cert.issuer == cert.subject,
+    }
+
+
 @router.get("/tls")
 async def get_tls_status() -> dict:
-    return {"enabled": _CERT_FILE.exists() and _KEY_FILE.exists()}
+    enabled = _CERT_FILE.exists() and _KEY_FILE.exists()
+    info: dict = {"enabled": enabled}
+    if enabled:
+        try:
+            info.update(_cert_info(_CERT_FILE.read_bytes()))
+        except ValueError:
+            # A cert this panel itself never wrote (hand-placed by an
+            # admin) that happens to be unparsable — the /tls status
+            # itself is still meaningful, just without the extra detail.
+            pass
+    return info
 
 
 @router.post("/tls", status_code=204)
@@ -132,19 +172,80 @@ async def upload_tls(
     if b"PRIVATE KEY" not in key_bytes:
         raise HTTPException(status_code=400, detail="That doesn't look like a PEM private key file")
 
-    _CERTS_DIR.mkdir(parents=True, exist_ok=True)
-    # Write to temp files first and rename into place, so the dashboard's
-    # reload watcher (polling on a timer, not locked in step with this
-    # request) never sees a half-written cert or key.
-    cert_tmp = _CERT_FILE.with_suffix(".tmp")
-    key_tmp = _KEY_FILE.with_suffix(".tmp")
-    cert_tmp.write_bytes(cert_bytes)
-    key_tmp.write_bytes(key_bytes)
-    cert_tmp.replace(_CERT_FILE)
-    key_tmp.replace(_KEY_FILE)
+    _install_cert(cert_bytes, key_bytes)
 
 
 @router.delete("/tls", status_code=204)
 async def remove_tls() -> None:
     _CERT_FILE.unlink(missing_ok=True)
     _KEY_FILE.unlink(missing_ok=True)
+
+
+_DOMAIN_RE = re.compile(r"^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$")
+
+# Persisted (survives a container recreate) so a renewal later doesn't
+# start from a blank Let's Encrypt account/order history — same directory
+# shape certbot always uses, just relocated under the data volume every
+# other piece of panel state already lives in.
+_ACME_DIR = Path("/app/data/letsencrypt")
+
+
+class SslRequest(BaseModel):
+    domain: str = Field(min_length=1, max_length=253)
+
+
+@router.post("/ssl/request", response_model=PanelSettingsResponse)
+async def request_ssl(payload: SslRequest, db: AsyncSession = Depends(get_db)) -> PanelSettingsResponse:
+    """One click in place of the certbot dance this panel's own install.sh
+    (and, this one night, a great deal of manual troubleshooting) otherwise
+    walks an admin through by hand: runs certbot's standalone HTTP-01
+    authenticator right inside this container, which is why panel publishes
+    host port 80 (see docker-compose.yml) — Let's Encrypt connects to that
+    port directly, so it has to actually be free and internet-reachable,
+    exactly like install.sh's own SSL step already required.
+    """
+    domain = payload.domain.strip().lower()
+    if not _DOMAIN_RE.match(domain):
+        raise HTTPException(status_code=400, detail="That doesn't look like a real domain name")
+
+    _ACME_DIR.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "certbot", "certonly", "--standalone", "--non-interactive", "--agree-tos",
+        "--config-dir", str(_ACME_DIR / "config"),
+        "--work-dir", str(_ACME_DIR / "work"),
+        "--logs-dir", str(_ACME_DIR / "logs"),
+        "-m", f"admin@{domain}", "-d", domain,
+    ]
+
+    def _run() -> subprocess.CompletedProcess:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+    try:
+        result = await asyncio.to_thread(_run)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Let's Encrypt didn't respond in time — try again shortly")
+
+    if result.returncode != 0:
+        # certbot's own last lines are almost always the actually useful
+        # part (the generic wrapper text above it never explains *why*) —
+        # surfacing those instead of a bare exit code is the whole point
+        # of running this from the panel instead of leaving an admin to
+        # go find and read /var/log/letsencrypt/letsencrypt.log themselves.
+        tail = "\n".join(line for line in result.stdout.splitlines() if line.strip())[-800:]
+        raise HTTPException(status_code=502, detail=tail or "certbot failed — no output captured")
+
+    live_dir = _ACME_DIR / "config" / "live" / domain
+    fullchain = live_dir / "fullchain.pem"
+    privkey = live_dir / "privkey.pem"
+    if not fullchain.exists() or not privkey.exists():
+        raise HTTPException(status_code=502, detail="certbot reported success but the certificate files are missing")
+
+    _install_cert(fullchain.read_bytes(), privkey.read_bytes())
+
+    row = await get_settings_row(db)
+    if not row.public_url:
+        row.public_url = f"https://{domain}"
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+    return row

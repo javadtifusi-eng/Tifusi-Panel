@@ -13,3 +13,4 @@ alembic>=1.13
 psutil>=6.0
 pyyaml>=6.0
 qrcode>=7.4
+certbot>=2.9

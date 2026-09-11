@@ -40,6 +40,7 @@ function emptyForm() {
     ikev2Certificate: '',
     ikev2CertificateKey: '',
     ikev2EgressVless: '',
+    ikev2AuthMode: 'eap' as 'eap' | 'psk',
   }
 }
 
@@ -698,6 +699,7 @@ export default function CoresPage() {
       ikev2Certificate: core.ikev2_certificate ?? '',
       ikev2CertificateKey: core.ikev2_certificate_key ?? '',
       ikev2EgressVless: core.ikev2_egress_vless ?? '',
+      ikev2AuthMode: core.ikev2_auth_mode === 'psk' ? 'psk' : 'eap',
     })
     setWizard(emptyWizard())
     setLastWarnings([])
@@ -793,6 +795,7 @@ export default function CoresPage() {
         ikev2_certificate: form.coreType === 'ikev2' ? form.ikev2Certificate || null : null,
         ikev2_certificate_key: form.coreType === 'ikev2' ? form.ikev2CertificateKey || null : null,
         ikev2_egress_vless: form.coreType === 'ikev2' ? form.ikev2EgressVless || null : null,
+        ikev2_auth_mode: form.coreType === 'ikev2' ? form.ikev2AuthMode : undefined,
       }
       const result = editingId ? await updateCore(editingId, payload) : await createCore(payload)
       setLastWarnings(result.warnings)
@@ -1230,6 +1233,31 @@ export default function CoresPage() {
 
             {form.coreType === 'ikev2' && (
               <div className="mt-3 flex flex-col gap-3">
+                <div>
+                  <label className={labelClass}>{t.coresPage.ikev2AuthModeLabel}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(['eap', 'psk'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, ikev2AuthMode: mode }))}
+                        className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+                          form.ikev2AuthMode === mode
+                            ? 'border-cyan-400/50 bg-accent-tint text-accent'
+                            : 'border-edge text-muted hover:border-cyan-400/30'
+                        }`}
+                      >
+                        <div className="font-bold">
+                          {mode === 'eap' ? t.coresPage.ikev2AuthModeEap : t.coresPage.ikev2AuthModePsk}
+                        </div>
+                        <div className="mt-0.5 max-w-xs text-[10px] text-faint">
+                          {mode === 'eap' ? t.coresPage.ikev2AuthModeEapHint : t.coresPage.ikev2AuthModePskHint}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-3">
                   <div>
                     <label className={labelClass}>{t.coresPage.ikev2RemoteIdLabel}</label>
@@ -1247,50 +1275,53 @@ export default function CoresPage() {
                       dir="ltr"
                       value={form.ikev2Psk}
                       onChange={(e) => setForm((f) => ({ ...f, ikev2Psk: e.target.value }))}
+                      required={form.ikev2AuthMode === 'psk'}
                       className={`${inputClass} w-64 font-mono text-xs`}
                     />
                   </div>
                   <div className="self-end pb-2 text-[10px] text-faint">{t.hostsPage.ikev2PortsHint}</div>
                 </div>
 
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className={labelClass}>{t.coresPage.ikev2CertSourceLabel}</label>
-                    <button
-                      type="button"
-                      onClick={generateIkev2ServerCert}
-                      disabled={generatingIkev2Cert}
-                      className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
-                    >
-                      {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
-                    </button>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={labelClass}>{t.coresPage.ikev2CertificateLabel}</label>
-                      <textarea
-                        dir="ltr"
-                        rows={4}
-                        value={form.ikev2Certificate}
-                        onChange={(e) => setForm((f) => ({ ...f, ikev2Certificate: e.target.value }))}
-                        placeholder="-----BEGIN CERTIFICATE-----"
-                        className={monoTextarea}
-                      />
+                {form.ikev2AuthMode === 'eap' && (
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <label className={labelClass}>{t.coresPage.ikev2CertSourceLabel}</label>
+                      <button
+                        type="button"
+                        onClick={generateIkev2ServerCert}
+                        disabled={generatingIkev2Cert}
+                        className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
+                      >
+                        {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
+                      </button>
                     </div>
-                    <div>
-                      <label className={labelClass}>{t.coresPage.ikev2CertificateKeyLabel}</label>
-                      <textarea
-                        dir="ltr"
-                        rows={4}
-                        value={form.ikev2CertificateKey}
-                        onChange={(e) => setForm((f) => ({ ...f, ikev2CertificateKey: e.target.value }))}
-                        placeholder="-----BEGIN PRIVATE KEY-----"
-                        className={monoTextarea}
-                      />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>{t.coresPage.ikev2CertificateLabel}</label>
+                        <textarea
+                          dir="ltr"
+                          rows={4}
+                          value={form.ikev2Certificate}
+                          onChange={(e) => setForm((f) => ({ ...f, ikev2Certificate: e.target.value }))}
+                          placeholder="-----BEGIN CERTIFICATE-----"
+                          className={monoTextarea}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>{t.coresPage.ikev2CertificateKeyLabel}</label>
+                        <textarea
+                          dir="ltr"
+                          rows={4}
+                          value={form.ikev2CertificateKey}
+                          onChange={(e) => setForm((f) => ({ ...f, ikev2CertificateKey: e.target.value }))}
+                          placeholder="-----BEGIN PRIVATE KEY-----"
+                          className={monoTextarea}
+                        />
+                      </div>
                     </div>
+                    <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2CertHint}</div>
                   </div>
-                  <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2CertHint}</div>
-                </div>
+                )}
               </div>
             )}
 

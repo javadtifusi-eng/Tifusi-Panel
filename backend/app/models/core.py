@@ -59,6 +59,15 @@ class Core(Base):
     ikev2_certificate: Mapped[str | None] = mapped_column(Text, nullable=True)
     ikev2_certificate_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # "eap" (default): the modes above, one login per ProxyUser. "psk":
+    # drop the certificate and EAP entirely for one shared secret (this
+    # Core's ikev2_psk) with no per-user login at all — for networks whose
+    # filtering targets the IKE certificate exchange itself rather than
+    # IKEv2 traffic in general (see node_agent/ipsec.py for how this was
+    # found). Native iOS/Windows "Shared Secret" IKEv2 setup has no
+    # username/password field, so every user of the Host shares one secret.
+    ikev2_auth_mode: Mapped[str] = mapped_column(String(16), default="eap", server_default="eap")
+
     # Optional chained egress for this Core's IKEv2 clients: a vless://
     # share link to a *different* panel's server — same idea and same
     # node_agent/vless_egress.py machinery as Node.l2tp_egress_vless (see

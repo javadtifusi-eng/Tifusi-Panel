@@ -53,6 +53,21 @@ def build_ikev2_mobileconfig(user: ProxyUser, host: Host) -> str:
     profile_uuid = _uuid_for("profile", str(host.id), str(user.id))
     display_name = escape(f"{host.remark} ({user.username})")
 
+    is_psk = bool(host.core and host.core.ikev2_auth_mode == "psk")
+
+    if is_psk:
+        # Shared-secret mode (Core.ikev2_auth_mode == "psk", see
+        # node_agent/ipsec.py): no certificate exchange at all, so no CA
+        # trust payload either — every field below just carries the one
+        # secret every user of this Host shares.
+        psk_b64 = base64.b64encode((host.core.ikev2_psk or "").encode()).decode()
+        auth_block = f"""                <key>AuthenticationMethod</key>
+                <string>SharedSecret</string>
+                <key>SharedSecret</key>
+                <data>{psk_b64}</data>"""
+        ca_payload = ""
+        return _build_plist(display_name, vpn_uuid, profile_uuid, remote_id, remote_address, auth_block, ca_payload)
+
     ca_der = _ca_certificate_der(host.core.ikev2_certificate if host.core else None)
     ca_payload = ""
     if ca_der is not None:
@@ -78,6 +93,28 @@ def build_ikev2_mobileconfig(user: ProxyUser, host: Host) -> str:
         </dict>
 """
 
+    auth_block = f"""                <key>AuthenticationMethod</key>
+                <string>None</string>
+                <key>ExtendedAuthEnabled</key>
+                <true/>
+                <key>AuthName</key>
+                <string>{escape(user.username)}</string>
+                <key>AuthPassword</key>
+                <string>{escape(user.secret)}</string>
+                <key>LocalIdentifier</key>
+                <string>{escape(user.username)}</string>"""
+    return _build_plist(display_name, vpn_uuid, profile_uuid, remote_id, remote_address, auth_block, ca_payload)
+
+
+def _build_plist(
+    display_name: str,
+    vpn_uuid: str,
+    profile_uuid: str,
+    remote_id: str,
+    remote_address: str,
+    auth_block: str,
+    ca_payload: str,
+) -> str:
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -87,20 +124,11 @@ def build_ikev2_mobileconfig(user: ProxyUser, host: Host) -> str:
 {ca_payload}        <dict>
             <key>IKEv2</key>
             <dict>
-                <key>AuthenticationMethod</key>
-                <string>None</string>
-                <key>ExtendedAuthEnabled</key>
-                <true/>
-                <key>AuthName</key>
-                <string>{escape(user.username)}</string>
-                <key>AuthPassword</key>
-                <string>{escape(user.secret)}</string>
+{auth_block}
                 <key>RemoteAddress</key>
                 <string>{escape(remote_address)}</string>
                 <key>RemoteIdentifier</key>
                 <string>{escape(remote_id)}</string>
-                <key>LocalIdentifier</key>
-                <string>{escape(user.username)}</string>
                 <key>DeadPeerDetectionRate</key>
                 <string>Medium</string>
                 <key>EnablePFS</key>

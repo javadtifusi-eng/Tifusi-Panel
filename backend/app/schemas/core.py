@@ -24,6 +24,7 @@ class CoreCreate(BaseModel):
     ikev2_certificate: str | None = None
     ikev2_certificate_key: str | None = None
     ikev2_egress_vless: str | None = None
+    ikev2_auth_mode: str = "eap"
 
     @model_validator(mode="after")
     def _check_required_fields(self) -> "CoreCreate":
@@ -33,13 +34,17 @@ class CoreCreate(BaseModel):
         elif self.core_type == CoreType.l2tp:
             _require(self.l2tp_psk, "l2tp_psk", "l2tp")
         elif self.core_type == CoreType.ikev2:
-            # No PSK requirement any more: the node authenticates itself to
-            # clients with a certificate (self-signed off ikev2_remote_id,
-            # or ikev2_certificate/_key below if set), not a shared secret —
-            # see node_agent/ipsec.py. remote_id is what the cert's CN/SAN
-            # is built from, so it's the one field that's actually required.
+            if self.ikev2_auth_mode not in ("eap", "psk"):
+                raise ValueError("ikev2_auth_mode must be 'eap' or 'psk'")
             _require(self.ikev2_remote_id, "ikev2_remote_id", "ikev2")
-            if bool(self.ikev2_certificate) != bool(self.ikev2_certificate_key):
+            if self.ikev2_auth_mode == "psk":
+                # Shared-secret mode: no certificate involved at all — see
+                # node_agent/ipsec.py for why this mode exists.
+                _require(self.ikev2_psk, "ikev2_psk", "ikev2 (psk mode)")
+            elif bool(self.ikev2_certificate) != bool(self.ikev2_certificate_key):
+                # eap mode: no PSK requirement — the node authenticates
+                # itself with a certificate (self-signed off ikev2_remote_id,
+                # or ikev2_certificate/_key below if set), not a shared secret.
                 raise ValueError("ikev2_certificate and ikev2_certificate_key must be set together")
         return self
 
@@ -56,6 +61,7 @@ class CoreUpdate(BaseModel):
     ikev2_certificate: str | None = None
     ikev2_certificate_key: str | None = None
     ikev2_egress_vless: str | None = None
+    ikev2_auth_mode: str | None = None
 
 
 class InboundResponse(BaseModel):
@@ -102,6 +108,7 @@ class CoreResponse(BaseModel):
     ikev2_certificate: str | None
     ikev2_certificate_key: str | None
     ikev2_egress_vless: str | None
+    ikev2_auth_mode: str
 
 
 class CoreList(BaseModel):

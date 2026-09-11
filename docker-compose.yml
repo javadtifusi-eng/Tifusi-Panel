@@ -10,6 +10,11 @@ services:
     restart: unless-stopped
     ports:
       - "${TIFUSI_PANEL_PORT:-8000}:8000"
+      # Only for Settings > SSL Certificate > "Get free SSL" — certbot's
+      # standalone plugin needs to answer Let's Encrypt's HTTP-01 challenge
+      # on the real port 80 itself. Harmless to leave published even if
+      # that button is never used.
+      - "80:80"
     volumes:
       - ./data:/app/data
       # Always mounted, shared with the dashboard container below: this is

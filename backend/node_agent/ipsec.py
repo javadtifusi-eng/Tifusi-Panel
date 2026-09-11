@@ -170,7 +170,13 @@ def _ensure_ikev2_cert(host: str, certificate: str | None = None, certificate_ke
     )
 
 
-def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users: list[dict] | None = None) -> str:
+def _swanctl_conf(
+    core_type: str,
+    psk: str,
+    remote_id: str | None = None,
+    users: list[dict] | None = None,
+    ikev2_auth_mode: str = "eap",
+) -> str:
     escaped_psk = psk.replace('"', '\\"')
     if core_type == "l2tp":
         return (
@@ -209,12 +215,41 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users:
     # this function so the cert file already exists when charon loads it).
     host = (remote_id or "").strip()
     local_id_line = f"      id = {host}\n" if host else ""
+    is_psk = ikev2_auth_mode == "psk"
+    # PSK mode: local AND remote auth are both a single shared secret — no
+    # certificate, no per-user EAP login. This exists because some networks'
+    # DPI appears to specifically target the IKE Certificate payload rather
+    # than IKEv2 traffic in general: in live testing, a plain PSK connection
+    # completed instantly on a network where the identical cert+EAP exchange
+    # (self-signed AND a publicly-trusted Let's Encrypt cert, tried both)
+    # died at exactly the same point every time, right after the server's
+    # certificate went out. The tradeoff is real: native iOS/Windows "Shared
+    # Secret" IKEv2 has no separate username/password field, so every user
+    # of this Host shares one secret with no per-user revocation — cert+EAP
+    # stays the default for admins not dealing with this kind of filtering.
+    if is_psk:
+        local_auth_block = "    local {\n      auth = psk\n" + local_id_line + "    }\n"
+        remote_auth_block = "    remote {\n      auth = psk\n    }\n"
+        secrets_block = f'  ike-ikev2 {{ secret = "{escaped_psk}" }}\n'
+        send_cert_line = ""
+    else:
+        local_auth_block = (
+            "    local {\n      auth = pubkey\n" f"      certs = {IKEV2_LEAF_CERT.name}\n" + local_id_line + "    }\n"
+        )
+        # eap_id = %any forces a real EAP-Identity request/response round
+        # trip instead of defaulting to the client's raw IKE identity
+        # (IDi) — an arbitrary self-chosen value, never the real username.
+        # Windows/iOS native IKEv2 stacks expect EAP-Identity first and
+        # silently drop a bare EAP-Request/MSCHAPv2 without it.
+        remote_auth_block = "    remote {\n      auth = eap-mschapv2\n      eap_id = %any\n    }\n"
+        secrets_block = _eap_secrets(users or [])
+        send_cert_line = "    send_cert = always\n"
     return (
         "connections {\n"
         "  ikev2-eap {\n"
         "    version = 2\n"
         "    unique = never\n"
-        "    send_cert = always\n"
+        f"{send_cert_line}"
         "    fragmentation = yes\n"
         "    dpd_delay = 300s\n"
         # modp1024 fallbacks matter in practice: Windows' native IKEv2
@@ -228,20 +263,8 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users:
         "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha1-modp1024,default\n"
         "    local_addrs = %any\n"
         "    remote_addrs = %any\n"
-        "    local {\n"
-        "      auth = pubkey\n"
-        f"      certs = {IKEV2_LEAF_CERT.name}\n"
-        f"{local_id_line}"
-        "    }\n"
-        # eap_id = %any forces a real EAP-Identity request/response round
-        # trip instead of defaulting to the client's raw IKE identity
-        # (IDi) — an arbitrary self-chosen value, never the real username.
-        # Windows/iOS native IKEv2 stacks expect EAP-Identity first and
-        # silently drop a bare EAP-Request/MSCHAPv2 without it.
-        "    remote {\n"
-        "      auth = eap-mschapv2\n"
-        "      eap_id = %any\n"
-        "    }\n"
+        f"{local_auth_block}"
+        f"{remote_auth_block}"
         "    children {\n"
         "      net {\n"
         "        local_ts = 0.0.0.0/0,::/0\n"
@@ -259,7 +282,7 @@ def _swanctl_conf(core_type: str, psk: str, remote_id: str | None = None, users:
         "  }\n"
         "}\n"
         "secrets {\n"
-        f"{_eap_secrets(users or [])}"
+        f"{secrets_block}"
         "}\n"
     )
 
@@ -392,10 +415,11 @@ def _load_swanctl_config(
     users: list[dict] | None = None,
     certificate: str | None = None,
     certificate_key: str | None = None,
+    ikev2_auth_mode: str = "eap",
 ) -> None:
-    if core_type == "ikev2":
+    if core_type == "ikev2" and ikev2_auth_mode != "psk":
         _ensure_ikev2_cert(remote_id or "", certificate, certificate_key)
-    _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users), mode=0o600)
+    _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users, ikev2_auth_mode), mode=0o600)
     _restart_charon()
 
     # charon takes a moment after being spawned to actually open its vici
@@ -442,8 +466,9 @@ def apply_ikev2(
     certificate: str | None = None,
     certificate_key: str | None = None,
     egress_vless: str | None = None,
+    ikev2_auth_mode: str = "eap",
 ) -> None:
-    _load_swanctl_config("ikev2", psk, remote_id, users, certificate, certificate_key)
+    _load_swanctl_config("ikev2", psk, remote_id, users, certificate, certificate_key, ikev2_auth_mode)
     _ensure_forwarding_and_nat(_IKEV2_SUBNET)
     # Chained egress (see vless_egress.py) — same mechanism apply_l2tp uses,
     # just against the ikev2 subnet. A node's l2tp/ikev2 slot is exclusive

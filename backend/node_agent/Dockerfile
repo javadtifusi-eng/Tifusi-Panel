@@ -15,7 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-ARG STRONGSWAN_VERSION=6.0.1
+# Pinned to 5.9.x, not the 6.x series: live testing found a 6.0.1-built
+# charon's IKE_AUTH response (CERT+AUTH+EAP-Identity) gets silently dropped
+# partway through negotiation on a network where an otherwise-identical
+# 5.9.14 setup (same proposals, same send_cert=always/fragmentation=yes,
+# same cert, same client) connects immediately — something about 6.x's
+# wire-level construction of that message trips a filter 5.9.x doesn't.
+ARG STRONGSWAN_VERSION=5.9.14
 RUN curl -fsSL -o /tmp/strongswan.tar.bz2 \
       "https://download.strongswan.org/strongswan-${STRONGSWAN_VERSION}.tar.bz2" \
     && mkdir -p /tmp/strongswan-src \

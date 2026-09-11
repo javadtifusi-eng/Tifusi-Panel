@@ -23,6 +23,7 @@ _CORE_FIELDS = (
     "ikev2_certificate",
     "ikev2_certificate_key",
     "ikev2_egress_vless",
+    "ikev2_auth_mode",
 )
 
 
@@ -89,6 +90,7 @@ async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None 
         ikev2_certificate=core.ikev2_certificate,
         ikev2_certificate_key=core.ikev2_certificate_key,
         ikev2_egress_vless=core.ikev2_egress_vless,
+        ikev2_auth_mode=core.ikev2_auth_mode,
     )
 
 

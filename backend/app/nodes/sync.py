@@ -51,15 +51,15 @@ async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict
             "users": user_payload,
             "egress_vless": node.l2tp_egress_vless,
         }
-    # ikev2 — the node authenticates itself to the client with a server
-    # certificate (IKE local auth), not the Core's PSK (kept only for
-    # backward-compat display, no longer used for crypto — see
-    # node_agent/ipsec.py); each ProxyUser's own username/secret
-    # authenticates the client to the server via EAP-MSCHAPv2, same
-    # per-user login model as l2tp instead of one shared secret with no
-    # way to tell users apart. certificate/certificate_key are None unless
-    # the admin pasted or generated one — the node self-signs its own
-    # otherwise.
+    # ikev2 has two auth modes (Core.ikev2_auth_mode, see node_agent/ipsec.py
+    # for why both exist): "eap" (default) authenticates the node to the
+    # client with a server certificate and each ProxyUser to the node over
+    # EAP-MSCHAPv2 — same per-user login model as l2tp. "psk" drops the
+    # certificate/EAP entirely for a single shared secret with no per-user
+    # distinction, for networks whose filtering appears to specifically
+    # target the IKE certificate exchange rather than IKEv2 traffic as a
+    # whole. certificate/certificate_key are None unless the admin pasted
+    # or generated one — the node self-signs its own otherwise (eap mode only).
     return {
         "core_type": "ikev2",
         "psk": core.ikev2_psk,
@@ -68,6 +68,7 @@ async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict
         "certificate_key": core.ikev2_certificate_key,
         "users": user_payload,
         "egress_vless": core.ikev2_egress_vless,
+        "ikev2_auth_mode": core.ikev2_auth_mode,
     }
 
 

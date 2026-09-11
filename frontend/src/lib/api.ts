@@ -686,6 +686,7 @@ export interface Core {
   ikev2_certificate: string | null
   ikev2_certificate_key: string | null
   ikev2_egress_vless: string | null
+  ikev2_auth_mode: string
 }
 
 export interface CoreList {
@@ -706,6 +707,7 @@ export interface CorePayload {
   ikev2_certificate?: string | null
   ikev2_certificate_key?: string | null
   ikev2_egress_vless?: string | null
+  ikev2_auth_mode?: string
 }
 
 export interface Ikev2CertKeypair {
@@ -897,7 +899,15 @@ export async function restoreBackup(file: File): Promise<void> {
   await authorizedFetch('/settings/restore', { method: 'POST', body: form })
 }
 
-export async function getTlsStatus(): Promise<{ enabled: boolean }> {
+export interface TlsStatus {
+  enabled: boolean
+  domain?: string | null
+  issuer?: string | null
+  expires_at?: string | null
+  self_signed?: boolean
+}
+
+export async function getTlsStatus(): Promise<TlsStatus> {
   const res = await authorizedFetch('/settings/tls')
   return res.json()
 }
@@ -911,6 +921,14 @@ export async function uploadTls(cert: File, key: File): Promise<void> {
 
 export async function removeTls(): Promise<void> {
   await authorizedFetch('/settings/tls', { method: 'DELETE' })
+}
+
+export async function requestSsl(domain: string): Promise<PanelSettings> {
+  const res = await authorizedFetch('/settings/ssl/request', {
+    method: 'POST',
+    body: JSON.stringify({ domain }),
+  })
+  return res.json()
 }
 
 export interface SystemStats {

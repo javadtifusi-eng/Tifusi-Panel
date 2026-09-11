@@ -15,6 +15,7 @@ import {
   listApiKeys,
   PERMISSION_SCOPES,
   removeTls,
+  requestSsl,
   restoreBackup,
   testDiscord,
   testTelegram,
@@ -27,6 +28,7 @@ import {
   type ApiKeyCreateResponse,
   type ApiKeyListItem,
   type PermissionScope,
+  type TlsStatus,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
@@ -61,12 +63,17 @@ export default function SettingsPage() {
   const [backupError, setBackupError] = useState<string | null>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
 
-  const [tlsEnabled, setTlsEnabled] = useState<boolean | null>(null)
+  const [tls, setTls] = useState<TlsStatus | null>(null)
+  const tlsEnabled = tls?.enabled ?? null
   const [tlsCertFile, setTlsCertFile] = useState<File | null>(null)
   const [tlsKeyFile, setTlsKeyFile] = useState<File | null>(null)
   const [tlsUploading, setTlsUploading] = useState(false)
   const [tlsUploaded, setTlsUploaded] = useState(false)
   const [tlsError, setTlsError] = useState<string | null>(null)
+
+  const [sslDomain, setSslDomain] = useState('')
+  const [sslRequesting, setSslRequesting] = useState(false)
+  const [sslError, setSslError] = useState<string | null>(null)
 
   const [admins, setAdmins] = useState<AdminListItem[] | null>(null)
   const [newAdminUsername, setNewAdminUsername] = useState('')
@@ -134,11 +141,17 @@ export default function SettingsPage() {
         setDiscordUrl(s.discord_webhook_url ?? '')
       })
       .catch(() => undefined)
-    getTlsStatus()
-      .then((s) => setTlsEnabled(s.enabled))
-      .catch(() => undefined)
+    refreshTls()
     refreshApiKeys()
   }, [])
+
+  async function refreshTls() {
+    try {
+      setTls(await getTlsStatus())
+    } catch {
+      // ignored — the SSL card just shows its "disabled" state
+    }
+  }
 
   async function refreshApiKeys() {
     try {
@@ -231,7 +244,7 @@ export default function SettingsPage() {
       await uploadTls(tlsCertFile, tlsKeyFile)
       setTlsCertFile(null)
       setTlsKeyFile(null)
-      setTlsEnabled(true)
+      await refreshTls()
       setTlsUploaded(true)
       window.setTimeout(() => setTlsUploaded(false), 3000)
     } catch (err) {
@@ -241,12 +254,28 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleRequestSsl(e: FormEvent) {
+    e.preventDefault()
+    if (!sslDomain.trim()) return
+    setSslRequesting(true)
+    setSslError(null)
+    try {
+      await requestSsl(sslDomain.trim())
+      setSslDomain('')
+      await refreshTls()
+    } catch (err) {
+      setSslError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setSslRequesting(false)
+    }
+  }
+
   async function handleRemoveTls() {
     if (!window.confirm(t.settingsPage.tlsRemoveConfirm)) return
     setTlsError(null)
     try {
       await removeTls()
-      setTlsEnabled(false)
+      await refreshTls()
     } catch (err) {
       setTlsError(err instanceof ApiError ? err.message : t.settingsPage.tlsRemoveFailed)
     }
@@ -762,7 +791,7 @@ export default function SettingsPage() {
           {restoreDone && <div className="mt-3 text-xs text-muted">{t.settingsPage.restoreDoneNote}</div>}
         </div>
 
-        <form onSubmit={handleUploadTls} className={cardClass}>
+        <div className={cardClass}>
           <div className={`mb-1 flex items-center justify-between ${align}`}>
             <h2 className="text-sm font-bold text-primary">{t.settingsPage.tlsTitle}</h2>
             {tlsEnabled !== null && (
@@ -779,48 +808,86 @@ export default function SettingsPage() {
             )}
           </div>
           <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.tlsDesc}</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className={labelClass}>{t.settingsPage.tlsCertLabel}</label>
-              <input
-                type="file"
-                accept=".pem,.crt,.cer"
-                onChange={(e) => setTlsCertFile(e.target.files?.[0] ?? null)}
-                required
-                className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
-              />
+          {tlsEnabled && tls?.domain && (
+            <div className={`mb-4 rounded-lg border border-subtle bg-well px-3 py-2 text-xs text-muted ${align}`}>
+              {tls.self_signed
+                ? t.settingsPage.tlsInfoSelfSigned(tls.domain)
+                : t.settingsPage.tlsInfoCa(tls.domain, tls.issuer ?? '?')}
+              {tls.expires_at && ' · ' + t.settingsPage.tlsExpiresAt(new Date(tls.expires_at).toLocaleDateString())}
             </div>
-            <div>
-              <label className={labelClass}>{t.settingsPage.tlsKeyLabel}</label>
-              <input
-                type="file"
-                accept=".pem,.key"
-                onChange={(e) => setTlsKeyFile(e.target.files?.[0] ?? null)}
-                required
-                className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={tlsUploading || !tlsCertFile || !tlsKeyFile}
-              className={buttonClass}
-              style={{ backgroundColor: ACCENT }}
-            >
-              {tlsUploading ? t.settingsPage.tlsUploading : tlsUploaded ? t.settingsPage.tlsUploaded : t.settingsPage.tlsUploadBtn}
-            </button>
-            {tlsEnabled && (
+          )}
+
+          <form onSubmit={handleRequestSsl} className="mb-4 border-b border-subtle pb-4">
+            <h3 className={`mb-1 text-xs font-bold text-secondary ${align}`}>{t.settingsPage.sslAutoTitle}</h3>
+            <p className={`mb-2 text-[11px] text-faint ${align}`}>{t.settingsPage.sslAutoDesc}</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1" style={{ minWidth: 200 }}>
+                <label className={labelClass}>{t.settingsPage.sslDomainLabel}</label>
+                <input
+                  dir="ltr"
+                  value={sslDomain}
+                  onChange={(e) => setSslDomain(e.target.value)}
+                  placeholder="panel.example.com"
+                  className={`${inputClass} w-full text-left`}
+                />
+              </div>
               <button
-                type="button"
-                onClick={handleRemoveTls}
-                className="rounded-lg border px-4 py-2 text-sm font-bold"
-                style={{ borderColor: 'rgba(248,113,113,0.4)', color: '#f87171' }}
+                type="submit"
+                disabled={sslRequesting || !sslDomain.trim()}
+                className={buttonClass}
+                style={{ backgroundColor: ACCENT }}
               >
-                {t.settingsPage.tlsRemoveBtn}
+                {sslRequesting ? t.settingsPage.sslRequesting : t.settingsPage.sslRequestBtn}
               </button>
-            )}
-          </div>
-          {tlsError && <div className="mt-3 text-xs text-danger">{tlsError}</div>}
-        </form>
+            </div>
+            {sslError && <div className="mt-2 whitespace-pre-wrap text-xs text-danger">{sslError}</div>}
+          </form>
+
+          <form onSubmit={handleUploadTls}>
+            <h3 className={`mb-1 text-xs font-bold text-secondary ${align}`}>{t.settingsPage.tlsManualTitle}</h3>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className={labelClass}>{t.settingsPage.tlsCertLabel}</label>
+                <input
+                  type="file"
+                  accept=".pem,.crt,.cer"
+                  onChange={(e) => setTlsCertFile(e.target.files?.[0] ?? null)}
+                  required
+                  className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>{t.settingsPage.tlsKeyLabel}</label>
+                <input
+                  type="file"
+                  accept=".pem,.key"
+                  onChange={(e) => setTlsKeyFile(e.target.files?.[0] ?? null)}
+                  required
+                  className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={tlsUploading || !tlsCertFile || !tlsKeyFile}
+                className={buttonClass}
+                style={{ backgroundColor: ACCENT }}
+              >
+                {tlsUploading ? t.settingsPage.tlsUploading : tlsUploaded ? t.settingsPage.tlsUploaded : t.settingsPage.tlsUploadBtn}
+              </button>
+              {tlsEnabled && (
+                <button
+                  type="button"
+                  onClick={handleRemoveTls}
+                  className="rounded-lg border px-4 py-2 text-sm font-bold"
+                  style={{ borderColor: 'rgba(248,113,113,0.4)', color: '#f87171' }}
+                >
+                  {t.settingsPage.tlsRemoveBtn}
+                </button>
+              )}
+            </div>
+            {tlsError && <div className="mt-3 text-xs text-danger">{tlsError}</div>}
+          </form>
+        </div>
         </>
         )}
 
