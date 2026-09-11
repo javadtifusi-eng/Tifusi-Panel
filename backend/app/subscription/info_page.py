@@ -19,8 +19,24 @@ import re
 
 import qrcode
 import qrcode.image.svg
+from cryptography import x509
 
 _PEM_CERT_RE = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.S)
+
+
+def _is_self_signed(pem_block: str) -> bool:
+    """True only for an actual self-signed cert (issuer == subject) — a
+    real CA-issued chain's last block is an intermediate, signed by some
+    other root, not itself; that only fools a naive "just check there's a
+    second block" test into treating it the same as a genuine self-signed
+    CA. Used to decide whether _import_qr_svg needs to pin anything at
+    all: a real cert needs no pinning, since every device already trusts
+    it — pinning would be pointless at best."""
+    try:
+        cert = x509.load_pem_x509_certificate(pem_block.encode())
+    except ValueError:
+        return False
+    return cert.issuer == cert.subject
 
 _ACCENT = "#22d3ee"
 
@@ -53,21 +69,21 @@ def _import_qr_svg(config_type: str, cfg: dict) -> str:
          "psk": str | omitted, "certificate": str | omitted}
     `certificate` (added after v1 shipped, but kept under the same "v":1 —
     it's optional and additive, so an older importer that doesn't know
-    about it just ignores it) is the CA cert only, needed because the
-    node's own cert is self-signed: without pinning a trust anchor here,
-    the client has no way to trust it and IKE_AUTH fails cert validation.
-    Deliberately just the CA, not the full leaf+CA bundle
+    about it just ignores it) is the CA cert, included ONLY when the Core's
+    certificate is actually self-signed (see _is_self_signed): that's the
+    one case a client has no other way to trust it, and IKE_AUTH fails cert
+    validation without pinning it here. A real, publicly-issued cert (e.g.
+    Let's Encrypt) needs nothing extra — every device already trusts it —
+    so this is deliberately left out for that case rather than pinning an
+    intermediate that was never meant to be handed to a client as a trust
+    anchor by itself.
+
+    Also deliberately just the CA, not the full leaf+CA bundle
     generate_self_signed_ikev2_cert hands admins elsewhere — that bundle is
     ~2.4 KB, and base64'd into this URI it blew past a QR code's ~2.3 KB
     payload ceiling entirely (confirmed live: `qrcode` raised "Invalid
     version" trying to fit it). The CA cert alone is what
-    Ikev2VpnProfile.Builder's serverRootCaCert param actually wants anyway
-    — it verifies the server's presented leaf against this root, it was
-    never meant to be handed the leaf itself. Omitted when the admin hasn't
-    set a certificate on the Core (see app/cores/ikev2_cert.py's "Generate
-    Self-Signed Cert" — before that, the node self-signs its own on the fly
-    and never reports it back to the panel, so there's nothing to embed
-    here yet).
+    Ikev2VpnProfile.Builder's serverRootCaCert param actually wants anyway.
     """
     payload: dict = {"v": 1, "type": config_type, "server": cfg["server"], "username": cfg["username"], "password": cfg["password"]}
     if cfg.get("remote_id"):
@@ -79,7 +95,7 @@ def _import_qr_svg(config_type: str, cfg: dict) -> str:
         # the last block is always the CA regardless of how many
         # intermediates a future admin-provided chain might add.
         blocks = _PEM_CERT_RE.findall(cfg["certificate"])
-        if blocks:
+        if blocks and _is_self_signed(blocks[-1]):
             payload["certificate"] = blocks[-1]
     encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
     return _qr_svg(f"tifusi-vpn://import?data={encoded}")
