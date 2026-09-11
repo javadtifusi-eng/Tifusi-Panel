@@ -325,6 +325,10 @@ export interface Host {
   security_override: HostSecurity | null
   allowinsecure: boolean
 
+  fragment_length: string | null
+  fragment_interval: string | null
+  fragment_packets: string | null
+
   core_id: number | null
 
   hysteria2_sni: string | null
@@ -371,6 +375,10 @@ export interface HostPayload {
   host_header_override?: string | null
   security_override?: HostSecurity | null
   allowinsecure?: boolean
+
+  fragment_length?: string | null
+  fragment_interval?: string | null
+  fragment_packets?: string | null
 
   core_id?: number | null
 
