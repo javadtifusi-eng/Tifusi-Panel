@@ -30,10 +30,15 @@ def _qr_svg(value: str) -> str:
     buf = io.BytesIO()
     img.save(buf)
     svg = buf.getvalue().decode()
-    # The default fill is black on a transparent background — fine on the
-    # white QR backdrop below, but the generated <svg> has no width/height
-    # scaling for our fixed display box, so pin those explicitly.
-    return svg.replace("<svg ", '<svg style="width:176px;height:176px" ', 1)
+    # SvgPathImage emits one <path> for every dark module with no fill set
+    # (SVG's own default fill, black, applies) and no width/height scaled to
+    # our fixed display box — this page is dark-themed end to end (see
+    # .qr-box below), so the modules go accent-cyan on that dark backdrop
+    # instead of the usual black-on-white, rather than punching a white
+    # rectangle into an otherwise all-dark page.
+    svg = svg.replace("<svg ", '<svg style="width:176px;height:176px" ', 1)
+    svg = svg.replace("<path ", f'<path fill="{_ACCENT}" ', 1)
+    return svg
 
 
 def _import_qr_svg(config_type: str, cfg: dict) -> str:
@@ -205,7 +210,7 @@ def build_info_page_html(
   .section {{ margin-bottom: 18px; }}
   .section-title {{ font-size: 12px; color: #94a3b8; margin-bottom: 8px; }}
   .qr-wrap {{ display: flex; justify-content: center; margin-bottom: 10px; }}
-  .qr-box {{ background: #fff; padding: 12px; border-radius: 12px; line-height: 0; }}
+  .qr-box {{ background: #111827; border: 1px solid rgba(34,211,238,0.15); padding: 12px; border-radius: 12px; line-height: 0; }}
   .link-row {{
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     background: #111827; border: 1px solid #1e293b; border-radius: 10px;
