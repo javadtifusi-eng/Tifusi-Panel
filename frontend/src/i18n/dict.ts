@@ -43,6 +43,8 @@ export const dict = {
       logout: 'خروج',
       menu: 'منو',
       toggleTheme: 'تعویض تم روشن/تاریک',
+      upToDate: 'به‌روز است',
+      updateAvailable: 'نسخه جدید موجود است',
     },
 
     dashboardStats: {
@@ -649,6 +651,8 @@ export const dict = {
       logout: 'Sign Out',
       menu: 'Menu',
       toggleTheme: 'Toggle light/dark theme',
+      upToDate: 'Up to date',
+      updateAvailable: 'Update available',
     },
 
     dashboardStats: {

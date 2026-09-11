@@ -965,3 +965,14 @@ export async function getSystemStats(): Promise<SystemStats> {
   const res = await authorizedFetch('/system/stats')
   return res.json()
 }
+
+export interface VersionInfo {
+  current: string
+  latest: string | null
+  update_available: boolean
+}
+
+export async function getVersion(): Promise<VersionInfo> {
+  const res = await authorizedFetch('/system/version')
+  return res.json()
+}

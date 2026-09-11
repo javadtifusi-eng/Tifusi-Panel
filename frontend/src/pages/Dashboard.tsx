@@ -4,7 +4,7 @@ import { Logo } from '../components/Logo'
 import SystemStatsBar from '../components/SystemStats'
 import { useLang } from '../i18n/LangContext'
 import { useTheme } from '../theme/ThemeContext'
-import { getAdminProfile, type AdminProfile } from '../lib/api'
+import { getAdminProfile, getVersion, type AdminProfile, type VersionInfo } from '../lib/api'
 
 function MenuIcon() {
   return (
@@ -49,9 +49,11 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [active, setActive] = useState<ActiveTab>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<AdminProfile | null>(null)
+  const [version, setVersion] = useState<VersionInfo | null>(null)
 
   useEffect(() => {
     getAdminProfile().then(setProfile).catch(() => undefined)
+    getVersion().then(setVersion).catch(() => undefined)
   }, [])
 
   // 'overview' and 'settings' always show — overview degrades gracefully
@@ -121,6 +123,16 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
         </div>
+
+        {version && (
+          <div className="mb-6 -mt-4 flex items-center gap-1.5 px-2 text-[10px] text-faint">
+            <span>v{version.current}</span>
+            <span>·</span>
+            <span className={version.update_available ? 'text-warning' : ''}>
+              {version.update_available ? t.nav.updateAvailable : t.nav.upToDate}
+            </span>
+          </div>
+        )}
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
           {navItems.map((item) => (
