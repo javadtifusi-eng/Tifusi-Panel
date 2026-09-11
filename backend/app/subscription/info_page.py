@@ -187,6 +187,14 @@ def build_info_page_html(
     padding: 6px 12px;
   }}
   .empty {{ text-align: center; color: #64748b; font-size: 13px; padding: 20px 0; }}
+  .reset-btn {{
+    display: block; width: 100%; background: #1e293b; color: #f87171; border: 1px solid rgba(248,113,113,0.3);
+    border-radius: 10px; padding: 10px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
+    font-family: inherit;
+  }}
+  .reset-btn.confirm {{ background: #7f1d1d; color: #fecaca; border-color: #f87171; }}
+  .reset-btn:disabled {{ opacity: 0.6; cursor: default; }}
+  .reset-hint {{ text-align: center; color: #64748b; font-size: 10px; margin-top: 6px; }}
   .footer {{ text-align: center; color: #334155; font-size: 10px; margin-top: 28px; }}
 </style>
 </head>
@@ -211,9 +219,14 @@ def build_info_page_html(
     <div class="section">
       <div class="section-title">لینک اشتراک کامل</div>
       <div class="link-row">
-        <span class="mono">{_esc(subscription_url)}</span>
+        <span class="mono" id="subUrlText">{_esc(subscription_url)}</span>
         <button class="copy-btn" data-copy="{_esc(subscription_url)}">کپی</button>
       </div>
+    </div>
+
+    <div class="section">
+      <button class="reset-btn" id="resetBtn" type="button">بازنشانی کلید دسترسی</button>
+      <div class="reset-hint">این کار همه‌ی لینک‌ها و رمزهای فعلیت رو باطل می‌کنه — باید تو همه‌ی دستگاه‌هات دوباره وصل بشی.</div>
     </div>
 
     <div class="footer">Tifusi Panel</div>
@@ -242,6 +255,50 @@ def build_info_page_html(
       document.body.appendChild(ta); ta.focus(); ta.select();
       try {{ document.execCommand('copy'); done(); }} catch (e) {{}}
       document.body.removeChild(ta);
+    }}
+
+    var resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {{
+      var confirming = false;
+      var confirmTimer = null;
+      var defaultLabel = resetBtn.textContent;
+      resetBtn.addEventListener('click', function () {{
+        if (!confirming) {{
+          confirming = true;
+          resetBtn.textContent = 'مطمئنی؟ همه دستگاه‌ها قطع می‌شن — دوباره بزن';
+          resetBtn.classList.add('confirm');
+          confirmTimer = setTimeout(function () {{
+            confirming = false;
+            resetBtn.textContent = defaultLabel;
+            resetBtn.classList.remove('confirm');
+          }}, 4000);
+          return;
+        }}
+        clearTimeout(confirmTimer);
+        resetBtn.disabled = true;
+        resetBtn.textContent = 'در حال بازنشانی...';
+        fetch(window.location.pathname + '/reset', {{ method: 'POST' }})
+          .then(function (res) {{
+            if (!res.ok) throw new Error('reset failed');
+            var newSecret = res.headers.get('X-New-Secret');
+            return res.text().then(function (body) {{ return {{ body: body, newSecret: newSecret }}; }});
+          }})
+          .then(function (r) {{
+            if (r.newSecret) {{
+              var parts = window.location.pathname.split('/');
+              parts[parts.length - 1] = r.newSecret;
+              history.replaceState(null, '', parts.join('/'));
+            }}
+            document.open();
+            document.write(r.body);
+            document.close();
+          }})
+          .catch(function () {{
+            confirming = false;
+            resetBtn.disabled = false;
+            resetBtn.textContent = 'خطا — دوباره امتحان کن';
+          }});
+      }});
     }}
   </script>
 </body>

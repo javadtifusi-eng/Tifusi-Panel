@@ -1,3 +1,4 @@
+import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
@@ -111,6 +112,25 @@ async def _enforce_device_limit(user: ProxyUser, identifier: str, db: AsyncSessi
     await db.commit()
 
 
+async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession) -> str:
+    hosts = list((await db.execute(select(Host))).scalars().all())
+    allowed_hosts = hosts_for_user(user, hosts)
+    public_url = await get_public_url(db)
+    base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
+    ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
+    return build_info_page_html(
+        username=user.username,
+        status=_STATUS_LABELS_FA.get(user.status, user.status.value),
+        used_traffic=user.used_traffic,
+        data_limit=user.data_limit,
+        expire_text=user.expire.strftime("%Y-%m-%d") if user.expire else "بدون انقضا",
+        subscription_url=f"{base}sub/{user.secret}",
+        links=build_links_for_user(user, allowed_hosts),
+        ikev2_configs=ikev2_configs,
+        l2tp_configs=l2tp_configs,
+    )
+
+
 @router.get("/sub/{secret}")
 async def get_subscription(
     secret: str,
@@ -135,20 +155,7 @@ async def get_subscription(
     # takes priority over guessing from User-Agent.
     accept = request.headers.get("accept") or ""
     if "text/html" in accept:
-        public_url = await get_public_url(db)
-        base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
-        ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
-        html = build_info_page_html(
-            username=user.username,
-            status=_STATUS_LABELS_FA.get(user.status, user.status.value),
-            used_traffic=user.used_traffic,
-            data_limit=user.data_limit,
-            expire_text=user.expire.strftime("%Y-%m-%d") if user.expire else "بدون انقضا",
-            subscription_url=f"{base}sub/{user.secret}",
-            links=build_links_for_user(user, allowed_hosts),
-            ikev2_configs=ikev2_configs,
-            l2tp_configs=l2tp_configs,
-        )
+        html = await _render_info_page(user, request, db)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     if _wants(user_agent, _CLASH_USER_AGENTS):
@@ -164,6 +171,26 @@ async def get_subscription(
     return Response(
         content=content, media_type=media_type, headers={"Subscription-Userinfo": _userinfo_header(user)}
     )
+
+
+@router.post("/sub/{secret}/reset")
+async def reset_subscription_secret(secret: str, request: Request, db: AsyncSession = Depends(get_db)) -> Response:
+    """Self-service secret rotation — same DB-level effect as the
+    admin-facing POST /api/users/{id}/reset-secret (app/routers/users.py),
+    just reachable from the public info page using the current secret as
+    the only proof of ownership, same as every other endpoint in this
+    router. Returns the freshly rendered info page body (not JSON) so the
+    caller can swap it straight into the DOM without reimplementing this
+    module's HTML in JavaScript — the new secret rides along in the
+    X-New-Secret header for the caller to update its own URL with."""
+    user = await _user_or_404(secret, db)
+    user.secret = str(uuid_lib.uuid4())
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    html = await _render_info_page(user, request, db)
+    return Response(content=html, media_type="text/html; charset=utf-8", headers={"X-New-Secret": user.secret})
 
 
 @router.get("/sub/{secret}/ikev2.mobileconfig")
