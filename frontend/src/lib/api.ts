@@ -258,6 +258,7 @@ export async function deleteUser(id: number): Promise<void> {
 export interface Ikev2Config {
   remark: string
   server: string
+  remote_id: string | null
   psk: string | null
   username: string
   password: string

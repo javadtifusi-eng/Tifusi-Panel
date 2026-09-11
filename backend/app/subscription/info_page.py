@@ -97,12 +97,14 @@ def build_info_page_html(
     for ike in ikev2_configs:
         body = f"""
           <div class="kv"><span>سرور</span><span class="mono">{_esc(ike['server'])}</span></div>
+          {f'<div class="kv"><span>Remote ID</span><span class="mono">{_esc(ike["remote_id"])}</span></div>' if ike.get('remote_id') else ''}
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(ike['username'])}</span></div>
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(ike['password'])}</span></div>
           {f'<div class="kv"><span>PSK</span><span class="mono">{_esc(ike["psk"])}</span></div>' if ike.get('psk') else ''}
           {f'<a class="mobileconfig-btn" href="{_esc(ike["mobileconfig_url"])}">نصب مستقیم روی iOS/macOS</a>' if ike.get('mobileconfig_url') else ''}
         """
-        copy_text = f"Server: {ike['server']}\nUsername: {ike['username']}\nPassword: {ike['password']}"
+        remote_id_line = f"\nRemote ID: {ike['remote_id']}" if ike.get('remote_id') else ""
+        copy_text = f"Server: {ike['server']}{remote_id_line}\nUsername: {ike['username']}\nPassword: {ike['password']}"
         sections.append(_card(f"IKEv2 · {ike['remark']}", copy_text, body))
 
     for l2tp in l2tp_configs:

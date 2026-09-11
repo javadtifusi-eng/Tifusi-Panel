@@ -230,7 +230,11 @@ def build_ipsec_configs_for_user(
         {
             "remark": render_remark(host, user),
             "server": host.address,
-            "psk": host.core.ikev2_psk if host.core else None,
+            "remote_id": (host.core.ikev2_remote_id if host.core else None) or host.address,
+            # PSK is only meaningful in "psk" auth mode (see node_agent/ipsec.py)
+            # — showing it in "eap" mode as well would be actively misleading,
+            # since it plays no part in that mode's actual authentication.
+            "psk": host.core.ikev2_psk if host.core and host.core.ikev2_auth_mode == "psk" else None,
             "username": user.username,
             "password": user.secret,
             # Tap-to-install iOS/macOS profile (Connect On Demand included) —

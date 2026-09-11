@@ -106,9 +106,10 @@ export default function UserLinksModal({
             {data.ikev2_configs.length > 0 && (
               <div className="mt-4 flex flex-col gap-3">
                 {data.ikev2_configs.map((ike, idx) => {
-                  const text = `Server: ${ike.server}\nPSK: ${ike.psk ?? '—'}\nUsername: ${ike.username}\nPassword: ${ike.password}`
+                  const text = `Server: ${ike.server}\nRemote ID: ${ike.remote_id ?? ike.server}\nPSK: ${ike.psk ?? '—'}\nUsername: ${ike.username}\nPassword: ${ike.password}`
                   const fields: [string, string][] = [
                     ['Server', ike.server],
+                    ...(ike.remote_id ? ([['Remote ID', ike.remote_id]] as [string, string][]) : []),
                     ...(ike.psk ? ([['PSK', ike.psk]] as [string, string][]) : []),
                     ['Username', ike.username],
                     ['Password', ike.password],
