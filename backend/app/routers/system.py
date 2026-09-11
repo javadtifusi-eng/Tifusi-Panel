@@ -1,29 +1,18 @@
 import asyncio
 import time
-from pathlib import Path
 
 import httpx
 import psutil
 from fastapi import APIRouter, Depends
 
 from app.dependencies import get_current_admin
+from app.version import __version__
 
 router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(get_current_admin)])
 
 _BOOT_TIME = psutil.boot_time()
 
-# WORKDIR is /app in the container; backend/Dockerfile COPYs this file to
-# /app/VERSION right next to the /app/app package this module lives in —
-# three parents up from here (routers -> app -> /app).
-_VERSION_FILE = Path(__file__).resolve().parent.parent.parent / "VERSION"
 _GITHUB_TAGS_URL = "https://api.github.com/repos/javadtifusi-eng/Tifusi-Panel/tags"
-
-
-def _current_version() -> str:
-    try:
-        return _VERSION_FILE.read_text().strip()
-    except OSError:
-        return "0.0.0"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -37,7 +26,7 @@ def _parse_version(v: str) -> tuple[int, ...]:
 
 @router.get("/version")
 async def get_version() -> dict:
-    current = _current_version()
+    current = __version__
     latest: str | None = None
     # Best-effort only: no network, GitHub rate-limiting, or a repo with no
     # tags yet must never turn this into a 500 — the panel just reports
