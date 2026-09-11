@@ -87,6 +87,15 @@ class Host(Base):
     security_override: Mapped[HostSecurity | None] = mapped_column(Enum(HostSecurity), nullable=True)
     allowinsecure: Mapped[bool] = mapped_column(default=False)
 
+    # TLS Client Hello fragmentation — splits the handshake packet so DPI
+    # can't pattern-match a whole TLS ClientHello in one packet. Client-side
+    # only (the exported link tells v2rayNG/NekoBox/etc. to do it), nothing
+    # for the node itself to run. `fragment_length` is the trigger field:
+    # left blank, no fragment param is emitted at all.
+    fragment_length: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fragment_interval: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fragment_packets: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     # --- l2tp/ikev2: which Core (of the matching core_type) this Host is
     # built on — that Core holds the actual PSK.
     core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)

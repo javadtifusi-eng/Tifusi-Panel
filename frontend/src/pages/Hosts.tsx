@@ -39,6 +39,9 @@ function emptyForm() {
     host_header_override: '',
     security_override: '' as HostSecurity | '',
     allowinsecure: false,
+    fragment_length: '',
+    fragment_interval: '',
+    fragment_packets: '',
     core_id: null as number | null,
     hysteria2_sni: '',
     hysteria2_port: '',
@@ -128,6 +131,9 @@ export default function HostsPage() {
       host_header_override: host.host_header_override ?? '',
       security_override: host.security_override ?? '',
       allowinsecure: host.allowinsecure,
+      fragment_length: host.fragment_length ?? '',
+      fragment_interval: host.fragment_interval ?? '',
+      fragment_packets: host.fragment_packets ?? '',
       core_id: host.core_id,
       hysteria2_sni: host.hysteria2_sni ?? '',
       hysteria2_port: host.hysteria2_port != null ? String(host.hysteria2_port) : '',
@@ -153,6 +159,9 @@ export default function HostsPage() {
       host_header_override: isXray ? form.host_header_override || null : null,
       security_override: isXray && form.security_override ? form.security_override : null,
       allowinsecure: isXray ? form.allowinsecure : false,
+      fragment_length: isXray ? form.fragment_length || null : null,
+      fragment_interval: isXray ? form.fragment_interval || null : null,
+      fragment_packets: isXray ? form.fragment_packets || null : null,
       core_id: isCoreLinked ? form.core_id : null,
       hysteria2_sni: isHysteria2 ? form.hysteria2_sni || null : null,
       hysteria2_port: isHysteria2 && form.hysteria2_port ? parseInt(form.hysteria2_port, 10) : null,
@@ -376,6 +385,45 @@ export default function HostsPage() {
                   />
                   {t.hostsPage.allowinsecureLabel}
                 </label>
+              </div>
+            </div>
+          )}
+
+          {isXray && (
+            <div className="mt-3 rounded-lg border border-subtle p-3">
+              <div className="mb-2 text-xs font-bold text-secondary">{t.hostsPage.fragmentTitle}</div>
+              <div className="mb-2 text-[11px] text-faint">{t.hostsPage.fragmentHint}</div>
+              <div className="flex flex-wrap gap-3">
+                <div>
+                  <label className={labelClass}>{t.hostsPage.fragmentLength}</label>
+                  <input
+                    dir="ltr"
+                    placeholder="40-60"
+                    value={form.fragment_length}
+                    onChange={(e) => update('fragment_length', e.target.value)}
+                    className={`${inputClass} w-28 text-left`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>{t.hostsPage.fragmentInterval}</label>
+                  <input
+                    dir="ltr"
+                    placeholder="10-20"
+                    value={form.fragment_interval}
+                    onChange={(e) => update('fragment_interval', e.target.value)}
+                    className={`${inputClass} w-28 text-left`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>{t.hostsPage.fragmentPackets}</label>
+                  <input
+                    dir="ltr"
+                    placeholder="tlshello"
+                    value={form.fragment_packets}
+                    onChange={(e) => update('fragment_packets', e.target.value)}
+                    className={`${inputClass} w-28 text-left`}
+                  />
+                </div>
               </div>
             </div>
           )}

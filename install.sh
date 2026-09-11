@@ -163,6 +163,10 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
       if docker run --rm -p 80:80 -v "$(pwd)/letsencrypt-work:/etc/letsencrypt" \
         certbot/certbot certonly --standalone --non-interactive --agree-tos \
         -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
+        # Certbot's own "Congratulations" box already states exactly where
+        # the cert and key ended up — show it instead of just our one-line
+        # paraphrase of it, the way every other panel's installer does.
+        cat "$CERT_LOG"
         cp "letsencrypt-work/live/${domain}/fullchain.pem" certs/fullchain.pem
         cp "letsencrypt-work/live/${domain}/privkey.pem" certs/privkey.pem
         echo "TIFUSI_PUBLIC_URL=https://${domain}" >> .env

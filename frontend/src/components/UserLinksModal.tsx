@@ -107,6 +107,12 @@ export default function UserLinksModal({
               <div className="mt-4 flex flex-col gap-3">
                 {data.ikev2_configs.map((ike, idx) => {
                   const text = `Server: ${ike.server}\nPSK: ${ike.psk ?? '—'}\nUsername: ${ike.username}\nPassword: ${ike.password}`
+                  const fields: [string, string][] = [
+                    ['Server', ike.server],
+                    ...(ike.psk ? ([['PSK', ike.psk]] as [string, string][]) : []),
+                    ['Username', ike.username],
+                    ['Password', ike.password],
+                  ]
                   return (
                     <div key={`${idx}-${ike.remark}`} className="rounded-lg border border-subtle bg-field p-3">
                       <div className="mb-2 flex items-center justify-between">
@@ -117,12 +123,23 @@ export default function UserLinksModal({
                           {copied === text ? t.copied : t.userLinksModal.copyConfig}
                         </button>
                       </div>
-                      <pre
-                        dir="ltr"
-                        className="whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-muted"
-                      >
-                        {text}
-                      </pre>
+                      <div className="flex flex-col gap-1.5">
+                        {fields.map(([label, value]) => (
+                          <div key={label} className="flex items-center gap-2 rounded-lg bg-well px-2.5 py-1.5">
+                            <span className="w-16 flex-shrink-0 text-[10px] text-faint">{label}</span>
+                            <span dir="ltr" className="flex-1 truncate text-left font-mono text-[11px] text-muted">
+                              {value}
+                            </span>
+                            <button
+                              onClick={() => copy(value)}
+                              className="flex-shrink-0 text-xs font-bold"
+                              style={{ color: ACCENT }}
+                            >
+                              {copied === value ? t.copied : t.copy}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )
                 })}
@@ -133,6 +150,12 @@ export default function UserLinksModal({
               <div className="mt-4 flex flex-col gap-3">
                 {data.l2tp_configs.map((l2tp, idx) => {
                   const text = `Server: ${l2tp.server}\nPSK: ${l2tp.psk ?? '—'}\nUsername: ${l2tp.username}\nPassword: ${l2tp.password}`
+                  const fields: [string, string][] = [
+                    ['Server', l2tp.server],
+                    ...(l2tp.psk ? ([['PSK', l2tp.psk]] as [string, string][]) : []),
+                    ['Username', l2tp.username],
+                    ['Password', l2tp.password],
+                  ]
                   return (
                     <div key={`${idx}-${l2tp.remark}`} className="rounded-lg border border-subtle bg-field p-3">
                       <div className="mb-2 flex items-center justify-between">
@@ -143,12 +166,23 @@ export default function UserLinksModal({
                           {copied === text ? t.copied : t.userLinksModal.copyConfig}
                         </button>
                       </div>
-                      <pre
-                        dir="ltr"
-                        className="whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-muted"
-                      >
-                        {text}
-                      </pre>
+                      <div className="flex flex-col gap-1.5">
+                        {fields.map(([label, value]) => (
+                          <div key={label} className="flex items-center gap-2 rounded-lg bg-well px-2.5 py-1.5">
+                            <span className="w-16 flex-shrink-0 text-[10px] text-faint">{label}</span>
+                            <span dir="ltr" className="flex-1 truncate text-left font-mono text-[11px] text-muted">
+                              {value}
+                            </span>
+                            <button
+                              onClick={() => copy(value)}
+                              className="flex-shrink-0 text-xs font-bold"
+                              style={{ color: ACCENT }}
+                            >
+                              {copied === value ? t.copied : t.copy}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )
                 })}

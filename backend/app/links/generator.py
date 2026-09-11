@@ -111,6 +111,19 @@ def _security_params(host: Host) -> dict[str, str]:
     return params
 
 
+def _fragment_param(host: Host, security: str) -> dict[str, str]:
+    """TLS Client Hello fragmentation — splits the handshake into pieces so
+    DPI can't pattern-match a whole ClientHello in one packet. Purely a
+    client-side instruction (v2rayNG/NekoBox/etc. read this query param and
+    do the splitting themselves); the node's own Xray config is untouched.
+    Only meaningful once there's an actual TLS handshake to fragment."""
+    if security not in ("tls", "reality") or not host.fragment_length:
+        return {}
+    interval = host.fragment_interval or "10-20"
+    packets = host.fragment_packets or "tlshello"
+    return {"fragment": f"{host.fragment_length},{interval},{packets}"}
+
+
 def build_vless_link(user: ProxyUser, host: Host) -> str:
     inbound = host.inbound
     security = host.effective_security or "none"
@@ -120,6 +133,7 @@ def build_vless_link(user: ProxyUser, host: Host) -> str:
         params["flow"] = inbound.flow
     params.update(_transport_params(inbound, host))
     params.update(_security_params(host))
+    params.update(_fragment_param(host, security))
 
     return f"vless://{user.secret}@{host.address}:{host.effective_port}?{urlencode(params)}#{_fragment(render_remark(host, user))}"
 
@@ -144,6 +158,9 @@ def build_vmess_link(user: ProxyUser, host: Host) -> str:
         "alpn": host.effective_alpn or "",
         "fp": host.effective_fingerprint or "",
     }
+    fragment = _fragment_param(host, security)
+    if fragment:
+        obj["fragment"] = fragment["fragment"]
     encoded = base64.b64encode(json.dumps(obj).encode()).decode()
     return f"vmess://{encoded}"
 
@@ -154,6 +171,7 @@ def build_trojan_link(user: ProxyUser, host: Host) -> str:
     params: dict[str, str] = {"type": inbound.network, "security": security}
     params.update(_transport_params(inbound, host))
     params.update(_security_params(host))
+    params.update(_fragment_param(host, security))
 
     return f"trojan://{user.secret}@{host.address}:{host.effective_port}?{urlencode(params)}#{_fragment(render_remark(host, user))}"
 

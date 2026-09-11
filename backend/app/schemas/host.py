@@ -22,6 +22,11 @@ class HostCreate(BaseModel):
     security_override: HostSecurity | None = None
     allowinsecure: bool = False
 
+    # TLS Client Hello fragmentation (vless/vmess/trojan only)
+    fragment_length: str | None = None
+    fragment_interval: str | None = None
+    fragment_packets: str | None = None
+
     # l2tp/ikev2: which Core (of the matching core_type) this Host is built on
     core_id: int | None = None
 
@@ -44,6 +49,10 @@ class HostUpdate(BaseModel):
     host_header_override: str | None = None
     security_override: HostSecurity | None = None
     allowinsecure: bool | None = None
+
+    fragment_length: str | None = None
+    fragment_interval: str | None = None
+    fragment_packets: str | None = None
 
     core_id: int | None = None
 
@@ -70,6 +79,10 @@ class HostResponse(BaseModel):
     host_header_override: str | None
     security_override: HostSecurity | None
     allowinsecure: bool
+
+    fragment_length: str | None
+    fragment_interval: str | None
+    fragment_packets: str | None
 
     core_id: int | None
 
