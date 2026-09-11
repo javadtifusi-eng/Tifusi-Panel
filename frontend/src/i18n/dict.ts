@@ -396,6 +396,9 @@ export const dict = {
         'خالی بمونه، نود خودش یه گواهی خودامضا با همین Remote ID می‌سازه. برای یه گواهی واقعی (مثلاً Let\'s Encrypt یه دامنه)، محتوای cert/key رو اینجا بچسبون یا با دکمه‌ی بالا یکی خودامضا بساز.',
       ikev2CertStatusCustom: 'گواهی سفارشی',
       ikev2CertStatusAuto: 'گواهی خودامضای خودکار',
+      ikev2CertPathLabel: 'مسیر گواهی روی نود',
+      ikev2CertKeyPathLabel: 'مسیر کلید خصوصی روی نود',
+      ikev2CertPathHint: 'این مسیرها ثابت‌اند و فقط برای اطلاع نشون داده می‌شن؛ نود بعد از سینک، گواهی و کلید بالا رو دقیقاً همینجا می‌نویسه.',
       ikev2EgressVlessLabel: 'رد کردن IKEv2 از مسیر VLESS (اختیاری)',
       ikev2EgressVlessHint:
         'خالی بمونه، ترافیک کلاینت‌های IKEv2 مستقیم از خود این نود خارج می‌شه. یه لینک vless:// از یه سرور دیگه بچسبون تا این نود به اون سرور وصل بشه و ترافیک IKEv2 رو از مسیرش رد کنه — یعنی این نود مثل یه کلاینت VLESS عمل می‌کنه، نه برعکس.',
@@ -1007,6 +1010,9 @@ export const dict = {
         "Left blank, the node self-signs one using this Remote ID. For a real certificate (e.g. Let's Encrypt for a domain), paste the cert/key content here, or generate a self-signed one with the button above.",
       ikev2CertStatusCustom: 'Custom certificate',
       ikev2CertStatusAuto: 'Auto self-signed certificate',
+      ikev2CertPathLabel: 'Certificate path on node',
+      ikev2CertKeyPathLabel: 'Private key path on node',
+      ikev2CertPathHint: "These paths are fixed and shown for reference only — once synced, the node writes the certificate/key above exactly there.",
       ikev2EgressVlessLabel: 'Route IKEv2 through VLESS (optional)',
       ikev2EgressVlessHint:
         'Left blank, IKEv2 client traffic exits directly from this node. Paste a vless:// link to a different server — this node then connects to it as a client and routes IKEv2 traffic through that connection, so the exit IP clients see becomes that server\'s.',

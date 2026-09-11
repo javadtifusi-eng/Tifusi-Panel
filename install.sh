@@ -17,16 +17,109 @@ PANEL_URL=""
 # Only emit color/box-drawing escapes into a real, color-capable terminal —
 # piped into a log file or a dumb terminal, raw escape codes are exactly
 # the "garbled unclear lines" this is here to avoid.
-if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+IS_TTY=""
+[ -t 1 ] && [ -z "${NO_COLOR:-}" ] && IS_TTY=1
+
+if [ -n "$IS_TTY" ]; then
   C_CYAN=$'\033[1;36m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
-  C_BOLD=$'\033[1m'; C_MAGENTA=$'\033[1;35m'
+  C_BOLD=$'\033[1m'; C_MAGENTA=$'\033[1;35m'; C_GREEN=$'\033[1;32m'
 else
-  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""; C_MAGENTA=""
+  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""; C_MAGENTA=""; C_GREEN=""
 fi
 
 info() { printf '%s[Tifusi]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
 warn() { printf '%s[Warning]%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
 fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
+
+# Runs a command in the background with a spinner in front of its message —
+# apt-get update, the Docker install script, and image pulls/builds can sit
+# with zero output for a minute or more otherwise, which reads as a hang
+# rather than progress (the gap this closes; every other panel's installer
+# animates something here). Falls back to a plain "before/after" line when
+# stdout isn't a real terminal, same rule as the color escapes above.
+_SPINNER_FRAMES='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+run_spinner() {
+  local msg="$1"; shift
+  local log; log="$(mktemp)"
+  "$@" >"$log" 2>&1 &
+  local pid=$!
+  if [ -n "$IS_TTY" ]; then
+    local i=0 frame_count=${#_SPINNER_FRAMES}
+    while kill -0 "$pid" 2>/dev/null; do
+      printf '\r%s%s%s %s' "$C_CYAN" "${_SPINNER_FRAMES:$((i % frame_count)):1}" "$C_RESET" "$msg"
+      i=$((i + 1))
+      sleep 0.1
+    done
+  else
+    printf '%s ...\n' "$msg"
+  fi
+  local status=0
+  wait "$pid" || status=$?
+  if [ "$status" -eq 0 ]; then
+    printf '\r%s✔%s %s%s\n' "$C_GREEN" "$C_RESET" "$msg" "$([ -n "$IS_TTY" ] && printf '%*s' 10 '' || true)"
+  else
+    printf '\r%s✘%s %s\n' "$C_RED" "$C_RESET" "$msg"
+    cat "$log"
+  fi
+  rm -f "$log"
+  return "$status"
+}
+
+# Renders `lines` inside a box-drawing rectangle wide enough for its widest
+# line, titled and colored — used for the SSL summary below so the cert
+# paths/fingerprint/content read as one clear block instead of scattered
+# log lines the way certbot's own raw output does.
+_repeat_char() { printf '%*s' "$1" '' | tr ' ' "$2"; }
+print_box() {
+  local title="$1" color="$2"; shift 2
+  local -a lines=("$@")
+  local w=0 l
+  for l in "${lines[@]}"; do (( ${#l} > w )) && w=${#l}; done
+  local title_w=$(( ${#title} + 2 ))
+  (( title_w > w )) && w=$title_w
+  printf '\n%s┌─ %s ' "$color" "$title"
+  printf '%s' "$(_repeat_char $((w - ${#title} - 1)) '─')"
+  printf '┐%s\n' "$C_RESET"
+  for l in "${lines[@]}"; do
+    printf '%s│%s %-*s %s│%s\n' "$color" "$C_RESET" "$w" "$l" "$color" "$C_RESET"
+  done
+  printf '%s└%s┘%s\n' "$color" "$(_repeat_char $((w + 2)) '─')" "$C_RESET"
+}
+
+# Prints the paths, the full fullchain.pem content, and the panel access
+# info once a certificate is in place. The private key's own content is
+# deliberately NOT printed in full here — dumping a TLS private key to a
+# terminal (and whatever logs that terminal feeds) is a real credential
+# leak, so this shows its path and public-key fingerprint instead, the way
+# `ssh-keygen -l` does for SSH keys, and points at `cat` for anyone who
+# genuinely needs the raw key on-screen.
+show_ssl_summary() {
+  local fullchain="$1" privkey="$2" public_url="$3" dash_port="$4"
+  local -a cert_lines privkey_info
+  mapfile -t cert_lines < "$fullchain"
+
+  local key_fp
+  key_fp=$(openssl pkey -in "$privkey" -pubout -outform DER 2>/dev/null \
+    | openssl sha256 -r 2>/dev/null | awk '{print $1}' \
+    | sed 's/../&:/g; s/:$//' | tr '[:lower:]' '[:upper:]')
+
+  privkey_info=(
+    "Path         :  $privkey"
+    "SHA256 (pub) :  ${key_fp:-unavailable}"
+    ""
+    "Kept out of this box on purpose — it's the private half of your TLS"
+    "key. Read it on the server directly if you ever need the raw text:"
+    "  cat $privkey"
+  )
+
+  printf '\n%s%s✔ SSL Certificate Installed%s\n' "$C_GREEN" "$C_BOLD" "$C_RESET"
+  printf '\n  %sFullchain%s :  %s%s%s\n' "$C_BOLD" "$C_RESET" "$C_GREEN" "$fullchain" "$C_RESET"
+  printf '  %sPrivkey  %s :  %s%s%s\n' "$C_BOLD" "$C_RESET" "$C_GREEN" "$privkey" "$C_RESET"
+
+  print_box "Fullchain.pem" "$C_CYAN" "${cert_lines[@]}"
+  print_box "Privkey.pem (info only, not the raw key)" "$C_YELLOW" "${privkey_info[@]}"
+  print_box "Panel Access Info" "$C_MAGENTA" "Dashboard :  $public_url" "Port      :  $dash_port"
+}
 
 # One line per install phase (system deps, docker, repo, .env, SSL, build,
 # health check) — a percentage instead of a bare step count so a long build
@@ -61,19 +154,15 @@ info "Installing Tifusi Panel..."
 
 step "System packages"
 if command -v apt-get >/dev/null 2>&1; then
-  info "Updating the system's package list (apt-get update)..."
-  DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || warn "apt-get update failed — continuing anyway."
+  run_spinner "Updating the system's package list (apt-get update)..." \
+    env DEBIAN_FRONTEND=noninteractive apt-get update -y \
+    || warn "apt-get update failed — continuing anyway."
 fi
 
 step "Docker"
 if ! command -v docker >/dev/null 2>&1; then
-  info "Docker isn't installed — installing it with the official script..."
-  DOCKER_INSTALL_LOG="$(mktemp)"
-  if ! curl -fsSL https://get.docker.com | sh > "$DOCKER_INSTALL_LOG" 2>&1; then
-    warn "Docker's own installer output:"
-    cat "$DOCKER_INSTALL_LOG"
-  fi
-  rm -f "$DOCKER_INSTALL_LOG"
+  run_spinner "Docker isn't installed — installing it with the official script..." \
+    bash -c 'curl -fsSL https://get.docker.com | sh' || true
   command -v docker >/dev/null 2>&1 \
     || fail "Automatic Docker install failed — try it manually: curl -fsSL https://get.docker.com | sh"
 fi
@@ -171,7 +260,7 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
         cp "letsencrypt-work/live/${domain}/privkey.pem" certs/privkey.pem
         echo "TIFUSI_PUBLIC_URL=https://${domain}" >> .env
         PANEL_PUBLIC_URL="https://${domain}"
-        info "Certificate obtained — the dashboard (login page) will serve HTTPS directly on $PANEL_PUBLIC_URL."
+        show_ssl_summary "$(pwd)/certs/fullchain.pem" "$(pwd)/certs/privkey.pem" "$PANEL_PUBLIC_URL" "$dashboard_port"
         warn "Let's Encrypt certificates expire every 90 days — this installer doesn't set up auto-renewal, so you'll need to repeat this (or set up certbot renew plus a container restart) before then."
       else
         warn "Certificate request failed — full output:"
@@ -185,22 +274,13 @@ fi
 PANEL_PUBLIC_URL="${PANEL_PUBLIC_URL:-}"
 
 step "Building & starting containers"
-BUILD_LOG="$(mktemp)"
-info "Trying prebuilt images first (faster than building locally, especially on a low-core server)..."
-if docker compose pull > "$BUILD_LOG" 2>&1; then
-  info "Pulled prebuilt images."
+if run_spinner "Trying prebuilt images first (faster than building locally)..." docker compose pull; then
   BUILD_CMD=(docker compose up -d)
 else
   info "Prebuilt images aren't available (offline registry, or this repo's Packages aren't Public yet) — building locally instead. This can take a few minutes."
   BUILD_CMD=(docker compose up -d --build)
 fi
-if ! "${BUILD_CMD[@]}" > "$BUILD_LOG" 2>&1; then
-  warn "Build failed — full output:"
-  cat "$BUILD_LOG"
-  rm -f "$BUILD_LOG"
-  exit 1
-fi
-rm -f "$BUILD_LOG"
+run_spinner "Building & starting containers..." "${BUILD_CMD[@]}" || exit 1
 
 step "Management command"
 mkdir -p /etc/tifusi-panel

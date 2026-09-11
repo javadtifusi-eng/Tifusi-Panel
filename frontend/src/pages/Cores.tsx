@@ -28,6 +28,12 @@ const monoTextarea =
 
 const CORE_TYPES: CoreType[] = ['xray', 'l2tp', 'ikev2']
 
+// Where node_agent/ipsec.py actually writes these two fields once synced to
+// a node (IKEV2_LEAF_CERT / IKEV2_LEAF_KEY) — shown read-only so the admin
+// knows where to look on the node, not an admin-configurable path.
+const IKEV2_CERT_NODE_PATH = '/etc/swanctl/x509/ikev2-server.pem'
+const IKEV2_CERT_KEY_NODE_PATH = '/etc/swanctl/private/ikev2-server.key'
+
 function emptyForm() {
   return {
     coreType: '' as CoreType | '',
@@ -1318,8 +1324,29 @@ export default function CoresPage() {
                           className={monoTextarea}
                         />
                       </div>
+                      <div>
+                        <label className={labelClass}>{t.coresPage.ikev2CertPathLabel}</label>
+                        <input
+                          dir="ltr"
+                          readOnly
+                          disabled
+                          value={IKEV2_CERT_NODE_PATH}
+                          className={`${inputClass} w-full cursor-default font-mono text-xs text-faint`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>{t.coresPage.ikev2CertKeyPathLabel}</label>
+                        <input
+                          dir="ltr"
+                          readOnly
+                          disabled
+                          value={IKEV2_CERT_KEY_NODE_PATH}
+                          className={`${inputClass} w-full cursor-default font-mono text-xs text-faint`}
+                        />
+                      </div>
                     </div>
                     <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2CertHint}</div>
+                    <div className="mt-1 text-[10px] text-faint">{t.coresPage.ikev2CertPathHint}</div>
                   </div>
                 )}
               </div>
