@@ -103,6 +103,9 @@ export const dict = {
       unlimited: 'نامحدود',
       gbSuffix: 'گیگ',
       confirmDelete: (name: string) => `کاربر «${name}» حذف بشه؟`,
+      searchPlaceholder: 'جستجو با نام کاربری…',
+      allStatuses: 'همه وضعیت‌ها',
+      allGroups: 'همه گروه‌ها',
       status: {
         active: 'فعال',
         disabled: 'غیرفعال',
@@ -711,6 +714,9 @@ export const dict = {
       unlimited: 'Unlimited',
       gbSuffix: 'GB',
       confirmDelete: (name: string) => `Delete user "${name}"?`,
+      searchPlaceholder: 'Search by username…',
+      allStatuses: 'All statuses',
+      allGroups: 'All groups',
       status: {
         active: 'Active',
         disabled: 'Disabled',

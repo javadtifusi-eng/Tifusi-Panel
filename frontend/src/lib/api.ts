@@ -110,8 +110,21 @@ export interface ProxyUserList {
   users: ProxyUser[]
 }
 
-export async function listUsers(): Promise<ProxyUserList> {
-  const res = await authorizedFetch('/users')
+export async function listUsers(filters?: {
+  q?: string
+  status?: UserStatus
+  group_id?: number
+  offset?: number
+  limit?: number
+}): Promise<ProxyUserList> {
+  const params = new URLSearchParams()
+  if (filters?.q) params.set('q', filters.q)
+  if (filters?.status) params.set('status', filters.status)
+  if (filters?.group_id != null) params.set('group_id', String(filters.group_id))
+  if (filters?.offset != null) params.set('offset', String(filters.offset))
+  if (filters?.limit != null) params.set('limit', String(filters.limit))
+  const qs = params.toString()
+  const res = await authorizedFetch(`/users${qs ? `?${qs}` : ''}`)
   return res.json()
 }
 

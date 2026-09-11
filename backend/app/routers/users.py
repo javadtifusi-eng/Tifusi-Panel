@@ -50,12 +50,28 @@ def _owned_query(admin: Admin, stmt):
 async def list_users(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    q: str | None = Query(default=None, description="Case-insensitive substring match on username"),
+    status: UserStatus | None = Query(default=None),
+    group_id: int | None = Query(default=None),
     admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> ProxyUserList:
-    total = await db.scalar(_owned_query(admin, select(func.count()).select_from(ProxyUser)))
+    def _apply_filters(stmt):
+        if q:
+            stmt = stmt.where(ProxyUser.username.ilike(f"%{q}%"))
+        if status is not None:
+            stmt = stmt.where(ProxyUser.status == status)
+        if group_id is not None:
+            stmt = stmt.where(ProxyUser.groups.any(id=group_id))
+        return stmt
+
+    count_stmt = _apply_filters(_owned_query(admin, select(func.count()).select_from(ProxyUser)))
+    total = await db.scalar(count_stmt)
     result = await db.execute(
-        _owned_query(admin, select(ProxyUser)).order_by(ProxyUser.id.desc()).offset(offset).limit(limit)
+        _apply_filters(_owned_query(admin, select(ProxyUser)))
+        .order_by(ProxyUser.id.desc())
+        .offset(offset)
+        .limit(limit)
     )
     return ProxyUserList(total=total or 0, users=list(result.scalars().all()))
 

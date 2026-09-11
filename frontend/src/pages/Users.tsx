@@ -54,6 +54,10 @@ export default function UsersPage() {
   const [devicesUser, setDevicesUser] = useState<ProxyUser | null>(null)
   const [resettingSecretId, setResettingSecretId] = useState<number | null>(null)
 
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<UserStatus | ''>('')
+  const [groupFilter, setGroupFilter] = useState<number | ''>('')
+
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkPanel, setBulkPanel] = useState<'limit' | 'expire' | 'group' | null>(null)
@@ -108,7 +112,16 @@ export default function UsersPage() {
 
   async function refresh() {
     try {
-      const [usersRes, groupsRes, templatesRes] = await Promise.all([listUsers(), listGroups(), listUserTemplates()])
+      const [usersRes, groupsRes, templatesRes] = await Promise.all([
+        listUsers({
+          q: searchQuery || undefined,
+          status: statusFilter || undefined,
+          group_id: groupFilter === '' ? undefined : groupFilter,
+          limit: 200,
+        }),
+        listGroups(),
+        listUserTemplates(),
+      ])
       setUsers(usersRes.users)
       setGroups(groupsRes.groups)
       setTemplates(templatesRes.templates)
@@ -192,8 +205,13 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    refresh()
-  }, [])
+    // Debounce just the free-text query so every keystroke doesn't fire a
+    // request — status/group filters are discrete picks, no debounce needed.
+    const handle = setTimeout(() => {
+      refresh()
+    }, searchQuery ? 300 : 0)
+    return () => clearTimeout(handle)
+  }, [searchQuery, statusFilter, groupFilter])
 
   function resetForm() {
     setEditingId(null)
@@ -441,6 +459,39 @@ export default function UsersPage() {
             {t.usersPage.newBtn}
           </button>
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={t.usersPage.searchPlaceholder}
+          className="min-w-0 flex-1 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as UserStatus | '')}
+          className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+        >
+          <option value="">{t.usersPage.allStatuses}</option>
+          <option value="active">{t.usersPage.status.active}</option>
+          <option value="disabled">{t.usersPage.status.disabled}</option>
+          <option value="expired">{t.usersPage.status.expired}</option>
+          <option value="limited">{t.usersPage.status.limited}</option>
+          <option value="on_hold">{t.usersPage.status.on_hold}</option>
+        </select>
+        <select
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value ? Number(e.target.value) : '')}
+          className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+        >
+          <option value="">{t.usersPage.allGroups}</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {showTemplates && (
