@@ -15,9 +15,12 @@ import base64
 import html
 import io
 import json
+import re
 
 import qrcode
 import qrcode.image.svg
+
+_PEM_CERT_RE = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.S)
 
 _ACCENT = "#22d3ee"
 
@@ -42,13 +45,37 @@ def _import_qr_svg(config_type: str, cfg: dict) -> str:
         tifusi-vpn://import?data=<base64url, no padding, of this JSON>
         {"v": 1, "type": "ikev2"|"l2tp", "server": str,
          "remote_id": str | omitted, "username": str, "password": str,
-         "psk": str | omitted}
+         "psk": str | omitted, "certificate": str | omitted}
+    `certificate` (added after v1 shipped, but kept under the same "v":1 —
+    it's optional and additive, so an older importer that doesn't know
+    about it just ignores it) is the CA cert only, needed because the
+    node's own cert is self-signed: without pinning a trust anchor here,
+    the client has no way to trust it and IKE_AUTH fails cert validation.
+    Deliberately just the CA, not the full leaf+CA bundle
+    generate_self_signed_ikev2_cert hands admins elsewhere — that bundle is
+    ~2.4 KB, and base64'd into this URI it blew past a QR code's ~2.3 KB
+    payload ceiling entirely (confirmed live: `qrcode` raised "Invalid
+    version" trying to fit it). The CA cert alone is what
+    Ikev2VpnProfile.Builder's serverRootCaCert param actually wants anyway
+    — it verifies the server's presented leaf against this root, it was
+    never meant to be handed the leaf itself. Omitted when the admin hasn't
+    set a certificate on the Core (see app/cores/ikev2_cert.py's "Generate
+    Self-Signed Cert" — before that, the node self-signs its own on the fly
+    and never reports it back to the panel, so there's nothing to embed
+    here yet).
     """
     payload: dict = {"v": 1, "type": config_type, "server": cfg["server"], "username": cfg["username"], "password": cfg["password"]}
     if cfg.get("remote_id"):
         payload["remote_id"] = cfg["remote_id"]
     if cfg.get("psk"):
         payload["psk"] = cfg["psk"]
+    if cfg.get("certificate"):
+        # The bundle is leaf-then-CA (see generate_self_signed_ikev2_cert) —
+        # the last block is always the CA regardless of how many
+        # intermediates a future admin-provided chain might add.
+        blocks = _PEM_CERT_RE.findall(cfg["certificate"])
+        if blocks:
+            payload["certificate"] = blocks[-1]
     encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
     return _qr_svg(f"tifusi-vpn://import?data={encoded}")
 

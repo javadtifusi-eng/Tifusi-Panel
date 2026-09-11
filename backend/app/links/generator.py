@@ -237,6 +237,14 @@ def build_ipsec_configs_for_user(
             "psk": host.core.ikev2_psk if host.core and host.core.ikev2_auth_mode == "psk" else None,
             "username": user.username,
             "password": user.secret,
+            # The node's own cert is self-signed (admin-provided or the
+            # node's own auto-generated fallback — see node_agent/ipsec.py),
+            # so a client needs this to actually trust it. None here (no
+            # admin-provided cert) means the QR import just won't carry a
+            # pinned cert — see QrImport.kt on the app side for how that's
+            # handled (falls back to system CA trust, which fails against a
+            # self-signed cert, same as before this existed).
+            "certificate": host.core.ikev2_certificate if host.core else None,
             # Tap-to-install iOS/macOS profile (Connect On Demand included) —
             # an alternative to typing the fields above into Settings > VPN.
             "mobileconfig_url": f"{base_url}sub/{user.secret}/ikev2.mobileconfig",
