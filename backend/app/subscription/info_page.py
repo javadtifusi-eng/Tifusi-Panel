@@ -11,8 +11,10 @@ almost no VPN client does) — this module only renders, given data the
 caller already built the same way the admin-facing /links endpoint does.
 """
 
+import base64
 import html
 import io
+import json
 
 import qrcode
 import qrcode.image.svg
@@ -29,6 +31,26 @@ def _qr_svg(value: str) -> str:
     # white QR backdrop below, but the generated <svg> has no width/height
     # scaling for our fixed display box, so pin those explicitly.
     return svg.replace("<svg ", '<svg style="width:176px;height:176px" ', 1)
+
+
+def _import_qr_svg(config_type: str, cfg: dict) -> str:
+    """QR-encodes an ikev2/l2tp config as a `tifusi-vpn://import?data=<b64>`
+    URI so the Tifusi Android app's importer can scan-to-import instead of
+    the user retyping four fields by hand. Documented format — keep this in
+    sync with whatever the Android app's importer expects (see
+    QrImport.kt in the Tifusi-VPN-App repo):
+        tifusi-vpn://import?data=<base64url, no padding, of this JSON>
+        {"v": 1, "type": "ikev2"|"l2tp", "server": str,
+         "remote_id": str | omitted, "username": str, "password": str,
+         "psk": str | omitted}
+    """
+    payload: dict = {"v": 1, "type": config_type, "server": cfg["server"], "username": cfg["username"], "password": cfg["password"]}
+    if cfg.get("remote_id"):
+        payload["remote_id"] = cfg["remote_id"]
+    if cfg.get("psk"):
+        payload["psk"] = cfg["psk"]
+    encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
+    return _qr_svg(f"tifusi-vpn://import?data={encoded}")
 
 
 def _esc(value: str | None) -> str:
@@ -77,9 +99,6 @@ def build_info_page_html(
     sections: list[str] = []
 
     if links:
-        # QR/barcode import only makes sense for these URI-based links
-        # (vless://, vmess://, ...) — ikev2/l2tp below have no such scheme,
-        # a client can't "scan" its way into a username/password + PSK.
         rows = "".join(
             f'<div class="link-row"><span class="mono">{_esc(link)}</span>'
             f'<button class="copy-btn" data-copy="{_esc(link)}">کپی</button></div>'
@@ -96,6 +115,7 @@ def build_info_page_html(
 
     for ike in ikev2_configs:
         body = f"""
+          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('ikev2', ike)}</div></div>
           <div class="kv"><span>سرور</span><span class="mono">{_esc(ike['server'])}</span></div>
           {f'<div class="kv"><span>Remote ID</span><span class="mono">{_esc(ike["remote_id"])}</span></div>' if ike.get('remote_id') else ''}
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(ike['username'])}</span></div>
@@ -109,6 +129,7 @@ def build_info_page_html(
 
     for l2tp in l2tp_configs:
         body = f"""
+          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('l2tp', l2tp)}</div></div>
           <div class="kv"><span>سرور</span><span class="mono">{_esc(l2tp['server'])}</span></div>
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(l2tp['username'])}</span></div>
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(l2tp['password'])}</span></div>
