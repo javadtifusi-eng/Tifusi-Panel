@@ -492,123 +492,6 @@ export async function deleteNode(id: number): Promise<void> {
   await authorizedFetch(`/nodes/${id}`, { method: 'DELETE' })
 }
 
-export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp'
-export type TunnelStatus = 'pending' | 'connected' | 'error'
-
-export interface TunnelForward {
-  name: string
-  listen_port: number
-  net: 'tcp' | 'udp'
-  target_port: number
-}
-
-export interface Tunnel {
-  id: number
-  name: string
-  iran_address: string
-  iran_port: number
-  foreign_node_id: number | null
-  foreign_address: string | null
-  transport: TunnelTransport
-  token: string
-  sni: string | null
-  domain: string | null
-  path: string | null
-  connection_count: number
-  forwards: TunnelForward[]
-  status: TunnelStatus
-  last_error: string | null
-  last_checked_at: string | null
-  created_at: string
-}
-
-export interface TunnelList {
-  total: number
-  tunnels: Tunnel[]
-}
-
-export interface TunnelTestResult {
-  status: TunnelStatus
-  iran_reachable: boolean
-  iran_latency_ms: number | null
-  foreign_reachable: boolean
-  foreign_latency_ms: number | null
-  error: string | null
-}
-
-export interface TunnelConfig {
-  iran_config: Record<string, unknown>
-  foreign_config: Record<string, unknown>
-  iran_install_command: string
-  foreign_install_command: string
-}
-
-export interface TunnelRankedTransport {
-  transport: TunnelTransport
-  reason: string
-}
-
-export interface TunnelRecommendResult {
-  iran_reachable: boolean
-  iran_latency_ms: number | null
-  foreign_reachable: boolean
-  foreign_latency_ms: number | null
-  ranked: TunnelRankedTransport[]
-}
-
-export type TunnelPayload = {
-  name: string
-  iran_address: string
-  iran_port: number
-  foreign_node_id?: number | null
-  foreign_address?: string | null
-  transport: TunnelTransport
-  sni?: string | null
-  domain?: string | null
-  path?: string | null
-  connection_count?: number
-  forwards?: TunnelForward[]
-}
-
-export async function listTunnels(): Promise<TunnelList> {
-  const res = await authorizedFetch('/tunnels')
-  return res.json()
-}
-
-export async function createTunnel(payload: TunnelPayload): Promise<Tunnel> {
-  const res = await authorizedFetch('/tunnels', { method: 'POST', body: JSON.stringify(payload) })
-  return res.json()
-}
-
-export async function updateTunnel(id: number, payload: Partial<TunnelPayload>): Promise<Tunnel> {
-  const res = await authorizedFetch(`/tunnels/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
-  return res.json()
-}
-
-export async function deleteTunnel(id: number): Promise<void> {
-  await authorizedFetch(`/tunnels/${id}`, { method: 'DELETE' })
-}
-
-export async function getTunnelConfig(id: number): Promise<TunnelConfig> {
-  const res = await authorizedFetch(`/tunnels/${id}/config`)
-  return res.json()
-}
-
-export async function testTunnel(id: number): Promise<TunnelTestResult> {
-  const res = await authorizedFetch(`/tunnels/${id}/test`, { method: 'POST' })
-  return res.json()
-}
-
-export async function recommendTunnelTransport(payload: {
-  iran_address: string
-  iran_port: number
-  foreign_node_id?: number | null
-  foreign_address?: string | null
-}): Promise<TunnelRecommendResult> {
-  const res = await authorizedFetch('/tunnels/recommend', { method: 'POST', body: JSON.stringify(payload) })
-  return res.json()
-}
-
 export async function syncNode(id: number): Promise<NodeSyncResult> {
   const res = await authorizedFetch(`/nodes/${id}/sync`, { method: 'POST' })
   return res.json()
@@ -808,7 +691,7 @@ export async function testDiscord(): Promise<void> {
 }
 
 // Matches app/permissions.py PERMISSION_SCOPES — keep in sync.
-export const PERMISSION_SCOPES = ['users', 'hosts', 'nodes', 'cores', 'groups', 'tunnels', 'settings'] as const
+export const PERMISSION_SCOPES = ['users', 'hosts', 'nodes', 'cores', 'groups', 'settings'] as const
 export type PermissionScope = (typeof PERMISSION_SCOPES)[number]
 
 export interface AdminProfile {
