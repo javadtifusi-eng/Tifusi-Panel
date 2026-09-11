@@ -4,13 +4,20 @@
 
 <h1 align="center">TIFUSI PANEL</h1>
 
-<p align="center"><b>Unified, secure control over your proxy infrastructure</b></p>
-
 <hr>
 
 <p align="center">
   <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=22D3EE" alt="GitHub stars" /></a>
-  <img src="https://img.shields.io/badge/protocols-VLESS%20%7C%20Trojan%20%7C%20Hysteria2%20%7C%20L2TP%20%7C%20IKEv2-22D3EE?style=flat-square" alt="Supported protocols" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/VLESS-22D3EE?style=flat-square" />
+  <img src="https://img.shields.io/badge/VMess-8B5CF6?style=flat-square" />
+  <img src="https://img.shields.io/badge/Trojan-EF4444?style=flat-square" />
+  <img src="https://img.shields.io/badge/Shadowsocks-F59E0B?style=flat-square" />
+  <img src="https://img.shields.io/badge/Hysteria2-10B981?style=flat-square" />
+  <img src="https://img.shields.io/badge/L2TP%2FIPsec-3B82F6?style=flat-square" />
+  <img src="https://img.shields.io/badge/IKEv2%2FIPsec-EC4899?style=flat-square" />
 </p>
 
 <p align="center">
