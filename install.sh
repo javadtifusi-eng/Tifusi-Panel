@@ -31,7 +31,7 @@ fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
 # One line per install phase (system deps, docker, repo, .env, SSL, build,
 # health check) — a percentage instead of a bare step count so a long build
 # still reads as visible progress rather than a silent hang.
-STEP_TOTAL=8
+STEP_TOTAL=9
 STEP_NUM=0
 step() {
   STEP_NUM=$((STEP_NUM + 1))
@@ -202,6 +202,13 @@ if ! "${BUILD_CMD[@]}" > "$BUILD_LOG" 2>&1; then
 fi
 rm -f "$BUILD_LOG"
 
+step "Management command"
+mkdir -p /etc/tifusi-panel
+echo "$INSTALL_DIR" > /etc/tifusi-panel/install_dir
+cp manage.sh /usr/local/bin/tifusi
+chmod +x /usr/local/bin/tifusi
+info "Installed the 'tifusi' command — run it any time to update, change ports, get SSL, back up, or uninstall."
+
 step "Health check"
 info "Waiting for the panel to come up..."
 ready=""
@@ -227,6 +234,8 @@ fi
 info "  Panel API:  http://${HOST_IP}:${panel_port}"
 info ""
 info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
-info "  docker exec -it tifusi-panel tifusi-cli generate-admin-key"
+info "  tifusi key"
 info "Paste that key into the login page along with the username/password you want, and you're in."
+info ""
+info "Run 'tifusi' any time (updates, ports, SSL, backups, uninstall) — or just 'tifusi' with no arguments for a menu."
 info "Done."
