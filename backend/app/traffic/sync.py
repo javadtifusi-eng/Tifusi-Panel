@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select
@@ -83,15 +83,59 @@ def _as_utc(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
+async def _apply_periodic_resets(db: AsyncSession, now: datetime) -> bool:
+    """Zeroes used_traffic back to 0 (and reactivates a user `limited` by
+    hitting data_limit) every data_limit_reset_days, for every user that
+    opted into a recurring cap instead of a one-time one. Runs before the
+    one-time enforce_limits pass below so a user due for a reset this
+    exact cycle never gets flipped to `limited` first and reset a moment
+    later — same cycle, reset wins.
+    """
+    candidates = list(
+        (
+            await db.execute(
+                select(ProxyUser).where(
+                    ProxyUser.data_limit_reset_days.isnot(None),
+                    ProxyUser.status.in_((UserStatus.active, UserStatus.limited)),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    changed = False
+    for user in candidates:
+        if not user.data_limit_reset_days:
+            continue
+        anchor = _as_utc(user.data_limit_reset_at) if user.data_limit_reset_at else _as_utc(user.created_at)
+        interval = timedelta(days=user.data_limit_reset_days)
+        if interval <= timedelta(0) or now < anchor + interval:
+            continue
+        # Advance by whole intervals from the original anchor rather than
+        # snapping to `now` — a cycle that ran late (node down, panel
+        # restarted) still lands back on the user's original schedule
+        # instead of quietly pushing every future reset later too.
+        periods_elapsed = (now - anchor) // interval
+        user.data_limit_reset_at = anchor + interval * periods_elapsed
+        user.used_traffic = 0
+        if user.status == UserStatus.limited:
+            user.status = UserStatus.active
+        changed = True
+
+    return changed
+
+
 async def enforce_limits(db: AsyncSession) -> bool:
     """Auto-transitions active users past their expire date or data_limit
     into expired/limited. Only flips a status — actually dropping them from
     a running Xray config still needs a node resync, which the caller does
     when this returns True."""
     now = datetime.now(timezone.utc)
+    reset_changed = await _apply_periodic_resets(db, now)
     users = list((await db.execute(select(ProxyUser).where(ProxyUser.status == UserStatus.active))).scalars().all())
 
-    changed = False
+    changed = reset_changed
     notifications: list[str] = []
     events: list[tuple[str, dict]] = []
     for user in users:

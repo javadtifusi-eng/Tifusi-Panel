@@ -12,6 +12,7 @@ class ProxyUserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=64, pattern=USERNAME_PATTERN)
     status: UserStatus = UserStatus.active
     data_limit: int | None = Field(default=None, ge=0)
+    data_limit_reset_days: int | None = Field(default=None, ge=1)
     expire: datetime | None = None
     on_hold_expire_days: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
@@ -29,6 +30,7 @@ class ProxyUserCreate(BaseModel):
 class ProxyUserUpdate(BaseModel):
     status: UserStatus | None = None
     data_limit: int | None = Field(default=None, ge=0)
+    data_limit_reset_days: int | None = Field(default=None, ge=1)
     expire: datetime | None = None
     on_hold_expire_days: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
@@ -44,6 +46,8 @@ class ProxyUserResponse(BaseModel):
     status: UserStatus
     secret: str
     data_limit: int | None
+    data_limit_reset_days: int | None
+    data_limit_reset_at: datetime | None
     used_traffic: int
     expire: datetime | None
     on_hold_expire_days: int | None

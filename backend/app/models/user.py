@@ -34,6 +34,16 @@ class ProxyUser(Base):
     data_limit: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
 
+    # None/0 means data_limit is a one-time cap (existing behavior — once
+    # hit, the user stays `limited` until an admin steps in). Set to a
+    # number of days and app/traffic/sync.py zeroes used_traffic back out
+    # (and reactivates a `limited` user) every time that many days pass
+    # since data_limit_reset_at, which advances by the same interval on
+    # every reset rather than snapping to "now" — a user who reset a day
+    # late still resets on their original schedule, not a day later too.
+    data_limit_reset_days: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    data_limit_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     expire: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 

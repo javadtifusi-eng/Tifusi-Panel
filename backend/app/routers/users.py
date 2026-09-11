@@ -1,4 +1,5 @@
 import uuid as uuid_lib
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
@@ -76,6 +77,8 @@ async def create_user(
         # shouldn't (and per validation below, can't meaningfully) also
         # hand us an absolute expire for that case.
         data_limit=payload.data_limit,
+        data_limit_reset_days=payload.data_limit_reset_days,
+        data_limit_reset_at=datetime.now(timezone.utc) if payload.data_limit_reset_days else None,
         expire=payload.expire if payload.status != UserStatus.on_hold else None,
         on_hold_expire_days=payload.on_hold_expire_days if payload.status == UserStatus.on_hold else None,
         hwid_limit=payload.hwid_limit,
@@ -214,7 +217,14 @@ async def update_user(
 ) -> ProxyUser:
     user = await _get_user_or_404(user_id, admin, db)
 
-    for field, value in payload.model_dump(exclude_unset=True, exclude={"group_ids"}).items():
+    updates = payload.model_dump(exclude_unset=True, exclude={"group_ids"})
+    # Turning periodic reset on for the first time starts the interval from
+    # right now — leaving data_limit_reset_at untouched would either crash
+    # (still None) or, if it were defaulted to created_at instead, count an
+    # existing account's whole lifetime as "overdue" and reset it instantly.
+    if updates.get("data_limit_reset_days") and user.data_limit_reset_at is None:
+        updates["data_limit_reset_at"] = datetime.now(timezone.utc)
+    for field, value in updates.items():
         setattr(user, field, value)
 
     new_groups = await resolve_groups(payload.group_ids, db)

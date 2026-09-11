@@ -91,6 +91,8 @@ export interface ProxyUser {
   status: UserStatus
   secret: string
   data_limit: number | null
+  data_limit_reset_days: number | null
+  data_limit_reset_at: string | null
   used_traffic: number
   expire: string | null
   on_hold_expire_days: number | null
@@ -115,6 +117,7 @@ export async function createUser(payload: {
   username: string
   status?: 'active' | 'on_hold'
   data_limit?: number | null
+  data_limit_reset_days?: number | null
   expire?: string | null
   on_hold_expire_days?: number | null
   hwid_limit?: number | null
@@ -227,7 +230,9 @@ export async function deleteUserTemplate(id: number): Promise<void> {
 
 export async function updateUser(
   id: number,
-  payload: Partial<Pick<ProxyUser, 'status' | 'data_limit' | 'expire' | 'hwid_limit' | 'note' | 'group_ids'>>,
+  payload: Partial<
+    Pick<ProxyUser, 'status' | 'data_limit' | 'data_limit_reset_days' | 'expire' | 'hwid_limit' | 'note' | 'group_ids'>
+  >,
 ): Promise<ProxyUser> {
   const res = await authorizedFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   return res.json()

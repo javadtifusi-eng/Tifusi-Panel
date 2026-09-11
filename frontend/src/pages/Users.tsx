@@ -41,6 +41,7 @@ export default function UsersPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [username, setUsername] = useState('')
   const [dataLimitGb, setDataLimitGb] = useState('')
+  const [dataLimitResetDays, setDataLimitResetDays] = useState('')
   const [expire, setExpire] = useState('')
   const [note, setNote] = useState('')
   const [groupIds, setGroupIds] = useState<Set<number>>(new Set())
@@ -189,6 +190,7 @@ export default function UsersPage() {
     setOnHold(false)
     setOnHoldDays('30')
     setHwidLimit('')
+    setDataLimitResetDays('')
     setShowForm(false)
   }
 
@@ -196,6 +198,7 @@ export default function UsersPage() {
     setEditingId(user.id)
     setUsername(user.username)
     setDataLimitGb(user.data_limit ? String(user.data_limit / 1024 ** 3) : '')
+    setDataLimitResetDays(user.data_limit_reset_days ? String(user.data_limit_reset_days) : '')
     setExpire(user.expire ? user.expire.slice(0, 10) : '')
     setNote(user.note ?? '')
     setGroupIds(new Set(user.group_ids))
@@ -218,24 +221,41 @@ export default function UsersPage() {
     setSubmitting(true)
     setError(null)
     const data_limit = dataLimitGb ? Math.round(parseFloat(dataLimitGb) * 1024 ** 3) : null
+    const data_limit_reset_days = data_limit && dataLimitResetDays ? parseInt(dataLimitResetDays, 10) : null
     const expireIso = expire ? new Date(`${expire}T23:59:59`).toISOString() : null
     const group_ids = Array.from(groupIds)
     const hwid_limit = hwidLimit ? parseInt(hwidLimit, 10) : null
     try {
       if (editingId) {
-        await updateUser(editingId, { data_limit, expire: expireIso, hwid_limit, note: note || null, group_ids })
+        await updateUser(editingId, {
+          data_limit,
+          data_limit_reset_days,
+          expire: expireIso,
+          hwid_limit,
+          note: note || null,
+          group_ids,
+        })
       } else if (onHold) {
         await createUser({
           username,
           status: 'on_hold',
           data_limit,
+          data_limit_reset_days,
           on_hold_expire_days: onHoldDays ? parseInt(onHoldDays, 10) : null,
           hwid_limit,
           note: note || null,
           group_ids,
         })
       } else {
-        await createUser({ username, data_limit, expire: expireIso, hwid_limit, note: note || null, group_ids })
+        await createUser({
+          username,
+          data_limit,
+          data_limit_reset_days,
+          expire: expireIso,
+          hwid_limit,
+          note: note || null,
+          group_ids,
+        })
       }
       resetForm()
       await refresh()
@@ -651,6 +671,19 @@ export default function UsersPage() {
               className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
             />
           </div>
+          {dataLimitGb && (
+            <div>
+              <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.dataLimitResetDaysLabel}</label>
+              <input
+                value={dataLimitResetDays}
+                onChange={(e) => setDataLimitResetDays(e.target.value)}
+                type="number"
+                min="1"
+                placeholder={t.usersPage.dataLimitResetDaysPlaceholder}
+                className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              />
+            </div>
+          )}
           {!editingId && onHold ? (
             <div>
               <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.onHoldDaysLabel}</label>
@@ -887,6 +920,7 @@ export default function UsersPage() {
             </div>
             <div dir="ltr" className="mb-3 text-left text-xs text-muted">
               {formatUsed(u.used_traffic)} / {formatLimit(u.data_limit)}
+              {u.data_limit_reset_days ? ` ↻${u.data_limit_reset_days}d` : ''}
             </div>
             <div className="flex flex-wrap gap-3 border-t border-hair pt-3">
               <button onClick={() => setLinksUser(u)} className="text-xs hover:underline" style={{ color: ACCENT }}>
