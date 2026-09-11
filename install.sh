@@ -19,9 +19,9 @@ PANEL_URL=""
 # the "garbled unclear lines" this is here to avoid.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_CYAN=$'\033[1;36m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
-  C_BOLD=$'\033[1m'
+  C_BOLD=$'\033[1m'; C_MAGENTA=$'\033[1;35m'
 else
-  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""
+  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""; C_MAGENTA=""
 fi
 
 info() { printf '%s[Tifusi]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
@@ -38,22 +38,22 @@ step() {
   printf '%s[%d/%d · %d%%]%s %s\n' "$C_CYAN" "$STEP_NUM" "$STEP_TOTAL" $((STEP_NUM * 100 / STEP_TOTAL)) "$C_RESET" "$1"
 }
 
+# Same big block-letter "TIFUSI" (figlet -f big) as backend/cli/main.py's
+# generate-admin-key banner, so the two feel like one product — but in
+# magenta instead of that command's cyan, so it's clear at a glance which
+# stage (install vs. admin-key) produced the banner on screen.
+_BIG_TIFUSI='
+ _______ _____ ______ _    _  _____ _____
+|__   __|_   _|  ____| |  | |/ ____|_   _|
+   | |    | | | |__  | |  | | (___   | |
+   | |    | | |  __| | |  | |\___ \  | |
+   | |   _| |_| |    | |__| |____) |_| |_
+   |_|  |_____|_|     \____/|_____/|_____|
+'
+
 banner() {
-  # Kept narrow on purpose (~20 cols) despite wanting to stand out more —
-  # a wider box wraps mid-line on a narrow terminal (a phone SSH client,
-  # for instance) and comes out looking like garbled rows of "=" instead
-  # of a box. Extra blank padding rows plus bold/colored title text make
-  # it read as bigger without widening it.
-  local title="TIFUSI PANEL" text width bar blank
-  text="   ${title}   "
-  width=${#text}
-  bar=$(printf '%*s' "$width" '' | tr ' ' '=')
-  blank=$(printf '%*s' "$width" '')
-  printf '\n%s+%s+\n' "$C_CYAN" "$bar"
-  printf '|%s|\n' "$blank"
-  printf '|%s%s%s%s|\n' "$C_YELLOW" "$C_BOLD" "$text" "$C_RESET$C_CYAN"
-  printf '|%s|\n' "$blank"
-  printf '+%s+%s\n\n' "$bar" "$C_RESET"
+  printf '\n%s%s%s\n' "$C_MAGENTA$C_BOLD" "$_BIG_TIFUSI" "$C_RESET"
+  printf '%s  Tifusi Panel installer%s\n\n' "$C_MAGENTA" "$C_RESET"
 }
 
 banner
