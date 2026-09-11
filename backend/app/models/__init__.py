@@ -9,6 +9,7 @@ from app.models.node_traffic_snapshot import NodeTrafficSnapshot
 from app.models.setting import PanelSetting
 from app.models.setup_key import SetupKey
 from app.models.traffic_snapshot import TrafficSnapshot
+from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.models.user_template import UserTemplate
@@ -32,4 +33,7 @@ __all__ = [
     "Core",
     "Group",
     "PanelSetting",
+    "Tunnel",
+    "TunnelStatus",
+    "TunnelTransport",
 ]

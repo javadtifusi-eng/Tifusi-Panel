@@ -46,6 +46,7 @@ Tifusi Panel is a self-hosted proxy management panel: a web dashboard plus a RES
 - **REALITY scanner** — tests around 160 candidate domains for latency and suggests the fastest one right from the Hosts form.
 - **Subscription links** — a `vless://`, `vmess://`, `trojan://`, `ss://` or `hysteria2://` link per host, plain connection details for L2TP/IKEv2, and one subscription URL with a QR code that client apps hit directly (Clash and sing-box clients get a proper config instead of a raw link list).
 - **Nodes** — register a server, run the install command it gives you, hit Sync, and it comes back connected with its Xray version attached. After that, health checks and traffic collection run on their own.
+- **Tunnels** — publish a foreign VPN server through an Iran-side relay so the foreign server never needs an open inbound port. The panel builds a silent install command for each side and suggests a transport based on a live latency check.
 - **Admin accounts** — the owner can create additional admins with limited permissions, and each admin can issue API keys for scripts and bots instead of using a login token. Admins with limited access only see the users they created themselves.
 - **Notifications** — Telegram, Discord or a plain webhook, your pick (or all three), for user and node events.
 - **Settings** — public URL and admin password from the dashboard, TLS certificate upload, one-click backup and restore. No redeploy needed for any of it.

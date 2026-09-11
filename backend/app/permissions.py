@@ -7,4 +7,4 @@ created with an explicit, non-null `permissions` list are restricted at
 all (a null list — the default for every admin created before this
 existed — means unrestricted, same as today)."""
 
-PERMISSION_SCOPES = ("users", "hosts", "nodes", "cores", "groups", "settings")
+PERMISSION_SCOPES = ("users", "hosts", "nodes", "cores", "groups", "tunnels", "settings")
