@@ -82,6 +82,7 @@ async def create_user(
         expire=payload.expire if payload.status != UserStatus.on_hold else None,
         on_hold_expire_days=payload.on_hold_expire_days if payload.status == UserStatus.on_hold else None,
         hwid_limit=payload.hwid_limit,
+        speed_limit_mbps=payload.speed_limit_mbps,
         note=payload.note,
         admin_id=admin.id,
     )

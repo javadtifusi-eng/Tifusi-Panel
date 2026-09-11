@@ -16,6 +16,7 @@ class ProxyUserCreate(BaseModel):
     expire: datetime | None = None
     on_hold_expire_days: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
+    speed_limit_mbps: int | None = Field(default=None, ge=1)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] = Field(default_factory=list)
 
@@ -34,6 +35,7 @@ class ProxyUserUpdate(BaseModel):
     expire: datetime | None = None
     on_hold_expire_days: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
+    speed_limit_mbps: int | None = Field(default=None, ge=1)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] | None = None
 
@@ -56,6 +58,8 @@ class ProxyUserResponse(BaseModel):
     created_at: datetime
     group_ids: list[int]
     admin_id: int | None
+    speed_limit_mbps: int | None
+    last_seen: datetime | None
 
 
 class ProxyUserList(BaseModel):

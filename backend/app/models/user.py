@@ -58,6 +58,22 @@ class ProxyUser(Base):
     # the enforcement in app/routers/subscription.py.
     hwid_limit: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
+    # None means uncapped. NOT YET ENFORCED — recorded and shown in the UI
+    # only. Vanilla Xray-core has no native per-client bandwidth-cap field
+    # (its policy levels cover handshake/connIdle timeouts and stats, not
+    # throughput), and this panel's data plane doesn't tag which kernel
+    # connection belongs to which user, so there's nothing today for a
+    # node-side `tc`/cgroup shaper to key off of. Real enforcement needs
+    # that per-connection tagging built first — see node_agent/main.py's
+    # /config, which would need to pass this through once it exists.
+    speed_limit_mbps: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    # Bumped in app/traffic/sync.py::collect_traffic whenever a poll cycle
+    # (every app.config.settings.traffic_sync_interval_seconds, 30s by
+    # default) sees a nonzero traffic delta for this user — "last seen
+    # active within the last poll window", not a live push-based signal.
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

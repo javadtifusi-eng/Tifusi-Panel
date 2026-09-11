@@ -48,8 +48,11 @@ async def collect_traffic(db: AsyncSession) -> None:
         return
 
     users = list((await db.execute(select(ProxyUser).where(ProxyUser.username.in_(deltas.keys())))).scalars().all())
+    now = datetime.now(timezone.utc)
     for user in users:
         user.used_traffic += deltas[user.username]
+        if deltas[user.username] > 0:
+            user.last_seen = now
 
     today = datetime.now(timezone.utc).date()
     snapshot = await db.scalar(select(TrafficSnapshot).where(TrafficSnapshot.date == today))

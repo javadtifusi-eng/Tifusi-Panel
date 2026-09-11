@@ -48,6 +48,7 @@ export default function UsersPage() {
   const [onHold, setOnHold] = useState(false)
   const [onHoldDays, setOnHoldDays] = useState('30')
   const [hwidLimit, setHwidLimit] = useState('')
+  const [speedLimitMbps, setSpeedLimitMbps] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [linksUser, setLinksUser] = useState<ProxyUser | null>(null)
   const [devicesUser, setDevicesUser] = useState<ProxyUser | null>(null)
@@ -89,6 +90,20 @@ export default function UsersPage() {
     const gb = bytes / 1024 ** 3
     if (gb < 0.1) return `0 ${t.usersPage.gbSuffix}`
     return `${gb.toFixed(1)} ${t.usersPage.gbSuffix}`
+  }
+
+  // "Online" within one traffic-sync cycle (30s server-side, see
+  // app/traffic/sync.py) rather than a live push — anything within 90s
+  // covers a slow/missed cycle without claiming a stale user is online.
+  function formatLastSeen(iso: string | null): string {
+    if (!iso) return t.usersPage.neverSeen
+    const seconds = (Date.now() - new Date(iso).getTime()) / 1000
+    if (seconds < 90) return t.usersPage.onlineNow
+    const minutes = Math.round(seconds / 60)
+    if (minutes < 60) return t.usersPage.minutesAgo(minutes)
+    const hours = Math.round(minutes / 60)
+    if (hours < 24) return t.usersPage.hoursAgo(hours)
+    return t.usersPage.daysAgo(Math.round(hours / 24))
   }
 
   async function refresh() {
@@ -190,6 +205,7 @@ export default function UsersPage() {
     setOnHold(false)
     setOnHoldDays('30')
     setHwidLimit('')
+    setSpeedLimitMbps('')
     setDataLimitResetDays('')
     setShowForm(false)
   }
@@ -204,6 +220,7 @@ export default function UsersPage() {
     setGroupIds(new Set(user.group_ids))
     setOnHold(false)
     setHwidLimit(user.hwid_limit ? String(user.hwid_limit) : '')
+    setSpeedLimitMbps(user.speed_limit_mbps ? String(user.speed_limit_mbps) : '')
     setShowForm(true)
   }
 
@@ -225,6 +242,7 @@ export default function UsersPage() {
     const expireIso = expire ? new Date(`${expire}T23:59:59`).toISOString() : null
     const group_ids = Array.from(groupIds)
     const hwid_limit = hwidLimit ? parseInt(hwidLimit, 10) : null
+    const speed_limit_mbps = speedLimitMbps ? parseInt(speedLimitMbps, 10) : null
     try {
       if (editingId) {
         await updateUser(editingId, {
@@ -232,6 +250,7 @@ export default function UsersPage() {
           data_limit_reset_days,
           expire: expireIso,
           hwid_limit,
+          speed_limit_mbps,
           note: note || null,
           group_ids,
         })
@@ -243,6 +262,7 @@ export default function UsersPage() {
           data_limit_reset_days,
           on_hold_expire_days: onHoldDays ? parseInt(onHoldDays, 10) : null,
           hwid_limit,
+          speed_limit_mbps,
           note: note || null,
           group_ids,
         })
@@ -253,6 +273,7 @@ export default function UsersPage() {
           data_limit_reset_days,
           expire: expireIso,
           hwid_limit,
+          speed_limit_mbps,
           note: note || null,
           group_ids,
         })
@@ -717,6 +738,17 @@ export default function UsersPage() {
             />
           </div>
           <div>
+            <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.speedLimitLabel}</label>
+            <input
+              value={speedLimitMbps}
+              onChange={(e) => setSpeedLimitMbps(e.target.value)}
+              type="number"
+              min="1"
+              placeholder={t.usersPage.speedLimitPlaceholder}
+              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+            />
+          </div>
+          <div>
             <label className={`mb-1.5 block text-xs text-muted ${align}`}>{t.usersPage.note}</label>
             <input
               value={note}
@@ -918,10 +950,12 @@ export default function UsersPage() {
                 {t.usersPage.status[u.status]}
               </button>
             </div>
-            <div dir="ltr" className="mb-3 text-left text-xs text-muted">
+            <div dir="ltr" className="mb-1 text-left text-xs text-muted">
               {formatUsed(u.used_traffic)} / {formatLimit(u.data_limit)}
               {u.data_limit_reset_days ? ` ↻${u.data_limit_reset_days}d` : ''}
+              {u.speed_limit_mbps ? ` · ${u.speed_limit_mbps} Mbps` : ''}
             </div>
+            <div className={`mb-3 text-xs text-faint ${align}`}>{formatLastSeen(u.last_seen)}</div>
             <div className="flex flex-wrap gap-3 border-t border-hair pt-3">
               <button onClick={() => setLinksUser(u)} className="text-xs hover:underline" style={{ color: ACCENT }}>
                 {t.usersPage.linksBtn}
