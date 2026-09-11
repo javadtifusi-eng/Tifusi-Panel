@@ -30,11 +30,26 @@ def _ca_certificate_der(cert_pem: str | None) -> bytes | None:
     (see app/cores/ikev2_cert.py) — the last PEM block in it is that CA.
     A publicly-trusted certificate needs nothing extra, but a self-signed
     one has to have this CA bundled straight into the profile, or iOS/macOS
-    silently reject the server's identity and the VPN just never connects."""
+    silently reject the server's identity and the VPN just never connects.
+
+    The check is issuer == subject on that last block, not just "is there a
+    second block": a real cert's fullchain.pem also has two blocks (leaf +
+    intermediate), and that intermediate is not a root — pinning it the
+    same way a genuine self-signed CA gets pinned taught a device to trust
+    only that one intermediate for this VPN specifically, instead of
+    validating normally against the system's trust store. Confirmed live:
+    a profile built before this fix (self-signed) kept failing to
+    reconnect after the Core's certificate was swapped to a real one,
+    because the OLD profile was still on the device pinning the OLD
+    self-signed CA — reinstalling a freshly-built profile (this fix, no
+    pinning for a real cert) is what actually fixed it, not just the
+    server-side cert swap."""
     blocks = _PEM_CERT_RE.findall(cert_pem or "")
-    if len(blocks) < 2:
+    if not blocks:
         return None
     ca_cert = x509.load_pem_x509_certificate(blocks[-1].encode())
+    if ca_cert.issuer != ca_cert.subject:
+        return None
     return ca_cert.public_bytes(Encoding.DER)
 
 
