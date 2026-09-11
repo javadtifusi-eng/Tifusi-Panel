@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Logo } from '../components/Logo'
 import { useLang } from '../i18n/LangContext'
-import { useTheme } from '../theme/ThemeContext'
 import { ApiError, createAdmin, getSetupStatus, login as loginApi } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
@@ -51,29 +50,11 @@ function CheckIcon() {
   )
 }
 
-function SunIcon() {
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-    </svg>
-  )
-}
-
-function MoonIcon() {
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-    </svg>
-  )
-}
-
 type Screen = 'setup' | 'login'
 
-// Semantic theme tokens, same as the rest of the app — this page now
-// follows the light/dark toggle instead of a fixed brand color, so it
-// looks like one product with the panel behind it rather than a separate
-// marketing surface bolted onto the front of it.
+// Semantic theme tokens, same as the rest of the app — dark is the only
+// theme (see frontend/src/index.css), so this stays one fixed palette
+// instead of a toggle-able one.
 const fieldClass =
   'w-full rounded-lg border border-edge bg-field px-3.5 py-3 text-sm text-primary placeholder-faint outline-none transition-colors focus:border-cyan-400/60'
 const labelClass = 'block text-xs text-muted mb-1'
@@ -83,7 +64,6 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
   const { lang, setLang, t, dir, align } = useLang()
   const iconSideClass = dir === 'rtl' ? 'right-3.5' : 'left-3.5'
   const iconPadClass = dir === 'rtl' ? 'pr-10' : 'pl-10'
-  const { theme, toggleTheme } = useTheme()
   const [screen, setScreen] = useState<Screen>('setup')
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -163,14 +143,6 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
         className={`rounded-full border px-3.5 py-1.5 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 bg-accent-tint text-accent' : 'border-edge text-muted'}`}
       >
         فارسی
-      </button>
-      <button
-        onClick={toggleTheme}
-        aria-label={t.nav.toggleTheme}
-        title={t.nav.toggleTheme}
-        className="flex items-center justify-center rounded-full border border-edge px-3 py-1.5 text-muted hover:border-cyan-400/50 hover:text-accent"
-      >
-        {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
       </button>
     </div>
   )

@@ -47,44 +47,6 @@
   --c-neutral-tint: 30 37 50;
 }
 
-/* An explicit light choice (data-theme="light") always wins. There's no
-   prefers-color-scheme fallback — this is an authenticated admin tool with
-   its own in-app toggle (see ThemeToggle), not a themed public page that
-   should silently follow the OS. */
-:root[data-theme='light'] {
-  color-scheme: light;
-
-  --c-app: 248 250 252;
-  --c-surface: 255 255 255;
-  --c-field: 241 245 249;
-  --c-well: 238 242 246;
-  --c-well-strong: 226 232 240;
-
-  --c-border-hair: 238 241 245;
-  --c-border-subtle: 226 232 240;
-  --c-border-default: 203 213 225;
-  --c-border-strong: 148 163 184;
-
-  --c-text-heading: 15 23 42;
-  --c-text-primary: 30 41 59;
-  --c-text-body: 51 65 85;
-  --c-text-secondary: 71 85 105;
-  --c-text-muted: 100 116 139;
-  --c-text-faint: 148 163 184;
-
-  --c-accent: 14 116 144;
-  --c-accent-tint: 236 254 255;
-
-  --c-success: 4 120 87;
-  --c-success-tint: 236 253 245;
-  --c-danger: 185 28 28;
-  --c-danger-tint: 254 242 242;
-  --c-warning: 180 83 9;
-  --c-warning-tint: 255 251 235;
-  --c-neutral: 100 116 139;
-  --c-neutral-tint: 241 245 249;
-}
-
 /* color-scheme isn't enough everywhere — some mobile browsers/WebViews
    still pop a <select>'s option list in their light default regardless.
    Setting the colors directly on select/option is honored much more
