@@ -1,3 +1,7 @@
+from pathlib import Path
+
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -109,6 +113,57 @@ async def list_cores(db: AsyncSession = Depends(get_db)) -> CoreList:
     return CoreList(total=total or 0, cores=[await _to_response(c, db) for c in cores])
 
 
+class GenerateIkev2CertResponse(BaseModel):
+    certificate: str
+    key: str
+
+
+# Same files app/routers/settings.py installs the panel's own dashboard
+# HTTPS cert to (Settings > SSL Certificate) — duplicated here rather than
+# imported to keep the two routers independent, the same way every other
+# small constant in this file already is.
+_PANEL_CERT_FILE = Path("/app/certs/fullchain.pem")
+_PANEL_KEY_FILE = Path("/app/certs/privkey.pem")
+
+
+# Registered ahead of GET /{core_id} below — Starlette matches routes in
+# registration order, and "panel-cert" would otherwise be captured as that
+# route's core_id path param (and rejected as invalid int, 422) before
+# this one ever got a chance to match.
+@router.get("/panel-cert", response_model=GenerateIkev2CertResponse)
+async def get_panel_cert() -> GenerateIkev2CertResponse:
+    """Backs Cores' "Use panel's domain certificate" button — the admin
+    already has one real, publicly-trusted certificate (Settings > SSL
+    Certificate), so reusing it for an IKEv2 Core needs no new Let's
+    Encrypt request and, unlike a self-signed one, needs no special
+    trust-pinning on the client at all (see info_page.py/ikev2_profile.py's
+    own self-signed detection).
+
+    strongSwan on a node can only parse an RSA key (no EC plugin compiled
+    in — confirmed live: an ECDSA cert fails to load at all) — install.sh
+    and Settings > SSL Certificate both request RSA now for exactly this
+    reason, but a cert obtained before that change, or uploaded by hand,
+    might still be ECDSA, so this checks rather than assuming.
+    """
+    if not _PANEL_CERT_FILE.exists() or not _PANEL_KEY_FILE.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="The panel has no SSL certificate yet — set one up in Settings > SSL Certificate first",
+        )
+    cert_pem = _PANEL_CERT_FILE.read_text()
+    key_pem = _PANEL_KEY_FILE.read_text()
+    key = load_pem_private_key(key_pem.encode(), password=None)
+    if not isinstance(key, rsa.RSAPrivateKey):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The panel's certificate isn't RSA, so strongSwan on a node can't use it for IKEv2. "
+                "Request a new one from Settings > SSL Certificate (RSA is the default now)."
+            ),
+        )
+    return GenerateIkev2CertResponse(certificate=cert_pem, key=key_pem)
+
+
 @router.get("/{core_id}", response_model=CoreResponse)
 async def get_core(core_id: int, db: AsyncSession = Depends(get_db)) -> CoreResponse:
     core = await _get_core_or_404(core_id, db)
@@ -170,11 +225,6 @@ async def update_core(core_id: int, payload: CoreUpdate, db: AsyncSession = Depe
 
 class GenerateIkev2CertRequest(BaseModel):
     host: str | None = None
-
-
-class GenerateIkev2CertResponse(BaseModel):
-    certificate: str
-    key: str
 
 
 @router.post("/generate-ikev2-cert", response_model=GenerateIkev2CertResponse)

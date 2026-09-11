@@ -391,6 +391,7 @@ export const dict = {
       ikev2CertificateLabel: 'Certificate',
       ikev2CertificateKeyLabel: 'Private Key',
       ikev2GenerateCertButton: 'ساخت گواهی خودامضا',
+      ikev2UsePanelCertButton: 'استفاده از گواهی دامنه‌ی پنل',
       ikev2CertHint:
         'خالی بمونه، نود خودش یه گواهی خودامضا با همین Remote ID می‌سازه. برای یه گواهی واقعی (مثلاً Let\'s Encrypt یه دامنه)، محتوای cert/key رو اینجا بچسبون یا با دکمه‌ی بالا یکی خودامضا بساز.',
       ikev2CertStatusCustom: 'گواهی سفارشی',
@@ -1004,6 +1005,7 @@ export const dict = {
       ikev2CertificateLabel: 'Certificate',
       ikev2CertificateKeyLabel: 'Private Key',
       ikev2GenerateCertButton: 'Generate Self-Signed Cert',
+      ikev2UsePanelCertButton: "Use Panel's Domain Certificate",
       ikev2CertHint:
         "Left blank, the node self-signs one using this Remote ID. For a real certificate (e.g. Let's Encrypt for a domain), paste the cert/key content here, or generate a self-signed one with the button above.",
       ikev2CertStatusCustom: 'Custom certificate',

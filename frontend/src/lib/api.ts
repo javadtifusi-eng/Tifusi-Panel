@@ -755,6 +755,11 @@ export async function generateIkev2Cert(host: string): Promise<Ikev2CertKeypair>
   return res.json()
 }
 
+export async function getPanelCertForIkev2(): Promise<Ikev2CertKeypair> {
+  const res = await authorizedFetch('/cores/panel-cert')
+  return res.json()
+}
+
 export async function listCores(): Promise<CoreList> {
   const res = await authorizedFetch('/cores')
   return res.json()

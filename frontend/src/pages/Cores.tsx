@@ -6,6 +6,7 @@ import {
   deleteCore,
   FINGERPRINTS,
   generateIkev2Cert,
+  getPanelCertForIkev2,
   getRealityKeypair,
   listCores,
   listNodes,
@@ -628,6 +629,7 @@ export default function CoresPage() {
   )
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
+  const [usingPanelCert, setUsingPanelCert] = useState(false)
 
   function updateWizard<K extends keyof ReturnType<typeof emptyWizard>>(
     key: K,
@@ -769,6 +771,19 @@ export default function CoresPage() {
       setError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
     } finally {
       setGeneratingIkev2Cert(false)
+    }
+  }
+
+  async function usePanelCertForIkev2() {
+    setUsingPanelCert(true)
+    setError(null)
+    try {
+      const pair = await getPanelCertForIkev2()
+      setForm((f) => ({ ...f, ikev2Certificate: pair.certificate, ikev2CertificateKey: pair.key }))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
+    } finally {
+      setUsingPanelCert(false)
     }
   }
 
@@ -1292,14 +1307,24 @@ export default function CoresPage() {
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
                       <label className={labelClass}>{t.coresPage.ikev2CertSourceLabel}</label>
-                      <button
-                        type="button"
-                        onClick={generateIkev2ServerCert}
-                        disabled={generatingIkev2Cert}
-                        className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
-                      >
-                        {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={usePanelCertForIkev2}
+                          disabled={usingPanelCert}
+                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
+                        >
+                          {usingPanelCert ? '…' : t.coresPage.ikev2UsePanelCertButton}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={generateIkev2ServerCert}
+                          disabled={generatingIkev2Cert}
+                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
+                        >
+                          {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
+                        </button>
+                      </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>

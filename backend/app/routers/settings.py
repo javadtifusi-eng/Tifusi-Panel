@@ -211,6 +211,13 @@ async def request_ssl(payload: SslRequest, db: AsyncSession = Depends(get_db)) -
     _ACME_DIR.mkdir(parents=True, exist_ok=True)
     cmd = [
         "certbot", "certonly", "--standalone", "--non-interactive", "--agree-tos",
+        # RSA, not certbot's own ECDSA default: this cert can end up reused
+        # as a Core's IKEv2 certificate (see cores.py's use-panel-cert
+        # endpoint), and the node's strongSwan build has no EC plugin —
+        # confirmed live, an ECDSA cert there fails with "parsing X509
+        # certificate failed" and loads zero IKEv2 connections. RSA works
+        # for the dashboard's own HTTPS exactly the same as ECDSA would.
+        "--key-type", "rsa", "--rsa-key-size", "2048",
         "--config-dir", str(_ACME_DIR / "config"),
         "--work-dir", str(_ACME_DIR / "work"),
         "--logs-dir", str(_ACME_DIR / "logs"),

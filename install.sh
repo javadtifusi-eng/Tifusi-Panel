@@ -249,8 +249,15 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
       info "Requesting a Let's Encrypt certificate for $domain (needs port 80 free, and $domain must already resolve to this server)..."
       mkdir -p certs letsencrypt-work
       CERT_LOG="$(mktemp)"
+      # --key-type rsa: not certbot's own ECDSA default — this cert can end
+      # up reused as an IKEv2 Core's certificate (Cores > "Use panel's
+      # domain certificate"), and strongSwan on a node has no EC plugin
+      # compiled in, so an ECDSA cert there fails outright ("parsing X509
+      # certificate failed", confirmed live). RSA works identically for
+      # the dashboard's own HTTPS.
       if docker run --rm -p 80:80 -v "$(pwd)/letsencrypt-work:/etc/letsencrypt" \
         certbot/certbot certonly --standalone --non-interactive --agree-tos \
+        --key-type rsa --rsa-key-size 2048 \
         -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
         # Certbot's own "Congratulations" box already states exactly where
         # the cert and key ended up — show it instead of just our one-line

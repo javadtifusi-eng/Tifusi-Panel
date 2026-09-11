@@ -117,8 +117,12 @@ action_get_ssl() {
   info "Requesting a Let's Encrypt certificate for $domain (needs port 80 free)..."
   mkdir -p certs letsencrypt-work
   CERT_LOG="$(mktemp)"
+  # --key-type rsa: see install.sh's own SSL step for why — a node's
+  # strongSwan can't parse an ECDSA cert if this one later gets reused as
+  # an IKEv2 Core's certificate.
   if docker run --rm -p 80:80 -v "$(pwd)/letsencrypt-work:/etc/letsencrypt" \
     certbot/certbot certonly --standalone --non-interactive --agree-tos \
+    --key-type rsa --rsa-key-size 2048 \
     -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
     cat "$CERT_LOG"
     cp "letsencrypt-work/live/${domain}/fullchain.pem" certs/fullchain.pem
