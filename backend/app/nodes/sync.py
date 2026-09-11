@@ -115,13 +115,17 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     xray_payload = await _build_xray_payload(xray_core, db)
     ipsec_payload = await _build_ipsec_payload(ipsec_core, node, db) if ipsec_core is not None else None
 
-    base_url = f"http://{node.address}:{node.port}"
+    base_url = f"https://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
 
     health: dict | None = None
     error: str | None = None
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        # verify=False: the node's cert is self-signed (node_agent/tls.py)
+        # with no shared CA to check it against — this still encrypts the
+        # API key and every pushed user secret/PSK against passive
+        # sniffing, which plain HTTP never did.
+        async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
             resp = await client.post(f"{base_url}/config", json=xray_payload, headers=headers)
             resp.raise_for_status()
             if ipsec_payload is not None:
@@ -174,10 +178,10 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
     does that deliberately, which is exactly what a periodic background
     check must NOT do to something actively serving connections)."""
     previous_status = node.status
-    base_url = f"http://{node.address}:{node.port}"
+    base_url = f"https://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
             resp = await client.get(f"{base_url}/health", headers=headers)
             resp.raise_for_status()
             health = resp.json()

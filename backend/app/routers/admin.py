@@ -38,6 +38,10 @@ async def change_password(
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
     admin.hashed_password = hash_password(payload.new_password)
+    # Invalidates every token issued before this — including the one used
+    # to make this very request, so the frontend has to log back in with
+    # the new password right after. See app/dependencies.get_current_admin.
+    admin.token_version = (admin.token_version or 0) + 1
     db.add(admin)
     await db.commit()
 

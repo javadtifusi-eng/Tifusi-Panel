@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -14,6 +14,14 @@ class Admin(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Embedded in every access token this admin is issued (see
+    # app/security.create_access_token) and checked on every request (see
+    # app/dependencies.get_current_admin). Bumped by change_password so a
+    # token issued before a password change — leaked or not — stops working
+    # immediately instead of staying valid for the rest of its normal
+    # lifetime (access_token_expire_minutes).
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
 
     # None = unrestricted (full access, same as every admin before this
     # existed); a list restricts this admin to exactly those scopes (see

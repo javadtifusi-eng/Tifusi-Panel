@@ -73,10 +73,8 @@ RUN mkdir -p /app/data
 
 EXPOSE 62050
 
-# Shell form (not exec-form JSON) so $AGENT_PORT actually expands — this
-# container runs with --network host (see install-node.sh), since Xray
-# itself binds to whatever ports the panel's pushed config gives it, chosen
-# per-host after the container already exists. Docker has no way to
-# pre-publish ports it doesn't know about yet, so the container shares the
-# host's real network stack instead of using -p per port.
-CMD uvicorn node_agent.main:app --host 0.0.0.0 --port ${AGENT_PORT:-62050}
+# node_agent/serve.py (not a bare `uvicorn node_agent.main:app` CLI call)
+# so the self-signed TLS cert it serves on gets generated before uvicorn
+# tries to load it — see node_agent/tls.py for why this agent speaks HTTPS
+# at all. Exec form works fine here since serve.py reads $AGENT_PORT itself.
+CMD ["python", "-m", "node_agent.serve"]

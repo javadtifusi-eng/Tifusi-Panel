@@ -1,13 +1,15 @@
 """The process that actually runs on a node: takes the config the panel
 pushes, (re)starts Xray-core pointed at it, and reports whether it's alive.
 
-Talks to the panel over plain HTTP + a shared API key rather than the
-mTLS gRPC bridge a production system would eventually want — that's real
-future work, not a shortcut taken for lack of caring: getting the
-panel <-> node config/health contract right first is what everything
-else builds on.
+Served over HTTPS with a self-signed cert (see node_agent/tls.py, and
+node_agent/serve.py which is the actual process entrypoint) plus a shared
+API key, rather than the mTLS gRPC bridge a production system would
+eventually want — that's real future work, not a shortcut taken for lack
+of caring: getting the panel <-> node config/health contract right first
+is what everything else builds on.
 """
 
+import hmac
 import json
 import os
 import subprocess
@@ -44,7 +46,10 @@ _ipsec_mode: str | None = None
 
 
 def _check_key(x_node_api_key: str | None) -> None:
-    if not API_KEY or x_node_api_key != API_KEY:
+    # hmac.compare_digest, not `!=`: a plain string compare short-circuits
+    # on the first mismatched byte, which leaks (via response timing) how
+    # many leading bytes of a guess are already correct.
+    if not API_KEY or not x_node_api_key or not hmac.compare_digest(x_node_api_key, API_KEY):
         raise HTTPException(status_code=401, detail="Invalid node API key")
 
 

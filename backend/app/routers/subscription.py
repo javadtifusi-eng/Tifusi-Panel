@@ -64,9 +64,16 @@ def _userinfo_header(user: ProxyUser) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    # X-Real-IP is what this project's own nginx (frontend/nginx.conf) sets
+    # to the real TCP peer, overwriting anything the client sent — safe to
+    # trust. X-Forwarded-For is NOT: nginx never touches it, so a client
+    # could set it to a fresh value on every request (or skip nginx
+    # entirely and hit the panel's own published port directly), which
+    # used to make the IP fallback below trivial to spoof into a useless
+    # per-request "device" limit.
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
     return request.client.host if request.client else "unknown"
 
 

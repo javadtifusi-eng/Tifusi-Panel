@@ -41,14 +41,21 @@ async def get_current_admin(
     if token.startswith(API_KEY_PREFIX):
         return await _admin_from_api_key(token, db)
 
-    username = decode_access_token(token)
-    if username is None:
+    payload = decode_access_token(token)
+    username = payload.get("sub") if payload else None
+    if not username:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     result = await db.execute(select(Admin).where(Admin.username == username))
     admin = result.scalar_one_or_none()
     if admin is None:
         raise HTTPException(status_code=401, detail="Admin account no longer exists")
+
+    # payload.get("tv") is None for a token minted before this existed —
+    # treated as version 0, same as every Admin row's own default, so an
+    # old still-live token isn't logged out by this change itself.
+    if payload.get("tv", 0) != admin.token_version:
+        raise HTTPException(status_code=401, detail="This session was invalidated by a password change")
 
     return admin
 

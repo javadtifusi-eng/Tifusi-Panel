@@ -15,9 +15,11 @@ from app.notifications.webhook import send_webhook_event
 
 
 async def _fetch_node_stats(node: Node) -> dict[str, dict[str, int]]:
-    base_url = f"http://{node.address}:{node.port}"
+    base_url = f"https://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    # verify=False: same self-signed node cert as app/nodes/sync.py — see
+    # node_agent/tls.py for why there's no CA to verify against.
+    async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
         resp = await client.get(f"{base_url}/stats", headers=headers)
         resp.raise_for_status()
         return resp.json().get("users", {})
