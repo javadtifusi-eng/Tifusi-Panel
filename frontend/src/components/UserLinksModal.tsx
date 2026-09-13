@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useLang } from '../i18n/LangContext'
-import { ApiError, getUserLinks, type UserLinks } from '../lib/api'
+import { ApiError, getUserLinks, listUserAppReports, type AppReport, type UserLinks } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
 const ACCENT = '#22D3EE'
 
 function protocolLabel(link: string): string {
   return link.split('://')[0].toUpperCase()
+}
+
+// Anything the app reports that isn't a known success/soft-failure is
+// shown as a failure — an unfamiliar result from a newer app is more
+// likely a new way to fail than a new way to succeed.
+function reportResultClass(result: string): string {
+  if (result === 'connected' || result === 'ok') return 'text-success'
+  if (result === 'disconnected_early') return 'text-warning'
+  return 'text-danger'
 }
 
 export default function UserLinksModal({
@@ -23,11 +32,18 @@ export default function UserLinksModal({
   const [data, setData] = useState<UserLinks | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [reports, setReports] = useState<AppReport[] | null>(null)
+  const [reportsError, setReportsError] = useState<string | null>(null)
+  const resultLabels: Record<string, string> = t.userLinksModal.appReportResults
 
   useEffect(() => {
     getUserLinks(userId)
       .then(setData)
       .catch((err) => setError(err instanceof ApiError ? err.message : t.userLinksModal.fetchError))
+    // Fetched separately so a failure here never hides the links themselves.
+    listUserAppReports(userId, 50)
+      .then(setReports)
+      .catch((err) => setReportsError(err instanceof ApiError ? err.message : t.userLinksModal.appReportsFetchError))
   }, [userId])
 
   async function copy(text: string) {
@@ -208,6 +224,39 @@ export default function UserLinksModal({
             )}
           </>
         )}
+
+        <div className="mt-6 border-t border-cyan-400/10 pt-4">
+          <div className="mb-2 text-xs font-bold text-secondary">{t.userLinksModal.appReportsTitle}</div>
+          {reportsError && <div className="text-xs text-danger">{reportsError}</div>}
+          {!reports && !reportsError && <div className="text-xs text-faint">{t.loading}</div>}
+          {reports && reports.length === 0 && (
+            <div className="text-xs text-faint">{t.userLinksModal.appReportsEmpty}</div>
+          )}
+          {reports && reports.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {reports.map((r) => (
+                <div key={r.id} className="rounded-lg border border-subtle bg-field px-2.5 py-1.5 text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span className={`flex-shrink-0 font-bold ${reportResultClass(r.result)}`}>
+                      {resultLabels[r.result] ?? r.result}
+                    </span>
+                    <span dir="ltr" className="flex-1 truncate text-left text-muted">
+                      {[r.protocol, r.network, r.carrier].filter(Boolean).join(' · ')}
+                    </span>
+                    <span dir="ltr" className="flex-shrink-0 text-faint">
+                      {new Date(r.reported_at).toLocaleString()}
+                    </span>
+                  </div>
+                  {r.detail && (
+                    <div dir="ltr" title={r.detail} className="mt-0.5 truncate text-left font-mono text-[10px] text-faint">
+                      {r.detail}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

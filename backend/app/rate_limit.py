@@ -1,7 +1,8 @@
 """A small in-process sliding-window limiter for the panel's unauthenticated
 endpoints (login, first-run admin setup) — without it, nothing stops an
 attacker from guessing a password or setup key as fast as the network lets
-them. In-memory by design: the panel always runs as one uvicorn process
+them — plus the Android app's report endpoint, which is limited per
+request rather than per failure (see hit()). In-memory by design: the panel always runs as one uvicorn process
 (see backend/run.py and the Dockerfile CMD), so this doesn't need to survive
 a restart or be shared across workers to do its job.
 """
@@ -34,6 +35,15 @@ def check(key: str, *, max_attempts: int, window_seconds: float) -> None:
             detail=f"Too many attempts — try again in {retry_after}s",
             headers={"Retry-After": str(retry_after)},
         )
+
+
+def hit(key: str, *, max_requests: int, window_seconds: float) -> None:
+    """check() and record in one step, for public endpoints where every
+    request counts toward the limit rather than only failed credential
+    checks — e.g. POST /app/report, which writes to the database even when
+    it succeeds."""
+    check(key, max_attempts=max_requests, window_seconds=window_seconds)
+    _attempts[key].append(time.monotonic())
 
 
 def record_failure(key: str) -> None:

@@ -1,5 +1,6 @@
 from app.models.admin import Admin
 from app.models.api_key import ApiKey
+from app.models.app_report import AppReport
 from app.models.core import Core
 from app.models.group import Group
 from app.models.host import Host, HostProtocol, HostSecurity
@@ -17,6 +18,7 @@ from app.models.user_template import UserTemplate
 __all__ = [
     "Admin",
     "ApiKey",
+    "AppReport",
     "SetupKey",
     "ProxyUser",
     "UserStatus",

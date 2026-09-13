@@ -170,6 +170,31 @@ export async function resetUserDevices(userId: number): Promise<void> {
   await authorizedFetch(`/users/${userId}/devices/reset`, { method: 'POST' })
 }
 
+// Self-reported by the Tifusi VPN Android app (POST /app/report); every
+// field but received_at/client_ip comes from the phone and is display-only.
+export interface AppReport {
+  id: number
+  received_at: string
+  reported_at: string
+  client_ip: string
+  app_version: string | null
+  android_sdk: number | null
+  device: string | null
+  event: string
+  result: string
+  detail: string | null
+  protocol: string | null
+  duration_ms: number | null
+  network: string | null
+  carrier: string | null
+  sim_carrier: string | null
+}
+
+export async function listUserAppReports(userId: number, limit = 100): Promise<AppReport[]> {
+  const res = await authorizedFetch(`/users/${userId}/app-reports?limit=${limit}`)
+  return res.json()
+}
+
 export interface BulkCreateResult {
   created: ProxyUser[]
   skipped: string[]

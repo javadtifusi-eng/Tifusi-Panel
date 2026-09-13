@@ -10,6 +10,7 @@ from app.dependencies import require_permission
 from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_ipsec_configs_for_user, build_links_for_user
 from app.models.admin import Admin
+from app.models.app_report import AppReport
 from app.models.host import Host
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
@@ -27,6 +28,7 @@ from app.schemas.user import (
     ProxyUserResponse,
     ProxyUserUpdate,
 )
+from app.schemas.app_report import AppReportResponse
 from app.schemas.user_device import UserDeviceResponse
 from app.settings_store import get_public_url
 from app.subscription.app_code import app_code_for
@@ -336,6 +338,26 @@ async def reset_user_devices(
     for device in result.scalars().all():
         await db.delete(device)
     await db.commit()
+
+
+@router.get("/{user_id}/app-reports", response_model=list[AppReportResponse])
+async def list_user_app_reports(
+    user_id: int,
+    limit: int = Query(default=100, ge=1, le=500),
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
+) -> list[AppReport]:
+    """What the Tifusi VPN Android app reported about this user's connection
+    attempts (POST /app/report, app/routers/app_reports.py), newest first.
+    At most 500 are ever kept per user, hence the same ceiling on limit."""
+    await _get_user_or_404(user_id, admin, db)
+    result = await db.execute(
+        select(AppReport)
+        .where(AppReport.user_id == user_id)
+        .order_by(AppReport.received_at.desc(), AppReport.id.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
 
 
 @router.get("/{user_id}/links")

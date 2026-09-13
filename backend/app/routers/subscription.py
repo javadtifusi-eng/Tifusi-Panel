@@ -1,4 +1,3 @@
-import hmac
 import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 
@@ -18,6 +17,7 @@ from app.subscription.app_code import app_code_for
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.info_page import build_info_page_html
+from app.subscription.lookup import client_ip, user_by_app_code_or_404, user_or_404
 from app.subscription.singbox import build_singbox_config
 
 _STATUS_LABELS_FA = {
@@ -49,13 +49,6 @@ def _wants(user_agent: str | None, markers: tuple[str, ...]) -> bool:
     return any(marker in ua for marker in markers)
 
 
-async def _user_or_404(secret: str, db: AsyncSession) -> ProxyUser:
-    user = await db.scalar(select(ProxyUser).where(ProxyUser.secret == secret))
-    if user is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    return user
-
-
 def _userinfo_header(user: ProxyUser) -> str:
     # The de-facto standard subscription header (Clash, v2rayN, and others
     # all read it) so a client can show remaining data/expiry in its own UI
@@ -64,20 +57,6 @@ def _userinfo_header(user: ProxyUser) -> str:
     if user.expire is not None:
         parts.append(f"expire={int(user.expire.timestamp())}")
     return "; ".join(parts)
-
-
-def _client_ip(request: Request) -> str:
-    # X-Real-IP is what this project's own nginx (frontend/nginx.conf) sets
-    # to the real TCP peer, overwriting anything the client sent — safe to
-    # trust. X-Forwarded-For is NOT: nginx never touches it, so a client
-    # could set it to a fresh value on every request (or skip nginx
-    # entirely and hit the panel's own published port directly), which
-    # used to make the IP fallback below trivial to spoof into a useless
-    # per-request "device" limit.
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    return request.client.host if request.client else "unknown"
 
 
 async def _activate_if_on_hold(user: ProxyUser, db: AsyncSession) -> None:
@@ -150,9 +129,9 @@ async def get_subscription(
     user_agent: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    user = await _user_or_404(secret, db)
+    user = await user_or_404(secret, db)
 
-    await _enforce_device_limit(user, hwid or _client_ip(request), db)
+    await _enforce_device_limit(user, hwid or client_ip(request), db)
     await _activate_if_on_hold(user, db)
 
     hosts = list((await db.execute(select(Host))).scalars().all())
@@ -196,7 +175,7 @@ async def reset_subscription_secret(
     caller can swap it straight into the DOM without reimplementing this
     module's HTML in JavaScript — the new secret rides along in the
     X-New-Secret header for the caller to update its own URL with."""
-    user = await _user_or_404(secret, db)
+    user = await user_or_404(secret, db)
     user.secret = str(uuid_lib.uuid4())
     db.add(user)
     await db.commit()
@@ -213,7 +192,7 @@ async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> 
     """A tap-to-install iOS/macOS profile — same secret-as-credential model
     as the main subscription link — so IKEv2 users skip typing server/
     remote-ID/username/password into Settings > VPN by hand."""
-    user = await _user_or_404(secret, db)
+    user = await user_or_404(secret, db)
 
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
@@ -229,22 +208,12 @@ async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> 
     )
 
 
-async def _user_by_app_code_or_404(code: str, db: AsyncSession) -> ProxyUser:
-    # Codes are derived from each secret rather than stored, so there is no
-    # column to query; a scan is fine at panel scale and needs no migration.
-    wanted = code.strip().lower().encode()
-    for user in (await db.execute(select(ProxyUser))).scalars().all():
-        if hmac.compare_digest(app_code_for(user).lower().encode(), wanted):
-            return user
-    raise HTTPException(status_code=404, detail="Not found")
-
-
 async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: AsyncSession) -> dict:
     """What the Tifusi VPN Android app imports: the same IKEv2/L2TP fields the
     info page's cards show, as JSON, so the app can fetch and refresh them.
     Same device limit and on_hold activation as the main subscription link,
     since the app is one more client of it."""
-    await _enforce_device_limit(user, hwid or _client_ip(request), db)
+    await _enforce_device_limit(user, hwid or client_ip(request), db)
     await _activate_if_on_hold(user, db)
 
     hosts = list((await db.execute(select(Host))).scalars().all())
@@ -274,7 +243,7 @@ async def get_app_config(
     hwid: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    user = await _user_or_404(secret, db)
+    user = await user_or_404(secret, db)
     return await _app_config(user, request, hwid, db)
 
 
@@ -285,5 +254,5 @@ async def get_app_config_by_code(
     hwid: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    user = await _user_by_app_code_or_404(code, db)
+    user = await user_by_app_code_or_404(code, db)
     return await _app_config(user, request, hwid, db)

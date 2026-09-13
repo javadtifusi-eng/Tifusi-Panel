@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import async_session, init_db
-from app.routers import admin, api_keys, auth, cores, groups, hosts, nodes, reality, settings as settings_router, setup, stats, subscription, system, tunnels, user_templates, users
+from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, nodes, reality, settings as settings_router, setup, stats, subscription, system, tunnels, user_templates, users
 from app.traffic.sync import run_traffic_cycle
 
 
@@ -83,6 +83,7 @@ def create_app() -> FastAPI:
     app.include_router(reality.router)
     app.include_router(hosts.router)
     app.include_router(subscription.router)
+    app.include_router(app_reports.router)
     app.include_router(nodes.router)
     app.include_router(groups.router)
     app.include_router(cores.router)

@@ -605,6 +605,16 @@ export const dict = {
       copyAppCode: 'کپی شناسه‌ی اپ',
       noHostsForLinks: 'هنوز هاستی برای ساخت لینک وجود نداره.',
       copyConfig: 'کپی کانفیگ',
+      appReportsTitle: 'گزارش‌های اتصال اپ Tifusi VPN',
+      appReportsEmpty: 'هنوز گزارشی از اپ نرسیده.',
+      appReportsFetchError: 'خطا در دریافت گزارش‌های اپ',
+      appReportResults: {
+        connected: 'وصل شد',
+        failed: 'ناموفق',
+        timeout: 'تایم‌اوت',
+        disconnected_early: 'قطع زودهنگام',
+        ok: 'دریافت اشتراک',
+      },
     },
 
     userDevicesModal: {
@@ -1223,6 +1233,16 @@ export const dict = {
       copyAppCode: 'Copy App Code',
       noHostsForLinks: 'No hosts available to build links from yet.',
       copyConfig: 'Copy Config',
+      appReportsTitle: 'Tifusi VPN app connection reports',
+      appReportsEmpty: 'No reports from the app yet.',
+      appReportsFetchError: 'Failed to load app reports',
+      appReportResults: {
+        connected: 'Connected',
+        failed: 'Failed',
+        timeout: 'Timeout',
+        disconnected_early: 'Dropped early',
+        ok: 'Subscription fetched',
+      },
     },
 
     userDevicesModal: {
