@@ -25,6 +25,26 @@ const ACCENT = '#22D3EE'
 
 type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'tunnels' | 'settings'
 
+// The Tifusi VPN launcher icon, copied from the app's adaptive icon
+// (res/drawable/ic_launcher_foreground.xml on its #0A0F24 background) so the
+// download link shows the same mark users see on their home screen.
+function TifusiVpnIcon({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 108 108" aria-hidden="true" className="flex-shrink-0">
+      <rect width="108" height="108" rx="24" fill="#0A0F24" />
+      <path
+        d="M54,26 L77,34 L77,52 C77,67 67,78 54,84 C41,78 31,67 31,52 L31,34 Z"
+        fill="none"
+        stroke="#2979FF"
+        strokeWidth={4}
+        strokeLinejoin="round"
+      />
+      <path d="M26,64 C40,50 70,43 84,47" fill="none" stroke="#29B6F6" strokeWidth={2} strokeLinecap="round" />
+      <path d="M40,40 L68,40 L66,47 L58,47 L58,72 L50,72 L50,47 L40,47 Z" fill="#FFFFFF" />
+    </svg>
+  )
+}
+
 const APP_DOWNLOAD_URL = 'https://github.com/javadtifusi-eng/Tifusi-VPN/releases/latest/download/tifusi-vpn.apk'
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
@@ -140,9 +160,10 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
             href={APP_DOWNLOAD_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className={`block rounded-lg px-3 py-2.5 text-sm text-accent hover:bg-field ${dir === 'rtl' ? 'text-right' : 'text-left'}`}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-accent hover:bg-field"
           >
-            {t.nav.appDownload}
+            <TifusiVpnIcon />
+            <span>{t.nav.appDownload}</span>
           </a>
         </div>
 
