@@ -233,6 +233,10 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
         "data_limit": user.data_limit,
         "ikev2": ikev2_configs,
         "l2tp": l2tp_configs,
+        # The same share links the plain subscription serves, kept to the
+        # VLESS ones the app's built-in Xray core connects to. Additive under
+        # "v": 1, so older app builds simply ignore the key.
+        "vless": [link for link in build_links_for_user(user, allowed_hosts) if link.startswith("vless://")],
     }
 
 
