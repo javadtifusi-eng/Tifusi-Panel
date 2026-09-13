@@ -1,3 +1,4 @@
+import hmac
 import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 
@@ -12,6 +13,7 @@ from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.settings_store import get_public_url
+from app.subscription.app_code import app_code_for
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.info_page import build_info_page_html
@@ -132,6 +134,7 @@ async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession)
         data_limit=user.data_limit,
         expire_text=user.expire.strftime("%Y-%m-%d") if user.expire else "بدون انقضا",
         subscription_url=f"{base}sub/{user.secret}",
+        app_code=app_code_for(user),
         links=build_links_for_user(user, allowed_hosts),
         ikev2_configs=ikev2_configs,
         l2tp_configs=l2tp_configs,
@@ -219,3 +222,63 @@ async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> 
         media_type="application/x-apple-aspen-config",
         headers={"Content-Disposition": 'attachment; filename="ikev2.mobileconfig"'},
     )
+
+
+async def _user_by_app_code_or_404(code: str, db: AsyncSession) -> ProxyUser:
+    # Codes are derived from each secret rather than stored, so there is no
+    # column to query; a scan is fine at panel scale and needs no migration.
+    wanted = code.strip().lower().encode()
+    for user in (await db.execute(select(ProxyUser))).scalars().all():
+        if hmac.compare_digest(app_code_for(user).lower().encode(), wanted):
+            return user
+    raise HTTPException(status_code=404, detail="Not found")
+
+
+async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: AsyncSession) -> dict:
+    """What the Tifusi VPN Android app imports: the same IKEv2/L2TP fields the
+    info page's cards show, as JSON, so the app can fetch and refresh them.
+    Same device limit and on_hold activation as the main subscription link,
+    since the app is one more client of it."""
+    await _enforce_device_limit(user, hwid or _client_ip(request), db)
+    await _activate_if_on_hold(user, db)
+
+    hosts = list((await db.execute(select(Host))).scalars().all())
+    allowed_hosts = hosts_for_user(user, hosts)
+    public_url = await get_public_url(db)
+    base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
+    ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
+    for cfg in ikev2_configs:
+        cfg.pop("mobileconfig_url", None)
+
+    return {
+        "v": 1,
+        "username": user.username,
+        "status": user.status.value,
+        "expire": int(user.expire.timestamp()) if user.expire else None,
+        "used_traffic": user.used_traffic,
+        "data_limit": user.data_limit,
+        "ikev2": ikev2_configs,
+        "l2tp": l2tp_configs,
+    }
+
+
+@router.get("/sub/{secret}/app.json")
+async def get_app_config(
+    secret: str,
+    request: Request,
+    hwid: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    user = await _user_or_404(secret, db)
+    return await _app_config(user, request, hwid, db)
+
+
+@router.get("/code/{code}/app.json")
+async def get_app_config_by_code(
+    code: str,
+    request: Request,
+    hwid: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    user = await _user_by_app_code_or_404(code, db)
+    return await _app_config(user, request, hwid, db)

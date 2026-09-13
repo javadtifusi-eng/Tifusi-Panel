@@ -140,6 +140,7 @@ def build_info_page_html(
     data_limit: int | None,
     expire_text: str,
     subscription_url: str,
+    app_code: str,
     links: list[str],
     ikev2_configs: list[dict],
     l2tp_configs: list[dict],
@@ -283,6 +284,14 @@ def build_info_page_html(
         <div class="meta">{_esc(_traffic_line(used_traffic, data_limit))} · انقضا: {_esc(expire_text)}</div>
       </div>
       <div class="status">{_esc(status)}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">شناسه‌ی اپ Tifusi VPN (برای اندروید؛ حروف بزرگ و کوچک فرقی ندارد)</div>
+      <div class="link-row">
+        <span class="mono">{_esc(app_code)}</span>
+        <button class="copy-btn" data-copy="{_esc(app_code)}">کپی</button>
+      </div>
     </div>
 
     {"".join(sections)}
