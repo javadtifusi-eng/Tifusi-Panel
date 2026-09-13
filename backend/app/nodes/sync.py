@@ -4,6 +4,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cores.ikev2_cert import generate_self_signed_ikev2_cert
 from app.groups.access import users_for_host
 from app.models.core import Core, CoreType
 from app.models.host import Host
@@ -58,8 +59,17 @@ async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict
     # certificate/EAP entirely for a single shared secret with no per-user
     # distinction, for networks whose filtering appears to specifically
     # target the IKE certificate exchange rather than IKEv2 traffic as a
-    # whole. certificate/certificate_key are None unless the admin pasted
-    # or generated one — the node self-signs its own otherwise (eap mode only).
+    # whole. In eap mode a Core with no certificate gets one generated here
+    # and saved on the Core (committed by sync_node), rather than letting the
+    # node self-sign one the panel never sees: clients such as the Tifusi VPN
+    # app and iOS profiles can only trust a self-signed server if the panel
+    # hands them its CA (links/generator.py), so a fresh install works
+    # without the admin ever pasting a certificate.
+    if core.ikev2_auth_mode != "psk" and not (core.ikev2_certificate and core.ikev2_certificate_key):
+        core.ikev2_certificate, core.ikev2_certificate_key = generate_self_signed_ikev2_cert(
+            core.ikev2_remote_id or ""
+        )
+        db.add(core)
     return {
         "core_type": "ikev2",
         "psk": core.ikev2_psk,

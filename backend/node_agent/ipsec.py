@@ -369,6 +369,15 @@ def _ensure_forwarding_and_nat(subnet_cidr: str) -> None:
         if check.returncode != 0:
             _run(["iptables", "-I", "FORWARD", "1", direction, subnet_cidr, "-j", "ACCEPT"])
 
+    # Tunnel traffic loses room to ESP/UDP overhead, and phones on small-MTU
+    # mobile paths often never see the ICMP that would shrink TCP segments,
+    # so large transfers stall. Clamping the MSS on SYNs avoids that.
+    for direction in ("-s", "-d"):
+        rule = ["FORWARD", direction, subnet_cidr, "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
+                "-j", "TCPMSS", "--set-mss", "1100"]
+        if _run(["iptables", "-t", "mangle", "-C", *rule]).returncode != 0:
+            _run(["iptables", "-t", "mangle", "-A", *rule])
+
 
 _charon_process: subprocess.Popen | None = None
 

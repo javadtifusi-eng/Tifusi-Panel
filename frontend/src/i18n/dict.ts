@@ -498,6 +498,7 @@ export const dict = {
       publicUrlDesc:
         'وقتی پنل پشت یه دامنه یا ریورس‌پروکسی باشه، لینک‌های اشتراک باید از روی این آدرس ساخته بشن، نه هدر داخلی درخواست — مثلاً https://panel.example.com. خالی بذاری، همون آدرسی که باهاش به پنل وصل شدی استفاده می‌شه.',
       publicUrlLabel: 'آدرس عمومی',
+      supportTelegramLabel: 'آیدی تلگرام پشتیبانی (در اپ Tifusi VPN، بخش «ارتباط با ما»)',
       changePasswordTitle: 'تغییر رمز عبور',
       changePasswordDesc: 'برای تغییر رمز، اول رمز فعلی‌ت رو وارد کن.',
       currentPassword: 'رمز فعلی',
@@ -1114,6 +1115,7 @@ export const dict = {
       publicUrlDesc:
         "When the panel sits behind a domain or reverse proxy, subscription links should be built from this address instead of the request's own header — e.g. https://panel.example.com. Leave it empty to use whatever address you're connecting to the panel with.",
       publicUrlLabel: 'Public URL',
+      supportTelegramLabel: 'Support Telegram ID (shown under "Contact us" in the Tifusi VPN app)',
       changePasswordTitle: 'Change Password',
       changePasswordDesc: 'Enter your current password first to change it.',
       currentPassword: 'Current Password',

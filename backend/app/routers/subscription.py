@@ -12,7 +12,7 @@ from app.links.generator import build_ipsec_configs_for_user, build_links_for_us
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
-from app.settings_store import get_public_url
+from app.settings_store import get_public_url, get_settings_row
 from app.subscription.app_code import app_code_for
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
@@ -259,6 +259,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
         "data_limit": user.data_limit,
         "ikev2": ikev2_configs,
         "l2tp": l2tp_configs,
+        "support_telegram": (await get_settings_row(db)).support_telegram,
     }
 
 

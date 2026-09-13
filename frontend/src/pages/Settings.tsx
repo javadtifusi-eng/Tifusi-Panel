@@ -46,6 +46,7 @@ export default function SettingsPage() {
   const canSettings = !profile || profile.is_owner || profile.permissions === null || profile.permissions.includes('settings')
 
   const [publicUrl, setPublicUrl] = useState('')
+  const [supportTelegram, setSupportTelegram] = useState('')
   const [urlSaving, setUrlSaving] = useState(false)
   const [urlSaved, setUrlSaved] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -134,6 +135,7 @@ export default function SettingsPage() {
     getSettings()
       .then((s) => {
         setPublicUrl(s.public_url ?? '')
+        setSupportTelegram(s.support_telegram ?? '')
         setBotToken(s.telegram_bot_token ?? '')
         setChatId(s.telegram_chat_id ?? '')
         setWebhookUrl(s.webhook_url ?? '')
@@ -169,8 +171,12 @@ export default function SettingsPage() {
     setUrlError(null)
     setUrlSaved(false)
     try {
-      const res = await updateSettings({ public_url: publicUrl.trim() || null })
+      const res = await updateSettings({
+        public_url: publicUrl.trim() || null,
+        support_telegram: supportTelegram.trim() || null,
+      })
       setPublicUrl(res.public_url ?? '')
+      setSupportTelegram(res.support_telegram ?? '')
       setUrlSaved(true)
       window.setTimeout(() => setUrlSaved(false), 2000)
     } catch (err) {
@@ -510,6 +516,16 @@ export default function SettingsPage() {
                 value={publicUrl}
                 onChange={(e) => setPublicUrl(e.target.value)}
                 placeholder="https://panel.example.com"
+                className={`${inputClass} w-full text-left`}
+              />
+            </div>
+            <div className="flex-1" style={{ minWidth: 240 }}>
+              <label className={labelClass}>{t.settingsPage.supportTelegramLabel}</label>
+              <input
+                dir="ltr"
+                value={supportTelegram}
+                onChange={(e) => setSupportTelegram(e.target.value)}
+                placeholder="@your_support"
                 className={`${inputClass} w-full text-left`}
               />
             </div>
