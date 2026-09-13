@@ -57,7 +57,7 @@ def _qr_svg(value: str) -> str:
     return svg
 
 
-def _import_qr_svg(config_type: str, cfg: dict) -> str:
+def _import_qr_svg(config_type: str, cfg: dict, subscription_url: str) -> str:
     """QR-encodes an ikev2/l2tp config as a `tifusi-vpn://import?data=<b64>`
     URI so the Tifusi Android app's importer can scan-to-import instead of
     the user retyping four fields by hand. Documented format — keep this in
@@ -85,7 +85,15 @@ def _import_qr_svg(config_type: str, cfg: dict) -> str:
     version" trying to fit it). The CA cert alone is what
     Ikev2VpnProfile.Builder's serverRootCaCert param actually wants anyway.
     """
-    payload: dict = {"v": 1, "type": config_type, "server": cfg["server"], "username": cfg["username"], "password": cfg["password"]}
+    # `sub` lets the app fetch the whole subscription (every server, the
+    # certificate chain it needs, days and data left) from any QR on this
+    # page, instead of only this one card's fields. Publicly issued certs are
+    # never embedded below, so without it a scan could not bring the
+    # certificate Android needs.
+    payload: dict = {
+        "v": 1, "type": config_type, "server": cfg["server"], "username": cfg["username"],
+        "password": cfg["password"], "sub": subscription_url,
+    }
     if cfg.get("remote_id"):
         payload["remote_id"] = cfg["remote_id"]
     if cfg.get("psk"):
@@ -164,7 +172,7 @@ def build_info_page_html(
 
     for ike in ikev2_configs:
         body = f"""
-          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('ikev2', ike)}</div></div>
+          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('ikev2', ike, subscription_url)}</div></div>
           <div class="kv"><span>سرور</span><span class="mono">{_esc(ike['server'])}</span></div>
           {f'<div class="kv"><span>Remote ID</span><span class="mono">{_esc(ike["remote_id"])}</span></div>' if ike.get('remote_id') else ''}
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(ike['username'])}</span></div>
@@ -178,7 +186,7 @@ def build_info_page_html(
 
     for l2tp in l2tp_configs:
         body = f"""
-          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('l2tp', l2tp)}</div></div>
+          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('l2tp', l2tp, subscription_url)}</div></div>
           <div class="kv"><span>سرور</span><span class="mono">{_esc(l2tp['server'])}</span></div>
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(l2tp['username'])}</span></div>
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(l2tp['password'])}</span></div>
