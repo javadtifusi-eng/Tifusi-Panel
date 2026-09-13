@@ -76,6 +76,23 @@ export default function UserLinksModal({
               >
                 {copied === data.subscription_url ? t.common.copiedCheck : t.userLinksModal.copySubLink}
               </button>
+
+              <div className="mt-2 w-full border-t border-cyan-400/10 pt-3 text-center text-xs text-muted">
+                {t.userLinksModal.appCodeLabel}
+              </div>
+              <div
+                dir="ltr"
+                className="w-full rounded-lg bg-field px-3 py-2 text-center font-mono text-base font-bold tracking-wider text-accent"
+              >
+                {data.app_code}
+              </div>
+              <button
+                onClick={() => copy(data.app_code)}
+                className="rounded-lg border px-4 py-1.5 text-xs font-bold"
+                style={{ borderColor: ACCENT, color: ACCENT }}
+              >
+                {copied === data.app_code ? t.common.copiedCheck : t.userLinksModal.copyAppCode}
+              </button>
             </div>
 
             {data.links.length === 0 &&

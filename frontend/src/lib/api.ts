@@ -287,6 +287,7 @@ export interface L2tpConfig {
 
 export interface UserLinks {
   subscription_url: string
+  app_code: string
   links: string[]
   ikev2_configs: Ikev2Config[]
   l2tp_configs: L2tpConfig[]
