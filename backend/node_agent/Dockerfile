@@ -66,6 +66,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY node_agent ./node_agent
+# Charon tuning (fragment size, per-IP half-open limit); see the file.
+COPY node_agent/strongswan-tifusi.conf /etc/strongswan.d/tifusi.conf
 
 ENV XRAY_BIN=/usr/local/bin/xray
 ENV XRAY_CONFIG_PATH=/app/data/xray-config.json

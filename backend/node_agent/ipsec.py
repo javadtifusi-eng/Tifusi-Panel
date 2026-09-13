@@ -259,7 +259,12 @@ def _swanctl_conf(
         # a matching proposal here charon hard-rejects it with NO_PROP —
         # surfaced client-side as Windows' generic "policy match error".
         # `default` on the end is a last-resort catch-all, matching vpn-ui.
-        "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384,"
+        # modp4096 first: Android's platform IKE client always sends its
+        # first key exchange for MODP_4096, so with modp2048 first charon
+        # answered INVALID_KE_PAYLOAD and every Android handshake needed an
+        # extra round trip. charon only ever picks a group the client
+        # offered, so iOS (which offers only group 14) still gets modp2048.
+        "    proposals = aes256-sha256-modp4096,aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384,"
         "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha1-modp1024,default\n"
         "    local_addrs = %any\n"
         "    remote_addrs = %any\n"
