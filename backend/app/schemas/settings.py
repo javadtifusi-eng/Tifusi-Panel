@@ -10,7 +10,6 @@ class PanelSettingsResponse(BaseModel):
     webhook_url: str | None
     webhook_secret: str | None
     discord_webhook_url: str | None
-    support_telegram: str | None
 
 
 class PanelSettingsUpdate(BaseModel):
@@ -20,4 +19,3 @@ class PanelSettingsUpdate(BaseModel):
     webhook_url: str | None = None
     webhook_secret: str | None = None
     discord_webhook_url: str | None = None
-    support_telegram: str | None = None

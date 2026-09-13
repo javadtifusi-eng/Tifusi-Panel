@@ -32,8 +32,3 @@ class PanelSetting(Base):
     # A Discord incoming-webhook URL — same events as Telegram/the generic
     # webhook, see app/notifications/discord.py.
     discord_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-    # The Telegram username the Tifusi VPN app shows under "Contact us" for
-    # users imported from this panel (served in app.json), so every panel
-    # owner points their own users at their own support.
-    support_telegram: Mapped[str | None] = mapped_column(String(64), nullable=True)

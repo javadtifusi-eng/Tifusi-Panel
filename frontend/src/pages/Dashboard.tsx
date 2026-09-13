@@ -25,6 +25,8 @@ const ACCENT = '#22D3EE'
 
 type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'tunnels' | 'settings'
 
+const APP_DOWNLOAD_URL = 'https://github.com/javadtifusi-eng/Tifusi-VPN/releases/latest/download/tifusi-vpn.apk'
+
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { lang, setLang, t, dir } = useLang()
   const [active, setActive] = useState<ActiveTab>('overview')
@@ -128,6 +130,21 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
             </button>
           ))}
         </nav>
+
+        {/* Always the newest build: GitHub serves the latest release's asset at this fixed URL. */}
+        <div className="mb-3 border-t border-subtle pt-3">
+          <div className={`mb-1 px-3 text-[11px] text-muted ${dir === 'rtl' ? 'text-right' : 'text-left'}`}>
+            {t.nav.appSection}
+          </div>
+          <a
+            href={APP_DOWNLOAD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`block rounded-lg px-3 py-2.5 text-sm text-accent hover:bg-field ${dir === 'rtl' ? 'text-right' : 'text-left'}`}
+          >
+            {t.nav.appDownload}
+          </a>
+        </div>
 
         <div className="mb-2 flex justify-center gap-2">
           <button

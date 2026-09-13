@@ -802,7 +802,6 @@ export interface PanelSettings {
   webhook_url: string | null
   webhook_secret: string | null
   discord_webhook_url: string | null
-  support_telegram: string | null
 }
 
 export async function getSettings(): Promise<PanelSettings> {
