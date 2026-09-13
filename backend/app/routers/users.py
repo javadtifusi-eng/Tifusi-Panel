@@ -1,7 +1,7 @@
 import uuid as uuid_lib
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.models.admin import Admin
 from app.models.host import Host
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
+from app.nodes.sync import resync_nodes_in_background
 from app.notifications.webhook import send_webhook_event
 from app.schemas.user import (
     BulkCreateRequest,
@@ -80,6 +81,7 @@ async def list_users(
 @router.post("", response_model=ProxyUserResponse, status_code=201)
 async def create_user(
     payload: ProxyUserCreate,
+    background_tasks: BackgroundTasks,
     admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> ProxyUser:
@@ -108,12 +110,14 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
     await send_webhook_event(db, "user_created", {"username": user.username, "id": user.id})
+    background_tasks.add_task(resync_nodes_in_background)
     return user
 
 
 @router.post("/bulk-create", response_model=BulkCreateResult, status_code=201)
 async def bulk_create_users(
     payload: BulkCreateRequest,
+    background_tasks: BackgroundTasks,
     admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> BulkCreateResult:
@@ -151,12 +155,14 @@ async def bulk_create_users(
         await db.refresh(user)
     for user in created:
         await send_webhook_event(db, "user_created", {"username": user.username, "id": user.id})
+    background_tasks.add_task(resync_nodes_in_background)
     return BulkCreateResult(created=created, skipped=skipped)
 
 
 @router.post("/bulk-update", response_model=BulkUpdateResult)
 async def bulk_update_users(
     payload: BulkUpdateRequest,
+    background_tasks: BackgroundTasks,
     admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> BulkUpdateResult:
@@ -187,12 +193,14 @@ async def bulk_update_users(
         db.add(user)
 
     await db.commit()
+    background_tasks.add_task(resync_nodes_in_background)
     return BulkUpdateResult(updated=len(users))
 
 
 @router.post("/bulk-delete", response_model=BulkDeleteResult)
 async def bulk_delete_users(
     payload: BulkDeleteRequest,
+    background_tasks: BackgroundTasks,
     admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> BulkDeleteResult:
@@ -206,6 +214,7 @@ async def bulk_delete_users(
     for user in users:
         await db.delete(user)
     await db.commit()
+    background_tasks.add_task(resync_nodes_in_background)
     return BulkDeleteResult(deleted=len(users))
 
 
@@ -230,6 +239,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     payload: ProxyUserUpdate,
+    background_tasks: BackgroundTasks,
     admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> ProxyUser:
@@ -252,21 +262,29 @@ async def update_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    background_tasks.add_task(resync_nodes_in_background)
     return user
 
 
 @router.delete("/{user_id}", status_code=204)
 async def delete_user(
-    user_id: int, admin: Admin = Depends(require_permission("users")), db: AsyncSession = Depends(get_db)
+    user_id: int,
+    background_tasks: BackgroundTasks,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
 ) -> None:
     user = await _get_user_or_404(user_id, admin, db)
     await db.delete(user)
     await db.commit()
+    background_tasks.add_task(resync_nodes_in_background)
 
 
 @router.post("/{user_id}/reset-secret", response_model=ProxyUserResponse)
 async def reset_user_secret(
-    user_id: int, admin: Admin = Depends(require_permission("users")), db: AsyncSession = Depends(get_db)
+    user_id: int,
+    background_tasks: BackgroundTasks,
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
 ) -> ProxyUser:
     """Regenerates just the secret (the VLESS UUID / Trojan password / sub
     URL token) — for when a link leaked and needs invalidating, without
@@ -278,6 +296,8 @@ async def reset_user_secret(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    # The secret is also the user's IKEv2/L2TP password on the nodes.
+    background_tasks.add_task(resync_nodes_in_background)
     return user
 
 

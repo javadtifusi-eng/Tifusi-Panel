@@ -2,7 +2,7 @@ import hmac
 import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.links.generator import build_ipsec_configs_for_user, build_links_for_us
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
+from app.nodes.sync import resync_nodes_in_background
 from app.settings_store import get_public_url
 from app.subscription.app_code import app_code_for
 from app.subscription.clash import build_clash_config
@@ -184,7 +185,9 @@ async def get_subscription(
 
 
 @router.post("/sub/{secret}/reset")
-async def reset_subscription_secret(secret: str, request: Request, db: AsyncSession = Depends(get_db)) -> Response:
+async def reset_subscription_secret(
+    secret: str, request: Request, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)
+) -> Response:
     """Self-service secret rotation — same DB-level effect as the
     admin-facing POST /api/users/{id}/reset-secret (app/routers/users.py),
     just reachable from the public info page using the current secret as
@@ -198,6 +201,8 @@ async def reset_subscription_secret(secret: str, request: Request, db: AsyncSess
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    # The secret doubles as the IKEv2/L2TP password the nodes check.
+    background_tasks.add_task(resync_nodes_in_background)
 
     html = await _render_info_page(user, request, db)
     return Response(content=html, media_type="text/html; charset=utf-8", headers={"X-New-Secret": user.secret})

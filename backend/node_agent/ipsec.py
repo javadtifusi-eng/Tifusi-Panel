@@ -429,7 +429,11 @@ def _load_swanctl_config(
     if core_type == "ikev2" and ikev2_auth_mode != "psk":
         _ensure_ikev2_cert(remote_id or "", certificate, certificate_key)
     _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users, ikev2_auth_mode), mode=0o600)
-    _restart_charon()
+    # Every user change now triggers a sync, so a running charon only
+    # reloads (swanctl --load-all below picks up conns, secrets and certs)
+    # instead of restarting and dropping every connected client.
+    if not is_ipsec_running():
+        _restart_charon()
 
     # charon takes a moment after being spawned to actually open its vici
     # socket — calling --load-all immediately can hit that window, fail

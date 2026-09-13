@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cores.ikev2_cert import generate_self_signed_ikev2_cert
+from app.database import async_session
 from app.groups.access import users_for_host
 from app.models.core import Core, CoreType
 from app.models.host import Host
@@ -180,6 +181,16 @@ async def resync_connected_nodes(db: AsyncSession) -> None:
             await sync_node(node, db)
         except Exception:
             continue
+
+
+async def resync_nodes_in_background() -> None:
+    """For a route's BackgroundTasks after it changes users. IKEv2/L2TP
+    logins are checked on the node itself against the user list pushed at
+    sync time, so a new user (or a changed secret) is rejected with "no EAP
+    key found" until a sync happens. Opens its own session because the
+    request's session is already closed when background tasks run."""
+    async with async_session() as db:
+        await resync_connected_nodes(db)
 
 
 async def check_node_health(node: Node, db: AsyncSession) -> None:
