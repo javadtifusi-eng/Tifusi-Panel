@@ -596,43 +596,7 @@ export default function TunnelsPage() {
 
               {configId === tunnel.id && configData && (
                 <div className="mb-3 flex flex-col gap-2">
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-faint">{t.tunnelsPage.iranConfigLabel}</span>
-                      <button
-                        onClick={() => copy(JSON.stringify(configData.iran_config, null, 2))}
-                        className="text-[10px] font-bold"
-                        style={{ color: ACCENT }}
-                      >
-                        {copied === JSON.stringify(configData.iran_config, null, 2) ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
-                      </button>
-                    </div>
-                    <pre
-                      dir="ltr"
-                      className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-muted"
-                    >
-                      {JSON.stringify(configData.iran_config, null, 2)}
-                    </pre>
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-faint">{t.tunnelsPage.foreignConfigLabel}</span>
-                      <button
-                        onClick={() => copy(JSON.stringify(configData.foreign_config, null, 2))}
-                        className="text-[10px] font-bold"
-                        style={{ color: ACCENT }}
-                      >
-                        {copied === JSON.stringify(configData.foreign_config, null, 2) ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
-                      </button>
-                    </div>
-                    <pre
-                      dir="ltr"
-                      className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-muted"
-                    >
-                      {JSON.stringify(configData.foreign_config, null, 2)}
-                    </pre>
-                  </div>
-                  {/* The commands are long base64 blobs nobody reads; only copying them matters. */}
+                  {/* The install commands carry each side's config, so only copying them matters. */}
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {([
                       [t.tunnelsPage.iranInstallCommandLabel, configData.iran_install_command],
