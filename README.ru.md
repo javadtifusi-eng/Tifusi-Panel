@@ -7,7 +7,7 @@
 <hr>
 
 <p align="center">
-  <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=22D3EE" alt="GitHub stars" /></a>
+  <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=F97316" alt="GitHub stars" /></a>
 </p>
 
 <p align="center">
@@ -26,79 +26,252 @@
 
 <hr>
 
-Tifusi Panel — это панель управления прокси, которую вы разворачиваете на своём сервере: веб-дашборд плюс REST API, на FastAPI и React. Поддерживает VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP/IPsec и IKEv2/IPsec. WireGuard не поддерживается.
-
-## Скриншоты
+Tifusi Panel — самостоятельно размещаемая плоскость управления для прокси- и VPN-инфраструктуры. Один экземпляр панели хранит пользователей, политику доступа и конфигурации ядер, формирует конфигурацию для каждого узла и передаёт её на произвольное число удалённых узлов через аутентифицированный HTTPS API. На узлах работают Xray-core для VLESS, VMess, Trojan и Shadowsocks, а также strongSwan с xl2tpd для IKEv2/IPsec и L2TP/IPsec. Эндпоинты подписки отдают ссылки, профили Clash и sing-box и структурированный JSON-профиль для клиента Tifusi VPN. WireGuard не поддерживается.
 
 <p align="center">
-  <img src="docs/screenshots/login.png" width="49%" alt="Экран входа" />
-  <img src="docs/screenshots/panel.png" width="49%" alt="Внутри панели" />
+  <img src="docs/screenshots/dashboard.png" width="100%" alt="Дашборд Tifusi Panel" />
 </p>
+
+## Архитектура
+
+### Компоненты и потоки данных
+
+```mermaid
+flowchart LR
+    Admin(["Administrator"])
+
+    subgraph PanelHost["Panel server · docker compose"]
+        direction TB
+        Dash["tifusi-dashboard<br/>nginx + React SPA<br/>TCP 443 / 8080"]
+        API["tifusi-panel<br/>FastAPI · TCP 8000"]
+        DB[("SQLite<br/>./data")]
+        Dash -->|"/api · /sub · /code · /app"| API
+        API <--> DB
+    end
+
+    subgraph NodeHost["Node server · tifusi-node · host network"]
+        direction TB
+        Agent["Node agent<br/>HTTPS · TCP 62050"]
+        Xray["Xray-core<br/>VLESS · VMess · Trojan · SS"]
+        Swan["strongSwan charon<br/>IKEv2 · EAP-MSCHAPv2"]
+        L2TP["xl2tpd<br/>L2TP over IPsec"]
+        Agent -->|"write config, restart"| Xray
+        Agent -->|"swanctl --load-all"| Swan
+        Agent -->|"apply config"| L2TP
+    end
+
+    subgraph Clients["Clients"]
+        direction TB
+        App["Tifusi VPN<br/>Android"]
+        XC["Xray clients<br/>v2rayNG · V2Box · sing-box · Clash"]
+        Native["Native IKEv2 / L2TP<br/>iOS · Android · Windows"]
+    end
+
+    Admin -->|"HTTPS"| Dash
+    API -->|"POST /config<br/>POST /ipsec-config<br/>X-Node-Api-Key"| Agent
+    API -.->|"GET /health · GET /stats<br/>every 30 s"| Agent
+
+    App -->|"GET /code/{code}/app.json<br/>POST /app/report"| Dash
+    XC -->|"GET /sub/{secret}"| Dash
+    App ==>|"VLESS REALITY"| Xray
+    App ==>|"IKEv2 · UDP 500/4500"| Swan
+    XC ==>|"proxy protocols"| Xray
+    Native ==>|"UDP 500/4500"| Swan
+    Native ==>|"UDP 1701 in IPsec"| L2TP
+```
+
+Сплошные стрелки — запросы плоскости управления, пунктирные — периодический опрос, толстые — трафик плоскости данных. Панель не проксирует пользовательский трафик: клиенты подключаются напрямую к адресам узлов, опубликованным в хостах.
+
+### Модель конфигурации
+
+```mermaid
+flowchart TD
+    Core["Core<br/>raw Xray JSON, or IKEv2 / L2TP server settings"]
+    Node["Node<br/>address · agent port · API key"]
+    Inbound["Inbound<br/>tag · protocol · port · transport · security"]
+    Host["Host<br/>public address · port · SNI · fingerprint · remark"]
+    Group["Group<br/>access boundary"]
+    User["User<br/>quota · expiry · device limit · status"]
+    Sub["Subscription<br/>/sub/{secret} · /code/{code}"]
+    Out["Share links · Clash · sing-box<br/>app.json: ikev2 · l2tp · vless"]
+
+    Core -->|"assigned to"| Node
+    Core -->|"inbounds parsed from config"| Inbound
+    Inbound -->|"published through"| Host
+    Core -.->|"IKEv2 / L2TP hosts bind to the core"| Host
+    Group -->|"restricts visibility of"| Host
+    User -->|"member of"| Group
+    User --> Sub
+    Host --> Sub
+    Sub --> Out
+```
+
+Хост без группы доступен всем пользователям. После привязки хоста к одной или нескольким группам он включается в подписки и конфигурации узлов только для участников этих групп.
+
+### Жизненный цикл синхронизации узла
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Admin
+    participant Panel as Panel API
+    participant Agent as Node agent
+    participant Core as Xray / strongSwan
+    participant Client
+
+    Admin->>Panel: Create, update, reset or delete a user
+    Panel->>Panel: Persist change and resolve group access
+    Panel-)Agent: POST /config (rendered Xray JSON)
+    Panel-)Agent: POST /ipsec-config (swanctl connections, EAP secrets, PSK, pools)
+    Agent->>Core: Apply configuration
+    Client->>Panel: GET /code/{code}/app.json
+    Panel-->>Client: Endpoints, credentials, remaining quota and expiry
+    Client->>Core: Establish tunnel
+    Client-)Panel: POST /app/report (connection result)
+    loop Every TIFUSI_TRAFFIC_SYNC_INTERVAL_SECONDS (default 30)
+        Panel->>Agent: GET /health, GET /stats
+        Agent-->>Panel: Process state and per-user traffic counters
+        Panel->>Panel: Accumulate usage, transition expired / limited users
+        Panel-)Agent: Resync nodes whose effective user set changed
+    end
+```
+
+### Безопасность канала между панелью и узлом
+
+- Агент обслуживает HTTPS с самоподписанным сертификатом, который создаётся при первом запуске (`backend/node_agent/tls.py`). Учётные данные и передаваемые секреты шифруются в пути.
+- Каждый запрос содержит ключ узла в заголовке `X-Node-Api-Key`. Панель не проверяет сертификат агента, поэтому фактическим учётным данным является API-ключ; взаимный TLS пока не реализован.
+- Контейнер узла запускается с `--network host`, чтобы Xray мог занимать порты, заданные после запуска контейнера, а UDP 500, 4500 и 1701 на публичном адресе доходили до charon и xl2tpd.
 
 ## Возможности
 
-- **Бэкенд** в `backend/`: FastAPI, асинхронный SQLAlchemy (по умолчанию SQLite), JWT-авторизация, миграции Alembic.
-- **Фронтенд** в `frontend/`: React + Vite + Tailwind, светлая и тёмная тема, полностью двуязычный интерфейс (фарси/английский).
-- **Пользователи** — создание, список, включение/отключение и удаление, по одному или пачкой. Лимиты трафика с отслеживанием реального потребления, автопереход в `истёк`/`ограничен`, отложенные аккаунты, у которых отсчёт начинается с первого подключения, а не с момента создания, опциональный лимит устройств на пользователя и сохранённые шаблоны, чтобы не вводить одни и те же параметры заново.
-- **Хосты** для VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP и IKEv2. Протоколы на базе Xray выбирают Inbound, разобранный прямо из реального конфига Xray ядра — транспорт, безопасность и ключи REALITY берутся оттуда. Хосты L2TP/IKEv2 выбирают ядро с общим PSK.
-- **Ядра** хранят либо полный сырой конфиг Xray (с визуальными редакторами маршрутизации, outbound'ов и DNS поверх него), либо общие настройки сервера L2TP/IKEv2, плюс список нод, на которых оно запущено.
-- **Группы** — это настоящий контроль доступа, а не просто ярлык. Хост без группы виден всем; попав в группу, он становится виден только пользователям этой группы — как в их ссылках, так и в реальном конфиге, отправляемом на ноды.
-- **Сканер REALITY** — проверяет задержку у примерно 160 доменов-кандидатов и предлагает самый быстрый прямо из формы хостов.
-- **Ссылки подписки** — ссылка `vless://`, `vmess://`, `trojan://`, `ss://` или `hysteria2://` на каждый хост, простые поля подключения для L2TP/IKEv2, и одна ссылка подписки с QR-кодом, к которой клиентские приложения обращаются напрямую (клиенты Clash и sing-box получают настоящий конфиг вместо простого списка ссылок).
-- **Ноды** — регистрируете сервер, выполняете команду установки, которую даёт панель, нажимаете «Синхронизировать» — и нода становится подключённой, с версией Xray. Дальше проверки состояния и сбор трафика идут сами.
-- **Туннели** — публикуют зарубежный VPN-сервер через реле в Иране, так что зарубежному серверу никогда не нужен открытый входящий порт. Панель собирает тихую команду установки для каждой стороны и предлагает транспорт на основе реальной проверки задержки.
-- **Учётные записи администраторов** — владелец может создавать дополнительных администраторов с ограниченными правами, и каждый администратор может выпускать API-ключи для скриптов и ботов вместо токена входа. Администраторы с ограниченным доступом видят только тех пользователей, которых создали сами.
-- **Уведомления** — Telegram, Discord или обычный вебхук, на выбор (или все сразу), о событиях пользователей и нод.
-- **Настройки** — публичный адрес и пароль администратора прямо из дашборда, загрузка TLS-сертификата, резервное копирование и восстановление в один клик. Ничего из этого не требует передеплоя.
+- **Пользователи.** Создание, включение, отключение и удаление по одному и пакетно. Квоты трафика с учётом потребления, автоматические переходы в `expired` и `limited`, отложенные аккаунты со сроком действия от первого подключения, ограничение числа устройств и шаблоны.
+- **Ядра (Cores).** Полная JSON-конфигурация Xray со структурированными редакторами routing, outbounds и DNS либо параметры сервера IKEv2/L2TP. Каждое ядро назначается одному или нескольким узлам.
+- **Хосты.** Публичные точки подключения для VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP и IKEv2. Хосты на базе Xray ссылаются на inbound из конфигурации ядра и наследуют параметры transport, security и REALITY. Хосты L2TP используют общий PSK. Хосты IKEv2 аутентифицируют сервер сертификатом X.509 (по умолчанию самоподписанным или импортированной цепочкой от CA), а пользователей — через EAP-MSCHAPv2.
+- **Группы.** Принудительный контроль доступа. Членство в группе определяет как ссылки пользователя, так и учётные данные в конфигурациях узлов.
+- **Сканер целей REALITY.** Измеряет задержку до примерно 160 SNI-доменов и предлагает самый быстрый прямо в форме хоста.
+- **Подписки.** URI `vless://`, `vmess://`, `trojan://`, `ss://` и `hysteria2://` для каждого хоста; параметры подключения L2TP и IKEv2; профиль `.mobileconfig` для IKEv2; единый URL подписки с QR-кодом. Клиенты семейства Clash и sing-box определяются по User-Agent и получают нативный профиль.
+- **Профиль Tifusi VPN.** `GET /sub/{secret}/app.json` и `GET /code/{code}/app.json` возвращают точки подключения IKEv2, L2TP и VLESS вместе с квотой и сроком действия. Результаты подключений, отправленные клиентом на `/app/report`, отображаются у пользователя и в ленте активности дашборда.
+- **Узлы.** При регистрации создаётся однострочная команда установки, привязанная к ключу узла. После первой успешной синхронизации проверка состояния и сбор трафика выполняются непрерывно.
+- **Туннели.** Публикация зарубежного сервера через ретранслятор внутри ограниченной сети, без открытых входящих портов на зарубежном сервере. Панель генерирует команды установки для обеих сторон и предлагает транспорт по результатам измерения задержки.
+- **Администрирование.** Учётная запись владельца и дополнительные администраторы с ограниченными правами. Ограниченные администраторы видят только созданных ими пользователей. Каждый администратор может выпускать API-ключи для автоматизации.
+- **Уведомления.** Telegram, Discord и произвольные webhook для изменений состояния пользователей и узлов.
+- **Настройки.** Публичный URL, пароль администратора, загрузка TLS-сертификата или выпуск Let's Encrypt, резервное копирование и восстановление базы данных без повторного развёртывания.
+- **Интерфейс.** React 18, Vite и Tailwind CSS; локализация на персидский (RTL) и английский; локально размещённые шрифты Vazirmatn и Poppins.
 
-Что ещё не сделано и какие более крупные идеи рассматриваются — смотрите в `ROADMAP.md`.
+Запланированные и сознательно исключённые задачи описаны в [`ROADMAP.md`](ROADMAP.md).
 
-## Быстрая установка
+## Структура репозитория
 
-**Панель** — сервер, на котором будут работать дашборд и API:
+| Путь | Содержимое |
+| --- | --- |
+| `backend/app` | Приложение FastAPI: роутеры, модели SQLAlchemy, генератор конфигурации Xray, рендеры подписок, синхронизация узлов, учёт трафика |
+| `backend/alembic` | Миграции базы данных |
+| `backend/cli` | `tifusi-cli`, включая генерацию ключа первичной настройки |
+| `backend/node_agent` | Агент узла, интеграция strongSwan/xl2tpd, Dockerfile узла |
+| `backend/tunnel_agent` | Агент ретранслятора для туннелей (Go) |
+| `frontend` | React-дашборд и образ nginx |
+| `install.sh`, `install-node.sh` | Установщики панели и узла |
+| `manage.sh` | Меню эксплуатации, устанавливается как `/usr/local/bin/tifusi` |
+| `.github/workflows/build-images.yml` | Сборка и публикация образов панели, дашборда и узла в GHCR |
+
+## Требования
+
+- Панель: Linux-хост с Docker (устанавливается автоматически при отсутствии). Для TLS рекомендуется DNS-запись, указывающая на сервер.
+- Узел: Linux-хост с Docker и публичным IPv4-адресом. Для IKEv2 требуются UDP 500 и 4500; для L2TP дополнительно UDP 1701 и модули ядра `l2tp_ppp` и `ppp_generic` на хосте.
+- Локальная сборка образов требует исходящего доступа к релизам Xray-core на GitHub и к архиву исходников strongSwan.
+
+## Установка
+
+### Панель
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
-Установит Docker, если его нет, склонирует репозиторий, предложит бесплатный сертификат Let's Encrypt, если на сервер указывает домен, и поднимет всё через Docker Compose. Учётную запись администратора вы создадите потом, в браузере — см. ниже.
 
-**Нода** — любой сервер, который будет реально запускать Xray. Сначала создайте ноду на странице «Ноды» панели, чтобы получить её API-ключ:
+Установщик подготавливает Docker, клонирует репозиторий, генерирует `TIFUSI_SECRET_KEY`, при необходимости выпускает сертификат Let's Encrypt для домена, указывающего на сервер, и запускает стек через Docker Compose. Также устанавливается команда управления `tifusi`.
+
+### Узел
+
+Создайте узел на странице **Nodes**, чтобы получить его API-ключ, затем выполните на сервере узла:
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- <API_KEY> [PORT]
 ```
-Устанавливает только агент ноды — ни панели, ни базы данных, ничего лишнего на этой машине.
 
-Оба скрипта сами установят Docker, если его не хватает.
+`PORT` по умолчанию равен `62050`. Скрипт загружает готовый образ узла (или собирает его локально), подгружает необходимые модули ядра и запускает контейнер `tifusi-node` в сети хоста. Для отправки начальной конфигурации нажмите **Sync** в панели.
 
-## Первый запуск
+### Первичная настройка
 
-Не нужно искать команду в документации — страница входа сама показывает её, с кнопкой копирования.
+<p align="center">
+  <img src="docs/screenshots/login.png" width="80%" alt="Экран входа Tifusi Panel" />
+</p>
 
-1. Запустите стек: `docker compose up -d`
-2. Откройте панель. Поскольку администратора ещё нет, она покажет карточку первоначальной настройки и команду для копирования.
-3. Выполните эту команду на сервере:
+1. Откройте дашборд. Если администратор ещё не создан, экран входа предлагает процедуру настройки.
+2. Сгенерируйте одноразовый ключ настройки на сервере панели:
    ```bash
    docker exec -it tifusi-panel tifusi-cli generate-admin-key
    ```
-4. Вставьте выведенный ключ в ту же карточку, выберите имя пользователя и пароль — готово.
+3. Введите ключ и задайте имя пользователя и пароль владельца.
 
-`install.sh` берёт на себя шаг 1 — шаги 2–4 проходят в браузере.
+## Эксплуатация
 
-## Ноды и агент ноды
+`tifusi` без аргументов открывает интерактивное меню, с аргументом выполняет одно действие:
 
-Нода — это сервер, на котором работает Xray. `backend/node_agent/` — небольшой сервис на FastAPI, который устанавливается на неё: панель отправляет сгенерированный конфиг на его эндпоинт `/config`, с авторизацией по индивидуальному API-ключу ноды, а агент перезапускает Xray с этим конфигом и сообщает о состоянии через `/health`.
+| Команда | Действие |
+| --- | --- |
+| `tifusi update` | Обновить до последней версии и пересоздать контейнеры |
+| `tifusi status` | Показать состояние контейнеров |
+| `tifusi logs` | Просмотр журналов контейнеров |
+| `tifusi restart` | Перезапустить стек |
+| `tifusi port` | Изменить порты API панели и дашборда |
+| `tifusi ssl` | Выпустить сертификат Let's Encrypt |
+| `tifusi key` | Сгенерировать новый ключ настройки администратора |
+| `tifusi backup` / `tifusi restore` | Экспорт или восстановление базы данных |
+| `tifusi uninstall` | Удалить установку |
+
+## Справочник по развёртыванию
+
+### Docker Compose
 
 ```bash
-docker build -t tifusi-node-agent -f backend/node_agent/Dockerfile backend
-docker run -d --name tifusi-node --restart unless-stopped \
-  -p 62050:62050 -e TIFUSI_NODE_API_KEY=<из команды установки ноды в панели> \
-  tifusi-node-agent
+cp .env.example .env    # задайте TIFUSI_SECRET_KEY; TIFUSI_PUBLIC_URL — при работе за обратным прокси
+docker compose up -d --build
 ```
 
-Dockerfile агента при сборке скачивает настоящий бинарник Xray-core из релиза на GitHub, так что для сборки нужен исходящий доступ в интернет.
+| Сервис | Контейнер | Порты |
+| --- | --- | --- |
+| Panel API | `tifusi-panel` | `8000` (API), `80` (только ACME HTTP-01) |
+| Dashboard | `tifusi-dashboard` | `8080` (HTTP), `443` (HTTPS) |
 
-Hysteria2 вообще не часть Xray-core — это отдельный сервер, а L2TP/IKEv2 работают через strongSwan и xl2tpd. Все три просто не попадают в конфиг Xray, который панель отправляет на ноды, вместо того чтобы получить нерабочий inbound.
+Данные SQLite хранятся в `./data`. `TIFUSI_PUBLIC_URL` задаёт базовый URL ссылок подписки; без него ссылки строятся из заголовка `Host` запроса, который недоступен клиентам, если панель находится за прокси. Значение можно изменить позже в разделе **Settings** без перезапуска.
 
-## Локальная разработка
+### TLS на дашборде
+
+Контейнер дашборда терминирует TLS на порту 443 и проксирует `/api/`, `/sub/`, `/code/` и `/app/` в панель. Файлы `fullchain.pem` и `privkey.pem` читаются из `./certs`; каталог отслеживается постоянно, и смена сертификата применяется без перезапуска. Сертификат можно получить через установщик, загрузить в **Settings → SSL Certificate** или поместить в `./certs` вручную.
+
+### Прямой TLS на API
+
+Для развёртываний без контейнера дашборда uvicorn может терминировать TLS самостоятельно:
+
+```bash
+TIFUSI_SSL_CERTFILE=/app/certs/fullchain.pem
+TIFUSI_SSL_KEYFILE=/app/certs/privkey.pem
+```
+
+Смонтируйте `./certs:/app/certs:ro` в `docker-compose.yml`. Обе переменные задаются вместе; если указана только одна, запуск прерывается вместо перехода на HTTP.
+
+### Миграции базы данных
+
+Схема управляется Alembic, `alembic upgrade head` выполняется при каждом запуске. После изменения модели сгенерируйте и проверьте миграцию:
+
+```bash
+cd backend
+alembic revision --autogenerate -m "describe the change"
+```
+
+SQLite требует `op.batch_alter_table(...)` для изменений столбцов, которые нельзя применить на месте; проверяйте автоматически сгенерированные ревизии перед коммитом.
+
+## Разработка
 
 **Бэкенд**
 ```bash
@@ -113,59 +286,19 @@ cd frontend
 npm install
 npm run dev
 ```
-Dev-сервер Vite проксирует `/api` на `http://localhost:8000`.
 
-**Сгенерировать ключ установки без Docker**
+Сервер разработки Vite проксирует `/api` на `http://localhost:8000`. Ключ настройки без Docker генерируется командой `python -m cli.main generate-admin-key` из каталога `backend/`.
+
+**Образ агента узла**
 ```bash
-cd backend
-python -m cli.main generate-admin-key
+docker build -t tifusi-node-agent -f backend/node_agent/Dockerfile backend
 ```
 
-## Миграции базы данных
+## Связанные проекты
 
-Изменения схемы проходят через Alembic, а не через `create_all()`. Приложение выполняет `alembic upgrade head` при каждом запуске, поэтому обычный деплой всегда приводит к последней схеме без ручных шагов.
-
-При изменении модели создавайте миграцию вместе с ним:
-```bash
-cd backend
-alembic revision --autogenerate -m "описание изменения"
-```
-Перед коммитом обязательно просмотрите сгенерированный файл — autogenerate делает большую часть работы, но для некоторых изменений столбцов SQLite нужен `op.batch_alter_table(...)`, который он сам не подставляет.
-
-## Развёртывание через Docker
-
-```bash
-cp .env.example .env   # укажите настоящий TIFUSI_SECRET_KEY, и TIFUSI_PUBLIC_URL, если панель за прокси
-docker compose up -d --build
-```
-
-- API панели: `http://localhost:8000`
-- Дашборд: `http://localhost:8080`
-- Данные SQLite хранятся в `./data`
-
-Задайте `TIFUSI_PUBLIC_URL`, когда панель работает за прокси — без этого ссылки подписки строятся из заголовка Host запроса, а внутри контейнера это внутреннее имя, недоступное клиенту. Это лишь значение по умолчанию: в любой момент его можно посмотреть и изменить прямо из настроек панели, без передеплоя.
-
-### HTTPS на дашборде (рекомендуется)
-
-Контейнер `dashboard` может сам завершать TLS на порту 443 и проксировать `/api/` и `/sub/` на панель внутри сети. Именно это настраивает за вас шаг с доменом и Let's Encrypt в `install.sh`. Ещё два способа включить это позже:
-
-- Из панели: Настройки → Сертификат SSL → загрузите `fullchain.pem` и `privkey.pem`. Заработает примерно через 15 секунд.
-- Вручную: положите те же два файла в `./certs` на сервере.
-
-В обоих случаях `./certs` постоянно отслеживается, так что nginx сам подхватывает новый или удалённый сертификат.
-
-### Прямой TLS на панели (продвинутый вариант)
-
-Если вы вообще не используете контейнер dashboard и хотите, чтобы TLS завершал сам uvicorn:
-
-```bash
-# в .env
-TIFUSI_SSL_CERTFILE=/app/certs/fullchain.pem
-TIFUSI_SSL_KEYFILE=/app/certs/privkey.pem
-```
-
-Раскомментируйте также строку `./certs:/app/certs:ro` в `docker-compose.yml`. Обе переменные нужно задать вместе — если задать только одну, приложение завершится с ошибкой при запуске вместо тихого отката на обычный HTTP.
+- [Tifusi VPN](https://github.com/javadtifusi-eng/Tifusi-VPN): Android-клиент для IKEv2 и VLESS REALITY, настраиваемый из этой панели по ссылке подписки, коду доступа или QR-коду.
+- [Tifusi Bot](https://github.com/javadtifusi-eng/Tifusi-Bot): Telegram-магазин, создающий пользователей через API панели.
 
 ## Благодарности
 
-Эмблема грифона — собственный знак Tifusi, перенесён из `Tifusi-Tunnel`.
+Эмблема перенесена из проекта Tifusi-Tunnel.

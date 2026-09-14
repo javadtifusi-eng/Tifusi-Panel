@@ -7,7 +7,7 @@
 <hr>
 
 <p align="center">
-  <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=22D3EE" alt="GitHub stars" /></a>
+  <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=F97316" alt="GitHub stars" /></a>
 </p>
 
 <p align="center">
@@ -26,79 +26,252 @@
 
 <hr>
 
-Tifusi Panel is a self-hosted proxy management panel: a web dashboard plus a REST API, built on FastAPI and React. It supports VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP/IPsec and IKEv2/IPsec. No WireGuard.
-
-## Screenshots
+Tifusi Panel is a self-hosted control plane for proxy and VPN infrastructure. A single panel instance stores users, access policy and core configurations, renders per-node configuration, and pushes it to any number of remote nodes over an authenticated HTTPS API. Nodes run Xray-core for VLESS, VMess, Trojan and Shadowsocks, and strongSwan with xl2tpd for IKEv2/IPsec and L2TP/IPsec. Subscription endpoints serve share links, Clash and sing-box profiles, and a structured JSON profile consumed by the Tifusi VPN client. WireGuard is not supported.
 
 <p align="center">
-  <img src="docs/screenshots/login.png" width="49%" alt="Login screen" />
-  <img src="docs/screenshots/panel.png" width="49%" alt="Inside the panel" />
+  <img src="docs/screenshots/dashboard.png" width="100%" alt="Tifusi Panel dashboard" />
 </p>
+
+## Architecture
+
+### Components and data flow
+
+```mermaid
+flowchart LR
+    Admin(["Administrator"])
+
+    subgraph PanelHost["Panel server · docker compose"]
+        direction TB
+        Dash["tifusi-dashboard<br/>nginx + React SPA<br/>TCP 443 / 8080"]
+        API["tifusi-panel<br/>FastAPI · TCP 8000"]
+        DB[("SQLite<br/>./data")]
+        Dash -->|"/api · /sub · /code · /app"| API
+        API <--> DB
+    end
+
+    subgraph NodeHost["Node server · tifusi-node · host network"]
+        direction TB
+        Agent["Node agent<br/>HTTPS · TCP 62050"]
+        Xray["Xray-core<br/>VLESS · VMess · Trojan · SS"]
+        Swan["strongSwan charon<br/>IKEv2 · EAP-MSCHAPv2"]
+        L2TP["xl2tpd<br/>L2TP over IPsec"]
+        Agent -->|"write config, restart"| Xray
+        Agent -->|"swanctl --load-all"| Swan
+        Agent -->|"apply config"| L2TP
+    end
+
+    subgraph Clients["Clients"]
+        direction TB
+        App["Tifusi VPN<br/>Android"]
+        XC["Xray clients<br/>v2rayNG · V2Box · sing-box · Clash"]
+        Native["Native IKEv2 / L2TP<br/>iOS · Android · Windows"]
+    end
+
+    Admin -->|"HTTPS"| Dash
+    API -->|"POST /config<br/>POST /ipsec-config<br/>X-Node-Api-Key"| Agent
+    API -.->|"GET /health · GET /stats<br/>every 30 s"| Agent
+
+    App -->|"GET /code/{code}/app.json<br/>POST /app/report"| Dash
+    XC -->|"GET /sub/{secret}"| Dash
+    App ==>|"VLESS REALITY"| Xray
+    App ==>|"IKEv2 · UDP 500/4500"| Swan
+    XC ==>|"proxy protocols"| Xray
+    Native ==>|"UDP 500/4500"| Swan
+    Native ==>|"UDP 1701 in IPsec"| L2TP
+```
+
+Solid arrows are control-plane requests, dotted arrows are periodic polling, and thick arrows are data-plane traffic. The panel never proxies user traffic; clients connect directly to the node addresses published by hosts.
+
+### Configuration model
+
+```mermaid
+flowchart TD
+    Core["Core<br/>raw Xray JSON, or IKEv2 / L2TP server settings"]
+    Node["Node<br/>address · agent port · API key"]
+    Inbound["Inbound<br/>tag · protocol · port · transport · security"]
+    Host["Host<br/>public address · port · SNI · fingerprint · remark"]
+    Group["Group<br/>access boundary"]
+    User["User<br/>quota · expiry · device limit · status"]
+    Sub["Subscription<br/>/sub/{secret} · /code/{code}"]
+    Out["Share links · Clash · sing-box<br/>app.json: ikev2 · l2tp · vless"]
+
+    Core -->|"assigned to"| Node
+    Core -->|"inbounds parsed from config"| Inbound
+    Inbound -->|"published through"| Host
+    Core -.->|"IKEv2 / L2TP hosts bind to the core"| Host
+    Group -->|"restricts visibility of"| Host
+    User -->|"member of"| Group
+    User --> Sub
+    Host --> Sub
+    Sub --> Out
+```
+
+A host without a group is visible to all users. Once a host is attached to one or more groups, it is included in subscriptions and node configurations only for members of those groups.
+
+### Node synchronisation lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Admin
+    participant Panel as Panel API
+    participant Agent as Node agent
+    participant Core as Xray / strongSwan
+    participant Client
+
+    Admin->>Panel: Create, update, reset or delete a user
+    Panel->>Panel: Persist change and resolve group access
+    Panel-)Agent: POST /config (rendered Xray JSON)
+    Panel-)Agent: POST /ipsec-config (swanctl connections, EAP secrets, PSK, pools)
+    Agent->>Core: Apply configuration
+    Client->>Panel: GET /code/{code}/app.json
+    Panel-->>Client: Endpoints, credentials, remaining quota and expiry
+    Client->>Core: Establish tunnel
+    Client-)Panel: POST /app/report (connection result)
+    loop Every TIFUSI_TRAFFIC_SYNC_INTERVAL_SECONDS (default 30)
+        Panel->>Agent: GET /health, GET /stats
+        Agent-->>Panel: Process state and per-user traffic counters
+        Panel->>Panel: Accumulate usage, transition expired / limited users
+        Panel-)Agent: Resync nodes whose effective user set changed
+    end
+```
+
+### Transport security between panel and node
+
+- The agent serves HTTPS with a self-signed certificate generated on first start (`backend/node_agent/tls.py`). This encrypts credentials and pushed secrets in transit.
+- Every request carries the per-node key in the `X-Node-Api-Key` header. The panel does not verify the agent certificate, so the API key is the effective credential; mutual TLS is not yet implemented.
+- The node container uses `--network host` so that Xray can bind ports defined after the container starts, and so that UDP 500, 4500 and 1701 reach charon and xl2tpd on the public address.
 
 ## Features
 
-- **Backend** in `backend/`: FastAPI, async SQLAlchemy (SQLite by default), JWT auth, Alembic migrations.
-- **Frontend** in `frontend/`: React + Vite + Tailwind, dark/light theme, bilingual (Persian/English) UI throughout.
-- **Users** — create, list, enable/disable and delete proxy users one at a time or in bulk. Traffic caps and usage tracking, automatic `expired`/`limited` transitions, on-hold accounts whose countdown starts on first connect instead of at creation, an optional per-user device limit, and saved templates so you're not retyping the same plan every time.
-- **Hosts** for VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP and IKEv2. The Xray-backed protocols pick an Inbound parsed straight out of a Core's real Xray config — transport, security and REALITY keys all come from there. L2TP/IKEv2 hosts pick a Core: L2TP holds a shared PSK, IKEv2 authenticates itself to clients with a certificate (self-signed by default, or a real one pasted in) and each user with their own EAP-MSCHAPv2 login.
-- **Cores** hold either a full raw Xray JSON config (with visual editors for routing, outbounds and DNS on top of it) or the shared settings for an L2TP/IKEv2 server, plus which nodes run it.
-- **Groups** are real access control, not just labels. A host with no group is visible to everyone; once it joins a group, only users in that group can see or use it — in their links and in the actual config pushed to nodes.
-- **REALITY scanner** — tests around 160 candidate domains for latency and suggests the fastest one right from the Hosts form.
-- **Subscription links** — a `vless://`, `vmess://`, `trojan://`, `ss://` or `hysteria2://` link per host, plain connection details for L2TP/IKEv2, and one subscription URL with a QR code that client apps hit directly (Clash and sing-box clients get a proper config instead of a raw link list).
-- **Nodes** — register a server, run the install command it gives you, hit Sync, and it comes back connected with its Xray version attached. After that, health checks and traffic collection run on their own.
-- **Tunnels** — publish a foreign VPN server through an Iran-side relay so the foreign server never needs an open inbound port. The panel builds a silent install command for each side and suggests a transport based on a live latency check.
-- **Admin accounts** — the owner can create additional admins with limited permissions, and each admin can issue API keys for scripts and bots instead of using a login token. Admins with limited access only see the users they created themselves.
-- **Notifications** — Telegram, Discord or a plain webhook, your pick (or all three), for user and node events.
-- **Settings** — public URL and admin password from the dashboard, TLS certificate upload, one-click backup and restore. No redeploy needed for any of it.
+- **Users.** Individual and bulk creation, enable/disable and deletion. Data quotas with usage accounting, automatic `expired` and `limited` transitions, on-hold accounts whose validity period starts at first connection, per-user device limits and reusable templates.
+- **Cores.** Either a complete Xray JSON configuration, with structured editors for routing, outbounds and DNS, or the server parameters of an IKEv2/L2TP deployment. Each core is assigned to one or more nodes.
+- **Hosts.** Public endpoints for VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP and IKEv2. Xray-based hosts reference an inbound parsed from the core configuration, from which transport, security and REALITY parameters are inherited. L2TP hosts use a shared PSK. IKEv2 hosts authenticate the server with an X.509 certificate (self-signed by default, or an imported CA-issued chain) and each user with EAP-MSCHAPv2.
+- **Groups.** Enforced access control. Group membership determines both the links a user receives and the credentials rendered into node configurations.
+- **REALITY target scanner.** Measures latency to approximately 160 candidate SNI domains and proposes the fastest one from the host form.
+- **Subscriptions.** Per-host `vless://`, `vmess://`, `trojan://`, `ss://` and `hysteria2://` URIs; connection parameters for L2TP and IKEv2; an IKEv2 `.mobileconfig` profile; a single subscription URL with QR code. Clash-family and sing-box clients are detected by User-Agent and receive a native profile.
+- **Tifusi VPN profile.** `GET /sub/{secret}/app.json` and `GET /code/{code}/app.json` return IKEv2, L2TP and VLESS endpoints together with quota and expiry data. Client connection results posted to `/app/report` are listed per user and in the dashboard activity feed.
+- **Nodes.** Registration generates a one-line install command bound to the node key. After the first successful sync, health and traffic collection run continuously.
+- **Tunnels.** Publishes a foreign server through a relay inside a restricted network, so the foreign server requires no open inbound port. The panel generates install commands for both sides and proposes a transport based on a live latency measurement.
+- **Administration.** An owner account plus additional administrators with scoped permissions. Scoped administrators see only the users they created. Each administrator can issue API keys for automation.
+- **Notifications.** Telegram, Discord and generic webhooks for user and node state transitions.
+- **Settings.** Public URL, administrator password, TLS certificate upload or Let's Encrypt issuance, and database backup and restore, all applied without redeployment.
+- **Interface.** React 18, Vite and Tailwind CSS; Persian (RTL) and English localisation; self-hosted Vazirmatn and Poppins typefaces.
 
-See `ROADMAP.md` for what's still missing and what's being considered next.
+Planned and deliberately excluded work is tracked in [`ROADMAP.md`](ROADMAP.md).
 
-## Quick install
+## Repository layout
 
-**Panel** — the server that'll host the dashboard and API:
+| Path | Contents |
+| --- | --- |
+| `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting |
+| `backend/alembic` | Database migrations |
+| `backend/cli` | `tifusi-cli`, including first-run admin key generation |
+| `backend/node_agent` | Node agent service, strongSwan/xl2tpd integration, node Dockerfile |
+| `backend/tunnel_agent` | Relay agent for the Tunnels feature (Go) |
+| `frontend` | React dashboard and nginx image |
+| `install.sh`, `install-node.sh` | Panel and node installers |
+| `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi` |
+| `.github/workflows/build-images.yml` | Builds and publishes panel, dashboard and node images to GHCR |
+
+## Requirements
+
+- Panel: a Linux host with Docker (installed automatically if absent). A DNS record pointing to the server is recommended for TLS.
+- Node: a Linux host with Docker and a public IPv4 address. IKEv2 requires UDP 500 and 4500; L2TP additionally requires UDP 1701 and the `l2tp_ppp` and `ppp_generic` kernel modules on the host.
+- Building images locally requires outbound access to GitHub releases for Xray-core and to the strongSwan source archive.
+
+## Installation
+
+### Panel
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
-This installs Docker if you don't have it, clones the repo, offers to grab a free Let's Encrypt certificate if you point a domain at the server, and brings everything up with Docker Compose. You create the admin account afterward from the browser — see below.
 
-**Node** — any server that'll actually run Xray. Create the node in the panel's Nodes page first to get its API key:
+The installer provisions Docker, clones the repository, generates `TIFUSI_SECRET_KEY`, optionally issues a Let's Encrypt certificate for a domain that resolves to the server, and starts the stack with Docker Compose. It also installs the `tifusi` management command.
+
+### Node
+
+Create the node on the **Nodes** page to obtain its API key, then run on the node server:
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- <API_KEY> [PORT]
 ```
-This only sets up the node agent — no panel, no database, nothing else on that machine.
 
-Both scripts install Docker for you if it's missing.
+`PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules and starts the `tifusi-node` container on the host network. Select **Sync** in the panel to push the initial configuration.
 
-## First-run setup
+### First-run setup
 
-No documentation hunt needed — the login page shows you the exact command to run, with a copy button.
+<p align="center">
+  <img src="docs/screenshots/login.png" width="80%" alt="Tifusi Panel sign-in screen" />
+</p>
 
-1. Start the stack: `docker compose up -d`
-2. Open the panel. With no admin account yet, it shows a first-time setup card and a command to copy.
-3. Run that command on the server:
+1. Open the dashboard. When no administrator exists, the sign-in screen offers the setup procedure.
+2. Generate a one-time setup key on the panel server:
    ```bash
    docker exec -it tifusi-panel tifusi-cli generate-admin-key
    ```
-4. Paste the key back into the same card, pick a username and password, done.
+3. Enter the key, then choose the owner username and password.
 
-`install.sh` handles step 1 for you — steps 2 through 4 happen in the browser.
+## Operations
 
-## Nodes and the node agent
+`tifusi` runs an interactive menu, or a single action when given an argument:
 
-A node is a server that runs Xray. `backend/node_agent/` is the small FastAPI service that goes on it: the panel posts a generated config to its `/config` endpoint, authenticated with a per-node API key, and the agent restarts Xray with it and reports back on `/health`.
+| Command | Action |
+| --- | --- |
+| `tifusi update` | Update to the latest release and recreate the containers |
+| `tifusi status` | Show container state |
+| `tifusi logs` | Follow container logs |
+| `tifusi restart` | Restart the stack |
+| `tifusi port` | Change the panel API and dashboard ports |
+| `tifusi ssl` | Issue a Let's Encrypt certificate |
+| `tifusi key` | Generate a new administrator setup key |
+| `tifusi backup` / `tifusi restore` | Export or restore the database |
+| `tifusi uninstall` | Remove the installation |
+
+## Deployment reference
+
+### Docker Compose
 
 ```bash
-docker build -t tifusi-node-agent -f backend/node_agent/Dockerfile backend
-docker run -d --name tifusi-node --restart unless-stopped \
-  -p 62050:62050 -e TIFUSI_NODE_API_KEY=<from the panel's node-install command> \
-  tifusi-node-agent
+cp .env.example .env    # set TIFUSI_SECRET_KEY; set TIFUSI_PUBLIC_URL when behind a reverse proxy
+docker compose up -d --build
 ```
 
-The agent's Dockerfile pulls the real Xray-core binary from its GitHub release at build time, so building it needs outbound internet access.
+| Service | Container | Ports |
+| --- | --- | --- |
+| Panel API | `tifusi-panel` | `8000` (API), `80` (ACME HTTP-01 challenge only) |
+| Dashboard | `tifusi-dashboard` | `8080` (HTTP), `443` (HTTPS) |
 
-Hysteria2 isn't part of Xray-core — it runs as its own server — and L2TP/IKEv2 go through strongSwan and xl2tpd instead. All three are left out of the Xray config the panel pushes rather than forced into a broken inbound.
+SQLite data is stored in `./data`. `TIFUSI_PUBLIC_URL` defines the base URL used in subscription links; without it, links are derived from the request `Host` header, which is not reachable from clients when the panel runs behind a proxy. The value can later be changed from **Settings** at runtime.
 
-## Local development
+### TLS on the dashboard
+
+The dashboard container terminates TLS on port 443 and proxies `/api/`, `/sub/`, `/code/` and `/app/` to the panel. It reads `fullchain.pem` and `privkey.pem` from `./certs`, which is watched continuously; certificate changes take effect without a restart. Certificates can be supplied by the installer, uploaded under **Settings → SSL Certificate**, or placed in `./certs` manually.
+
+### Direct TLS on the API
+
+For deployments without the dashboard container, uvicorn can terminate TLS directly:
+
+```bash
+TIFUSI_SSL_CERTFILE=/app/certs/fullchain.pem
+TIFUSI_SSL_KEYFILE=/app/certs/privkey.pem
+```
+
+Mount `./certs:/app/certs:ro` in `docker-compose.yml`. Both variables must be set together; setting only one aborts startup rather than falling back to plain HTTP.
+
+### Database migrations
+
+The schema is managed with Alembic, and `alembic upgrade head` runs on every startup. When a model changes, generate and review a migration:
+
+```bash
+cd backend
+alembic revision --autogenerate -m "describe the change"
+```
+
+SQLite requires `op.batch_alter_table(...)` for column alterations that cannot be applied in place; review autogenerated revisions before committing.
+
+## Development
 
 **Backend**
 ```bash
@@ -113,59 +286,19 @@ cd frontend
 npm install
 npm run dev
 ```
-The Vite dev server proxies `/api` to `http://localhost:8000`.
 
-**Generate a setup key without Docker**
+The Vite development server proxies `/api` to `http://localhost:8000`. A setup key can be generated without Docker with `python -m cli.main generate-admin-key` from `backend/`.
+
+**Node agent image**
 ```bash
-cd backend
-python -m cli.main generate-admin-key
+docker build -t tifusi-node-agent -f backend/node_agent/Dockerfile backend
 ```
 
-## Database migrations
+## Related projects
 
-Schema changes go through Alembic, not `create_all()`. The app runs `alembic upgrade head` on every startup, so a normal deploy always lands on the latest schema with no manual step.
-
-When you change a model, generate the migration alongside it:
-```bash
-cd backend
-alembic revision --autogenerate -m "add whatever column"
-```
-Read the generated file before committing it — autogenerate gets you most of the way there but SQLite needs `op.batch_alter_table(...)` for some column changes it can't do inline.
-
-## Docker deployment
-
-```bash
-cp .env.example .env   # set a real TIFUSI_SECRET_KEY, and TIFUSI_PUBLIC_URL if behind a proxy
-docker compose up -d --build
-```
-
-- Panel API: `http://localhost:8000`
-- Dashboard: `http://localhost:8080`
-- SQLite data lives in `./data`
-
-Set `TIFUSI_PUBLIC_URL` once the panel sits behind a proxy — without it, subscription URLs get built from the request's Host header, which inside a container is an internal name a client can't reach. It's only a bootstrap default though; you can change it any time from Settings without redeploying.
-
-### HTTPS on the dashboard (recommended)
-
-The `dashboard` container can terminate TLS itself on port 443 and proxy `/api/` and `/sub/` to the panel internally. `install.sh`'s domain/Let's Encrypt step sets this up automatically. Two other ways to enable it later:
-
-- From the panel: Settings → SSL Certificate → upload `fullchain.pem` and `privkey.pem`. Live within about 15 seconds.
-- By hand: drop the same two files into `./certs` on the host.
-
-Either way, `./certs` is watched continuously, so nginx picks up a new or removed cert on its own.
-
-### Direct TLS on the panel (advanced)
-
-If you're skipping the dashboard container entirely and want uvicorn to terminate TLS itself:
-
-```bash
-# in .env
-TIFUSI_SSL_CERTFILE=/app/certs/fullchain.pem
-TIFUSI_SSL_KEYFILE=/app/certs/privkey.pem
-```
-
-Uncomment the `./certs:/app/certs:ro` line in `docker-compose.yml` too. Both variables need to be set together — setting only one fails fast at startup instead of quietly falling back to plain HTTP.
+- [Tifusi VPN](https://github.com/javadtifusi-eng/Tifusi-VPN): Android client for IKEv2 and VLESS REALITY, provisioned from this panel by subscription link, access code or QR code.
+- [Tifusi Bot](https://github.com/javadtifusi-eng/Tifusi-Bot): Telegram storefront that provisions users through the panel API.
 
 ## Credits
 
-The griffin emblem is Tifusi's own mark, carried over from `Tifusi-Tunnel`.
+The emblem is carried over from the Tifusi-Tunnel project.
