@@ -171,7 +171,8 @@ Planned and deliberately excluded work is tracked in [`ROADMAP.md`](ROADMAP.md).
 | `backend/tunnel_agent` | Relay agent for the Tunnels feature (Go) |
 | `frontend` | React dashboard and nginx image |
 | `install.sh`, `install-node.sh` | Panel and node installers |
-| `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi` |
+| `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi-panel` and run as `tifusi panel` |
+| `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, Tifusi Bot and the Tifusi VPN app |
 | `.github/workflows/build-images.yml` | Builds and publishes panel, dashboard and node images to GHCR |
 
 ## Requirements
@@ -188,7 +189,7 @@ Planned and deliberately excluded work is tracked in [`ROADMAP.md`](ROADMAP.md).
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
 
-The installer provisions Docker, clones the repository, generates `TIFUSI_SECRET_KEY`, optionally issues a Let's Encrypt certificate for a domain that resolves to the server, and starts the stack with Docker Compose. It also installs the `tifusi` management command.
+The installer provisions Docker, clones the repository, generates `TIFUSI_SECRET_KEY`, optionally issues a Let's Encrypt certificate for a domain that resolves to the server, and starts the stack with Docker Compose. It also installs the `tifusi panel` management command.
 
 ### Node
 
@@ -215,19 +216,21 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 
 ## Operations
 
-`tifusi` runs an interactive menu, or a single action when given an argument:
+`tifusi panel` runs an interactive menu, or a single action when given an argument:
 
 | Command | Action |
 | --- | --- |
-| `tifusi update` | Update to the latest release and recreate the containers |
-| `tifusi status` | Show container state |
-| `tifusi logs` | Follow container logs |
-| `tifusi restart` | Restart the stack |
-| `tifusi port` | Change the panel API and dashboard ports |
-| `tifusi ssl` | Issue a Let's Encrypt certificate |
-| `tifusi key` | Generate a new administrator setup key |
-| `tifusi backup` / `tifusi restore` | Export or restore the database |
-| `tifusi uninstall` | Remove the installation |
+| `tifusi panel update` | Update to the latest release and recreate the containers |
+| `tifusi panel status` | Show container state |
+| `tifusi panel logs` | Follow container logs |
+| `tifusi panel restart` | Restart the stack |
+| `tifusi panel port` | Change the panel API and dashboard ports |
+| `tifusi panel ssl` | Issue a Let's Encrypt certificate |
+| `tifusi panel key` | Generate a new administrator setup key |
+| `tifusi panel backup` / `tifusi panel restore` | Export or restore the database |
+| `tifusi panel uninstall` | Remove the installation |
+
+`tifusi` is a launcher shared with [Tifusi Bot](https://github.com/javadtifusi-eng/Tifusi-Bot): `tifusi bot` opens the bot installer menu and `tifusi app` prints the latest Tifusi VPN Android release with its download link. When only one of the panel and the bot is installed on a server, `tifusi` without a subcommand opens that component, so `tifusi update` continues to work.
 
 ## Deployment reference
 

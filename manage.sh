@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tifusi Panel management CLI — installed as `tifusi` on PATH by install.sh.
+# Tifusi Panel management CLI — installed as `tifusi-panel` by install.sh and run as `tifusi panel`.
 # Run it any time (from anywhere) to update, reconfigure, or inspect an
 # existing install; it's not the installer itself (see install.sh for that).
 #
@@ -67,6 +67,9 @@ action_update() {
   fi
   info "Pulling latest code..."
   git pull --ff-only
+  # A pull alone leaves tifusi-panel and the shared launcher at the previously installed version.
+  source scripts/install-commands.sh
+  install_panel_commands
   info "Pulling prebuilt images..."
   if ! docker compose pull; then
     warn "Prebuilt images unavailable — building locally instead (can take a few minutes on a small server)."
@@ -190,7 +193,7 @@ action_status() {
 }
 
 action_uninstall() {
-  warn "This stops every Tifusi container, deletes all panel data (users, hosts, nodes, certs), and removes this 'tifusi' command."
+  warn "This stops every Tifusi container, deletes all panel data (users, hosts, nodes, certs), and removes the 'tifusi panel' command."
   read -r -p "Type the word DELETE to continue: " confirm
   [ "$confirm" = "DELETE" ] || { info "Cancelled."; return; }
   docker compose down -v
@@ -200,7 +203,9 @@ action_uninstall() {
     rm -rf "$INSTALL_DIR"
     info "Removed $INSTALL_DIR."
   fi
-  rm -f "$STATE_FILE" /usr/local/bin/tifusi
+  rm -f "$STATE_FILE" /usr/local/bin/tifusi-panel
+  # The launcher is shared with Tifusi Bot, so it stays while the bot is installed.
+  [ -e /usr/local/bin/tifusi-bot ] || rm -f /usr/local/bin/tifusi
   info "Tifusi Panel uninstalled."
   exit 0
 }
@@ -237,8 +242,8 @@ menu() {
   esac
 }
 
-# A single argument runs one action non-interactively (`tifusi update`,
-# `tifusi status`, ...) for scripting/cron; no args drops into the menu loop.
+# A single argument runs one action non-interactively (`tifusi panel update`,
+# `tifusi panel status`, ...) for scripting/cron; no args drops into the menu loop.
 case "${1:-}" in
   update) action_update ;;
   port) action_change_port ;;
@@ -260,7 +265,7 @@ case "${1:-}" in
     ;;
   *)
     err "Unknown command: $1"
-    err "Run 'tifusi' with no arguments for the interactive menu."
+    err "Run 'tifusi panel' with no arguments for the interactive menu."
     exit 1
     ;;
 esac

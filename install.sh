@@ -292,9 +292,9 @@ run_spinner "Building & starting containers..." "${BUILD_CMD[@]}" || exit 1
 step "Management command"
 mkdir -p /etc/tifusi-panel
 echo "$INSTALL_DIR" > /etc/tifusi-panel/install_dir
-cp manage.sh /usr/local/bin/tifusi
-chmod +x /usr/local/bin/tifusi
-info "Installed the 'tifusi' command — run it any time to update, change ports, get SSL, back up, or uninstall."
+source scripts/install-commands.sh
+install_panel_commands
+info "Installed the 'tifusi panel' command — run it any time to update, change ports, get SSL, back up, or uninstall."
 
 step "Health check"
 info "Waiting for the panel to come up..."
@@ -321,8 +321,8 @@ fi
 info "  Panel API:  http://${HOST_IP}:${panel_port}"
 info ""
 info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
-info "  tifusi key"
+info "  tifusi panel key"
 info "Paste that key into the login page along with the username/password you want, and you're in."
 info ""
-info "Run 'tifusi' any time (updates, ports, SSL, backups, uninstall) — or just 'tifusi' with no arguments for a menu."
+info "Run 'tifusi panel' any time (updates, ports, SSL, backups, uninstall) — with no arguments it opens a menu."
 info "Done."

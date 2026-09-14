@@ -191,7 +191,8 @@ sequenceDiagram
 | `backend/tunnel_agent` | Relay agent for the Tunnels feature (Go) |
 | `frontend` | React dashboard and nginx image |
 | `install.sh`, `install-node.sh` | Panel and node installers |
-| `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi` |
+| `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi-panel` and run as `tifusi panel` |
+| `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, Tifusi Bot and the Tifusi VPN app |
 | `.github/workflows/build-images.yml` | Builds and publishes panel, dashboard and node images to GHCR |
 
 <div dir="rtl">
@@ -214,7 +215,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 
 <div dir="rtl">
 
-نصب‌کننده Docker را آماده می‌کند، مخزن را clone می‌کند، `TIFUSI_SECRET_KEY` را تولید می‌کند، در صورت تمایل برای دامنه‌ای که به سرور اشاره می‌کند گواهی Let's Encrypt صادر می‌کند و مجموعه را با Docker Compose راه‌اندازی می‌کند. فرمان مدیریتی `tifusi` نیز نصب می‌شود.
+نصب‌کننده Docker را آماده می‌کند، مخزن را clone می‌کند، `TIFUSI_SECRET_KEY` را تولید می‌کند، در صورت تمایل برای دامنه‌ای که به سرور اشاره می‌کند گواهی Let's Encrypt صادر می‌کند و مجموعه را با Docker Compose راه‌اندازی می‌کند. فرمان مدیریتی `tifusi panel` نیز نصب می‌شود.
 
 ### نود
 
@@ -256,21 +257,27 @@ docker exec -it tifusi-panel tifusi-cli generate-admin-key
 
 ## عملیات
 
-فرمان `tifusi` بدون آرگومان یک منوی تعاملی و با آرگومان یک عملیات مشخص را اجرا می‌کند:
+فرمان `tifusi panel` بدون آرگومان یک منوی تعاملی و با آرگومان یک عملیات مشخص را اجرا می‌کند:
 
 </div>
 
 | Command | Action |
 | --- | --- |
-| `tifusi update` | Update to the latest release and recreate the containers |
-| `tifusi status` | Show container state |
-| `tifusi logs` | Follow container logs |
-| `tifusi restart` | Restart the stack |
-| `tifusi port` | Change the panel API and dashboard ports |
-| `tifusi ssl` | Issue a Let's Encrypt certificate |
-| `tifusi key` | Generate a new administrator setup key |
-| `tifusi backup` / `tifusi restore` | Export or restore the database |
-| `tifusi uninstall` | Remove the installation |
+| `tifusi panel update` | Update to the latest release and recreate the containers |
+| `tifusi panel status` | Show container state |
+| `tifusi panel logs` | Follow container logs |
+| `tifusi panel restart` | Restart the stack |
+| `tifusi panel port` | Change the panel API and dashboard ports |
+| `tifusi panel ssl` | Issue a Let's Encrypt certificate |
+| `tifusi panel key` | Generate a new administrator setup key |
+| `tifusi panel backup` / `tifusi panel restore` | Export or restore the database |
+| `tifusi panel uninstall` | Remove the installation |
+
+<div dir="rtl">
+
+فرمان `tifusi` یک راه‌انداز مشترک با [Tifusi Bot](https://github.com/javadtifusi-eng/Tifusi-Bot) است: `tifusi bot` منوی نصب‌کننده‌ی ربات را باز می‌کند و `tifusi app` آخرین نسخه‌ی اپلیکیشن اندروید Tifusi VPN را همراه با لینک دانلود نمایش می‌دهد. اگر روی سرور تنها یکی از دو مؤلفه‌ی پنل یا ربات نصب باشد، فرمان `tifusi` بدون زیرفرمان همان مؤلفه را باز می‌کند؛ از این رو `tifusi update` همچنان کار می‌کند.
+
+</div>
 
 <div dir="rtl">
 

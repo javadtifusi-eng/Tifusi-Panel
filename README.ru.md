@@ -171,7 +171,8 @@ sequenceDiagram
 | `backend/tunnel_agent` | Агент ретранслятора для туннелей (Go) |
 | `frontend` | React-дашборд и образ nginx |
 | `install.sh`, `install-node.sh` | Установщики панели и узла |
-| `manage.sh` | Меню эксплуатации, устанавливается как `/usr/local/bin/tifusi` |
+| `manage.sh` | Меню эксплуатации, устанавливается как `/usr/local/bin/tifusi-panel` и запускается командой `tifusi panel` |
+| `scripts/tifusi` | Общий лаунчер `tifusi` для Tifusi Panel, Tifusi Bot и приложения Tifusi VPN |
 | `.github/workflows/build-images.yml` | Сборка и публикация образов панели, дашборда и узла в GHCR |
 
 ## Требования
@@ -188,7 +189,7 @@ sequenceDiagram
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
 
-Установщик подготавливает Docker, клонирует репозиторий, генерирует `TIFUSI_SECRET_KEY`, при необходимости выпускает сертификат Let's Encrypt для домена, указывающего на сервер, и запускает стек через Docker Compose. Также устанавливается команда управления `tifusi`.
+Установщик подготавливает Docker, клонирует репозиторий, генерирует `TIFUSI_SECRET_KEY`, при необходимости выпускает сертификат Let's Encrypt для домена, указывающего на сервер, и запускает стек через Docker Compose. Также устанавливается команда управления `tifusi panel`.
 
 ### Узел
 
@@ -215,19 +216,21 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 
 ## Эксплуатация
 
-`tifusi` без аргументов открывает интерактивное меню, с аргументом выполняет одно действие:
+`tifusi panel` без аргументов открывает интерактивное меню, с аргументом выполняет одно действие:
 
 | Команда | Действие |
 | --- | --- |
-| `tifusi update` | Обновить до последней версии и пересоздать контейнеры |
-| `tifusi status` | Показать состояние контейнеров |
-| `tifusi logs` | Просмотр журналов контейнеров |
-| `tifusi restart` | Перезапустить стек |
-| `tifusi port` | Изменить порты API панели и дашборда |
-| `tifusi ssl` | Выпустить сертификат Let's Encrypt |
-| `tifusi key` | Сгенерировать новый ключ настройки администратора |
-| `tifusi backup` / `tifusi restore` | Экспорт или восстановление базы данных |
-| `tifusi uninstall` | Удалить установку |
+| `tifusi panel update` | Обновить до последней версии и пересоздать контейнеры |
+| `tifusi panel status` | Показать состояние контейнеров |
+| `tifusi panel logs` | Просмотр журналов контейнеров |
+| `tifusi panel restart` | Перезапустить стек |
+| `tifusi panel port` | Изменить порты API панели и дашборда |
+| `tifusi panel ssl` | Выпустить сертификат Let's Encrypt |
+| `tifusi panel key` | Сгенерировать новый ключ настройки администратора |
+| `tifusi panel backup` / `tifusi panel restore` | Экспорт или восстановление базы данных |
+| `tifusi panel uninstall` | Удалить установку |
+
+`tifusi` — общий лаунчер с [Tifusi Bot](https://github.com/javadtifusi-eng/Tifusi-Bot): `tifusi bot` открывает меню установщика бота, а `tifusi app` выводит последнюю версию Android-приложения Tifusi VPN и ссылку на загрузку. Если на сервере установлен только один из компонентов (панель или бот), `tifusi` без подкоманды открывает его, поэтому `tifusi update` продолжает работать.
 
 ## Справочник по развёртыванию
 
