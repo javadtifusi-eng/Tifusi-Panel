@@ -632,41 +632,23 @@ export default function TunnelsPage() {
                       {JSON.stringify(configData.foreign_config, null, 2)}
                     </pre>
                   </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-faint">{t.tunnelsPage.iranInstallCommandLabel}</span>
+                  {/* The commands are long base64 blobs nobody reads; only copying them matters. */}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {([
+                      [t.tunnelsPage.iranInstallCommandLabel, configData.iran_install_command],
+                      [t.tunnelsPage.foreignInstallCommandLabel, configData.foreign_install_command],
+                    ] as const).map(([label, command]) => (
                       <button
-                        onClick={() => copy(configData.iran_install_command)}
-                        className="text-[10px] font-bold"
-                        style={{ color: ACCENT }}
+                        key={label}
+                        onClick={() => copy(command)}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-well px-3 py-2 text-start text-xs"
                       >
-                        {copied === configData.iran_install_command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
+                        <span className="text-muted">{label}</span>
+                        <span className="shrink-0 font-bold" style={{ color: ACCENT }}>
+                          {copied === command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
+                        </span>
                       </button>
-                    </div>
-                    <pre
-                      dir="ltr"
-                      className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-accent"
-                    >
-                      {configData.iran_install_command}
-                    </pre>
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] text-faint">{t.tunnelsPage.foreignInstallCommandLabel}</span>
-                      <button
-                        onClick={() => copy(configData.foreign_install_command)}
-                        className="text-[10px] font-bold"
-                        style={{ color: ACCENT }}
-                      >
-                        {copied === configData.foreign_install_command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
-                      </button>
-                    </div>
-                    <pre
-                      dir="ltr"
-                      className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-well p-2 text-left font-mono text-[10px] text-accent"
-                    >
-                      {configData.foreign_install_command}
-                    </pre>
+                    ))}
                   </div>
                 </div>
               )}

@@ -68,4 +68,5 @@ def build_install_command(config: dict) -> str:
     no terminal prompts, no picking transport/token/SNI by hand again.
     """
     encoded = base64.b64encode(json.dumps(config).encode()).decode()
-    return f"bash <(curl -fsSL {_INSTALL_RAW_URL}) -- {encoded}"
+    # No `--` before the config: with `bash <(...)` bash hands it to the script as $1.
+    return f"bash <(curl -fsSL {_INSTALL_RAW_URL}) {encoded}"

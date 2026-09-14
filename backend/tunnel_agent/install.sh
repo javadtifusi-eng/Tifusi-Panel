@@ -9,9 +9,12 @@ REPO_NAME="Tifusi-Panel"
 BRANCH="main"
 TUNNEL_DIR="backend/tunnel_agent"
 RAW="https://raw.githubusercontent.com/${REPO_USER}/${REPO_NAME}/${BRANCH}/${TUNNEL_DIR}"
-RELEASE="https://github.com/${REPO_USER}/${REPO_NAME}/releases/latest/download"
+# Fixed release the build-tunnel-agent workflow publishes the prebuilt binaries on.
+RELEASE="https://github.com/${REPO_USER}/${REPO_NAME}/releases/download/tunnel-agent"
 
-BIN=/usr/local/bin/tifusi
+BIN=/usr/local/bin/tifusi-tunnel
+# Where the agent used to live; Tifusi Panel and Tifusi Bot now keep their shared launcher there.
+OLD_BIN=/usr/local/bin/tifusi
 MENU=/usr/local/bin/tifusi-menu
 CFG_DIR=/etc/tifusi
 CFG=$CFG_DIR/config.json
@@ -158,7 +161,7 @@ ensure_go() {
   if have_go; then ok "using $(go version | awk '{print $3}')"; return; fi
 
   die "no usable Go toolchain (need >= $GO_MIN). Build elsewhere with build.sh and
-     upload dist/* to a GitHub release tagged \"latest\", then run option 1 again."
+     upload dist/* to the GitHub release tagged \"tunnel-agent\", then run option 1 again."
 }
 
 # ------------------------------------------------------------------ binary
@@ -199,12 +202,24 @@ install_shortcut() {
   return 0
 }
 
+# retire_old_bin removes an agent binary left at the old path. It only ever
+# touches a real ELF binary that reports itself as the agent: the launcher,
+# the panel menu and the bot installer that can also sit there are scripts,
+# and running the bot installer would open its interactive menu.
+retire_old_bin() {
+  [ -f "$OLD_BIN" ] || return 0
+  [ "$(head -c 4 "$OLD_BIN" 2>/dev/null | tail -c 3)" = "ELF" ] || return 0
+  case "$("$OLD_BIN" -version 2>/dev/null | head -1)" in
+    tifusi\ *) rm -f "$OLD_BIN"; ok "removed the old agent binary at $OLD_BIN" ;;
+  esac
+}
+
 install_binary() {
   step "Install / update the binary"
   stop_legacy
   local a; a=$(arch_tag) || die "unsupported architecture: $(uname -m)"
   info "looking for a prebuilt binary"
-  if curl -fsSL "${RELEASE}/tifusi-linux-${a}" -o /tmp/tifusi 2>/dev/null && [ -s /tmp/tifusi ]; then
+  if curl -fsSL "${RELEASE}/tifusi-tunnel-linux-${a}" -o /tmp/tifusi 2>/dev/null && [ -s /tmp/tifusi ]; then
     install -m 0755 /tmp/tifusi "$BIN"; rm -f /tmp/tifusi
     ok "installed $(bin_version)"
   else
@@ -226,6 +241,7 @@ install_binary() {
     chmod 0755 "$BIN"
     ok "built and installed $(bin_version)"
   fi
+  retire_old_bin
   install_shortcut && ok "type ${R}bm${N}${W} to open this menu again"
 }
 
@@ -1056,9 +1072,11 @@ unattended_install() {
 require_root
 ensure_deps
 
-# `bash <(curl ...) -- <base64-config>` (same convention as install-node.sh)
-# skips the interactive menu entirely and installs unattended from that one
-# argument - this is what the panel's per-server install commands use.
+# `bash <(curl ...) <base64-config>` skips the interactive menu entirely and
+# installs unattended from that one argument - this is what the panel's
+# per-server install commands use. Commands copied from older panels put a
+# `--` first, which bash passes through to the script as $1, so skip it.
+[ "${1:-}" = "--" ] && shift
 if [ -n "${1:-}" ]; then
   unattended_install "$1"
   exit 0

@@ -1,0 +1,40 @@
+name: Build tunnel agent
+
+# Publishes the prebuilt binaries backend/tunnel_agent/install.sh downloads, so the
+# Iran and foreign servers never compile Go themselves (go.dev is unreachable from
+# many Iranian networks). The fixed "tunnel-agent" release keeps the download URL
+# stable; each run replaces its assets in place.
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/tunnel_agent/**
+      - .github/workflows/build-tunnel-agent.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/tunnel_agent/go.mod
+          cache-dependency-path: backend/tunnel_agent/go.sum
+
+      - name: Build binaries
+        working-directory: backend/tunnel_agent
+        run: bash build.sh
+
+      - name: Publish on the tunnel-agent release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tunnel-agent
+          name: Tifusi Tunnel agent
+          make_latest: false
+          overwrite_files: true
+          files: backend/tunnel_agent/dist/tifusi-tunnel-linux-*
