@@ -4,7 +4,8 @@ import { useLang } from '../i18n/LangContext'
 import { ApiError, getUserLinks, listUserAppReports, type AppReport, type UserLinks } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 function protocolLabel(link: string): string {
   return link.split('://')[0].toUpperCase()
@@ -53,12 +54,12 @@ export default function UserLinksModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-well-strong p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
         dir={dir}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-cyan-400/20 bg-surface p-6"
-        style={{ boxShadow: '0 0 60px rgba(34,211,238,0.1)' }}
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-subtle bg-surface p-6"
+        style={{ boxShadow: '0 24px 60px rgba(0,0,0,0.55)' }}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-heading">{t.userLinksModal.title(username)}</h2>
@@ -72,7 +73,7 @@ export default function UserLinksModal({
 
         {data && (
           <>
-            <div className="mb-6 flex flex-col items-center gap-3 rounded-xl border border-cyan-400/20 bg-well p-4">
+            <div className="mb-6 flex flex-col items-center gap-3 rounded-xl border border-subtle bg-well p-4">
               {data.links.length > 0 && (
                 <div className="rounded-lg bg-white p-3">
                   <QRCodeSVG value={data.subscription_url} size={160} />
@@ -87,13 +88,13 @@ export default function UserLinksModal({
               </div>
               <button
                 onClick={() => copy(data.subscription_url)}
-                className="rounded-lg px-4 py-1.5 text-xs font-bold text-slate-950"
+                className="rounded-lg px-4 py-1.5 text-xs font-bold text-app"
                 style={{ backgroundColor: ACCENT }}
               >
                 {copied === data.subscription_url ? t.common.copiedCheck : t.userLinksModal.copySubLink}
               </button>
 
-              <div className="mt-2 w-full border-t border-cyan-400/10 pt-3 text-center text-xs text-muted">
+              <div className="mt-2 w-full border-t border-hair pt-3 text-center text-xs text-muted">
                 {t.userLinksModal.appCodeLabel}
               </div>
               <div
@@ -225,7 +226,7 @@ export default function UserLinksModal({
           </>
         )}
 
-        <div className="mt-6 border-t border-cyan-400/10 pt-4">
+        <div className="mt-6 border-t border-hair pt-4">
           <div className="mb-2 text-xs font-bold text-secondary">{t.userLinksModal.appReportsTitle}</div>
           {reportsError && <div className="text-xs text-danger">{reportsError}</div>}
           {!reports && !reportsError && <div className="text-xs text-faint">{t.loading}</div>}

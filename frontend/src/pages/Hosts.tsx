@@ -15,10 +15,11 @@ import {
   type Inbound,
 } from '../lib/api'
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 const labelClass = 'mb-1.5 block text-xs text-muted'
 
 const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'hysteria2', 'ikev2', 'l2tp']
@@ -190,19 +191,19 @@ export default function HostsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-heading">{t.hostsPage.title}</h1>
+      <div className="mb-6 flex items-center justify-end">
+        <h1 className="sr-only">{t.hostsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
+          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
+          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
         >
           {t.hostsPage.newBtn}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-surface p-4">
+        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-subtle bg-surface p-4">
           <div className="flex flex-wrap gap-3">
             <div className="relative">
               <div className="mb-1.5 flex items-center gap-1.5">
@@ -210,7 +211,7 @@ export default function HostsPage() {
                 <button
                   type="button"
                   onClick={() => setShowPlaceholders((v) => !v)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full border border-edge text-[10px] text-muted hover:border-cyan-400/50 hover:text-accent"
+                  className="flex h-4 w-4 items-center justify-center rounded-full border border-edge text-[10px] text-muted hover:border-accent/50 hover:text-accent"
                 >
                   ?
                 </button>
@@ -222,7 +223,7 @@ export default function HostsPage() {
                 className={inputClass}
               />
               {showPlaceholders && (
-                <div className="absolute top-full z-10 mt-1 w-64 rounded-lg border border-cyan-400/20 bg-surface p-2 shadow-xl">
+                <div className="absolute top-full z-10 mt-1 w-64 rounded-lg border border-subtle bg-surface p-2 shadow-xl">
                   <div className="mb-1.5 text-[10px] text-faint">{t.hostsPage.remarkPlaceholdersTitle}</div>
                   {PLACEHOLDER_KEYS.map((key) => (
                     <button
@@ -484,7 +485,7 @@ export default function HostsPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
             {editingId ? t.common.save : t.hostsPage.createHostBtn}

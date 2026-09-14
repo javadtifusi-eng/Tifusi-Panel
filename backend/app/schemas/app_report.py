@@ -56,3 +56,11 @@ class AppReportResponse(BaseModel):
         # offset in the JSON, the dashboard's `new Date(...)` would read
         # them as the admin's local time and shift every report by hours.
         return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+class RecentAppReportResponse(AppReportResponse):
+    """One row of the dashboard's recent-activity feed: a report plus the
+    user it belongs to, so the overview doesn't need a lookup per row."""
+
+    user_id: int
+    username: str

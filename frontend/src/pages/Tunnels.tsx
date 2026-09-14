@@ -21,24 +21,25 @@ import {
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 const TRANSPORTS: TunnelTransport[] = ['tcp', 'tls', 'ws', 'wss', 'tcpmux', 'wsmux', 'wssmux', 'udp']
 
 const statusDot: Record<TunnelStatus, string> = {
-  connected: 'bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,0.6)]',
-  pending: 'bg-slate-500',
-  error: 'bg-red-400 shadow-[0_0_8px_2px_rgba(248,113,113,0.5)]',
+  connected: 'bg-success',
+  pending: 'bg-neutral',
+  error: 'bg-danger',
 }
 
 const statusBadge: Record<TunnelStatus, string> = {
-  connected: 'bg-success-tint text-success border-success',
-  pending: 'bg-neutral-tint text-muted border-neutral',
-  error: 'bg-danger-tint text-danger border-danger',
+  connected: 'bg-success-tint text-success border-success/30',
+  pending: 'bg-neutral-tint text-muted border-neutral/30',
+  error: 'bg-danger-tint text-danger border-danger/30',
 }
 
 const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 const labelClass = 'mb-1.5 block text-xs text-muted'
 
 type ForeignSource = 'node' | 'address'
@@ -245,12 +246,12 @@ export default function TunnelsPage() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-heading">{t.tunnelsPage.title}</h1>
+      <div className="mb-2 flex items-center justify-end">
+        <h1 className="sr-only">{t.tunnelsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
+          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
+          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
         >
           {t.tunnelsPage.newBtn}
         </button>
@@ -260,7 +261,7 @@ export default function TunnelsPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mb-6 flex flex-col gap-4 rounded-xl border border-cyan-400/20 bg-surface p-4"
+          className="mb-6 flex flex-col gap-4 rounded-xl border border-subtle bg-surface p-4"
         >
           <div className="flex flex-wrap items-end gap-3">
             <div>
@@ -303,7 +304,7 @@ export default function TunnelsPage() {
                     onClick={() => setForeignSource(src)}
                     className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
                       foreignSource === src
-                        ? 'border-cyan-400/60 bg-accent-tint text-accent'
+                        ? 'border-accent/60 bg-accent-tint text-accent'
                         : 'border-edge text-muted hover:border-strong'
                     }`}
                   >
@@ -383,7 +384,7 @@ export default function TunnelsPage() {
                       type="button"
                       onClick={() => setTransport(r.transport)}
                       className={`rounded-md border px-2 py-1 text-[10.5px] font-bold ${
-                        transport === r.transport ? 'border-cyan-400/60 bg-accent-tint text-accent' : 'border-edge text-muted'
+                        transport === r.transport ? 'border-accent/60 bg-accent-tint text-accent' : 'border-edge text-muted'
                       }`}
                     >
                       {i === 0 ? '★ ' : ''}
@@ -402,7 +403,7 @@ export default function TunnelsPage() {
                   title={t.tunnelsPage.transportHints[tr]}
                   className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
                     transport === tr
-                      ? 'border-cyan-400/60 bg-accent-tint text-accent'
+                      ? 'border-accent/60 bg-accent-tint text-accent'
                       : 'border-edge text-muted hover:border-strong'
                   }`}
                 >
@@ -527,7 +528,7 @@ export default function TunnelsPage() {
             <button
               type="submit"
               disabled={submitting || !transport}
-              className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+              className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
               style={{ backgroundColor: ACCENT }}
             >
               {editingId ? t.common.save : t.tunnelsPage.registerBtn}
@@ -554,7 +555,7 @@ export default function TunnelsPage() {
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${
-                      isTesting ? 'animate-pulse bg-cyan-400' : statusDot[tunnel.status]
+                      isTesting ? 'animate-pulse bg-accent' : statusDot[tunnel.status]
                     }`}
                   />
                   <span className="font-bold text-primary">{tunnel.name}</span>

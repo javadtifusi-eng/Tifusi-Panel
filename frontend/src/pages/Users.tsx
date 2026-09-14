@@ -22,17 +22,20 @@ import {
   type UserTemplate,
 } from '../lib/api'
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 const statusStyles: Record<UserStatus, string> = {
-  active: 'bg-success-tint text-success border-success',
-  disabled: 'bg-neutral-tint text-muted border-neutral',
-  expired: 'bg-danger-tint text-danger border-danger',
-  limited: 'bg-warning-tint text-warning border-warning',
-  on_hold: 'bg-accent-tint text-accent border-cyan-400/40',
+  active: 'bg-success-tint text-success border-success/30',
+  disabled: 'bg-neutral-tint text-muted border-neutral/30',
+  expired: 'bg-danger-tint text-danger border-danger/30',
+  limited: 'bg-warning-tint text-warning border-warning/30',
+  on_hold: 'bg-accent-tint text-accent border-accent/40',
 }
 
-export default function UsersPage() {
+// `search` comes from the search box in the dashboard header; typing there
+// fills this page's own username filter.
+export default function UsersPage({ search }: { search?: string } = {}) {
   const { t, align } = useLang()
   const [users, setUsers] = useState<ProxyUser[] | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
@@ -55,6 +58,9 @@ export default function UsersPage() {
   const [resettingSecretId, setResettingSecretId] = useState<number | null>(null)
 
   const [searchQuery, setSearchQuery] = useState('')
+  useEffect(() => {
+    if (search !== undefined) setSearchQuery(search)
+  }, [search])
   const [statusFilter, setStatusFilter] = useState<UserStatus | ''>('')
   const [groupFilter, setGroupFilter] = useState<number | ''>('')
 
@@ -432,8 +438,8 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-heading">{t.usersPage.title}</h1>
+      <div className="mb-6 flex items-center justify-end">
+        <h1 className="sr-only">{t.usersPage.title}</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowTemplates((v) => !v)}
@@ -447,14 +453,14 @@ export default function UsersPage() {
               setBulkCreateMsg(null)
             }}
             className="rounded-lg border px-4 py-2 text-sm font-bold"
-            style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+            style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
           >
             {t.usersPage.bulkCreateBtn}
           </button>
           <button
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
-            className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
-            style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
+            className="rounded-lg px-4 py-2 text-sm font-bold text-app"
+            style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
           >
             {t.usersPage.newBtn}
           </button>
@@ -466,12 +472,12 @@ export default function UsersPage() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t.usersPage.searchPlaceholder}
-          className="min-w-0 flex-1 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+          className="min-w-0 flex-1 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as UserStatus | '')}
-          className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+          className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
         >
           <option value="">{t.usersPage.allStatuses}</option>
           <option value="active">{t.usersPage.status.active}</option>
@@ -483,7 +489,7 @@ export default function UsersPage() {
         <select
           value={groupFilter}
           onChange={(e) => setGroupFilter(e.target.value ? Number(e.target.value) : '')}
-          className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+          className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
         >
           <option value="">{t.usersPage.allGroups}</option>
           {groups.map((g) => (
@@ -532,7 +538,7 @@ export default function UsersPage() {
                 onChange={(e) => setTplName(e.target.value)}
                 placeholder={t.usersPage.templateNamePlaceholder}
                 required
-                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div>
@@ -543,7 +549,7 @@ export default function UsersPage() {
                 type="number"
                 min="0"
                 step="0.5"
-                className="w-40 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-40 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div>
@@ -553,7 +559,7 @@ export default function UsersPage() {
                 onChange={(e) => setTplExpireDays(e.target.value)}
                 type="number"
                 min="0"
-                className="w-56 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-56 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div>
@@ -561,7 +567,7 @@ export default function UsersPage() {
               <input
                 value={tplNote}
                 onChange={(e) => setTplNote(e.target.value)}
-                className="w-48 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-48 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div className="w-full">
@@ -579,7 +585,7 @@ export default function UsersPage() {
             <button
               type="submit"
               disabled={tplSubmitting}
-              className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+              className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
               style={{ backgroundColor: ACCENT }}
             >
               {t.usersPage.saveTemplateBtn}
@@ -591,7 +597,7 @@ export default function UsersPage() {
       {showBulkCreate && (
         <form
           onSubmit={handleBulkCreateSubmit}
-          className="mb-6 flex flex-col gap-3 rounded-xl border border-cyan-400/20 bg-surface p-4"
+          className="mb-6 flex flex-col gap-3 rounded-xl border border-subtle bg-surface p-4"
         >
           <div className="text-sm font-bold text-body">{t.usersPage.bulkCreateTitle}</div>
           <div className="flex flex-wrap items-end gap-3">
@@ -601,7 +607,7 @@ export default function UsersPage() {
                 <select
                   onChange={(e) => applyTemplateToBulkCreate(e.target.value ? Number(e.target.value) : null)}
                   defaultValue=""
-                  className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                  className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
                 >
                   <option value="">{t.usersPage.noTemplate}</option>
                   {templates.map((tpl) => (
@@ -618,7 +624,7 @@ export default function UsersPage() {
                 value={bulkPrefix}
                 onChange={(e) => setBulkPrefix(e.target.value)}
                 dir="ltr"
-                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div>
@@ -629,7 +635,7 @@ export default function UsersPage() {
                 type="number"
                 min="1"
                 max="500"
-                className="w-24 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-24 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div>
@@ -639,7 +645,7 @@ export default function UsersPage() {
                 onChange={(e) => setBulkStartAt(e.target.value)}
                 type="number"
                 min="1"
-                className="w-24 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-24 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div>
@@ -650,7 +656,7 @@ export default function UsersPage() {
                 type="number"
                 min="0"
                 step="0.5"
-                className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
             <div>
@@ -659,7 +665,7 @@ export default function UsersPage() {
                 value={bulkCreateExpire}
                 onChange={(e) => setBulkCreateExpire(e.target.value)}
                 type="date"
-                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
           </div>
@@ -690,7 +696,7 @@ export default function UsersPage() {
             <button
               type="submit"
               disabled={bulkCreateSubmitting || bulkCreateUsernames.length === 0}
-              className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+              className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
               style={{ backgroundColor: ACCENT }}
             >
               {t.usersPage.bulkCreateSubmit(bulkCreateUsernames.length)}
@@ -702,7 +708,7 @@ export default function UsersPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-surface p-4"
+          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-subtle bg-surface p-4"
         >
           {!editingId && templates.length > 0 && (
             <div>
@@ -710,7 +716,7 @@ export default function UsersPage() {
               <select
                 onChange={(e) => applyTemplateToSingle(e.target.value ? Number(e.target.value) : null)}
                 defaultValue=""
-                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               >
                 <option value="">{t.usersPage.noTemplate}</option>
                 {templates.map((tpl) => (
@@ -729,7 +735,7 @@ export default function UsersPage() {
               required
               disabled={editingId !== null}
               pattern="[a-zA-Z0-9_-]+"
-              className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60 disabled:opacity-50"
+              className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60 disabled:opacity-50"
             />
           </div>
           <div>
@@ -740,7 +746,7 @@ export default function UsersPage() {
               type="number"
               min="0"
               step="0.5"
-              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
             />
           </div>
           {dataLimitGb && (
@@ -752,7 +758,7 @@ export default function UsersPage() {
                 type="number"
                 min="1"
                 placeholder={t.usersPage.dataLimitResetDaysPlaceholder}
-                className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
           )}
@@ -764,7 +770,7 @@ export default function UsersPage() {
                 onChange={(e) => setOnHoldDays(e.target.value)}
                 type="number"
                 min="0"
-                className="w-40 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-40 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
           ) : (
@@ -774,7 +780,7 @@ export default function UsersPage() {
                 value={expire}
                 onChange={(e) => setExpire(e.target.value)}
                 type="date"
-                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
               />
             </div>
           )}
@@ -785,7 +791,7 @@ export default function UsersPage() {
               onChange={(e) => setHwidLimit(e.target.value)}
               type="number"
               min="0"
-              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
             />
           </div>
           <div>
@@ -796,7 +802,7 @@ export default function UsersPage() {
               type="number"
               min="1"
               placeholder={t.usersPage.speedLimitPlaceholder}
-              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              className="w-44 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
             />
           </div>
           <div>
@@ -804,7 +810,7 @@ export default function UsersPage() {
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-48 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60"
+              className="w-48 rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60"
             />
           </div>
           {!editingId && (
@@ -829,7 +835,7 @@ export default function UsersPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+            className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
             {editingId ? t.common.save : t.usersPage.createBtn}
@@ -893,7 +899,7 @@ export default function UsersPage() {
               <button
                 disabled={bulkBusy}
                 onClick={handleBulkDelete}
-                className="rounded-md border border-danger px-2.5 py-1 text-xs text-danger hover:bg-danger-tint disabled:opacity-50"
+                className="rounded-md border border-danger/30 px-2.5 py-1 text-xs text-danger hover:bg-danger-tint disabled:opacity-50"
               >
                 {t.usersPage.bulkDeleteBtn}
               </button>
@@ -909,7 +915,7 @@ export default function UsersPage() {
                 value={bulkLimitGb}
                 onChange={(e) => setBulkLimitGb(e.target.value)}
                 placeholder={t.usersPage.gbSuffix}
-                className="w-32 rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="w-32 rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-accent/60"
               />
               <button
                 disabled={bulkBusy}
@@ -932,7 +938,7 @@ export default function UsersPage() {
                 type="date"
                 value={bulkExpire}
                 onChange={(e) => setBulkExpire(e.target.value)}
-                className="rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-accent/60"
               />
               <button
                 disabled={bulkBusy}
@@ -954,7 +960,7 @@ export default function UsersPage() {
               <select
                 value={bulkGroupId ?? ''}
                 onChange={(e) => setBulkGroupId(e.target.value ? Number(e.target.value) : null)}
-                className="rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-cyan-400/60"
+                className="rounded-lg border border-edge bg-field px-3 py-1.5 text-sm text-primary outline-none focus:border-accent/60"
               >
                 <option value="">—</option>
                 {groups.map((g) => (

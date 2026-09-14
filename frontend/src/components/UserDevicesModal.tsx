@@ -57,12 +57,12 @@ export default function UserDevicesModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-well-strong p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
         dir={dir}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-cyan-400/20 bg-surface p-6"
-        style={{ boxShadow: '0 0 60px rgba(34,211,238,0.1)' }}
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-subtle bg-surface p-6"
+        style={{ boxShadow: '0 24px 60px rgba(0,0,0,0.55)' }}
       >
         <div className="mb-1 flex items-center justify-between">
           <h2 className="text-lg font-bold text-heading">{t.userDevicesModal.title(username)}</h2>

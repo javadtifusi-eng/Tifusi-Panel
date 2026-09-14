@@ -3,7 +3,6 @@ import { useLang } from '../i18n/LangContext'
 
 const faDateFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
   weekday: 'long',
-  year: 'numeric',
   month: 'long',
   day: 'numeric',
 })
@@ -15,7 +14,6 @@ const faTimeFormatter = new Intl.DateTimeFormat('fa-IR', {
 })
 const enDateFormatter = new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
-  year: 'numeric',
   month: 'long',
   day: 'numeric',
 })
@@ -39,9 +37,9 @@ export default function LiveClock() {
   const dateFormatter = lang === 'fa' ? faDateFormatter : enDateFormatter
 
   return (
-    <div className="text-left">
-      <div className="font-mono text-sm tabular-nums text-body">{timeFormatter.format(now)}</div>
-      <div className="text-[11px] text-faint">{dateFormatter.format(now)}</div>
+    <div className="text-end leading-tight">
+      <div className="font-en text-[13px] font-medium text-body tabular">{timeFormatter.format(now)}</div>
+      <div className="mt-0.5 whitespace-nowrap text-[11px] text-faint">{dateFormatter.format(now)}</div>
     </div>
   )
 }

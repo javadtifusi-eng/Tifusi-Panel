@@ -7,44 +7,98 @@
 /* Semantic color tokens — see tailwind.config.js's `colors` block, where
    each of these becomes a `rgb(var(--c-x) / <alpha-value>)` utility (e.g.
    `bg-surface`, `text-muted`). Every component reads colors through those
-   utilities, never a raw slate/white/black-opacity class, so switching
-   themes is just swapping which block of variables is in effect — no
-   component needs to know which theme is active.
+   utilities, never a raw slate/white/black-opacity class, so the whole
+   panel's look is this one block of variables.
+
+   The palette is the dark "studio" design: a near-black ground, #141414
+   cards on #232323 borders, #0e0e0e inner wells, neutral greys for text
+   and an orange accent (the same orange as the resource gauges). Dark is
+   the only theme.
 
    Values are "R G B" (space-separated, no commas, no rgb()) — that's the
-   shape Tailwind's <alpha-value> substitution requires. */
+   shape Tailwind's <alpha-value> substitution requires. Inline styles can
+   use them the same way: `rgb(var(--c-accent) / 0.35)`. */
 :root {
   color-scheme: dark;
 
-  --c-app: 3 5 7;
-  --c-surface: 15 23 42;
-  --c-field: 13 22 34;
-  --c-well: 6 10 18;
-  --c-well-strong: 4 6 12;
+  --c-app: 10 10 10; /* #0a0a0a ground */
+  --c-side: 13 13 13; /* #0d0d0d sidebar */
+  --c-surface: 20 20 20; /* #141414 card */
+  --c-field: 14 14 14; /* #0e0e0e inputs */
+  --c-well: 14 14 14; /* #0e0e0e inner well */
+  --c-well-strong: 8 8 8;
+  --c-hover: 23 23 23; /* #171717 nav/list hover */
+  --c-raised: 28 28 28; /* #1c1c1c active nav, chips */
 
-  --c-border-hair: 21 27 38;
-  --c-border-subtle: 35 43 58;
-  --c-border-default: 49 59 78;
-  --c-border-strong: 74 85 104;
+  --c-border-hair: 25 25 25; /* #191919 row dividers */
+  --c-border-subtle: 35 35 35; /* #232323 card edge */
+  --c-border-default: 42 42 42; /* #2a2a2a inputs */
+  --c-border-strong: 64 64 64;
+  --c-border-well: 29 29 29; /* #1d1d1d well edge */
 
-  --c-text-heading: 248 250 252;
-  --c-text-primary: 241 245 249;
-  --c-text-body: 226 232 240;
-  --c-text-secondary: 203 213 225;
-  --c-text-muted: 148 163 184;
-  --c-text-faint: 100 116 139;
+  --c-text-heading: 245 245 245;
+  --c-text-primary: 245 245 245;
+  --c-text-body: 229 229 229;
+  --c-text-secondary: 190 190 190;
+  --c-text-muted: 139 139 139; /* #8b8b8b */
+  --c-text-faint: 92 92 92; /* #5c5c5c */
 
-  --c-accent: 103 232 249;
-  --c-accent-tint: 11 37 48;
+  --c-accent: 249 115 22; /* #f97316 */
+  --c-accent-strong: 234 88 12; /* #ea580c */
+  --c-accent-tint: 43 30 20;
 
-  --c-success: 110 231 183;
-  --c-success-tint: 13 43 34;
-  --c-danger: 252 165 165;
-  --c-danger-tint: 43 20 20;
-  --c-warning: 252 211 77;
-  --c-warning-tint: 43 34 16;
-  --c-neutral: 148 163 184;
-  --c-neutral-tint: 30 37 50;
+  --c-success: 34 197 94; /* #22c55e */
+  --c-success-tint: 21 34 26;
+  --c-danger: 239 68 68; /* #ef4444 */
+  --c-danger-tint: 38 24 24;
+  --c-warning: 245 158 11; /* #f59e0b */
+  --c-warning-tint: 38 31 19;
+  --c-neutral: 139 139 139;
+  --c-neutral-tint: 26 26 26;
+  --c-purple: 168 85 247; /* #a855f7 */
+
+  /* Vazirmatn for Persian, Poppins for Latin text and numbers. The
+     direction attribute picks which one leads, so an LTR island inside a
+     Persian page (a username, a link, a key) gets Poppins automatically. */
+  --font-fa: 'Vazirmatn', 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-en: 'Poppins', 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  [dir='rtl'] {
+    font-family: var(--font-fa);
+  }
+  [dir='ltr'] {
+    font-family: var(--font-en);
+  }
+
+  ::placeholder {
+    color: rgb(var(--c-text-faint));
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-text-body));
+    outline-offset: 2px;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-border-default));
+    border-radius: 999px;
+    border: 2px solid rgb(var(--c-app));
+  }
 }
 
 /* color-scheme isn't enough everywhere — some mobile browsers/WebViews
@@ -53,13 +107,24 @@
    consistently, so it stays as a second line of defense. */
 select,
 option {
-  background-color: rgb(var(--c-surface));
+  background-color: rgb(var(--c-field));
+  color: rgb(var(--c-text-primary));
+}
+
+html,
+body {
+  background-color: rgb(var(--c-app));
   color: rgb(var(--c-text-primary));
 }
 
 body {
   margin: 0;
-  background-color: rgb(var(--c-app));
+  font-family: var(--font-fa);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-height: 820px) {

@@ -11,6 +11,9 @@ export default {
         // literal slate/white/black-opacity classes this replaced (those
         // only ever had one dark-theme meaning baked in).
         app: 'rgb(var(--c-app) / <alpha-value>)',
+        side: 'rgb(var(--c-side) / <alpha-value>)',
+        hover: 'rgb(var(--c-hover) / <alpha-value>)',
+        raised: 'rgb(var(--c-raised) / <alpha-value>)',
         surface: 'rgb(var(--c-surface) / <alpha-value>)',
         field: 'rgb(var(--c-field) / <alpha-value>)',
         well: 'rgb(var(--c-well) / <alpha-value>)',
@@ -20,6 +23,7 @@ export default {
         subtle: 'rgb(var(--c-border-subtle) / <alpha-value>)',
         edge: 'rgb(var(--c-border-default) / <alpha-value>)',
         strong: 'rgb(var(--c-border-strong) / <alpha-value>)',
+        'well-edge': 'rgb(var(--c-border-well) / <alpha-value>)',
 
         heading: 'rgb(var(--c-text-heading) / <alpha-value>)',
         primary: 'rgb(var(--c-text-primary) / <alpha-value>)',
@@ -29,7 +33,9 @@ export default {
         faint: 'rgb(var(--c-text-faint) / <alpha-value>)',
 
         accent: 'rgb(var(--c-accent) / <alpha-value>)',
+        'accent-strong': 'rgb(var(--c-accent-strong) / <alpha-value>)',
         'accent-tint': 'rgb(var(--c-accent-tint) / <alpha-value>)',
+        purple: 'rgb(var(--c-purple) / <alpha-value>)',
 
         success: 'rgb(var(--c-success) / <alpha-value>)',
         'success-tint': 'rgb(var(--c-success-tint) / <alpha-value>)',
@@ -41,9 +47,12 @@ export default {
         'neutral-tint': 'rgb(var(--c-neutral-tint) / <alpha-value>)',
       },
       fontFamily: {
-        display: ['"Chakra Petch"', 'sans-serif'],
-        body: ['"Vazirmatn"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        // See --font-fa / --font-en in index.css: Vazirmatn leads for
+        // Persian, Poppins for Latin text and numbers. Both self-hosted.
+        body: ['var(--font-fa)'],
+        display: ['var(--font-en)'],
+        en: ['var(--font-en)'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       keyframes: {
         'fade-up': {

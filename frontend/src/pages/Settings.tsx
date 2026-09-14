@@ -32,13 +32,14 @@ import {
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 const labelClass = 'mb-1.5 block text-xs text-muted'
-const cardClass = 'rounded-xl border border-cyan-400/20 bg-surface p-4'
-const buttonClass = 'rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60'
+const cardClass = 'rounded-xl border border-subtle bg-surface p-4'
+const buttonClass = 'rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60'
 
 export default function SettingsPage() {
   const { t, align } = useLang()
@@ -488,8 +489,8 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-heading">{t.settingsPage.title}</h1>
+      <div className="mb-6 flex items-center justify-end">
+        <h1 className="sr-only">{t.settingsPage.title}</h1>
         {profile && (
           <span className="text-xs text-muted">
             {t.settingsPage.signedInAs} <span className="text-body">{profile.username}</span>
@@ -591,7 +592,7 @@ export default function SettingsPage() {
           {keyError && <div className="mb-3 text-xs text-danger">{keyError}</div>}
 
           {justCreatedKey && (
-            <div className="mb-3 rounded-lg border border-cyan-400/30 bg-accent-tint p-3">
+            <div className="mb-3 rounded-lg border border-accent/30 bg-accent-tint p-3">
               <div className={`mb-1.5 text-xs text-secondary ${align}`}>{t.settingsPage.apiKeyShowOnceWarning}</div>
               <div className="flex items-center gap-2">
                 <code dir="ltr" className="flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-well-strong px-2.5 py-1.5 text-left text-xs text-accent">
@@ -676,7 +677,7 @@ export default function SettingsPage() {
               onClick={handleTestTelegram}
               disabled={telegramTesting}
               className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+              style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
             >
               {telegramTesting ? t.settingsPage.sending : telegramTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
@@ -715,7 +716,7 @@ export default function SettingsPage() {
               onClick={handleTestWebhook}
               disabled={webhookTesting}
               className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+              style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
             >
               {webhookTesting ? t.settingsPage.sending : webhookTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
@@ -745,7 +746,7 @@ export default function SettingsPage() {
               onClick={handleTestDiscord}
               disabled={discordTesting}
               className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+              style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
             >
               {discordTesting ? t.settingsPage.sending : discordTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
@@ -772,7 +773,7 @@ export default function SettingsPage() {
               onClick={() => restoreInputRef.current?.click()}
               disabled={restoring}
               className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgba(248,113,113,0.4)', color: '#f87171' }}
+              style={{ borderColor: 'rgb(var(--c-danger) / 0.4)', color: 'rgb(var(--c-danger))' }}
             >
               {restoring ? t.settingsPage.restoring : restoreDone ? t.settingsPage.restored : t.settingsPage.restoreFromFile}
             </button>
@@ -799,8 +800,8 @@ export default function SettingsPage() {
                 className="rounded-full border px-2.5 py-1 text-[11px]"
                 style={
                   tlsEnabled
-                    ? { borderColor: 'rgba(52,211,153,0.35)', color: '#34d399', backgroundColor: 'rgba(52,211,153,0.1)' }
-                    : { borderColor: 'rgba(148,163,184,0.3)', color: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.08)' }
+                    ? { borderColor: 'rgb(var(--c-success) / 0.3)', color: 'rgb(var(--c-success))', backgroundColor: 'rgb(var(--c-success) / 0.08)' }
+                    : { borderColor: 'rgb(var(--c-border-default))', color: 'rgb(var(--c-text-muted))', backgroundColor: 'rgb(var(--c-neutral-tint))' }
                 }
               >
                 {tlsEnabled ? t.settingsPage.tlsEnabled : t.settingsPage.tlsDisabled}
@@ -879,7 +880,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={handleRemoveTls}
                   className="rounded-lg border px-4 py-2 text-sm font-bold"
-                  style={{ borderColor: 'rgba(248,113,113,0.4)', color: '#f87171' }}
+                  style={{ borderColor: 'rgb(var(--c-danger) / 0.4)', color: 'rgb(var(--c-danger))' }}
                 >
                   {t.settingsPage.tlsRemoveBtn}
                 </button>
@@ -991,7 +992,7 @@ export default function SettingsPage() {
                       <button
                         onClick={saveEditingPerms}
                         disabled={permsSaving}
-                        className="mt-2 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-950 disabled:opacity-60"
+                        className="mt-2 rounded-lg px-3 py-1.5 text-xs font-bold text-app disabled:opacity-60"
                         style={{ backgroundColor: ACCENT }}
                       >
                         {t.common.save}

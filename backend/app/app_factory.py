@@ -84,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(hosts.router)
     app.include_router(subscription.router)
     app.include_router(app_reports.router)
+    app.include_router(app_reports.admin_router)
     app.include_router(nodes.router)
     app.include_router(groups.router)
     app.include_router(cores.router)

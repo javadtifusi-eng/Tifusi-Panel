@@ -1,17 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import LiveClock from '../components/LiveClock'
-import { Logo } from '../components/Logo'
-import SystemStatsBar from '../components/SystemStats'
+import { TifusiMark } from '../components/Logo'
+import {
+  IconBell,
+  IconChip,
+  IconGlobe,
+  IconGrid,
+  IconHome,
+  IconLogout,
+  IconMenu,
+  IconSearch,
+  IconServer,
+  IconSettings,
+  IconTunnel,
+  IconUsers,
+  type IconProps,
+} from '../components/icons'
 import { useLang } from '../i18n/LangContext'
 import { getAdminProfile, getVersion, type AdminProfile, type VersionInfo } from '../lib/api'
-
-function MenuIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-      <path d="M3 6h18M3 12h18M3 18h18" />
-    </svg>
-  )
-}
+import { initials } from '../lib/format'
 import CoresPage from './Cores'
 import GroupsPage from './Groups'
 import HostsPage from './Hosts'
@@ -21,30 +28,22 @@ import SettingsPage from './Settings'
 import TunnelsPage from './Tunnels'
 import UsersPage from './Users'
 
-const ACCENT = '#22D3EE'
-
 type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'tunnels' | 'settings'
 
-// The Tifusi VPN launcher icon, copied from the app's adaptive icon
-// (res/drawable/ic_launcher_foreground.xml on its #0A0F24 background) so the
-// download link shows the same mark users see on their home screen.
-function TifusiVpnIcon({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 108 108" aria-hidden="true" className="flex-shrink-0">
-      <rect width="108" height="108" rx="24" fill="#0A0F24" />
-      <path
-        d="M54,26 L77,34 L77,52 C77,67 67,78 54,84 C41,78 31,67 31,52 L31,34 Z"
-        fill="none"
-        stroke="#2979FF"
-        strokeWidth={4}
-        strokeLinejoin="round"
-      />
-      <path d="M26,64 C40,50 70,43 84,47" fill="none" stroke="#29B6F6" strokeWidth={2} strokeLinecap="round" />
-      <path d="M40,40 L68,40 L66,47 L58,47 L58,72 L50,72 L50,47 L40,47 Z" fill="#FFFFFF" />
-    </svg>
-  )
+const MAIN_TABS: ActiveTab[] = ['overview', 'users', 'hosts', 'groups', 'nodes', 'cores', 'tunnels']
+
+const NAV_ICONS: Record<ActiveTab, (p: IconProps) => JSX.Element> = {
+  overview: IconHome,
+  users: IconUsers,
+  hosts: IconGlobe,
+  groups: IconGrid,
+  nodes: IconServer,
+  cores: IconChip,
+  tunnels: IconTunnel,
+  settings: IconSettings,
 }
 
+// Always the newest build: GitHub serves the latest release's asset at this fixed URL.
 const APP_DOWNLOAD_URL = 'https://github.com/javadtifusi-eng/Tifusi-VPN/releases/latest/download/tifusi-vpn.apk'
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
@@ -53,6 +52,8 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [version, setVersion] = useState<VersionInfo | null>(null)
+  const [search, setSearch] = useState('')
+  const [bellOpen, setBellOpen] = useState(false)
 
   useEffect(() => {
     getAdminProfile().then(setProfile).catch(() => undefined)
@@ -68,141 +69,213 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
     return (profile.permissions as string[]).includes(id)
   }
 
-  const allNavItems: { id: ActiveTab; label: string }[] = [
-    { id: 'overview', label: t.nav.dashboard },
-    { id: 'users', label: t.nav.users },
-    { id: 'hosts', label: t.nav.hosts },
-    { id: 'groups', label: t.nav.groups },
-    { id: 'nodes', label: t.nav.nodes },
-    { id: 'cores', label: t.nav.cores },
-    { id: 'tunnels', label: t.nav.tunnels },
-    { id: 'settings', label: t.nav.settings },
-  ]
-  const navItems = allNavItems.filter((item) => canSee(item.id))
-
   function selectTab(id: ActiveTab) {
     setActive(id)
     setSidebarOpen(false)
+    setBellOpen(false)
   }
 
+  // The header search filters the Users page: typing there while on Users
+  // narrows the list live, and Enter from any other page opens Users.
+  function submitSearch(e: FormEvent) {
+    e.preventDefault()
+    if (canSee('users')) selectTab('users')
+  }
+
+  function labelFor(id: ActiveTab): string {
+    return id === 'overview' ? t.nav.dashboard : t.nav[id]
+  }
+
+  const subtitle = active === 'overview' ? t.nav.subtitles.overview(profile?.username ?? '') : t.nav.subtitles[active]
+  const updateAvailable = !!version?.update_available
   const sideEdge = dir === 'rtl' ? 'right-0 border-l' : 'left-0 border-r'
   const closedTranslate = dir === 'rtl' ? 'translate-x-full' : '-translate-x-full'
 
+  function navButton(id: ActiveTab) {
+    const Icon = NAV_ICONS[id]
+    const isActive = active === id
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={() => selectTab(id)}
+        aria-current={isActive ? 'page' : undefined}
+        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-[9px] text-start text-[13.5px] transition-colors ${
+          isActive ? 'border-[#262626] bg-raised text-primary' : 'border-transparent text-muted hover:bg-hover hover:text-primary'
+        }`}
+      >
+        <Icon />
+        <span className="truncate">{labelFor(id)}</span>
+      </button>
+    )
+  }
+
   return (
-    <div dir={dir} className="flex min-h-screen w-full bg-app font-body text-primary">
-      {/* Mobile top bar — the fixed w-60 sidebar below doesn't fit next to real
-          content on a phone-width screen, so under lg it's an off-canvas
-          drawer instead, opened from here. */}
+    <div dir={dir} className="min-h-screen w-full bg-app font-body text-primary lg:grid lg:grid-cols-[236px_minmax(0,1fr)]">
+      {/* Mobile top bar — under lg the sidebar is an off-canvas drawer
+          instead of a column, opened from here. */}
       <div className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-subtle bg-app/95 px-4 py-3 backdrop-blur lg:hidden">
         <button
+          type="button"
           onClick={() => setSidebarOpen(true)}
           aria-label={t.nav.menu}
           className="rounded-lg border border-subtle p-2 text-secondary"
         >
-          <MenuIcon />
+          <IconMenu size={18} strokeWidth={2} />
         </button>
         <div className="flex items-center gap-2">
-          <Logo accent={ACCENT} size={32} glow={false} />
-          <span className="font-display text-xs font-bold tracking-[2px] text-heading">TIFUSI</span>
+          <TifusiMark size={28} />
+          <span className="font-en text-sm font-semibold text-heading">{t.nav.brand}</span>
         </div>
         <div className="w-9" />
       </div>
 
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-well-strong lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <aside
-        className={`fixed inset-y-0 z-50 flex w-64 flex-shrink-0 flex-col bg-surface px-4 py-6 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:translate-x-0 lg:bg-surface ${sideEdge} border-subtle ${
+        className={`fixed inset-y-0 z-50 flex w-64 flex-col gap-[22px] overflow-y-auto border-subtle bg-side px-3.5 py-5 transition-transform duration-200 ${sideEdge} ${
           sidebarOpen ? 'translate-x-0' : closedTranslate
-        } lg:transition-none`}
+        } lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:translate-x-0 lg:transition-none`}
       >
-        <div className="mb-8 flex items-center gap-2.5 px-2">
-          <Logo accent={ACCENT} size={46} />
-          <div>
-            <div className="font-display text-sm font-bold tracking-[2px] text-heading">TIFUSI</div>
-            <div className="font-display text-[9px] font-semibold tracking-[3px]" style={{ color: ACCENT }}>
-              PANEL
-            </div>
-          </div>
+        <div className="flex items-center gap-2.5 px-2 py-1">
+          <TifusiMark size={30} />
+          <strong className="font-en text-[15px] font-semibold text-heading">{t.nav.brand}</strong>
         </div>
 
-        {version && (
-          <div className="mb-6 -mt-4 flex items-center gap-1.5 px-2 text-[10px] text-faint">
-            <span>v{version.current}</span>
-            <span>·</span>
-            <span className={version.update_available ? 'text-warning' : ''}>
-              {version.update_available ? t.nav.updateAvailable : t.nav.upToDate}
-            </span>
-          </div>
-        )}
-
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => selectTab(item.id)}
-              className={`rounded-lg px-3 py-2.5 text-sm transition-colors ${dir === 'rtl' ? 'text-right' : 'text-left'} ${
-                active === item.id ? 'bg-accent-tint text-accent' : 'text-secondary hover:bg-field'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+        <nav aria-label={t.nav.menu} className="flex flex-col gap-0.5">
+          {MAIN_TABS.filter(canSee).map(navButton)}
+          <div className="h-3.5" />
+          {navButton('settings')}
         </nav>
 
-        {/* Always the newest build: GitHub serves the latest release's asset at this fixed URL. */}
-        <div className="mb-3 border-t border-subtle pt-3">
-          <div className={`mb-1 px-3 text-[11px] text-muted ${dir === 'rtl' ? 'text-right' : 'text-left'}`}>
-            {t.nav.appSection}
-          </div>
-          <a
-            href={APP_DOWNLOAD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-accent hover:bg-field"
-          >
-            <TifusiVpnIcon />
-            <span>{t.nav.appDownload}</span>
-          </a>
-        </div>
+        <div className="flex-1" />
 
-        <div className="mb-2 flex justify-center gap-2">
-          <button
-            onClick={() => setLang('en')}
-            className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'en' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
-          >
-            EN
-          </button>
-          <button
-            onClick={() => setLang('fa')}
-            className={`rounded-md border px-3 py-1 text-[11px] ${lang === 'fa' ? 'border-cyan-400/50 text-accent' : 'border-edge text-muted'}`}
-          >
-            فارسی
-          </button>
-        </div>
-
-        <button
-          onClick={onLogout}
-          className={`rounded-lg border border-subtle px-3 py-2.5 text-sm text-muted hover:bg-field ${dir === 'rtl' ? 'text-right' : 'text-left'}`}
+        <a
+          href={APP_DOWNLOAD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-[#1f1f1f] px-2.5 py-[9px] font-en text-[12px] text-primary transition-colors hover:bg-hover"
         >
-          {t.nav.logout}
-        </button>
+          <TifusiMark size={22} />
+          <span>{t.nav.appDownload}</span>
+        </a>
+
+        <div className="flex items-center gap-2.5 border-t border-subtle px-2 pt-3">
+          <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-[#e5e5e5] font-en text-xs font-semibold text-app">
+            {profile ? initials(profile.username) : ''}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-en text-[13px] font-medium text-primary">
+              <bdi>{profile?.username ?? '…'}</bdi>
+            </div>
+            <div className="truncate text-[11px] text-faint">
+              {profile ? (profile.is_owner ? t.nav.ownerRole : t.nav.adminRole) : ' '}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLang(lang === 'fa' ? 'en' : 'fa')}
+            title={t.nav.switchLang}
+            aria-label={t.nav.switchLang}
+            className="grid h-7 min-w-[30px] place-items-center rounded-md border border-subtle px-1.5 text-[11px] text-muted transition-colors hover:bg-hover hover:text-primary"
+          >
+            {t.nav.switchLangShort}
+          </button>
+          <button
+            type="button"
+            onClick={onLogout}
+            title={t.nav.logout}
+            aria-label={t.nav.logout}
+            className="grid h-7 w-7 place-items-center rounded-md text-muted transition-colors hover:bg-hover hover:text-danger"
+          >
+            <IconLogout size={16} className="rtl:-scale-x-100" />
+          </button>
+        </div>
       </aside>
 
-      <main className="w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pt-20 lg:p-8 lg:pt-8">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <SystemStatsBar />
-          <LiveClock />
+      <main className="flex min-w-0 flex-col gap-4 px-4 pb-10 pt-20 lg:px-[22px] lg:pt-[18px]">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-hair pb-3.5">
+          <div className="min-w-0">
+            <h1 className="text-[21px] font-semibold leading-tight text-heading">{labelFor(active)}</h1>
+            <p className="mt-1 text-xs text-muted">{subtitle}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {canSee('users') && (
+              <form
+                role="search"
+                onSubmit={submitSearch}
+                className="flex w-[220px] max-w-full items-center gap-2 rounded-lg border border-subtle bg-[#121212] px-3 py-[7px] transition-colors focus-within:border-strong"
+              >
+                <IconSearch size={14} strokeWidth={2} className="text-muted" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t.nav.searchPlaceholder}
+                  aria-label={t.nav.searchPlaceholder}
+                  className="w-full border-0 bg-transparent text-[12.5px] text-primary outline-none"
+                />
+              </form>
+            )}
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setBellOpen((v) => !v)}
+                aria-label={t.nav.notifications}
+                aria-expanded={bellOpen}
+                className="relative grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:bg-hover hover:text-primary"
+              >
+                <IconBell size={18} />
+                {updateAvailable && <i className="absolute end-1 top-1 h-[7px] w-[7px] rounded-full bg-danger" />}
+              </button>
+              {bellOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setBellOpen(false)} />
+                  <div className="absolute end-0 top-full z-40 mt-2 w-64 rounded-xl border border-subtle bg-surface p-3 text-xs shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+                    <div className="mb-2 text-[13px] font-semibold text-heading">{t.nav.notifications}</div>
+                    {updateAvailable && version?.latest ? (
+                      <div className="rounded-[10px] border border-well-edge bg-well px-3 py-2 leading-relaxed text-body">
+                        {t.nav.updateNotice(version.latest)}
+                      </div>
+                    ) : (
+                      <div className="text-faint">{t.nav.noNotifications}</div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2.5 border-s border-hair ps-3">
+              <LiveClock />
+              {version && (
+                <span
+                  dir="ltr"
+                  title={updateAvailable ? t.nav.updateAvailable : t.nav.upToDate}
+                  className={`rounded-md border px-2 py-0.5 font-en text-[11px] ${
+                    updateAvailable ? 'border-warning/30 text-warning' : 'border-subtle text-faint'
+                  }`}
+                >
+                  v{version.current}
+                </span>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <div className="min-w-0">
+          {active === 'overview' && <OverviewPage onNavigate={selectTab} canOpen={canSee} />}
+          {active === 'users' && <UsersPage search={search} />}
+          {active === 'hosts' && <HostsPage />}
+          {active === 'groups' && <GroupsPage />}
+          {active === 'nodes' && <NodesPage />}
+          {active === 'cores' && <CoresPage />}
+          {active === 'tunnels' && <TunnelsPage />}
+          {active === 'settings' && <SettingsPage />}
         </div>
-        {active === 'overview' && <OverviewPage />}
-        {active === 'users' && <UsersPage />}
-        {active === 'hosts' && <HostsPage />}
-        {active === 'groups' && <GroupsPage />}
-        {active === 'nodes' && <NodesPage />}
-        {active === 'cores' && <CoresPage />}
-        {active === 'tunnels' && <TunnelsPage />}
-        {active === 'settings' && <SettingsPage />}
       </main>
     </div>
   )

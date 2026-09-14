@@ -16,10 +16,11 @@ import {
   type ProxyUser,
 } from '../lib/api'
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 const labelClass = 'mb-1.5 block text-xs text-muted'
 
 function emptyForm() {
@@ -136,12 +137,12 @@ export default function GroupsPage() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-heading">{t.groupsPage.title}</h1>
+      <div className="mb-2 flex items-center justify-end">
+        <h1 className="sr-only">{t.groupsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
+          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
+          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
         >
           {t.groupsPage.newBtn}
         </button>
@@ -149,7 +150,7 @@ export default function GroupsPage() {
       <p className="mb-6 text-sm text-muted">{t.groupsPage.intro}</p>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-cyan-400/20 bg-surface p-4">
+        <form onSubmit={handleSubmit} className="mb-6 rounded-xl border border-subtle bg-surface p-4">
           <div className="flex flex-wrap gap-3">
             <div>
               <label className={labelClass}>{t.groupsPage.nameLabel}</label>
@@ -258,7 +259,7 @@ export default function GroupsPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
             {editingId ? t.common.save : t.groupsPage.createGroupBtn}

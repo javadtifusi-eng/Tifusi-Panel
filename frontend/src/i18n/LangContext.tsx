@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { dict, type Dict, type Lang } from './dict'
 
 const STORAGE_KEY = 'tifusi_lang'
@@ -25,6 +25,14 @@ const LangContext = createContext<LangContextValue | null>(null)
 
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(loadLang)
+
+  // Keep <html lang/dir> in step with the chosen language: index.html ships
+  // with dir="rtl", and Tailwind's rtl:/ltr: variants (mirrored arrows, the
+  // logout icon) read the nearest dir, so English must flip it too.
+  useEffect(() => {
+    document.documentElement.lang = lang
+    document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr'
+  }, [lang])
 
   function setLang(next: Lang) {
     setLangState(next)

@@ -195,6 +195,18 @@ export async function listUserAppReports(userId: number, limit = 100): Promise<A
   return res.json()
 }
 
+// The newest app reports across every user this admin can see (the owner:
+// all of them), for the dashboard's recent-activity feed.
+export interface RecentAppReport extends AppReport {
+  user_id: number
+  username: string
+}
+
+export async function listRecentAppReports(limit = 20): Promise<RecentAppReport[]> {
+  const res = await authorizedFetch(`/app-reports/recent?limit=${limit}`)
+  return res.json()
+}
+
 export interface BulkCreateResult {
   created: ProxyUser[]
   skipped: string[]

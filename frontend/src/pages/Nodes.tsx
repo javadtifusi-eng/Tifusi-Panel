@@ -18,22 +18,23 @@ import { copyToClipboard } from '../lib/clipboard'
 // toggles the nodes running it), not repeated here — this form only owns
 // what's actually the node's own identity (name/address/agent port).
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 const statusDot: Record<NodeStatus, string> = {
-  connected: 'bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,0.6)]',
-  pending: 'bg-slate-500',
-  error: 'bg-red-400 shadow-[0_0_8px_2px_rgba(248,113,113,0.5)]',
+  connected: 'bg-success',
+  pending: 'bg-neutral',
+  error: 'bg-danger',
 }
 
 const statusBadge: Record<NodeStatus, string> = {
-  connected: 'bg-success-tint text-success border-success',
-  pending: 'bg-neutral-tint text-muted border-neutral',
-  error: 'bg-danger-tint text-danger border-danger',
+  connected: 'bg-success-tint text-success border-success/30',
+  pending: 'bg-neutral-tint text-muted border-neutral/30',
+  error: 'bg-danger-tint text-danger border-danger/30',
 }
 
 const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 
 function setupCommand(node: Node): string {
   // The one-line installer (not a raw docker build/run) — it clones the
@@ -157,12 +158,12 @@ export default function NodesPage() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-heading">{t.nodesPage.title}</h1>
+      <div className="mb-2 flex items-center justify-end">
+        <h1 className="sr-only">{t.nodesPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
+          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
+          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
         >
           {t.nodesPage.newBtn}
         </button>
@@ -172,7 +173,7 @@ export default function NodesPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-cyan-400/20 bg-surface p-4"
+          className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-subtle bg-surface p-4"
         >
           <div>
             <label className="mb-1.5 block text-xs text-muted">{t.nodesPage.nameLabel}</label>
@@ -206,7 +207,7 @@ export default function NodesPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+            className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
             style={{ backgroundColor: ACCENT }}
           >
             {editingId ? t.common.save : t.nodesPage.registerBtn}
@@ -217,7 +218,7 @@ export default function NodesPage() {
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       {setupNode && (
-        <div className="mb-6 rounded-xl border border-cyan-400/20 bg-well p-4">
+        <div className="mb-6 rounded-xl border border-subtle bg-well p-4">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-bold text-primary">{setupNode.name}</div>
             <button onClick={() => setSetupNodeId(null)} className="text-xs text-muted hover:underline">
@@ -228,7 +229,7 @@ export default function NodesPage() {
           <pre
             dir="ltr"
             onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
-            className="mb-2 cursor-text overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-cyan-400/20 bg-well-strong p-3 text-left font-mono text-[13px] leading-relaxed text-accent"
+            className="mb-2 cursor-text overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-subtle bg-well-strong p-3 text-left font-mono text-[13px] leading-relaxed text-accent"
           >
             {setupCommand(setupNode)}
           </pre>
@@ -240,7 +241,7 @@ export default function NodesPage() {
           )}
           <button
             onClick={() => copySetup(setupNode)}
-            className="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-950"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold text-app"
             style={{ backgroundColor: ACCENT }}
           >
             {copied ? t.common.copiedCheck : t.nodesPage.copyCommand}
@@ -265,13 +266,13 @@ export default function NodesPage() {
               key={node.id}
               onClick={() => handleSync(node)}
               title={t.nodesPage.sync}
-              className="cursor-pointer rounded-xl border border-subtle bg-surface p-4 transition-colors hover:border-cyan-400/40"
+              className="cursor-pointer rounded-xl border border-subtle bg-surface p-4 transition-colors hover:border-accent/40"
             >
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${
-                      isSyncing ? 'animate-pulse bg-cyan-400' : statusDot[node.status]
+                      isSyncing ? 'animate-pulse bg-accent' : statusDot[node.status]
                     }`}
                   />
                   <span className="font-bold text-primary">{node.name}</span>

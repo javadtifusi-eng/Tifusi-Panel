@@ -19,13 +19,14 @@ import {
   type RealityScanResult,
 } from '../lib/api'
 
-const ACCENT = '#22D3EE'
+// The theme accent (see --c-accent in index.css).
+const ACCENT = 'rgb(var(--c-accent))'
 
 const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-cyan-400/60'
+  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 const labelClass = 'mb-1.5 block text-xs text-muted'
 const monoTextarea =
-  'w-full rounded-lg border border-edge bg-well p-3 font-mono text-xs text-accent outline-none focus:border-cyan-400/60'
+  'w-full rounded-lg border border-edge bg-well p-3 font-mono text-xs text-body outline-none focus:border-accent/60'
 
 const CORE_TYPES: CoreType[] = ['xray', 'l2tp', 'ikev2']
 
@@ -841,12 +842,12 @@ export default function CoresPage() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-heading">{t.coresPage.title}</h1>
+      <div className="mb-2 flex items-center justify-end">
+        <h1 className="sr-only">{t.coresPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-slate-950"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, #0891b2)` }}
+          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
+          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
         >
           {t.coresPage.newBtn}
         </button>
@@ -854,7 +855,7 @@ export default function CoresPage() {
       <p className="mb-6 text-sm text-muted">{t.coresPage.intro}</p>
 
       {showForm && (
-        <div className="mb-6 rounded-xl border border-cyan-400/20 bg-surface p-4">
+        <div className="mb-6 rounded-xl border border-subtle bg-surface p-4">
           <div className="mb-4">
             <label className={labelClass}>{t.coresPage.coreTypeLabel}</label>
             <div className="flex flex-wrap gap-2">
@@ -867,8 +868,8 @@ export default function CoresPage() {
                   className="rounded-lg border px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
                   style={
                     form.coreType === ct
-                      ? { borderColor: ACCENT, color: ACCENT, backgroundColor: 'rgba(34,211,238,0.1)' }
-                      : { borderColor: 'rgba(255,255,255,0.15)', color: '#cbd5e1' }
+                      ? { borderColor: ACCENT, color: ACCENT, backgroundColor: 'rgb(var(--c-accent) / 0.1)' }
+                      : { borderColor: 'rgb(var(--c-border-default))', color: 'rgb(var(--c-text-secondary))' }
                   }
                 >
                   {t.coresPage.coreTypeLabels[ct]}
@@ -925,7 +926,7 @@ export default function CoresPage() {
                     type="button"
                     onClick={() => updateWizard('port', randomPort())}
                     className="rounded-lg border px-2.5 py-2 text-xs font-bold"
-                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
                   >
                     🎲
                   </button>
@@ -1032,7 +1033,7 @@ export default function CoresPage() {
                     onClick={generateKeys}
                     disabled={generatingKeys}
                     className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
                   >
                     {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
                   </button>
@@ -1041,7 +1042,7 @@ export default function CoresPage() {
                     onClick={runScan}
                     disabled={scanning}
                     className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
                   >
                     {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
                   </button>
@@ -1061,7 +1062,7 @@ export default function CoresPage() {
                         type="button"
                         onClick={() => copy(generatedKey[key], key)}
                         dir="ltr"
-                        className="truncate rounded-lg border border-subtle bg-well px-2 py-1.5 text-left font-mono text-[11px] text-accent hover:border-cyan-400/40"
+                        className="truncate rounded-lg border border-subtle bg-well px-2 py-1.5 text-left font-mono text-[11px] text-accent hover:border-accent/40"
                         title={generatedKey[key]}
                       >
                         {copiedField === key ? t.coresPage.copied : `${key}: ${generatedKey[key]}`}
@@ -1159,7 +1160,7 @@ export default function CoresPage() {
               type="button"
               onClick={addWizardToJson}
               disabled={!wizardCanAdd}
-              className="mt-3 rounded-lg px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40"
+              className="mt-3 rounded-lg px-4 py-2 text-xs font-bold text-app disabled:opacity-40"
               style={{ backgroundColor: ACCENT }}
             >
               {addedFlash ? t.coresPage.addedToJson : t.coresPage.addToJsonBtn}
@@ -1206,7 +1207,7 @@ export default function CoresPage() {
                   <label
                     htmlFor="core-json-upload"
                     className="cursor-pointer rounded-lg border px-3 py-1 text-xs font-bold"
-                    style={{ borderColor: 'rgba(34,211,238,0.35)', color: ACCENT }}
+                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
                   >
                     {t.coresPage.uploadJsonBtn}
                   </label>
@@ -1264,8 +1265,8 @@ export default function CoresPage() {
                         onClick={() => setForm((f) => ({ ...f, ikev2AuthMode: mode }))}
                         className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
                           form.ikev2AuthMode === mode
-                            ? 'border-cyan-400/50 bg-accent-tint text-accent'
-                            : 'border-edge text-muted hover:border-cyan-400/30'
+                            ? 'border-accent/50 bg-accent-tint text-accent'
+                            : 'border-edge text-muted hover:border-accent/30'
                         }`}
                       >
                         <div className="font-bold">
@@ -1312,7 +1313,7 @@ export default function CoresPage() {
                           type="button"
                           onClick={usePanelCertForIkev2}
                           disabled={usingPanelCert}
-                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
+                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-accent/60 hover:text-primary disabled:opacity-50"
                         >
                           {usingPanelCert ? '…' : t.coresPage.ikev2UsePanelCertButton}
                         </button>
@@ -1320,7 +1321,7 @@ export default function CoresPage() {
                           type="button"
                           onClick={generateIkev2ServerCert}
                           disabled={generatingIkev2Cert}
-                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-cyan-400/60 hover:text-primary disabled:opacity-50"
+                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-accent/60 hover:text-primary disabled:opacity-50"
                         >
                           {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
                         </button>
@@ -1378,7 +1379,7 @@ export default function CoresPage() {
             )}
 
             {lastWarnings.length > 0 && (
-              <div className="mt-3 rounded-lg border border-warning bg-warning-tint p-3 text-xs text-warning">
+              <div className="mt-3 rounded-lg border border-warning/30 bg-warning-tint p-3 text-xs text-warning">
                 <div className="mb-1 font-bold">{t.coresPage.warningsTitle}</div>
                 <ul className="list-inside list-disc">
                   {lastWarnings.map((w, i) => (
@@ -1393,7 +1394,7 @@ export default function CoresPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-60"
+              className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
               style={{ backgroundColor: ACCENT }}
             >
               {editingId ? t.common.save : t.coresPage.createCoreBtn}

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy import delete, select
@@ -8,14 +8,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import rate_limit
 from app.database import get_db
+from app.dependencies import require_permission
+from app.models.admin import Admin
 from app.models.app_report import AppReport
-from app.schemas.app_report import AppReportPayload
+from app.models.user import ProxyUser
+from app.routers.users import _owned_query
+from app.schemas.app_report import AppReportPayload, AppReportResponse, RecentAppReportResponse
 from app.subscription.lookup import client_ip, user_by_subscription_or_404
 
 # Deliberately not behind get_current_admin, same as app/routers/subscription.py:
 # the Android app has no admin token, only the subscription link or app code
 # it was set up with, and that is the credential here too.
 router = APIRouter(tags=["app"])
+
+# The admin side, unlike `router` above: the dashboard's activity feed.
+# Same "users" permission as GET /api/users/{id}/app-reports, since it is
+# the same data across users.
+admin_router = APIRouter(
+    prefix="/api/app-reports",
+    tags=["app"],
+    dependencies=[Depends(require_permission("users"))],
+)
 
 _MAX_BODY_BYTES = 64 * 1024
 _KEEP_PER_USER = 500
@@ -111,3 +124,28 @@ async def post_app_report(request: Request, db: AsyncSession = Depends(get_db)) 
         await db.commit()
 
     return Response(status_code=204)
+
+
+@admin_router.get("/recent", response_model=list[RecentAppReportResponse])
+async def recent_app_reports(
+    limit: int = Query(default=20, ge=1, le=100),
+    admin: Admin = Depends(require_permission("users")),
+    db: AsyncSession = Depends(get_db),
+) -> list[RecentAppReportResponse]:
+    """The newest app reports across users, each with its username, newest
+    first (same ordering as the per-user list). The owner sees every user's
+    reports; any other admin only those of users they created, exactly as
+    _owned_query scopes the user list itself."""
+    stmt = _owned_query(
+        admin,
+        select(AppReport, ProxyUser.username).join(ProxyUser, ProxyUser.id == AppReport.user_id),
+    )
+    rows = await db.execute(stmt.order_by(AppReport.received_at.desc(), AppReport.id.desc()).limit(limit))
+    return [
+        RecentAppReportResponse(
+            **AppReportResponse.model_validate(report).model_dump(),
+            user_id=report.user_id,
+            username=username,
+        )
+        for report, username in rows.all()
+    ]
