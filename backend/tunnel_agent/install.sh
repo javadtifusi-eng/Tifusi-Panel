@@ -25,49 +25,61 @@ GO_MIN=1.21
 
 # palette: text is white, numbers are red, only "running" is green
 W=$'\e[97m'; R=$'\e[91m'; G=$'\e[92m'; BL=$'\e[94m'; C=$'\e[96m'; D=$'\e[90m'; N=$'\e[0m'; BD=$'\e[1m'
+# Tunnel brand color: magenta, so it reads apart from the panel menu (red) and the panel CLI (cyan).
+M=$'\e[95m'; MB=$'\e[30;105m'
 
 # All four of these are status/log output for the user, never a value a
 # caller should capture - printed to stderr so a caller that reads a
 # result via "x=$(some_func)" (ask/ask_required in particular, which call
 # warn() while re-prompting) can never have this text accidentally mixed
 # into the captured value.
-info() { echo "${W}==>${N} ${W}$*${N}" >&2; }
-ok()   { echo "${G} ok ${N} ${W}$*${N}" >&2; }
-warn() { echo "${R} !! ${N} ${W}$*${N}" >&2; }
-die()  { echo "${R}fail${N} ${W}$*${N}" >&2; exit 1; }
+#
+# QUIET (the unattended install) replaces the step-by-step chatter with one
+# progress line; warnings and failures still print, starting on a fresh line
+# so they never land on top of that progress bar.
+QUIET=""
+PROGRESS_OPEN=""
+end_progress_line() { if [ -n "$PROGRESS_OPEN" ]; then echo >&2; PROGRESS_OPEN=""; fi; }
+info() { [ -n "$QUIET" ] && return 0; echo "${W}==>${N} ${W}$*${N}" >&2; }
+ok()   { [ -n "$QUIET" ] && return 0; echo "${G} ok ${N} ${W}$*${N}" >&2; }
+warn() { end_progress_line; echo "${R} !! ${N} ${W}$*${N}" >&2; }
+die()  { end_progress_line; echo "${R}fail${N} ${W}$*${N}" >&2; exit 1; }
 
 cols() { local c; c=$(tput cols 2>/dev/null || echo 80); [ -n "$c" ] && echo "$c" || echo 80; }
 
 # rule N repeats a single character N times without depending on seq.
 rule() { local n="$1" ch="$2" out; printf -v out '%*s' "$n" ''; echo "${out// /$ch}"; }
 
+# Same big block letters (figlet -f big) as the Tifusi Panel CLI banner. The
+# art is 43 columns wide; a narrower terminal gets only the label line.
+tunnel_art() {
+  echo
+  if [ "$(cols)" -ge 44 ]; then
+    printf '%s%s' "$M" "$BD"
+    cat <<'EOF'
+ _______ _____ ______ _    _  _____ _____
+|__   __|_   _|  ____| |  | |/ ____|_   _|
+   | |    | | | |__  | |  | | (___   | |
+   | |    | | |  __| | |  | |\___ \  | |
+   | |   _| |_| |    | |__| |____) |_| |_
+   |_|  |_____|_|     \____/|_____/|_____|
+ _______ _    _ _   _ _   _ ______ _
+|__   __| |  | | \ | | \ | |  ____| |
+   | |  | |  | |  \| |  \| | |__  | |
+   | |  | |  | | . ` | . ` |  __| | |
+   | |  | |__| | |\  | |\  | |____| |____
+   |_|   \____/|_| \_|_| \_|______|______|
+EOF
+    printf '%s\n' "$N"
+  fi
+  printf '%s%s  Tifusi Tunnel  %s %sreverse tunnel · client-initiated%s\n' "$MB" "$BD" "$N" "$D" "$N"
+  echo "  ${D}GitHub: https://github.com/${REPO_USER}/${REPO_NAME}${N}"
+  echo
+}
+
 banner() {
   clear 2>/dev/null || true
-  local w; w=$(cols)
-  echo
-  if [ "$w" -ge 40 ]; then
-    printf '%s%s' "$C" "$BD"
-    cat <<'EOF'
- _____ ___ _____ _   _ ____ ___
-|_   _|_ _|  ___| | | / ___|_ _|
-  | |  | || |_  | | | \___ \| |
-  | |  | ||  _| | |_| |___) | |
-  |_| |___|_|    \___/|____/___|
-EOF
-    printf '%s%s' "$R" "$BD"
-    cat <<'EOF'
- _____ _   _ _   _ _   _ _____ _
-|_   _| | | | \ | | \ | | ____| |
-  | | | | | |  \| |  \| |  _| | |
-  | | | |_| | |\  | |\  | |___| |___
-  |_|  \___/|_| \_|_| \_|_____|_____|
-EOF
-    printf '%s' "$N"
-  else
-    printf '  %s%sTIFUSI TUNNEL%s\n' "$C" "$BD" "$N"
-  fi
-  echo "  ${D}reverse tunnel · client-initiated${N}"
-  echo
+  tunnel_art
 }
 
 pause() { echo; read -r -p "  ${D}press Enter${N} " _; }
@@ -77,6 +89,8 @@ pause() { echo; read -r -p "  ${D}press Enter${N} " _; }
 # still sitting above it - one header style (cyan, bold, "▸" marker) used
 # everywhere instead of every function inventing its own.
 step() {
+  # Clearing the screen mid-install made the pasted command vanish, as if another program had opened.
+  [ -n "$QUIET" ] && return 0
   clear 2>/dev/null || true
   echo
   echo "  ${C}${BD}▸ $1${N}"
@@ -84,15 +98,35 @@ step() {
   echo "  ${D}$(rule 34 "─")${N}"
 }
 
+# progress PCT LABEL redraws one line in place on a terminal, but prints one
+# line per step when output is piped or logged, where carriage returns would
+# smear every step together.
+progress() {
+  [ -n "$QUIET" ] || return 0
+  local pct="$1" label="$2" width=20 fill bar
+  fill=$(( pct * width / 100 ))
+  bar="$(rule "$fill" "█")$(rule $(( width - fill )) "░")"
+  if [ -t 2 ]; then
+    printf '\r  %s%s%s %s%3d%%%s  %-40s' "$M" "$bar" "$N" "$W" "$pct" "$N" "$label" >&2
+    PROGRESS_OPEN=1
+    [ "$pct" -ge 100 ] && end_progress_line
+  else
+    printf '  [%3d%%] %s\n' "$pct" "$label" >&2
+  fi
+  return 0
+}
+
 require_root() { [ "$(id -u)" = 0 ] || die "run this script as root (sudo -i)"; }
 
 pkg_install() {
+  local out=/dev/stdout
+  [ -n "$QUIET" ] && out=/dev/null
   if command -v apt-get >/dev/null 2>&1; then
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"
-  elif command -v dnf >/dev/null 2>&1; then dnf install -y -q "$@"
-  elif command -v yum >/dev/null 2>&1; then yum install -y -q "$@"
-  elif command -v apk >/dev/null 2>&1; then apk add --no-cache "$@"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >"$out" 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >"$out" 2>&1
+  elif command -v dnf >/dev/null 2>&1; then dnf install -y -q "$@" >"$out" 2>&1
+  elif command -v yum >/dev/null 2>&1; then yum install -y -q "$@" >"$out" 2>&1
+  elif command -v apk >/dev/null 2>&1; then apk add --no-cache "$@" >"$out" 2>&1
   else warn "unknown package manager, please install manually: $*"; fi
 }
 
@@ -224,6 +258,7 @@ install_binary() {
     ok "installed $(bin_version)"
   else
     warn "no release binary found, building from source"
+    progress 40 "building from source (can take a few minutes)"
     ensure_go
     mkdir -p "$SRC_DIR"
     if [ -f ./main.go ] && [ -f ./mux.go ] && [ -f ./panel.go ] && [ -f ./panel_ui.html ] \
@@ -1047,30 +1082,42 @@ menu() {
 # setup_client), which asks for every field one at a time.
 unattended_install() {
   local b64="$1" cfg mode port proto
+  QUIET=1
+  tunnel_art
+
+  progress 5 "checking the config"
   cfg=$(printf '%s' "$b64" | base64 -d 2>/dev/null) || die "invalid config (not valid base64)"
+  progress 10 "installing dependencies"
+  ensure_deps
   echo "$cfg" | jq -e . >/dev/null 2>&1 || die "invalid config (not valid JSON)"
 
+  progress 30 "installing the tunnel binary"
   install_binary
+  progress 70 "saving the config"
   save_cfg "$cfg"
 
   mode=$(echo "$cfg" | jq -r '.mode')
   if [ "$mode" = "server" ]; then
+    progress 80 "opening firewall ports"
     port=$(echo "$cfg" | jq -r '.listen' | sed 's/.*://')
-    open_port "$port" tcp
-    [ "$(echo "$cfg" | jq -r '.domain // empty')" != "" ] && open_port 80 tcp
+    open_port "$port" tcp >/dev/null
+    [ "$(echo "$cfg" | jq -r '.domain // empty')" != "" ] && open_port 80 tcp >/dev/null
     while read -r port proto; do
-      [ -n "$port" ] && open_port "$port" "$proto"
+      [ -n "$port" ] && open_port "$port" "$proto" >/dev/null
     done < <(echo "$cfg" | jq -r '.forwards[]? | (.listen | split(":")[1]) + " " + .net')
   fi
 
+  progress 90 "starting the service"
   restart_service
+  systemctl is-active --quiet tifusi || die "the tunnel service did not start - see: journalctl -u tifusi -n 30"
+  progress 100 "done"
   echo
-  ok "Tifusi Tunnel installed and running (mode: $mode)"
-  echo "   ${D}manage it later with:${N} ${W}bm${N}"
+  echo "  ${G}${BD}✓${N} ${W}Tifusi Tunnel is installed and running${N} ${D}(mode: $mode)${N}"
+  echo "  ${D}Manage it later with:${N} ${W}bm${N}"
+  echo
 }
 
 require_root
-ensure_deps
 
 # `bash <(curl ...) <base64-config>` skips the interactive menu entirely and
 # installs unattended from that one argument - this is what the panel's
@@ -1082,5 +1129,6 @@ if [ -n "${1:-}" ]; then
   exit 0
 fi
 
+ensure_deps
 install_shortcut >/dev/null 2>&1
 menu
