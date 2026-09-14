@@ -4,9 +4,6 @@ import { useLang } from '../i18n/LangContext'
 import { ApiError, getUserLinks, listUserAppReports, type AppReport, type UserLinks } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
-// The theme accent (see --c-accent in index.css).
-const ACCENT = 'rgb(var(--c-accent))'
-
 function protocolLabel(link: string): string {
   return link.split('://')[0].toUpperCase()
 }
@@ -88,8 +85,7 @@ export default function UserLinksModal({
               </div>
               <button
                 onClick={() => copy(data.subscription_url)}
-                className="rounded-lg px-4 py-1.5 text-xs font-bold text-app"
-                style={{ backgroundColor: ACCENT }}
+                className="hover-btn hover-btn-sm"
               >
                 {copied === data.subscription_url ? t.common.copiedCheck : t.userLinksModal.copySubLink}
               </button>
@@ -105,8 +101,7 @@ export default function UserLinksModal({
               </div>
               <button
                 onClick={() => copy(data.app_code)}
-                className="rounded-lg border px-4 py-1.5 text-xs font-bold"
-                style={{ borderColor: ACCENT, color: ACCENT }}
+                className="hover-btn hover-btn-sm"
               >
                 {copied === data.app_code ? t.common.copiedCheck : t.userLinksModal.copyAppCode}
               </button>
@@ -129,7 +124,7 @@ export default function UserLinksModal({
                     <span dir="ltr" className="flex-1 truncate text-left font-mono text-[11px] text-muted">
                       {link}
                     </span>
-                    <button onClick={() => copy(link)} className="flex-shrink-0 text-xs" style={{ color: ACCENT }}>
+                    <button onClick={() => copy(link)} className="hover-btn hover-btn-sm flex-shrink-0">
                       {copied === link ? t.copied : t.copy}
                     </button>
                   </div>
@@ -154,7 +149,7 @@ export default function UserLinksModal({
                         <span className="rounded-full border border-edge px-2 py-1 text-[10px] text-secondary">
                           IKEV2 · {ike.remark}
                         </span>
-                        <button onClick={() => copy(text)} className="text-xs font-bold" style={{ color: ACCENT }}>
+                        <button onClick={() => copy(text)} className="hover-btn hover-btn-sm">
                           {copied === text ? t.copied : t.userLinksModal.copyConfig}
                         </button>
                       </div>
@@ -167,8 +162,7 @@ export default function UserLinksModal({
                             </span>
                             <button
                               onClick={() => copy(value)}
-                              className="flex-shrink-0 text-xs font-bold"
-                              style={{ color: ACCENT }}
+                              className="hover-btn hover-btn-sm flex-shrink-0"
                             >
                               {copied === value ? t.copied : t.copy}
                             </button>
@@ -197,7 +191,7 @@ export default function UserLinksModal({
                         <span className="rounded-full border border-edge px-2 py-1 text-[10px] text-secondary">
                           L2TP · {l2tp.remark}
                         </span>
-                        <button onClick={() => copy(text)} className="text-xs font-bold" style={{ color: ACCENT }}>
+                        <button onClick={() => copy(text)} className="hover-btn hover-btn-sm">
                           {copied === text ? t.copied : t.userLinksModal.copyConfig}
                         </button>
                       </div>
@@ -210,8 +204,7 @@ export default function UserLinksModal({
                             </span>
                             <button
                               onClick={() => copy(value)}
-                              className="flex-shrink-0 text-xs font-bold"
-                              style={{ color: ACCENT }}
+                              className="hover-btn hover-btn-sm flex-shrink-0"
                             >
                               {copied === value ? t.copied : t.copy}
                             </button>

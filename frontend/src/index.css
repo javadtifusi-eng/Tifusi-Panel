@@ -56,6 +56,7 @@
   --c-neutral: 139 139 139;
   --c-neutral-tint: 26 26 26;
   --c-purple: 168 85 247; /* #a855f7 */
+  --c-glass: 170 202 255; /* #aacaff glass buttons (.hover-btn) and their small highlights */
 
   /* Vazirmatn for Persian, Poppins for Latin text and numbers. The
      direction attribute picks which one leads, so an LTR island inside a
@@ -141,4 +142,97 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* Glass pill buttons, used for every action button in the panel instead of
+   the orange accent. Kept outside @layer on purpose: unlayered rules come
+   after Tailwind's utilities, so they win over any rounded-*, text-* or bg-*
+   a button still carries for layout. The glow position (--x / --y) comes
+   from one pointer listener in App.tsx. */
+.hover-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 9999px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: rgb(236 241 255);
+  background-color: rgb(43 55 80 / 0.14);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--c-glass) / 0.2),
+    inset 0 0 16px 0 rgb(var(--c-glass) / 0.1),
+    inset 0 -3px 12px 0 rgb(var(--c-glass) / 0.15),
+    0 1px 3px 0 rgb(0 0 0 / 0.5),
+    0 4px 12px 0 rgb(0 0 0 / 0.45);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none !important;
+  transition:
+    transform 150ms ease,
+    box-shadow 200ms ease,
+    opacity 200ms ease;
+}
+.hover-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    140px circle at var(--x, 50%) var(--y, 50%),
+    rgb(160 217 248 / 0.32),
+    rgb(58 91 191 / 0.16) 45%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+.hover-btn:hover:not(:disabled)::before {
+  opacity: 1;
+}
+.hover-btn:active:not(:disabled) {
+  transform: scale(0.975);
+}
+.hover-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.hover-btn:focus-visible {
+  outline: 2px solid rgb(var(--c-glass) / 0.6);
+  outline-offset: 2px;
+}
+.hover-btn-sm {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.hover-btn-danger {
+  color: rgb(var(--c-danger));
+}
+/* The chosen option in a choice group (core type, transport, ...). */
+.hover-btn-active {
+  color: rgb(255 255 255);
+  background-color: rgb(58 91 191 / 0.28);
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--c-glass) / 0.55),
+    inset 0 0 18px 0 rgb(160 217 248 / 0.22),
+    0 1px 3px 0 rgb(0 0 0 / 0.5),
+    0 4px 12px 0 rgb(0 0 0 / 0.45);
+}
+/* Two-line options (a title with a description) read badly as a pill. */
+.hover-btn-block {
+  border-radius: 0.875rem;
+  white-space: normal;
+  text-align: start;
+  justify-content: flex-start;
 }

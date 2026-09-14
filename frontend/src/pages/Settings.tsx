@@ -32,14 +32,11 @@ import {
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
-// The theme accent (see --c-accent in index.css).
-const ACCENT = 'rgb(var(--c-accent))'
-
 const inputClass =
   'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 const labelClass = 'mb-1.5 block text-xs text-muted'
 const cardClass = 'rounded-xl border border-subtle bg-surface p-4'
-const buttonClass = 'rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60'
+const buttonClass = 'hover-btn'
 
 export default function SettingsPage() {
   const { t, align } = useLang()
@@ -514,7 +511,7 @@ export default function SettingsPage() {
                 className={`${inputClass} w-full text-left`}
               />
             </div>
-            <button type="submit" disabled={urlSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+            <button type="submit" disabled={urlSaving} className={buttonClass}>
               {urlSaving ? t.common.saving : urlSaved ? t.common.saved : t.common.save}
             </button>
           </div>
@@ -564,7 +561,6 @@ export default function SettingsPage() {
             type="submit"
             disabled={pwSubmitting}
             className={`${buttonClass} mt-4`}
-            style={{ backgroundColor: ACCENT }}
           >
             {pwSubmitting ? t.common.saving : pwSaved ? t.settingsPage.passwordChanged : t.settingsPage.changePasswordBtn}
           </button>
@@ -585,7 +581,7 @@ export default function SettingsPage() {
                 className={inputClass}
               />
             </div>
-            <button type="submit" disabled={keyCreating} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+            <button type="submit" disabled={keyCreating} className={buttonClass}>
               {keyCreating ? t.settingsPage.creating : t.settingsPage.newApiKeyBtn}
             </button>
           </form>
@@ -605,8 +601,7 @@ export default function SettingsPage() {
                     setKeyCopied(true)
                     window.setTimeout(() => setKeyCopied(false), 1500)
                   }}
-                  className="flex-shrink-0 text-xs font-bold"
-                  style={{ color: ACCENT }}
+                  className="hover-btn hover-btn-sm flex-shrink-0"
                 >
                   {keyCopied ? t.common.copiedCheck : t.settingsPage.copyKey}
                 </button>
@@ -625,7 +620,7 @@ export default function SettingsPage() {
                     {k.last_used_at ? t.settingsPage.lastUsed(new Date(k.last_used_at).toLocaleDateString()) : t.settingsPage.neverUsed}
                   </div>
                 </div>
-                <button onClick={() => handleDeleteApiKey(k)} className="text-xs text-danger hover:underline">
+                <button onClick={() => handleDeleteApiKey(k)} className="hover-btn hover-btn-sm hover-btn-danger">
                   {t.common.delete}
                 </button>
               </div>
@@ -669,15 +664,14 @@ export default function SettingsPage() {
                 className={`${inputClass} w-40 text-left font-mono text-xs`}
               />
             </div>
-            <button type="submit" disabled={telegramSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+            <button type="submit" disabled={telegramSaving} className={buttonClass}>
               {telegramSaving ? t.common.saving : telegramSaved ? t.common.saved : t.common.save}
             </button>
             <button
               type="button"
               onClick={handleTestTelegram}
               disabled={telegramTesting}
-              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
+              className="hover-btn"
             >
               {telegramTesting ? t.settingsPage.sending : telegramTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
@@ -708,15 +702,14 @@ export default function SettingsPage() {
                 className={`${inputClass} w-48 text-left font-mono text-xs`}
               />
             </div>
-            <button type="submit" disabled={webhookSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+            <button type="submit" disabled={webhookSaving} className={buttonClass}>
               {webhookSaving ? t.common.saving : webhookSaved ? t.common.saved : t.common.save}
             </button>
             <button
               type="button"
               onClick={handleTestWebhook}
               disabled={webhookTesting}
-              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
+              className="hover-btn"
             >
               {webhookTesting ? t.settingsPage.sending : webhookTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
@@ -738,15 +731,14 @@ export default function SettingsPage() {
                 className={`${inputClass} w-full text-left`}
               />
             </div>
-            <button type="submit" disabled={discordSaving} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+            <button type="submit" disabled={discordSaving} className={buttonClass}>
               {discordSaving ? t.common.saving : discordSaved ? t.common.saved : t.common.save}
             </button>
             <button
               type="button"
               onClick={handleTestDiscord}
               disabled={discordTesting}
-              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
+              className="hover-btn"
             >
               {discordTesting ? t.settingsPage.sending : discordTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
             </button>
@@ -763,7 +755,6 @@ export default function SettingsPage() {
               onClick={handleDownloadBackup}
               disabled={backupDownloading}
               className={buttonClass}
-              style={{ backgroundColor: ACCENT }}
             >
               {backupDownloading ? t.settingsPage.downloading : t.settingsPage.downloadBackup}
             </button>
@@ -772,8 +763,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => restoreInputRef.current?.click()}
               disabled={restoring}
-              className="rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-60"
-              style={{ borderColor: 'rgb(var(--c-danger) / 0.4)', color: 'rgb(var(--c-danger))' }}
+              className="hover-btn hover-btn-danger"
             >
               {restoring ? t.settingsPage.restoring : restoreDone ? t.settingsPage.restored : t.settingsPage.restoreFromFile}
             </button>
@@ -836,7 +826,6 @@ export default function SettingsPage() {
                 type="submit"
                 disabled={sslRequesting || !sslDomain.trim()}
                 className={buttonClass}
-                style={{ backgroundColor: ACCENT }}
               >
                 {sslRequesting ? t.settingsPage.sslRequesting : t.settingsPage.sslRequestBtn}
               </button>
@@ -871,7 +860,6 @@ export default function SettingsPage() {
                 type="submit"
                 disabled={tlsUploading || !tlsCertFile || !tlsKeyFile}
                 className={buttonClass}
-                style={{ backgroundColor: ACCENT }}
               >
                 {tlsUploading ? t.settingsPage.tlsUploading : tlsUploaded ? t.settingsPage.tlsUploaded : t.settingsPage.tlsUploadBtn}
               </button>
@@ -879,8 +867,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleRemoveTls}
-                  className="rounded-lg border px-4 py-2 text-sm font-bold"
-                  style={{ borderColor: 'rgb(var(--c-danger) / 0.4)', color: 'rgb(var(--c-danger))' }}
+                  className="hover-btn hover-btn-danger"
                 >
                   {t.settingsPage.tlsRemoveBtn}
                 </button>
@@ -935,7 +922,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="mt-1 text-[11px] text-faint">{t.settingsPage.permissionsHint}</div>
               </div>
-              <button type="submit" disabled={adminSubmitting} className={buttonClass} style={{ backgroundColor: ACCENT }}>
+              <button type="submit" disabled={adminSubmitting} className={buttonClass}>
                 {adminSubmitting ? t.settingsPage.creating : t.settingsPage.newAdminBtn}
               </button>
             </form>
@@ -964,12 +951,11 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => (editingPermsId === a.id ? setEditingPermsId(null) : startEditPerms(a))}
-                          className="text-xs hover:underline"
-                          style={{ color: ACCENT }}
+                          className="hover-btn hover-btn-sm"
                         >
                           {t.settingsPage.editPermissions}
                         </button>
-                        <button onClick={() => handleDeleteAdmin(a)} className="text-xs text-danger hover:underline">
+                        <button onClick={() => handleDeleteAdmin(a)} className="hover-btn hover-btn-sm hover-btn-danger">
                           {t.common.delete}
                         </button>
                       </div>
@@ -992,8 +978,7 @@ export default function SettingsPage() {
                       <button
                         onClick={saveEditingPerms}
                         disabled={permsSaving}
-                        className="mt-2 rounded-lg px-3 py-1.5 text-xs font-bold text-app disabled:opacity-60"
-                        style={{ backgroundColor: ACCENT }}
+                        className="hover-btn hover-btn-sm mt-2"
                       >
                         {t.common.save}
                       </button>

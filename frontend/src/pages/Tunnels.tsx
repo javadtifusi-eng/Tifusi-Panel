@@ -21,9 +21,6 @@ import {
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
-// The theme accent (see --c-accent in index.css).
-const ACCENT = 'rgb(var(--c-accent))'
-
 const TRANSPORTS: TunnelTransport[] = ['tcp', 'tls', 'ws', 'wss', 'tcpmux', 'wsmux', 'wssmux', 'udp']
 
 const statusDot: Record<TunnelStatus, string> = {
@@ -250,8 +247,7 @@ export default function TunnelsPage() {
         <h1 className="sr-only">{t.tunnelsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
+          className="hover-btn"
         >
           {t.tunnelsPage.newBtn}
         </button>
@@ -302,11 +298,7 @@ export default function TunnelsPage() {
                     key={src}
                     type="button"
                     onClick={() => setForeignSource(src)}
-                    className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
-                      foreignSource === src
-                        ? 'border-accent/60 bg-accent-tint text-accent'
-                        : 'border-edge text-muted hover:border-strong'
-                    }`}
+                    className={`hover-btn hover-btn-sm ${foreignSource === src ? 'hover-btn-active' : ''}`}
                   >
                     {src === 'node' ? t.tunnelsPage.foreignNodeOption : t.tunnelsPage.foreignAddressOption}
                   </button>
@@ -353,8 +345,7 @@ export default function TunnelsPage() {
                 type="button"
                 onClick={handleRecommend}
                 disabled={recommending}
-                className="text-xs font-bold disabled:opacity-60"
-                style={{ color: ACCENT }}
+                className="hover-btn hover-btn-sm"
               >
                 {recommending ? t.tunnelsPage.recommending : t.tunnelsPage.recommendBtn}
               </button>
@@ -383,9 +374,7 @@ export default function TunnelsPage() {
                       key={r.transport}
                       type="button"
                       onClick={() => setTransport(r.transport)}
-                      className={`rounded-md border px-2 py-1 text-[10.5px] font-bold ${
-                        transport === r.transport ? 'border-accent/60 bg-accent-tint text-accent' : 'border-edge text-muted'
-                      }`}
+                      className={`hover-btn hover-btn-sm ${transport === r.transport ? 'hover-btn-active' : ''}`}
                     >
                       {i === 0 ? '★ ' : ''}
                       {t.tunnelsPage.transportLabels[r.transport]}
@@ -401,11 +390,7 @@ export default function TunnelsPage() {
                   type="button"
                   onClick={() => setTransport(tr)}
                   title={t.tunnelsPage.transportHints[tr]}
-                  className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
-                    transport === tr
-                      ? 'border-accent/60 bg-accent-tint text-accent'
-                      : 'border-edge text-muted hover:border-strong'
-                  }`}
+                  className={`hover-btn hover-btn-sm ${transport === tr ? 'hover-btn-active' : ''}`}
                 >
                   {t.tunnelsPage.transportLabels[tr]}
                 </button>
@@ -473,8 +458,7 @@ export default function TunnelsPage() {
               <button
                 type="button"
                 onClick={() => setForwards((fs) => [...fs, emptyForward()])}
-                className="text-xs font-bold"
-                style={{ color: ACCENT }}
+                className="hover-btn hover-btn-sm"
               >
                 {t.tunnelsPage.addForwardBtn}
               </button>
@@ -515,7 +499,7 @@ export default function TunnelsPage() {
                   <button
                     type="button"
                     onClick={() => setForwards((fs) => fs.filter((_, i) => i !== idx))}
-                    className="text-xs text-danger hover:underline"
+                    className="hover-btn hover-btn-sm hover-btn-danger"
                   >
                     {t.tunnelsPage.removeForward}
                   </button>
@@ -528,8 +512,7 @@ export default function TunnelsPage() {
             <button
               type="submit"
               disabled={submitting || !transport}
-              className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-              style={{ backgroundColor: ACCENT }}
+              className="hover-btn"
             >
               {editingId ? t.common.save : t.tunnelsPage.registerBtn}
             </button>
@@ -605,10 +588,10 @@ export default function TunnelsPage() {
                       <button
                         key={label}
                         onClick={() => copy(command)}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-well px-3 py-2 text-start text-xs"
+                        className="hover-btn hover-btn-sm w-full"
                       >
                         <span className="text-muted">{label}</span>
-                        <span className="shrink-0 font-bold" style={{ color: ACCENT }}>
+                        <span className="shrink-0 font-bold text-glass">
                           {copied === command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
                         </span>
                       </button>
@@ -618,16 +601,16 @@ export default function TunnelsPage() {
               )}
 
               <div className="flex items-center gap-3 border-t border-hair pt-3">
-                <button onClick={() => handleTest(tunnel)} className="text-xs text-muted hover:underline">
+                <button onClick={() => handleTest(tunnel)} className="hover-btn hover-btn-sm">
                   {t.tunnelsPage.test}
                 </button>
-                <button onClick={() => toggleConfig(tunnel)} className="text-xs text-muted hover:underline">
+                <button onClick={() => toggleConfig(tunnel)} className="hover-btn hover-btn-sm">
                   {t.tunnelsPage.showConfig}
                 </button>
-                <button onClick={() => startEdit(tunnel)} className="text-xs text-muted hover:underline">
+                <button onClick={() => startEdit(tunnel)} className="hover-btn hover-btn-sm">
                   {t.common.edit}
                 </button>
-                <button onClick={() => handleDelete(tunnel)} className="text-xs text-danger hover:underline">
+                <button onClick={() => handleDelete(tunnel)} className="hover-btn hover-btn-sm hover-btn-danger">
                   {t.common.delete}
                 </button>
               </div>

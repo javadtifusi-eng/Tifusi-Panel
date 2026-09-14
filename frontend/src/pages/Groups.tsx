@@ -16,9 +16,6 @@ import {
   type ProxyUser,
 } from '../lib/api'
 
-// The theme accent (see --c-accent in index.css).
-const ACCENT = 'rgb(var(--c-accent))'
-
 const inputClass =
   'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
 const labelClass = 'mb-1.5 block text-xs text-muted'
@@ -141,8 +138,7 @@ export default function GroupsPage() {
         <h1 className="sr-only">{t.groupsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
+          className="hover-btn"
         >
           {t.groupsPage.newBtn}
         </button>
@@ -188,8 +184,7 @@ export default function GroupsPage() {
                         <button
                           type="button"
                           onClick={() => toggleCoreInbounds(core.inbounds)}
-                          className="text-[11px] hover:underline"
-                          style={{ color: ACCENT }}
+                          className="hover-btn hover-btn-sm"
                         >
                           {allSelected ? t.groupsPage.deselectAllInCore : t.groupsPage.selectAllInCore}
                         </button>
@@ -259,8 +254,7 @@ export default function GroupsPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-            style={{ backgroundColor: ACCENT }}
+            className="hover-btn mt-4"
           >
             {editingId ? t.common.save : t.groupsPage.createGroupBtn}
           </button>
@@ -302,10 +296,10 @@ export default function GroupsPage() {
                 </span>
               </div>
               <div className="flex gap-3 border-t border-hair pt-3">
-                <button onClick={() => startEdit(g)} className="text-xs text-muted hover:underline">
+                <button onClick={() => startEdit(g)} className="hover-btn hover-btn-sm">
                   {t.common.edit}
                 </button>
-                <button onClick={() => handleDelete(g)} className="text-xs text-danger hover:underline">
+                <button onClick={() => handleDelete(g)} className="hover-btn hover-btn-sm hover-btn-danger">
                   {t.common.delete}
                 </button>
               </div>

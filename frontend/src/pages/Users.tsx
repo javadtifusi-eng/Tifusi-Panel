@@ -22,9 +22,6 @@ import {
   type UserTemplate,
 } from '../lib/api'
 
-// The theme accent (see --c-accent in index.css).
-const ACCENT = 'rgb(var(--c-accent))'
-
 const statusStyles: Record<UserStatus, string> = {
   active: 'bg-success-tint text-success border-success/30',
   disabled: 'bg-neutral-tint text-muted border-neutral/30',
@@ -443,7 +440,7 @@ export default function UsersPage({ search }: { search?: string } = {}) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowTemplates((v) => !v)}
-            className="rounded-lg border border-edge px-4 py-2 text-sm font-bold text-secondary hover:border-strong"
+            className="hover-btn"
           >
             {t.usersPage.templatesBtn}
           </button>
@@ -452,15 +449,13 @@ export default function UsersPage({ search }: { search?: string } = {}) {
               setShowBulkCreate((v) => !v)
               setBulkCreateMsg(null)
             }}
-            className="rounded-lg border px-4 py-2 text-sm font-bold"
-            style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
+            className="hover-btn"
           >
             {t.usersPage.bulkCreateBtn}
           </button>
           <button
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
-            className="rounded-lg px-4 py-2 text-sm font-bold text-app"
-            style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
+            className="hover-btn"
           >
             {t.usersPage.newBtn}
           </button>
@@ -522,7 +517,7 @@ export default function UsersPage({ search }: { search?: string } = {}) {
                       {tpl.expire_days != null ? `${tpl.expire_days}d` : t.usersPage.unlimited}
                     </span>
                   </div>
-                  <button onClick={() => handleDeleteTemplate(tpl)} className="text-xs text-danger hover:underline">
+                  <button onClick={() => handleDeleteTemplate(tpl)} className="hover-btn hover-btn-sm hover-btn-danger">
                     {t.common.delete}
                   </button>
                 </div>
@@ -585,8 +580,7 @@ export default function UsersPage({ search }: { search?: string } = {}) {
             <button
               type="submit"
               disabled={tplSubmitting}
-              className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-              style={{ backgroundColor: ACCENT }}
+              className="hover-btn"
             >
               {t.usersPage.saveTemplateBtn}
             </button>
@@ -696,8 +690,7 @@ export default function UsersPage({ search }: { search?: string } = {}) {
             <button
               type="submit"
               disabled={bulkCreateSubmitting || bulkCreateUsernames.length === 0}
-              className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-              style={{ backgroundColor: ACCENT }}
+              className="hover-btn"
             >
               {t.usersPage.bulkCreateSubmit(bulkCreateUsernames.length)}
             </button>
@@ -835,8 +828,7 @@ export default function UsersPage({ search }: { search?: string } = {}) {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-            style={{ backgroundColor: ACCENT }}
+            className="hover-btn"
           >
             {editingId ? t.common.save : t.usersPage.createBtn}
           </button>
@@ -864,42 +856,42 @@ export default function UsersPage({ search }: { search?: string } = {}) {
               <button
                 disabled={bulkBusy}
                 onClick={() => runBulkUpdate({ status: 'active' })}
-                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.bulkActivate}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => runBulkUpdate({ status: 'disabled' })}
-                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.bulkDisable}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => setBulkPanel((p) => (p === 'limit' ? null : 'limit'))}
-                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.bulkSetLimit}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => setBulkPanel((p) => (p === 'expire' ? null : 'expire'))}
-                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.bulkSetExpire}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={() => setBulkPanel((p) => (p === 'group' ? null : 'group'))}
-                className="rounded-md border border-edge px-2.5 py-1 text-xs text-secondary hover:border-strong disabled:opacity-50"
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.groupsLabel}
               </button>
               <button
                 disabled={bulkBusy}
                 onClick={handleBulkDelete}
-                className="rounded-md border border-danger/30 px-2.5 py-1 text-xs text-danger hover:bg-danger-tint disabled:opacity-50"
+                className="hover-btn hover-btn-sm hover-btn-danger"
               >
                 {t.usersPage.bulkDeleteBtn}
               </button>
@@ -922,12 +914,11 @@ export default function UsersPage({ search }: { search?: string } = {}) {
                 onClick={() =>
                   runBulkUpdate({ data_limit: bulkLimitGb ? Math.round(parseFloat(bulkLimitGb) * 1024 ** 3) : null })
                 }
-                className="text-xs font-bold"
-                style={{ color: ACCENT }}
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.apply}
               </button>
-              <button onClick={resetBulkPanel} className="text-xs text-faint">
+              <button onClick={resetBulkPanel} className="hover-btn hover-btn-sm">
                 {t.usersPage.cancelAction}
               </button>
             </div>
@@ -945,12 +936,11 @@ export default function UsersPage({ search }: { search?: string } = {}) {
                 onClick={() =>
                   runBulkUpdate({ expire: bulkExpire ? new Date(`${bulkExpire}T23:59:59`).toISOString() : null })
                 }
-                className="text-xs font-bold"
-                style={{ color: ACCENT }}
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.apply}
               </button>
-              <button onClick={resetBulkPanel} className="text-xs text-faint">
+              <button onClick={resetBulkPanel} className="hover-btn hover-btn-sm">
                 {t.usersPage.cancelAction}
               </button>
             </div>
@@ -972,19 +962,18 @@ export default function UsersPage({ search }: { search?: string } = {}) {
               <button
                 disabled={bulkBusy || bulkGroupId == null}
                 onClick={() => runBulkUpdate({ add_group_ids: bulkGroupId != null ? [bulkGroupId] : [] })}
-                className="text-xs font-bold disabled:opacity-50"
-                style={{ color: ACCENT }}
+                className="hover-btn hover-btn-sm"
               >
                 {t.usersPage.bulkAddGroup}
               </button>
               <button
                 disabled={bulkBusy || bulkGroupId == null}
                 onClick={() => runBulkUpdate({ remove_group_ids: bulkGroupId != null ? [bulkGroupId] : [] })}
-                className="text-xs text-danger disabled:opacity-50"
+                className="hover-btn hover-btn-sm hover-btn-danger"
               >
                 {t.usersPage.bulkRemoveGroup}
               </button>
-              <button onClick={resetBulkPanel} className="text-xs text-faint">
+              <button onClick={resetBulkPanel} className="hover-btn hover-btn-sm">
                 {t.usersPage.cancelAction}
               </button>
             </div>
@@ -1014,24 +1003,24 @@ export default function UsersPage({ search }: { search?: string } = {}) {
             </div>
             <div className={`mb-3 text-xs text-faint ${align}`}>{formatLastSeen(u.last_seen)}</div>
             <div className="flex flex-wrap gap-3 border-t border-hair pt-3">
-              <button onClick={() => setLinksUser(u)} className="text-xs hover:underline" style={{ color: ACCENT }}>
+              <button onClick={() => setLinksUser(u)} className="hover-btn hover-btn-sm">
                 {t.usersPage.linksBtn}
               </button>
-              <button onClick={() => setDevicesUser(u)} className="text-xs text-muted hover:underline">
+              <button onClick={() => setDevicesUser(u)} className="hover-btn hover-btn-sm">
                 {t.usersPage.devicesBtn}
                 {u.hwid_limit ? ` (${u.hwid_limit})` : ''}
               </button>
               <button
                 onClick={() => handleResetSecret(u)}
                 disabled={resettingSecretId === u.id}
-                className="text-xs text-muted hover:underline disabled:opacity-50"
+                className="hover-btn hover-btn-sm"
               >
                 {resettingSecretId === u.id ? t.common.saving : t.usersPage.resetSecretBtn}
               </button>
-              <button onClick={() => startEdit(u)} className="text-xs text-muted hover:underline">
+              <button onClick={() => startEdit(u)} className="hover-btn hover-btn-sm">
                 {t.common.edit}
               </button>
-              <button onClick={() => handleDelete(u)} className="text-xs text-danger hover:underline">
+              <button onClick={() => handleDelete(u)} className="hover-btn hover-btn-sm hover-btn-danger">
                 {t.common.delete}
               </button>
             </div>

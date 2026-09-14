@@ -195,8 +195,7 @@ export default function HostsPage() {
         <h1 className="sr-only">{t.hostsPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
+          className="hover-btn"
         >
           {t.hostsPage.newBtn}
         </button>
@@ -211,7 +210,7 @@ export default function HostsPage() {
                 <button
                   type="button"
                   onClick={() => setShowPlaceholders((v) => !v)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full border border-edge text-[10px] text-muted hover:border-accent/50 hover:text-accent"
+                  className="flex h-4 w-4 items-center justify-center rounded-full border border-edge text-[10px] text-muted hover:border-glass/50 hover:text-glass"
                 >
                   ?
                 </button>
@@ -232,7 +231,7 @@ export default function HostsPage() {
                       onClick={() => insertPlaceholder(key)}
                       className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs hover:bg-field"
                     >
-                      <span dir="ltr" className="font-mono" style={{ color: ACCENT }}>
+                      <span dir="ltr" className="font-mono text-glass">
                         {`{${key}}`}
                       </span>
                       <span className="text-muted">
@@ -485,8 +484,7 @@ export default function HostsPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-            style={{ backgroundColor: ACCENT }}
+            className="hover-btn mt-4"
           >
             {editingId ? t.common.save : t.hostsPage.createHostBtn}
           </button>
@@ -525,10 +523,10 @@ export default function HostsPage() {
               )}
             </div>
             <div className="flex gap-3 border-t border-hair pt-3">
-              <button onClick={() => startEdit(h)} className="text-xs text-muted hover:underline">
+              <button onClick={() => startEdit(h)} className="hover-btn hover-btn-sm">
                 {t.common.edit}
               </button>
-              <button onClick={() => handleDelete(h)} className="text-xs text-danger hover:underline">
+              <button onClick={() => handleDelete(h)} className="hover-btn hover-btn-sm hover-btn-danger">
                 {t.common.delete}
               </button>
             </div>

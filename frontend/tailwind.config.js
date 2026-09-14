@@ -36,6 +36,7 @@ export default {
         'accent-strong': 'rgb(var(--c-accent-strong) / <alpha-value>)',
         'accent-tint': 'rgb(var(--c-accent-tint) / <alpha-value>)',
         purple: 'rgb(var(--c-purple) / <alpha-value>)',
+        glass: 'rgb(var(--c-glass) / <alpha-value>)',
 
         success: 'rgb(var(--c-success) / <alpha-value>)',
         'success-tint': 'rgb(var(--c-success-tint) / <alpha-value>)',

@@ -589,7 +589,7 @@ export default function OverviewPage({
   function viewAll(tab: OverviewTab) {
     if (!onNavigate || (canOpen && !canOpen(tab))) return null
     return (
-      <button type="button" onClick={() => onNavigate(tab)} className="text-[11.5px] text-faint transition-colors hover:text-muted">
+      <button type="button" onClick={() => onNavigate(tab)} className="hover-btn hover-btn-sm">
         {o.viewAll}
       </button>
     )

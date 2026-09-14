@@ -18,9 +18,6 @@ import { copyToClipboard } from '../lib/clipboard'
 // toggles the nodes running it), not repeated here — this form only owns
 // what's actually the node's own identity (name/address/agent port).
 
-// The theme accent (see --c-accent in index.css).
-const ACCENT = 'rgb(var(--c-accent))'
-
 const statusDot: Record<NodeStatus, string> = {
   connected: 'bg-success',
   pending: 'bg-neutral',
@@ -162,8 +159,7 @@ export default function NodesPage() {
         <h1 className="sr-only">{t.nodesPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
+          className="hover-btn"
         >
           {t.nodesPage.newBtn}
         </button>
@@ -207,8 +203,7 @@ export default function NodesPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-            style={{ backgroundColor: ACCENT }}
+            className="hover-btn"
           >
             {editingId ? t.common.save : t.nodesPage.registerBtn}
           </button>
@@ -241,8 +236,7 @@ export default function NodesPage() {
           )}
           <button
             onClick={() => copySetup(setupNode)}
-            className="rounded-lg px-3 py-1.5 text-xs font-bold text-app"
-            style={{ backgroundColor: ACCENT }}
+            className="hover-btn hover-btn-sm"
           >
             {copied ? t.common.copiedCheck : t.nodesPage.copyCommand}
           </button>
@@ -305,7 +299,7 @@ export default function NodesPage() {
                     e.stopPropagation()
                     setSetupNodeId((id) => (id === node.id ? null : node.id))
                   }}
-                  className="text-xs text-muted hover:underline"
+                  className="hover-btn hover-btn-sm"
                 >
                   {t.nodesPage.installCmd}
                 </button>
@@ -314,11 +308,11 @@ export default function NodesPage() {
                     e.stopPropagation()
                     startEdit(node)
                   }}
-                  className="text-xs text-muted hover:underline"
+                  className="hover-btn hover-btn-sm"
                 >
                   {t.common.edit}
                 </button>
-                <button onClick={(e) => handleDelete(node, e)} className="text-xs text-danger hover:underline">
+                <button onClick={(e) => handleDelete(node, e)} className="hover-btn hover-btn-sm hover-btn-danger">
                   {t.common.delete}
                 </button>
               </div>

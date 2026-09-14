@@ -241,11 +241,11 @@ function RoutingEditor({
             type="button"
             onClick={() => setConfigText(applyRecommendedRouting(configText))}
             title={t.coresPage.applyRecommendedHint}
-            className="text-xs font-bold text-muted hover:text-body"
+            className="hover-btn hover-btn-sm"
           >
             {t.coresPage.applyRecommendedBtn}
           </button>
-          <button type="button" onClick={addRule} className="text-xs font-bold" style={{ color: ACCENT }}>
+          <button type="button" onClick={addRule} className="hover-btn hover-btn-sm">
             {t.coresPage.addRuleBtn}
           </button>
         </div>
@@ -297,7 +297,7 @@ function RoutingEditor({
               <button type="button" onClick={() => moveRule(i, 1)} className="text-xs text-muted hover:text-body">
                 ↓
               </button>
-              <button type="button" onClick={() => removeRule(i)} className="text-xs text-danger hover:underline">
+              <button type="button" onClick={() => removeRule(i)} className="hover-btn hover-btn-sm hover-btn-danger">
                 {t.common.delete}
               </button>
             </div>
@@ -402,7 +402,7 @@ function OutboundsEditor({
     <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
       <div className="mb-1 flex items-center justify-between">
         <div className="text-xs font-bold text-secondary">{t.coresPage.outboundsTitle}</div>
-        <button type="button" onClick={addOutbound} className="text-xs font-bold" style={{ color: ACCENT }}>
+        <button type="button" onClick={addOutbound} className="hover-btn hover-btn-sm">
           {t.coresPage.addOutboundBtn}
         </button>
       </div>
@@ -485,7 +485,7 @@ function OutboundsEditor({
                 <button type="button" onClick={() => moveOutbound(i, 1)} className="text-xs text-muted hover:text-body">
                   ↓
                 </button>
-                <button type="button" onClick={() => removeOutbound(i)} className="text-xs text-danger hover:underline">
+                <button type="button" onClick={() => removeOutbound(i)} className="hover-btn hover-btn-sm hover-btn-danger">
                   {t.common.delete}
                 </button>
               </div>
@@ -580,8 +580,7 @@ function NodeAssignmentEditor({
                       type="button"
                       onClick={() => saveEgress(n)}
                       disabled={busyId === n.id}
-                      className="rounded-lg px-2.5 text-xs font-bold disabled:opacity-60"
-                      style={{ color: ACCENT }}
+                      className="hover-btn hover-btn-sm"
                     >
                       {t.common.save}
                     </button>
@@ -846,8 +845,7 @@ export default function CoresPage() {
         <h1 className="sr-only">{t.coresPage.title}</h1>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="rounded-lg px-4 py-2 text-sm font-bold text-app"
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, rgb(var(--c-accent-strong)))` }}
+          className="hover-btn"
         >
           {t.coresPage.newBtn}
         </button>
@@ -865,12 +863,7 @@ export default function CoresPage() {
                   type="button"
                   disabled={!!editingId}
                   onClick={() => setForm((f) => ({ ...emptyForm(), coreType: ct, name: f.name, note: f.note }))}
-                  className="rounded-lg border px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
-                  style={
-                    form.coreType === ct
-                      ? { borderColor: ACCENT, color: ACCENT, backgroundColor: 'rgb(var(--c-accent) / 0.1)' }
-                      : { borderColor: 'rgb(var(--c-border-default))', color: 'rgb(var(--c-text-secondary))' }
-                  }
+                  className={`hover-btn ${form.coreType === ct ? 'hover-btn-active' : ''}`}
                 >
                   {t.coresPage.coreTypeLabels[ct]}
                 </button>
@@ -925,8 +918,7 @@ export default function CoresPage() {
                   <button
                     type="button"
                     onClick={() => updateWizard('port', randomPort())}
-                    className="rounded-lg border px-2.5 py-2 text-xs font-bold"
-                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
+                    className="hover-btn hover-btn-sm"
                   >
                     🎲
                   </button>
@@ -1032,8 +1024,7 @@ export default function CoresPage() {
                     type="button"
                     onClick={generateKeys}
                     disabled={generatingKeys}
-                    className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
+                    className="hover-btn hover-btn-sm"
                   >
                     {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
                   </button>
@@ -1041,8 +1032,7 @@ export default function CoresPage() {
                     type="button"
                     onClick={runScan}
                     disabled={scanning}
-                    className="rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-60"
-                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
+                    className="hover-btn hover-btn-sm"
                   >
                     {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
                   </button>
@@ -1062,7 +1052,7 @@ export default function CoresPage() {
                         type="button"
                         onClick={() => copy(generatedKey[key], key)}
                         dir="ltr"
-                        className="truncate rounded-lg border border-subtle bg-well px-2 py-1.5 text-left font-mono text-[11px] text-accent hover:border-accent/40"
+                        className="truncate rounded-lg border border-subtle bg-well px-2 py-1.5 text-left font-mono text-[11px] text-glass hover:border-glass/40"
                         title={generatedKey[key]}
                       >
                         {copiedField === key ? t.coresPage.copied : `${key}: ${generatedKey[key]}`}
@@ -1113,8 +1103,7 @@ export default function CoresPage() {
                                 <button
                                   type="button"
                                   onClick={() => updateWizard('sni', r.host)}
-                                  className="text-[11px] hover:underline"
-                                  style={{ color: ACCENT }}
+                                  className="hover-btn hover-btn-sm"
                                 >
                                   {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
                                 </button>
@@ -1160,8 +1149,7 @@ export default function CoresPage() {
               type="button"
               onClick={addWizardToJson}
               disabled={!wizardCanAdd}
-              className="mt-3 rounded-lg px-4 py-2 text-xs font-bold text-app disabled:opacity-40"
-              style={{ backgroundColor: ACCENT }}
+              className="hover-btn hover-btn-sm mt-3"
             >
               {addedFlash ? t.coresPage.addedToJson : t.coresPage.addToJsonBtn}
             </button>
@@ -1263,11 +1251,7 @@ export default function CoresPage() {
                         key={mode}
                         type="button"
                         onClick={() => setForm((f) => ({ ...f, ikev2AuthMode: mode }))}
-                        className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
-                          form.ikev2AuthMode === mode
-                            ? 'border-accent/50 bg-accent-tint text-accent'
-                            : 'border-edge text-muted hover:border-accent/30'
-                        }`}
+                        className={`hover-btn hover-btn-sm hover-btn-block ${form.ikev2AuthMode === mode ? 'hover-btn-active' : ''}`}
                       >
                         <div className="font-bold">
                           {mode === 'eap' ? t.coresPage.ikev2AuthModeEap : t.coresPage.ikev2AuthModePsk}
@@ -1313,7 +1297,7 @@ export default function CoresPage() {
                           type="button"
                           onClick={usePanelCertForIkev2}
                           disabled={usingPanelCert}
-                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-accent/60 hover:text-primary disabled:opacity-50"
+                          className="hover-btn hover-btn-sm"
                         >
                           {usingPanelCert ? '…' : t.coresPage.ikev2UsePanelCertButton}
                         </button>
@@ -1321,7 +1305,7 @@ export default function CoresPage() {
                           type="button"
                           onClick={generateIkev2ServerCert}
                           disabled={generatingIkev2Cert}
-                          className="rounded-md border border-edge px-2.5 py-1 text-[11px] text-muted transition hover:border-accent/60 hover:text-primary disabled:opacity-50"
+                          className="hover-btn hover-btn-sm"
                         >
                           {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
                         </button>
@@ -1394,8 +1378,7 @@ export default function CoresPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-app disabled:opacity-60"
-              style={{ backgroundColor: ACCENT }}
+              className="hover-btn mt-4"
             >
               {editingId ? t.common.save : t.coresPage.createCoreBtn}
             </button>
@@ -1436,10 +1419,10 @@ export default function CoresPage() {
                     {t.coresPage.colHosts}: <span className="text-body">{c.host_count}</span>
                   </span>
                 )}
-                <button onClick={() => startEdit(c)} className="text-xs text-muted hover:underline">
+                <button onClick={() => startEdit(c)} className="hover-btn hover-btn-sm">
                   {t.common.edit}
                 </button>
-                <button onClick={() => handleDelete(c)} className="text-xs text-danger hover:underline">
+                <button onClick={() => handleDelete(c)} className="hover-btn hover-btn-sm hover-btn-danger">
                   {t.common.delete}
                 </button>
               </div>

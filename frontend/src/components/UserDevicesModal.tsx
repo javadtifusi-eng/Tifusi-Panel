@@ -97,7 +97,7 @@ export default function UserDevicesModal({
                     <button
                       onClick={() => handleDelete(d)}
                       disabled={busyId === d.id}
-                      className="flex-shrink-0 text-xs text-danger hover:underline disabled:opacity-50"
+                      className="hover-btn hover-btn-sm hover-btn-danger flex-shrink-0"
                     >
                       {t.common.delete}
                     </button>
@@ -109,7 +109,7 @@ export default function UserDevicesModal({
               <button
                 onClick={handleResetAll}
                 disabled={resetting}
-                className="mt-4 text-xs text-danger hover:underline disabled:opacity-50"
+                className="hover-btn hover-btn-sm hover-btn-danger mt-4"
               >
                 {t.userDevicesModal.resetAllBtn}
               </button>

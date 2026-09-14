@@ -68,7 +68,7 @@ const fieldClass =
 const labelClass = 'mb-1.5 block text-xs text-muted'
 const linkClass = 'text-xs font-medium text-accent hover:underline'
 const primaryClass =
-  'mt-1 flex w-full items-center justify-center gap-2 rounded-[10px] bg-accent px-4 py-3 text-sm font-semibold text-app transition hover:brightness-110 active:scale-[0.99] disabled:opacity-60'
+  'hover-btn mt-1 w-full'
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
@@ -278,7 +278,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
             </button>
 
             <div className="text-center">
-              <button type="button" onClick={() => switchScreen('login')} className={linkClass}>
+              <button type="button" onClick={() => switchScreen('login')} className="hover-btn hover-btn-sm">
                 {t.switchToLogin}
               </button>
             </div>
@@ -309,7 +309,7 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
             </button>
 
             <div className="text-center">
-              <button type="button" onClick={() => switchScreen('setup')} className={linkClass}>
+              <button type="button" onClick={() => switchScreen('setup')} className="hover-btn hover-btn-sm">
                 {t.switchToSetup}
               </button>
             </div>
