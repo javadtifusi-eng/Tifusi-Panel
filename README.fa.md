@@ -33,7 +33,9 @@
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="100%" alt="داشبورد تیفوسی پنل" />
+  <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="داشبورد و هاست‌های تیفوسی پنل" />
+  <br /><br />
+  <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="هسته‌ها و تانل‌های تیفوسی پنل" />
 </p>
 
 <div dir="rtl">

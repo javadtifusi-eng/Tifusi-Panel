@@ -29,7 +29,9 @@
 Tifusi Panel is a self-hosted control plane for proxy and VPN infrastructure. A single panel instance stores users, access policy and core configurations, renders per-node configuration, and pushes it to any number of remote nodes over an authenticated HTTPS API. Nodes run Xray-core for VLESS, VMess, Trojan and Shadowsocks, and strongSwan with xl2tpd for IKEv2/IPsec and L2TP/IPsec. Subscription endpoints serve share links, Clash and sing-box profiles, and a structured JSON profile consumed by the Tifusi VPN client. WireGuard is not supported.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="100%" alt="Tifusi Panel dashboard" />
+  <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="Tifusi Panel dashboard and hosts" />
+  <br /><br />
+  <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="Tifusi Panel cores and tunnels" />
 </p>
 
 ## Architecture

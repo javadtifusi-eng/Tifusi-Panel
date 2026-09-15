@@ -29,7 +29,9 @@
 Tifusi Panel — самостоятельно размещаемая плоскость управления для прокси- и VPN-инфраструктуры. Один экземпляр панели хранит пользователей, политику доступа и конфигурации ядер, формирует конфигурацию для каждого узла и передаёт её на произвольное число удалённых узлов через аутентифицированный HTTPS API. На узлах работают Xray-core для VLESS, VMess, Trojan и Shadowsocks, а также strongSwan с xl2tpd для IKEv2/IPsec и L2TP/IPsec. Эндпоинты подписки отдают ссылки, профили Clash и sing-box и структурированный JSON-профиль для клиента Tifusi VPN. WireGuard не поддерживается.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="100%" alt="Дашборд Tifusi Panel" />
+  <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="Дашборд и хосты Tifusi Panel" />
+  <br /><br />
+  <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="Ядра и туннели Tifusi Panel" />
 </p>
 
 ## Архитектура
