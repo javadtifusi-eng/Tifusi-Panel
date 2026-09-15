@@ -16,7 +16,12 @@ class Base(DeclarativeBase):
 # edits: each request still holds its connection while the node-resync
 # background task it scheduled waits for another one. A 2,000-user load test
 # timed out half the writes at the default size and none at this one.
-engine = create_async_engine(settings.database_url, echo=False, pool_size=30, max_overflow=30, pool_timeout=30)
+_engine_options: dict = {"echo": False, "pool_size": 30, "max_overflow": 30, "pool_timeout": 30}
+if settings.database_url.startswith("mysql"):
+    # MySQL closes idle connections after wait_timeout; ping before use and
+    # recycle hourly so a quiet night doesn't leave the pool full of dead ones.
+    _engine_options.update(pool_pre_ping=True, pool_recycle=3600)
+engine = create_async_engine(settings.database_url, **_engine_options)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 if engine.dialect.name == "sqlite":

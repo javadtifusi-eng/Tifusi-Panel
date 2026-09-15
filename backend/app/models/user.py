@@ -22,7 +22,8 @@ class ProxyUser(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    status: Mapped[UserStatus] = mapped_column(Enum(UserStatus), default=UserStatus.active)
+    # VARCHAR on every database (see Core.core_type): no native MySQL ENUM to ALTER per new status.
+    status: Mapped[UserStatus] = mapped_column(Enum(UserStatus, native_enum=False, length=16), default=UserStatus.active)
 
     # Doubles as the VLESS UUID, the Trojan/Hysteria2 password, and the
     # unguessable token in this user's subscription URL.

@@ -6,11 +6,23 @@
 #
 # Usage:
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)" -- --pro
+#
+# --pro installs the professional edition: the same panel with its data in a
+# bundled MySQL 8.4 container instead of the built-in SQLite file.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/javadtifusi-eng/Tifusi-Panel.git"
 INSTALL_DIR="${TIFUSI_INSTALL_DIR:-/opt/tifusi-panel}"
+EDITION="standard"
+for arg in "$@"; do
+  case "$arg" in
+    --pro) EDITION="pro" ;;
+    --) ;;
+    *) printf 'Unknown option: %s (use --pro for the professional edition)\n' "$arg" >&2; exit 1 ;;
+  esac
+done
 # Set for real in the "Ports" step below, once the chosen panel port is known.
 PANEL_URL=""
 
@@ -184,13 +196,36 @@ fi
 cd "$INSTALL_DIR"
 
 step "Configuration (.env)"
+random_hex() { openssl rand -hex "$1" 2>/dev/null || head -c"$1" /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 if [ ! -f .env ]; then
   cp .env.example .env
-  SECRET=$(openssl rand -hex 32 2>/dev/null || head -c32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  SECRET=$(random_hex 32)
   awk -v s="$SECRET" '{gsub(/^TIFUSI_SECRET_KEY=.*/, "TIFUSI_SECRET_KEY=" s)}1' .env > .env.tmp
   mv .env.tmp .env
   info "Generated a random TIFUSI_SECRET_KEY in .env."
+  if [ "$EDITION" = "pro" ]; then
+    # Hex-only passwords: they sit inside a database URL and Alembic's
+    # config parser, where characters like % or @ would need escaping.
+    MYSQL_PASSWORD=$(random_hex 24)
+    MYSQL_ROOT_PASSWORD=$(random_hex 24)
+    grep -v '^TIFUSI_DATABASE_URL=' .env > .env.tmp
+    {
+      echo ""
+      echo "# Professional edition (install.sh --pro): data lives in the bundled MySQL."
+      echo "TIFUSI_EDITION=pro"
+      echo "COMPOSE_FILE=docker-compose.yml:docker-compose.pro.yml"
+      echo "TIFUSI_MYSQL_PASSWORD=$MYSQL_PASSWORD"
+      echo "TIFUSI_MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD"
+      echo "TIFUSI_DATABASE_URL=mysql+aiomysql://tifusi:${MYSQL_PASSWORD}@mysql:3306/tifusi?charset=utf8mb4"
+    } >> .env.tmp
+    mv .env.tmp .env
+    info "Professional edition: generated MySQL passwords and pointed the panel at the bundled MySQL."
+  fi
+elif [ "$EDITION" = "pro" ] && ! grep -q '^TIFUSI_EDITION=pro' .env; then
+  warn "An existing standard (SQLite) install was found — --pro only applies to a fresh install, so it keeps its current database."
+  EDITION="standard"
 fi
+grep -q '^TIFUSI_EDITION=pro' .env && EDITION="pro"
 
 step "Ports"
 # A port already in use on this server would make the container fail to
@@ -299,7 +334,8 @@ info "Installed the 'tifusi panel' command — run it any time to update, change
 step "Health check"
 info "Waiting for the panel to come up..."
 ready=""
-for _ in $(seq 1 60); do
+# The pro edition waits for MySQL's first-time initialisation before the panel starts.
+for _ in $(seq 1 $([ "$EDITION" = "pro" ] && echo 150 || echo 60)); do
   if curl -fsSk "$PANEL_URL/api/setup/status" >/dev/null 2>&1; then
     ready=1
     break
@@ -311,6 +347,11 @@ done
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 HOST_IP="${HOST_IP:-<server-ip>}"
 info "The panel is up."
+if [ "$EDITION" = "pro" ]; then
+  info "  Edition:    professional (MySQL 8.4, data in ${INSTALL_DIR}/mysql-data)"
+else
+  info "  Edition:    standard (SQLite, data in ${INSTALL_DIR}/data)"
+fi
 if [ -n "$PANEL_PUBLIC_URL" ]; then
   info "  SSL:        enabled (Let's Encrypt, ${domain:-})"
   info "  Certs:      ${INSTALL_DIR}/certs/fullchain.pem + privkey.pem"

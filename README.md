@@ -197,6 +197,7 @@ Planned and deliberately excluded work is tracked in [`ROADMAP.md`](ROADMAP.md).
 | Panel | 1 vCPU, 1 GB RAM, 10 GB disk | 2 vCPU, 2 GB RAM, 20 GB disk |
 | Node | 1 vCPU, 512 MB RAM, 10 GB disk | 1 vCPU, 1 GB RAM, 20 GB disk |
 | Panel and node on one server | 1 vCPU, 2 GB RAM, 15 GB disk | 2 vCPU, 2 GB RAM, 25 GB disk |
+| Panel, professional edition (MySQL) | 2 vCPU, 2 GB RAM, 20 GB disk | 2 vCPU, 4 GB RAM, 40 GB disk |
 
 Measured on a running installation: the panel container uses about 100 MB of RAM, the dashboard about 6 MB and a node about 50 MB; the images take about 1 GB of disk. The larger recommended disk leaves room for image updates, logs and backups. Traffic volume, not user count, is what drives node CPU and bandwidth needs.
 
@@ -217,14 +218,23 @@ Measured on a running installation: the panel container uses about 100 MB of RAM
 > **Minimum server for the panel:** 1 CPU core, 1 GB RAM, 10 GB disk.
 > **For comfortable installation and management:** 2 CPU cores, 2 GB RAM, 20 GB disk, Ubuntu 22.04/24.04 or Debian 11/12 on x86_64.
 > Running the panel and a node on the same server: at least 2 GB RAM and 25 GB disk. Details in [Requirements](#requirements).
+> **Professional edition (MySQL):** 2 CPU cores, at least 2 GB RAM (4 GB recommended), 20 GB disk.
 
-### Panel
+### Panel — standard edition (SQLite)
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
 
 The installer provisions Docker, clones the repository, generates `TIFUSI_SECRET_KEY`, optionally issues a Let's Encrypt certificate for a domain that resolves to the server, and starts the stack with Docker Compose. It also installs the `tifusi panel` management command.
+
+### Panel — professional edition (MySQL)
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)" -- --pro
+```
+
+The same panel with every record (users, nodes, hosts, groups, cores and settings) stored in a bundled MySQL 8.4 container instead of the built-in SQLite file. The installer generates the MySQL passwords, keeps MySQL reachable only on the internal Docker network and stores its data in `mysql-data/`. Choose it for large user bases or when you want a standard database server to manage and back up; `tifusi panel backup` and `tifusi panel restore` include a MySQL dump. Nodes are installed the same way for both editions.
 
 ### Node
 

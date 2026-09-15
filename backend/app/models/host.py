@@ -71,7 +71,7 @@ class Host(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     remark: Mapped[str] = mapped_column(String(100))
     address: Mapped[str] = mapped_column(String(255))
-    protocol: Mapped[HostProtocol] = mapped_column(Enum(HostProtocol))
+    protocol: Mapped[HostProtocol] = mapped_column(Enum(HostProtocol, native_enum=False, length=32))
 
     # --- vless/vmess/trojan/shadowsocks: Inbound + overrides ---
     inbound_id: Mapped[int | None] = mapped_column(ForeignKey("inbounds.id"), nullable=True)
@@ -84,7 +84,7 @@ class Host(Base):
     path_override: Mapped[str | None] = mapped_column(String(255), nullable=True)
     host_header_override: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # None = inherit the Inbound's own security (its streamSettings.security).
-    security_override: Mapped[HostSecurity | None] = mapped_column(Enum(HostSecurity), nullable=True)
+    security_override: Mapped[HostSecurity | None] = mapped_column(Enum(HostSecurity, native_enum=False, length=16), nullable=True)
     allowinsecure: Mapped[bool] = mapped_column(default=False)
 
     # TLS Client Hello fragmentation — splits the handshake packet so DPI

@@ -36,7 +36,10 @@ class Core(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    core_type: Mapped[CoreType] = mapped_column(Enum(CoreType))
+    # native_enum=False keeps this a VARCHAR on every database (as the
+    # migrations created it), so MySQL doesn't get a native ENUM that would
+    # need an ALTER every time a value is added.
+    core_type: Mapped[CoreType] = mapped_column(Enum(CoreType, native_enum=False, length=16))
     config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

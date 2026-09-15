@@ -58,6 +58,9 @@ next_free_port() {
   echo "$p"
 }
 
+# The professional edition (install.sh --pro) keeps its data in the bundled MySQL.
+is_pro() { grep -q '^TIFUSI_EDITION=pro' .env 2>/dev/null; }
+
 action_update() {
   info "Checking for local changes..."
   if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
@@ -162,8 +165,19 @@ action_logs() {
 
 action_backup() {
   local out="tifusi-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
+  if is_pro; then
+    info "Dumping the MySQL database..."
+    mkdir -p data
+    # A consistent snapshot without locking the panel out while it runs.
+    if ! docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers tifusi' > data/mysql-dump.sql; then
+      err "mysqldump failed — is the tifusi-mysql container running? Check with: tifusi panel status"
+      rm -f data/mysql-dump.sql
+      return
+    fi
+  fi
   info "Backing up data/, certs/, and .env to $out..."
   tar czf "$out" data certs .env 2>/dev/null || tar czf "$out" data .env
+  if is_pro; then rm -f data/mysql-dump.sql; fi
   info "Saved: $(pwd)/$out"
 }
 
@@ -173,13 +187,41 @@ action_restore() {
   warn "This overwrites the current data/, certs/, and .env. Existing users/hosts/nodes will be replaced."
   read -r -p "Type YES to continue: " confirm
   [ "$confirm" = "YES" ] || { info "Cancelled."; return; }
+  # mysql-data/ is not part of the backup, so the MySQL server on this machine
+  # keeps its own passwords — carry them over the ones in the restored .env.
+  local keep_mysql=""
+  if is_pro; then keep_mysql="$(grep -E '^(TIFUSI_MYSQL_PASSWORD|TIFUSI_MYSQL_ROOT_PASSWORD|TIFUSI_DATABASE_URL)=' .env)"; fi
   docker compose down
   tar xzf "$backup_path"
+  if [ -n "$keep_mysql" ] && is_pro; then
+    grep -vE '^(TIFUSI_MYSQL_PASSWORD|TIFUSI_MYSQL_ROOT_PASSWORD|TIFUSI_DATABASE_URL)=' .env > .env.restore-tmp
+    printf '%s\n' "$keep_mysql" >> .env.restore-tmp
+    mv .env.restore-tmp .env
+    chmod 600 .env
+  fi
+  if is_pro && [ -f data/mysql-dump.sql ]; then
+    info "Starting MySQL and importing the database dump..."
+    docker compose up -d mysql
+    for _ in $(seq 1 90); do
+      docker compose exec -T mysql sh -c 'mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent' >/dev/null 2>&1 && break
+      sleep 2
+    done
+    if ! docker compose exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" tifusi' < data/mysql-dump.sql; then
+      err "Importing the MySQL dump failed — the dump is kept at $(pwd)/data/mysql-dump.sql."
+      return
+    fi
+    rm -f data/mysql-dump.sql
+  fi
   docker compose up -d
   info "Restored from $backup_path and restarted."
 }
 
 action_status() {
+  if is_pro; then
+    printf '%sEdition:%s professional (MySQL)\n' "$C_GREEN" "$C_RESET"
+  else
+    printf '%sEdition:%s standard (SQLite)\n' "$C_GREEN" "$C_RESET"
+  fi
   docker compose ps
   echo
   local panel_port dashboard_port

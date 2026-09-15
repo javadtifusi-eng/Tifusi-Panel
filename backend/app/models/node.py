@@ -44,7 +44,7 @@ class Node(Base):
     # plain-NAT behavior.
     l2tp_egress_vless: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
-    status: Mapped[NodeStatus] = mapped_column(Enum(NodeStatus), default=NodeStatus.pending)
+    status: Mapped[NodeStatus] = mapped_column(Enum(NodeStatus, native_enum=False, length=16), default=NodeStatus.pending)
     xray_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

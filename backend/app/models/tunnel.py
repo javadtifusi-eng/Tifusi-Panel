@@ -52,7 +52,7 @@ class Tunnel(Base):
     foreign_node_id: Mapped[int | None] = mapped_column(ForeignKey("nodes.id"), nullable=True)
     foreign_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    transport: Mapped[TunnelTransport] = mapped_column(Enum(TunnelTransport))
+    transport: Mapped[TunnelTransport] = mapped_column(Enum(TunnelTransport, native_enum=False, length=16))
     token: Mapped[str] = mapped_column(String(64), default=lambda: secrets.token_hex(16))
 
     # Only meaningful for tls/wss/wssmux — plain tcp/ws/tcpmux/wsmux/udp
@@ -74,7 +74,7 @@ class Tunnel(Base):
     # [{"name": str, "listen_port": int, "net": "tcp"|"udp", "target_port": int}, ...]
     forwards: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
 
-    status: Mapped[TunnelStatus] = mapped_column(Enum(TunnelStatus), default=TunnelStatus.pending)
+    status: Mapped[TunnelStatus] = mapped_column(Enum(TunnelStatus, native_enum=False, length=16), default=TunnelStatus.pending)
     last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

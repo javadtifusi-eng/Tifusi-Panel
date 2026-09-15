@@ -92,7 +92,10 @@ async def test_discord(db: AsyncSession = Depends(get_db)) -> None:
 async def download_backup() -> FileResponse:
     path = _sqlite_path()
     if path is None or not path.exists():
-        raise HTTPException(status_code=400, detail="Backup is only supported for the built-in SQLite database")
+        raise HTTPException(
+            status_code=400,
+            detail="The professional edition (MySQL) is backed up on the server with: tifusi panel backup",
+        )
     return FileResponse(path, filename="tifusi-panel-backup.db", media_type="application/octet-stream")
 
 
@@ -100,7 +103,10 @@ async def download_backup() -> FileResponse:
 async def restore_backup(file: UploadFile = File(...)) -> None:
     path = _sqlite_path()
     if path is None:
-        raise HTTPException(status_code=400, detail="Restore is only supported for the built-in SQLite database")
+        raise HTTPException(
+            status_code=400,
+            detail="The professional edition (MySQL) is restored on the server with: tifusi panel restore",
+        )
 
     header = await file.read(len(_SQLITE_MAGIC))
     if header != _SQLITE_MAGIC:

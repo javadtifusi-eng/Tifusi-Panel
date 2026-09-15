@@ -18,7 +18,9 @@ config = context.config
 # aiosqlite) — a short-lived sync connection at migration time doesn't need
 # async, and it sidesteps bridging asyncio.run() into a possibly-already-
 # running event loop when this is invoked programmatically from app startup.
-sync_url = app_settings.database_url.replace("sqlite+aiosqlite://", "sqlite://")
+sync_url = app_settings.database_url.replace("sqlite+aiosqlite://", "sqlite://").replace(
+    "mysql+aiomysql://", "mysql+pymysql://"
+)
 config.set_main_option("sqlalchemy.url", sync_url)
 
 # Interpret the config file for Python logging.
