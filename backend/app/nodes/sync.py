@@ -183,14 +183,33 @@ async def resync_connected_nodes(db: AsyncSession) -> None:
             continue
 
 
+# One resync at a time; changes that land while it runs are folded into a
+# single follow-up pass. Without this, a bot or admin editing 400 users queued
+# 400 full pushes, each restarting Xray on every node.
+_resync_running = False
+_resync_pending = False
+
+
 async def resync_nodes_in_background() -> None:
     """For a route's BackgroundTasks after it changes users. IKEv2/L2TP
     logins are checked on the node itself against the user list pushed at
     sync time, so a new user (or a changed secret) is rejected with "no EAP
     key found" until a sync happens. Opens its own session because the
     request's session is already closed when background tasks run."""
-    async with async_session() as db:
-        await resync_connected_nodes(db)
+    global _resync_running, _resync_pending
+    if _resync_running:
+        _resync_pending = True
+        return
+    _resync_running = True
+    try:
+        while True:
+            _resync_pending = False
+            async with async_session() as db:
+                await resync_connected_nodes(db)
+            if not _resync_pending:
+                break
+    finally:
+        _resync_running = False
 
 
 async def check_node_health(node: Node, db: AsyncSession) -> None:

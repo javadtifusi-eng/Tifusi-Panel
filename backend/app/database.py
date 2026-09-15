@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -11,8 +12,27 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_async_engine(settings.database_url, echo=False)
+# The default pool (5 + 10 overflow) deadlocked under ~20 concurrent user
+# edits: each request still holds its connection while the node-resync
+# background task it scheduled waits for another one. A 2,000-user load test
+# timed out half the writes at the default size and none at this one.
+engine = create_async_engine(settings.database_url, echo=False, pool_size=30, max_overflow=30, pool_timeout=30)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+if engine.dialect.name == "sqlite":
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _sqlite_pragmas(dbapi_connection, _record) -> None:
+        # SQLite's default rollback journal makes every write block every
+        # reader; under a load test (admin edits while thousands of clients
+        # fetch subscriptions) requests queued behind that lock for minutes.
+        # WAL lets readers and the single writer proceed concurrently, and
+        # busy_timeout makes a second writer wait instead of failing fast.
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=15000")
+        cursor.close()
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
