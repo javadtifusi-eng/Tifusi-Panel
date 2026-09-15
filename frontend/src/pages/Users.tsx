@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import UserDevicesModal from '../components/UserDevicesModal'
 import UserLinksModal from '../components/UserLinksModal'
 import { IconCopy, IconPlus } from '../components/icons'
+import QuotaMeter, { formatGb } from '../components/QuotaMeter'
 import { CheckChips, CountUp, Empty, Field, Sheet, SlidingTabs, toggleInSet, useReducedMotion, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
@@ -14,11 +15,13 @@ import {
   deleteUser,
   deleteUserTemplate,
   getUserLinks,
+  getAdminProfile,
   listGroups,
   listUserTemplates,
   listUsers,
   resetUserSecret,
   updateUser,
+  type AdminProfile,
   type Group,
   type ProxyUser,
   type UserStatus,
@@ -74,6 +77,15 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
   const [allUsers, setAllUsers] = useState<ProxyUser[]>([])
   const [counts, setCounts] = useState<Record<Filter, number> | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
+  // A reseller works inside its allowance: no groups or templates, a protocol
+  // pick per user instead, and its remaining quota on top of the page.
+  const [me, setMe] = useState<AdminProfile | null>(null)
+  const quota = me?.reseller ?? null
+  const isReseller = !!me?.is_reseller
+  const allowedProtocols = quota?.protocols.map((p) => p.protocol) ?? []
+  const [protocols, setProtocols] = useState<Set<string>>(new Set())
+  const rs = t.ui.resellers
+  const protocolLabels = t.coresPage.protocolLabels as Record<string, string>
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -160,6 +172,8 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
 
   async function refresh() {
     try {
+      const profile = await getAdminProfile().catch(() => null)
+      const reseller = !!profile?.is_reseller
       const [usersRes, groupsRes, templatesRes, allRes, ...statusRes] = await Promise.all([
         listUsers({
           q: searchQuery || undefined,
@@ -167,11 +181,13 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
           group_id: groupFilter === '' ? undefined : groupFilter,
           limit: 200,
         }),
-        listGroups(),
-        listUserTemplates(),
+        // An admin without the groups scope gets none rather than a failed page.
+        reseller ? { groups: [] as Group[] } : listGroups().catch(() => ({ groups: [] as Group[] })),
+        reseller ? { templates: [] as UserTemplate[] } : listUserTemplates().catch(() => ({ templates: [] as UserTemplate[] })),
         listUsers({ limit: 200 }),
         ...STATUS_ORDER.map((status) => listUsers({ status, limit: 1 })),
       ])
+      setMe(profile)
       setUsers(usersRes.users)
       setGroups(groupsRes.groups)
       setTemplates(templatesRes.templates)
@@ -274,6 +290,7 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     setExpire('')
     setNote('')
     setGroupIds(new Set())
+    setProtocols(new Set(allowedProtocols))
     setOnHold(false)
     setOnHoldDays('30')
     setHwidLimit('')
@@ -291,6 +308,7 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     setExpire(user.expire ? user.expire.slice(0, 10) : '')
     setNote(user.note ?? '')
     setGroupIds(new Set(user.group_ids))
+    setProtocols(new Set(user.protocols ?? allowedProtocols))
     setOnHold(false)
     setHwidLimit(user.hwid_limit ? String(user.hwid_limit) : '')
     setSpeedLimitMbps(user.speed_limit_mbps ? String(user.speed_limit_mbps) : '')
@@ -306,12 +324,18 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     const data_limit = dataLimitGb ? Math.round(parseFloat(dataLimitGb) * GB) : null
     const data_limit_reset_days = data_limit && dataLimitResetDays ? parseInt(dataLimitResetDays, 10) : null
     const expireIso = expire ? new Date(`${expire}T23:59:59`).toISOString() : null
-    const group_ids = Array.from(groupIds)
+    const group_ids = isReseller ? undefined : Array.from(groupIds)
+    const protocolsPayload = isReseller ? Array.from(protocols) : undefined
+    if (isReseller && protocols.size === 0) {
+      setFormError(rs.pickProtocol)
+      setSubmitting(false)
+      return
+    }
     const hwid_limit = hwidLimit ? parseInt(hwidLimit, 10) : null
     const speed_limit_mbps = speedLimitMbps ? parseInt(speedLimitMbps, 10) : null
     try {
       if (editingId) {
-        await updateUser(editingId, { data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, note: note || null, group_ids })
+        await updateUser(editingId, { data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, note: note || null, group_ids, protocols: protocolsPayload })
       } else if (onHold) {
         await createUser({
           username,
@@ -323,9 +347,10 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
           speed_limit_mbps,
           note: note || null,
           group_ids,
+          protocols: protocolsPayload,
         })
       } else {
-        await createUser({ username, data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, note: note || null, group_ids })
+        await createUser({ username, data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, note: note || null, group_ids, protocols: protocolsPayload })
       }
       const wasEdit = !!editingId
       resetForm()
@@ -456,6 +481,43 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     <div className="pg-users">
       <h1 className="sr-only">{t.usersPage.title}</h1>
 
+      {quota && (
+        <div className="rs-quota">
+          <QuotaMeter
+            label={rs.myQuotaUsers}
+            used={quota.users_count}
+            cap={quota.max_users}
+            noLimit={rs.noLimit}
+            full={rs.full}
+            percent={rs.percentUsed}
+            sub={
+              quota.max_users == null
+                ? rs.noLimit
+                : quota.users_count >= quota.max_users
+                  ? rs.usersFull
+                  : rs.usersLeft(quota.max_users - quota.users_count)
+            }
+          />
+          <QuotaMeter
+            label={rs.myQuotaVolume}
+            used={quota.data_allocated}
+            cap={quota.data_quota}
+            format={formatGb}
+            unit=" GB"
+            noLimit={rs.noLimit}
+            full={rs.full}
+            percent={rs.percentUsed}
+            sub={
+              quota.data_quota == null
+                ? rs.unlimitedQuota(`${formatGb(quota.used_traffic)} GB`)
+                : quota.data_allocated >= quota.data_quota
+                  ? rs.volumeFull
+                  : rs.volumeLeft(formatGb(quota.data_quota - quota.data_allocated), `${formatGb(quota.used_traffic)} GB`)
+            }
+          />
+        </div>
+      )}
+
       <div className="bento">
         <div className="tile hero">
           <div className="row">
@@ -519,9 +581,11 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
           ]}
         />
         <div className="toolbar">
-          <button type="button" className="btn" onClick={() => setShowTemplates(true)}>
-            {t.usersPage.templatesBtn}
-          </button>
+          {!isReseller && (
+            <button type="button" className="btn" onClick={() => setShowTemplates(true)}>
+              {t.usersPage.templatesBtn}
+            </button>
+          )}
           <button
             type="button"
             className="btn"
@@ -554,6 +618,7 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
           placeholder={t.usersPage.searchPlaceholder}
           aria-label={t.usersPage.searchPlaceholder}
         />
+        {!isReseller && (
         <select
           className="input"
           value={groupFilter}
@@ -567,6 +632,7 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
             </option>
           ))}
         </select>
+        )}
       </div>
 
       {error && (
@@ -590,9 +656,11 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
           <button disabled={bulkBusy} onClick={() => setBulkPanel((p) => (p === 'expire' ? null : 'expire'))} className={`btn ${bulkPanel === 'expire' ? 'on' : ''}`}>
             {t.usersPage.bulkSetExpire}
           </button>
-          <button disabled={bulkBusy} onClick={() => setBulkPanel((p) => (p === 'group' ? null : 'group'))} className={`btn ${bulkPanel === 'group' ? 'on' : ''}`}>
-            {t.usersPage.groupsLabel}
-          </button>
+          {!isReseller && (
+            <button disabled={bulkBusy} onClick={() => setBulkPanel((p) => (p === 'group' ? null : 'group'))} className={`btn ${bulkPanel === 'group' ? 'on' : ''}`}>
+              {t.usersPage.groupsLabel}
+            </button>
+          )}
           <button disabled={bulkBusy} onClick={handleBulkDelete} className="btn danger">
             {t.usersPage.bulkDeleteBtn}
           </button>
@@ -817,8 +885,19 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
                 autoFocus={!editingId}
               />
             </Field>
-            <Field label={t.usersPage.dataLimit}>
-              <input className="input" value={dataLimitGb} onChange={(e) => setDataLimitGb(e.target.value)} type="number" min="0" step="0.5" />
+            <Field
+              label={t.usersPage.dataLimit}
+              hint={quota?.data_quota != null ? rs.volumeLeftHint(formatGb(Math.max(0, quota.data_quota - quota.data_allocated))) : undefined}
+            >
+              <input
+                className="input"
+                value={dataLimitGb}
+                onChange={(e) => setDataLimitGb(e.target.value)}
+                type="number"
+                min={quota?.data_quota != null ? '0.5' : '0'}
+                step="0.5"
+                required={quota?.data_quota != null}
+              />
             </Field>
             {dataLimitGb && (
               <Field label={t.usersPage.dataLimitResetDaysLabel}>
@@ -865,9 +944,20 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
                 </label>
               </div>
             )}
-            <Field label={t.usersPage.groupsLabel} wide>
-              <CheckChips options={groupOptions} selected={groupIds} onToggle={(id) => setGroupIds((s) => toggleInSet(s, id))} empty={t.usersPage.noGroups} />
-            </Field>
+            {isReseller ? (
+              <Field label={rs.protocolLabel} wide>
+                <CheckChips
+                  options={(quota?.protocols ?? []).map((p) => ({ id: p.protocol, label: `${protocolLabels[p.protocol] ?? p.protocol} · ${p.hosts.join(', ')}` }))}
+                  selected={protocols}
+                  onToggle={(id) => setProtocols((s) => toggleInSet(s, id))}
+                  empty={rs.noProtocols}
+                />
+              </Field>
+            ) : (
+              <Field label={t.usersPage.groupsLabel} wide>
+                <CheckChips options={groupOptions} selected={groupIds} onToggle={(id) => setGroupIds((s) => toggleInSet(s, id))} empty={t.usersPage.noGroups} />
+              </Field>
+            )}
             {formError && (
               <div className="wide tf-alert" role="alert">
                 {formError}
@@ -917,14 +1007,16 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
             <Field label={t.usersPage.expire} wide>
               <input className="input" value={bulkCreateExpire} onChange={(e) => setBulkCreateExpire(e.target.value)} type="date" />
             </Field>
-            <Field label={t.usersPage.groupsLabel} wide>
-              <CheckChips
-                options={groupOptions}
-                selected={bulkCreateGroupIds}
-                onToggle={(id) => setBulkCreateGroupIds((s) => toggleInSet(s, id))}
-                empty={t.usersPage.noGroups}
-              />
-            </Field>
+            {!isReseller && (
+              <Field label={t.usersPage.groupsLabel} wide>
+                <CheckChips
+                  options={groupOptions}
+                  selected={bulkCreateGroupIds}
+                  onToggle={(id) => setBulkCreateGroupIds((s) => toggleInSet(s, id))}
+                  empty={t.usersPage.noGroups}
+                />
+              </Field>
+            )}
             {bulkCreateUsernames.length > 0 && (
               <div className="wide tf-linkrow">
                 <span className="mono">

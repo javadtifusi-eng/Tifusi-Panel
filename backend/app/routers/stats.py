@@ -5,13 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import get_staff_admin
 from app.models.node import Node
 from app.models.node_traffic_snapshot import NodeTrafficSnapshot
 from app.models.traffic_snapshot import TrafficSnapshot
 from app.schemas.stats import TrafficHistory, TrafficHistoryPoint
 
-router = APIRouter(prefix="/api/stats", tags=["stats"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(prefix="/api/stats", tags=["stats"], dependencies=[Depends(get_staff_admin)])
 
 
 @router.get("/traffic-history", response_model=TrafficHistory)

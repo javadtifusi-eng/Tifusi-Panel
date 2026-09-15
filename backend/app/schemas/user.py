@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.user import UserStatus
+from app.schemas.reseller import validate_protocols
 
 USERNAME_PATTERN = r"^[a-zA-Z0-9_-]+$"
 
@@ -19,6 +20,10 @@ class ProxyUserCreate(BaseModel):
     speed_limit_mbps: int | None = Field(default=None, ge=1)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] = Field(default_factory=list)
+    # None = every protocol; a reseller's user gets the reseller's own when left out.
+    protocols: list[str] | None = None
+
+    _validate_protocols = field_validator("protocols")(validate_protocols)
 
     @field_validator("status")
     @classmethod
@@ -38,6 +43,9 @@ class ProxyUserUpdate(BaseModel):
     speed_limit_mbps: int | None = Field(default=None, ge=1)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] | None = None
+    protocols: list[str] | None = None
+
+    _validate_protocols = field_validator("protocols")(validate_protocols)
 
 
 class ProxyUserResponse(BaseModel):
@@ -57,6 +65,7 @@ class ProxyUserResponse(BaseModel):
     note: str | None
     created_at: datetime
     group_ids: list[int]
+    protocols: list[str] | None
     admin_id: int | None
     speed_limit_mbps: int | None
     last_seen: datetime | None
@@ -74,6 +83,9 @@ class BulkCreateRequest(BaseModel):
     hwid_limit: int | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] = Field(default_factory=list)
+    protocols: list[str] | None = None
+
+    _validate_protocols = field_validator("protocols")(validate_protocols)
 
     @field_validator("usernames")
     @classmethod

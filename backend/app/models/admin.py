@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -28,6 +28,15 @@ class Admin(Base):
     # app/permissions.py). Never consulted for the owner — see
     # app/dependencies.require_permission.
     permissions: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+    # Reseller accounts (see app/resellers.py): limited to their own users,
+    # to the protocols below and, when set, to a user count and a total volume
+    # in bytes. None on a limit means no limit of that kind.
+    is_reseller: Mapped[bool] = mapped_column(Boolean, default=False)
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    max_users: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data_quota: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    protocols: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

@@ -3,6 +3,7 @@ import LiveClock from '../components/LiveClock'
 import { TifusiMark } from '../components/Logo'
 import {
   IconBell,
+  IconBriefcase,
   IconChip,
   IconDownload,
   IconGlobe,
@@ -27,13 +28,14 @@ import GroupsPage from './Groups'
 import HostsPage from './Hosts'
 import NodesPage from './Nodes'
 import OverviewPage from './Overview'
+import ResellersPage from './Resellers'
 import SettingsPage from './Settings'
 import TunnelsPage from './Tunnels'
 import UsersPage from './Users'
 
-export type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'tunnels' | 'settings'
+export type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'resellers' | 'tunnels' | 'settings'
 
-const MAIN_TABS: ActiveTab[] = ['overview', 'users', 'hosts', 'groups', 'nodes', 'cores', 'tunnels']
+const MAIN_TABS: ActiveTab[] = ['overview', 'users', 'hosts', 'groups', 'nodes', 'cores', 'resellers', 'tunnels']
 
 const NAV_ICONS: Record<ActiveTab, (p: IconProps) => JSX.Element> = {
   overview: IconHome,
@@ -42,6 +44,7 @@ const NAV_ICONS: Record<ActiveTab, (p: IconProps) => JSX.Element> = {
   groups: IconGrid,
   nodes: IconServer,
   cores: IconChip,
+  resellers: IconBriefcase,
   tunnels: IconTunnel,
   settings: IconSettings,
 }
@@ -70,7 +73,13 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   useEffect(() => {
-    getAdminProfile().then(setProfile).catch(() => undefined)
+    getAdminProfile()
+      .then((p) => {
+        setProfile(p)
+        // A reseller has no overview; it lands on its own users.
+        if (p.is_reseller) setActive((a) => (a === 'overview' ? 'users' : a))
+      })
+      .catch(() => undefined)
     getVersion().then(setVersion).catch(() => undefined)
   }, [])
 
@@ -88,8 +97,12 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   // 'overview' and 'settings' always show — overview degrades gracefully
   // per-section when a scope is missing, and settings is where an admin
   // changes their own password regardless of what else they can reach.
+  // Two exceptions: only the owner manages resellers, and a reseller never
+  // gets the overview's panel-wide numbers.
   function canSee(id: ActiveTab): boolean {
-    if (id === 'overview' || id === 'settings') return true
+    if (id === 'resellers') return !!profile?.is_owner
+    if (id === 'overview') return !profile?.is_reseller
+    if (id === 'settings') return true
     if (!profile || profile.is_owner || profile.permissions === null) return true
     return (profile.permissions as string[]).includes(id)
   }
@@ -160,6 +173,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
       ['nodes', t.nodesPage.newBtn],
       ['cores', t.coresPage.newBtn],
       ['tunnels', t.tunnelsPage.newBtn],
+      ['resellers', t.ui.resellers.newBtn],
     ]
     const actions = creates
       .filter(([tab]) => canSee(tab))
@@ -253,7 +267,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
                 <bdi>{profile?.username ?? '…'}</bdi>
               </div>
               <div className="truncate text-[11px] text-faint">
-                {profile ? (profile.is_owner ? t.nav.ownerRole : t.nav.adminRole) : ' '}
+                {profile ? (profile.is_owner ? t.nav.ownerRole : profile.is_reseller ? t.nav.resellerRole : t.nav.adminRole) : ' '}
               </div>
             </div>
             <button
@@ -376,6 +390,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
             {active === 'nodes' && <NodesPage createSignal={signal('nodes')} />}
             {active === 'cores' && <CoresPage createSignal={signal('cores')} />}
             {active === 'tunnels' && <TunnelsPage createSignal={signal('tunnels')} />}
+            {active === 'resellers' && <ResellersPage createSignal={signal('resellers')} />}
             {active === 'settings' && <SettingsPage />}
           </div>
         </main>

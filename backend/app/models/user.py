@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from app.database import Base
 from app.models.group import group_users
@@ -86,6 +87,10 @@ class ProxyUser(Base):
     admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admins.id", ondelete="SET NULL"), nullable=True, index=True
     )
+
+    # None = every protocol the user's groups reach; a list narrows that to
+    # those protocols (always set for a reseller's users). See app/groups/access.py.
+    protocols: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     # Empty = no restriction beyond global (ungrouped) hosts. See app/groups/access.py.
     groups: Mapped[list["Group"]] = relationship(  # noqa: F821

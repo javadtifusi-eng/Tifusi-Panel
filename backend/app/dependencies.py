@@ -23,6 +23,8 @@ async def _admin_from_api_key(token: str, db: AsyncSession) -> Admin:
     admin = await db.get(Admin, api_key.admin_id)
     if admin is None:
         raise HTTPException(status_code=401, detail="Admin account no longer exists")
+    if admin.disabled:
+        raise HTTPException(status_code=401, detail="This account has been disabled")
 
     api_key.last_used_at = datetime.now(timezone.utc)
     db.add(api_key)
@@ -56,7 +58,17 @@ async def get_current_admin(
     # old still-live token isn't logged out by this change itself.
     if payload.get("tv", 0) != admin.token_version:
         raise HTTPException(status_code=401, detail="This session was invalidated by a password change")
+    if admin.disabled:
+        raise HTTPException(status_code=401, detail="This account has been disabled")
 
+    return admin
+
+
+async def get_staff_admin(admin: Admin = Depends(get_current_admin)) -> Admin:
+    """get_current_admin for what a reseller never reaches: panel-wide
+    stats and the shared user templates."""
+    if admin.is_reseller:
+        raise HTTPException(status_code=403, detail="Reseller accounts only manage their own users")
     return admin
 
 

@@ -11,6 +11,9 @@ Two independent mechanisms:
 Either way, an Inbound/host in no group at all is global — every user gets
 it, both in their links/subscription and as a client actually pushed to
 the node.
+
+On top of groups, a user with a protocols list only gets hosts and inbounds
+of those protocols — how a reseller picks protocols per user.
 """
 
 from fastapi import HTTPException
@@ -29,16 +32,22 @@ def _host_group_ids(host: Host) -> set[int]:
     return {g.id for g in host.groups}
 
 
+def _allows_protocol(user: ProxyUser, protocol) -> bool:
+    return user.protocols is None or getattr(protocol, "value", protocol) in user.protocols
+
+
 def hosts_for_user(user: ProxyUser, hosts: list[Host]) -> list[Host]:
     user_group_ids = {g.id for g in user.groups}
     return [
         host
         for host in hosts
-        if not (host_group_ids := _host_group_ids(host)) or (user_group_ids & host_group_ids)
+        if _allows_protocol(user, host.protocol)
+        and (not (host_group_ids := _host_group_ids(host)) or (user_group_ids & host_group_ids))
     ]
 
 
 def users_for_host(host: Host, users: list[ProxyUser]) -> list[ProxyUser]:
+    users = [u for u in users if _allows_protocol(u, host.protocol)]
     host_group_ids = _host_group_ids(host)
     if not host_group_ids:
         return users
@@ -46,6 +55,7 @@ def users_for_host(host: Host, users: list[ProxyUser]) -> list[ProxyUser]:
 
 
 def users_for_inbound(inbound: Inbound, users: list[ProxyUser]) -> list[ProxyUser]:
+    users = [u for u in users if _allows_protocol(u, inbound.protocol)]
     inbound_group_ids = {g.id for g in inbound.groups}
     if not inbound_group_ids:
         return users

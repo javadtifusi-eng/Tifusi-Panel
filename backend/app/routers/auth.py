@@ -34,6 +34,9 @@ async def login(
         record_failure(account_key)
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
+    if admin.disabled:
+        raise HTTPException(status_code=403, detail="This account has been disabled")
+
     # Only the per-account counter clears on success — the per-IP counter
     # stays, so guessing one account's password correctly doesn't buy an
     # attacker a fresh allowance to go spray-guess the next username.

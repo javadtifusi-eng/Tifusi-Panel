@@ -102,6 +102,8 @@ export interface ProxyUser {
   note: string | null
   created_at: string
   group_ids: number[]
+  // null = every protocol; always set for a reseller's users.
+  protocols: string[] | null
   admin_id: number | null
 }
 
@@ -139,6 +141,7 @@ export async function createUser(payload: {
   speed_limit_mbps?: number | null
   note?: string | null
   group_ids?: number[]
+  protocols?: string[]
 }): Promise<ProxyUser> {
   const res = await authorizedFetch('/users', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
@@ -219,6 +222,7 @@ export async function bulkCreateUsers(payload: {
   hwid_limit?: number | null
   note?: string | null
   group_ids?: number[]
+  protocols?: string[]
 }): Promise<BulkCreateResult> {
   const res = await authorizedFetch('/users/bulk-create', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
@@ -294,6 +298,7 @@ export async function updateUser(
       | 'speed_limit_mbps'
       | 'note'
       | 'group_ids'
+      | 'protocols'
     >
   >,
 ): Promise<ProxyUser> {
@@ -867,10 +872,70 @@ export async function testDiscord(): Promise<void> {
 export const PERMISSION_SCOPES = ['users', 'hosts', 'nodes', 'cores', 'groups', 'tunnels', 'settings'] as const
 export type PermissionScope = (typeof PERMISSION_SCOPES)[number]
 
+// A protocol that has hosts, with those hosts' remarks.
+export interface ProtocolOption {
+  protocol: string
+  hosts: string[]
+}
+
+export interface ResellerQuota {
+  max_users: number | null
+  users_count: number
+  data_quota: number | null
+  // Sum of the data limits of the reseller's current users, in bytes.
+  data_allocated: number
+  used_traffic: number
+  protocols: ProtocolOption[]
+}
+
 export interface AdminProfile {
   username: string
   is_owner: boolean
   permissions: PermissionScope[] | null
+  is_reseller?: boolean
+  reseller?: ResellerQuota | null
+}
+
+export interface Reseller {
+  id: number
+  username: string
+  disabled: boolean
+  max_users: number | null
+  data_quota: number | null
+  protocols: string[]
+  users_count: number
+  data_allocated: number
+  used_traffic: number
+  created_at: string
+}
+
+export async function listResellers(): Promise<{ resellers: Reseller[]; protocols: ProtocolOption[] }> {
+  const res = await authorizedFetch('/resellers')
+  return res.json()
+}
+
+export async function createReseller(payload: {
+  username: string
+  password: string
+  max_users: number | null
+  data_quota: number | null
+  protocols: string[]
+}): Promise<Reseller> {
+  const res = await authorizedFetch('/resellers', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+// Only the keys sent change; null on max_users or data_quota removes that limit.
+export async function updateReseller(
+  id: number,
+  payload: Partial<{ password: string; max_users: number | null; data_quota: number | null; protocols: string[]; disabled: boolean }>,
+): Promise<Reseller> {
+  const res = await authorizedFetch(`/resellers/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteReseller(id: number): Promise<void> {
+  await authorizedFetch(`/resellers/${id}`, { method: 'DELETE' })
 }
 
 export async function getAdminProfile(): Promise<AdminProfile> {

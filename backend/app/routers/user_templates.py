@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import require_permission
+from app.dependencies import get_staff_admin, require_permission
 from app.models.group import Group
 from app.models.user_template import UserTemplate
 from app.schemas.user_template import (
@@ -14,7 +14,7 @@ from app.schemas.user_template import (
 )
 
 router = APIRouter(
-    prefix="/api/user-templates", tags=["user-templates"], dependencies=[Depends(require_permission("users"))]
+    prefix="/api/user-templates", tags=["user-templates"], dependencies=[Depends(require_permission("users")), Depends(get_staff_admin)]
 )
 
 

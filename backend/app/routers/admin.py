@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.models.admin import Admin
+from app.resellers import protocol_catalog, reseller_usage
 from app.schemas.admin import (
     AdminCreate,
     AdminList,
@@ -13,6 +14,7 @@ from app.schemas.admin import (
     AdminProfileResponse,
     ChangePasswordRequest,
 )
+from app.schemas.reseller import ProtocolOption, ResellerQuota
 from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -24,8 +26,27 @@ def _require_owner(admin: Admin) -> None:
 
 
 @router.get("/me", response_model=AdminProfileResponse)
-async def get_me(admin: Admin = Depends(get_current_admin)) -> Admin:
-    return admin
+async def get_me(
+    admin: Admin = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
+) -> AdminProfileResponse:
+    reseller = None
+    if admin.is_reseller:
+        users_count, allocated, used = await reseller_usage(admin.id, db)
+        reseller = ResellerQuota(
+            max_users=admin.max_users,
+            users_count=users_count,
+            data_quota=admin.data_quota,
+            data_allocated=allocated,
+            used_traffic=used,
+            protocols=[ProtocolOption(**p) for p in await protocol_catalog(db, only=admin.protocols or [])],
+        )
+    return AdminProfileResponse(
+        username=admin.username,
+        is_owner=admin.is_owner,
+        permissions=admin.permissions,
+        is_reseller=admin.is_reseller,
+        reseller=reseller,
+    )
 
 
 @router.put("/password", status_code=204)
@@ -51,7 +72,8 @@ async def list_admins(
     admin: Admin = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> AdminList:
     _require_owner(admin)
-    result = await db.execute(select(Admin).order_by(Admin.id))
+    # Resellers have their own page (app/routers/resellers.py).
+    result = await db.execute(select(Admin).where(Admin.is_reseller.is_(False)).order_by(Admin.id))
     admins = list(result.scalars().all())
     return AdminList(total=len(admins), admins=admins)
 
@@ -92,6 +114,8 @@ async def update_admin_permissions(
         raise HTTPException(status_code=404, detail="Admin not found")
     if target.is_owner:
         raise HTTPException(status_code=400, detail="The owner account always has full access")
+    if target.is_reseller:
+        raise HTTPException(status_code=400, detail="A reseller's access is set on the Resellers page")
 
     target.permissions = payload.permissions
     db.add(target)

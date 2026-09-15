@@ -15,6 +15,7 @@ from app.models.host import Host
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
+from app.resellers import check_data_limit, check_no_groups, check_quota, resolve_user_protocols
 from app.notifications.webhook import send_webhook_event
 from app.schemas.user import (
     BulkCreateRequest,
@@ -91,6 +92,11 @@ async def create_user(
     if existing is not None:
         raise HTTPException(status_code=409, detail="A user with this username already exists")
 
+    check_no_groups(admin, payload.group_ids)
+    check_data_limit(admin, payload.data_limit)
+    await check_quota(admin, db, new_users=1, data_delta=payload.data_limit or 0)
+    protocols = resolve_user_protocols(admin, payload.protocols)
+
     user = ProxyUser(
         username=payload.username,
         status=payload.status,
@@ -105,6 +111,7 @@ async def create_user(
         hwid_limit=payload.hwid_limit,
         speed_limit_mbps=payload.speed_limit_mbps,
         note=payload.note,
+        protocols=protocols,
         admin_id=admin.id,
     )
     user.groups = await resolve_groups(payload.group_ids, db) or []
@@ -123,6 +130,9 @@ async def bulk_create_users(
     admin: Admin = Depends(require_permission("users")),
     db: AsyncSession = Depends(get_db),
 ) -> BulkCreateResult:
+    check_no_groups(admin, payload.group_ids)
+    check_data_limit(admin, payload.data_limit)
+    protocols = resolve_user_protocols(admin, payload.protocols)
     groups = await resolve_groups(payload.group_ids, db) or []
     existing = set(
         (
@@ -132,20 +142,26 @@ async def bulk_create_users(
         ).all()
     )
 
-    created: list[ProxyUser] = []
+    to_create: list[str] = []
     skipped: list[str] = []
-    seen: set[str] = set()
     for username in payload.usernames:
-        if username in existing or username in seen:
+        if username in existing or username in to_create:
             skipped.append(username)
             continue
-        seen.add(username)
+        to_create.append(username)
+    await check_quota(
+        admin, db, new_users=len(to_create), data_delta=(payload.data_limit or 0) * len(to_create)
+    )
+
+    created: list[ProxyUser] = []
+    for username in to_create:
         user = ProxyUser(
             username=username,
             data_limit=payload.data_limit,
             expire=payload.expire,
             hwid_limit=payload.hwid_limit,
             note=payload.note,
+            protocols=protocols,
             admin_id=admin.id,
         )
         user.groups = list(groups)
@@ -181,6 +197,12 @@ async def bulk_update_users(
     field_updates = payload.model_dump(
         exclude_unset=True, exclude={"user_ids", "add_group_ids", "remove_group_ids"}
     )
+    check_no_groups(admin, payload.add_group_ids + payload.remove_group_ids)
+    if "data_limit" in field_updates:
+        check_data_limit(admin, field_updates["data_limit"])
+        await check_quota(
+            admin, db, data_delta=sum((field_updates["data_limit"] or 0) - (u.data_limit or 0) for u in users)
+        )
     add_groups = await resolve_groups(payload.add_group_ids, db) or []
     remove_ids = set(payload.remove_group_ids)
 
@@ -248,6 +270,12 @@ async def update_user(
     user = await _get_user_or_404(user_id, admin, db)
 
     updates = payload.model_dump(exclude_unset=True, exclude={"group_ids"})
+    check_no_groups(admin, payload.group_ids)
+    if "data_limit" in updates:
+        check_data_limit(admin, updates["data_limit"])
+        await check_quota(admin, db, data_delta=(updates["data_limit"] or 0) - (user.data_limit or 0))
+    if "protocols" in updates:
+        updates["protocols"] = resolve_user_protocols(admin, updates["protocols"])
     # Turning periodic reset on for the first time starts the interval from
     # right now — leaving data_limit_reset_at untouched would either crash
     # (still None) or, if it were defaulted to created_at instead, count an

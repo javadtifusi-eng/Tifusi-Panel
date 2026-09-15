@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.permissions import PERMISSION_SCOPES
+from app.schemas.reseller import ResellerQuota
 
 
 def _validate_scopes(scopes: list[str] | None) -> list[str] | None:
@@ -20,6 +21,9 @@ class AdminProfileResponse(BaseModel):
     username: str
     is_owner: bool
     permissions: list[str] | None
+    is_reseller: bool = False
+    # Only for a reseller: its limits and how much of them is in use.
+    reseller: ResellerQuota | None = None
 
 
 class ChangePasswordRequest(BaseModel):
