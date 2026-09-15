@@ -1019,3 +1019,14 @@ select.input { padding-block: 7px; }
 .rs-cred { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 11px; background: var(--well); border: 1px solid var(--hair); }
 .rs-cred span { font-size: 0.74rem; color: var(--muted); }
 .rs-cred code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.8rem; direction: ltr; text-align: left; white-space: nowrap; overflow-x: auto; }
+
+/* ═════════ Sidebar spotlight (after 21st.dev "Spotlight Card") ═════════
+   A soft orange glow follows the pointer inside the hovered menu item and
+   lights the part of its border nearest the pointer; --x/--y come from
+   trackPointer in the dashboard shell. */
+.nav-spot { position: relative; isolation: isolate; }
+.nav-spot::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: radial-gradient(120px circle at var(--x, 50%) var(--y, 50%), rgb(249 115 22 / 0.18), transparent 70%); opacity: 0; transition: opacity 0.25s; pointer-events: none; }
+.nav-spot::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: radial-gradient(80px circle at var(--x, 50%) var(--y, 50%), rgb(249 115 22 / 0.75), transparent 70%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
+.nav-spot:hover::before, .nav-spot:hover::after { opacity: 1; }
+.nav-spot:hover svg { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .nav-spot::before, .nav-spot::after { transition: none; } }

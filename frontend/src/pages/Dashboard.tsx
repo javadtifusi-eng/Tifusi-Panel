@@ -19,7 +19,7 @@ import {
   IconUsers,
   type IconProps,
 } from '../components/icons'
-import { ToastProvider } from '../components/ui'
+import { ToastProvider, trackPointer } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import { getAdminProfile, getVersion, type AdminProfile, type VersionInfo } from '../lib/api'
 import { initials } from '../lib/format'
@@ -144,8 +144,9 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         key={id}
         type="button"
         onClick={() => selectTab(id)}
+        onPointerMove={trackPointer}
         aria-current={isActive ? 'page' : undefined}
-        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-[9px] text-start text-[13.5px] transition-colors ${
+        className={`nav-spot flex w-full items-center gap-3 rounded-lg border px-3 py-[9px] text-start text-[13.5px] transition-colors ${
           isActive ? 'border-[#2a2a2a] bg-raised text-primary' : 'border-transparent text-muted hover:bg-hover hover:text-primary'
         }`}
       >
