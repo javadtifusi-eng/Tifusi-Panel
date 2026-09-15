@@ -8,6 +8,8 @@
 
 <p align="center">
   <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=F97316" alt="GitHub stars" /></a>
+  <img src="https://img.shields.io/github/v/tag/javadtifusi-eng/Tifusi-Panel?filter=v*&sort=semver&label=version&style=flat-square&color=22C55E" alt="version" />
+  <img src="https://img.shields.io/github/last-commit/javadtifusi-eng/Tifusi-Panel?label=last%20update&style=flat-square&color=0EA5E9" alt="last update" />
 </p>
 
 <p align="center">
@@ -33,6 +35,15 @@ Tifusi Panel is a self-hosted control plane for proxy and VPN infrastructure. A 
   <br /><br />
   <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="Tifusi Panel cores and tunnels" />
 </p>
+
+## What's new in v1.2
+
+- **Redesigned dashboard.** A new sign-in and setup screen, a live overview with a "needs attention" list and period-over-period traffic, and redesigned users, hosts, groups, nodes, cores, tunnels and settings pages.
+- **Access at a glance.** An interactive access map and a clickable matrix on the groups page; a traffic-flow view of every Xray core.
+- **Faster loading.** One JS and one CSS bundle, precompressed and served with `gzip_static`.
+- **Version status.** The header shows the running version and whether it is up to date.
+
+Full notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Architecture
 
@@ -179,8 +190,26 @@ Planned and deliberately excluded work is tracked in [`ROADMAP.md`](ROADMAP.md).
 
 ## Requirements
 
-- Panel: a Linux host with Docker (installed automatically if absent). A DNS record pointing to the server is recommended for TLS.
-- Node: a Linux host with Docker and a public IPv4 address. IKEv2 requires UDP 500 and 4500; L2TP additionally requires UDP 1701 and the `l2tp_ppp` and `ppp_generic` kernel modules on the host.
+### Server sizing
+
+| Role | Minimum | Recommended |
+| --- | --- | --- |
+| Panel | 1 vCPU, 1 GB RAM, 10 GB disk | 2 vCPU, 2 GB RAM, 20 GB disk |
+| Node | 1 vCPU, 512 MB RAM, 10 GB disk | 1 vCPU, 1 GB RAM, 20 GB disk |
+| Panel and node on one server | 1 vCPU, 2 GB RAM, 15 GB disk | 2 vCPU, 2 GB RAM, 25 GB disk |
+
+Measured on a running installation: the panel container uses about 100 MB of RAM, the dashboard about 6 MB and a node about 50 MB; the images take about 1 GB of disk. The larger recommended disk leaves room for image updates, logs and backups. Traffic volume, not user count, is what drives node CPU and bandwidth needs.
+
+### Platform
+
+- OS: Ubuntu 22.04/24.04 or Debian 11/12 (the installers use `apt-get`). Other Linux distributions work with Docker installed manually.
+- Architecture: x86_64 (amd64). Prebuilt images are published for amd64 only; other architectures build locally, which takes considerably longer.
+- Root access and a public IPv4 address.
+
+### Network
+
+- Panel: a DNS record pointing to the server is recommended for TLS. Port 80 must be reachable to issue a free Let's Encrypt certificate.
+- Node: IKEv2 requires UDP 500 and 4500; L2TP additionally requires UDP 1701 and the `l2tp_ppp` and `ppp_generic` kernel modules on the host.
 - Building images locally requires outbound access to GitHub releases for Xray-core and to the strongSwan source archive.
 
 ## Installation

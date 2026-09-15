@@ -338,14 +338,22 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
               <div className="flex items-center gap-2.5 border-s border-hair ps-3">
                 <LiveClock />
                 {version && (
-                  <span
-                    dir="ltr"
-                    title={updateAvailable ? t.nav.updateAvailable : t.nav.upToDate}
-                    className={`rounded-md border px-2 py-0.5 font-en text-[11px] ${
-                      updateAvailable ? 'border-warning/30 text-warning' : 'border-subtle text-faint'
-                    }`}
-                  >
-                    v{version.current}
+                  <span className="flex flex-col items-center gap-0.5 leading-none">
+                    <span
+                      dir="ltr"
+                      title={updateAvailable && version.latest ? t.nav.updateNotice(version.latest) : t.nav.upToDate}
+                      className={`rounded-md border px-2 py-0.5 font-en text-[11px] ${
+                        updateAvailable ? 'border-warning/30 text-warning' : 'border-success/30 text-body'
+                      }`}
+                    >
+                      v{version.current}
+                    </span>
+                    {/* Only claim "up to date" when GitHub was actually reachable to compare against. */}
+                    {updateAvailable ? (
+                      <span className="whitespace-nowrap text-[10px] text-warning">{t.nav.updateAvailable}</span>
+                    ) : version.latest ? (
+                      <span className="whitespace-nowrap text-[10px] text-success">{t.nav.upToDate}</span>
+                    ) : null}
                   </span>
                 )}
               </div>

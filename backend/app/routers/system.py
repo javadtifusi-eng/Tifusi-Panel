@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 
 import httpx
@@ -36,8 +37,13 @@ async def get_version() -> dict:
             resp = await client.get(_GITHUB_TAGS_URL, headers={"Accept": "application/vnd.github+json"})
             if resp.status_code == 200:
                 tags = resp.json()
-                if isinstance(tags, list) and tags:
-                    latest = tags[0].get("name")
+                # The repo also carries non-release tags (e.g. "tunnel-agent"),
+                # and GitHub's order isn't semantic: take the highest vX.Y tag.
+                if isinstance(tags, list):
+                    names = [t.get("name", "") for t in tags if isinstance(t, dict)]
+                    versions = [n for n in names if re.fullmatch(r"[vV]?\d+(\.\d+)*", n)]
+                    if versions:
+                        latest = max(versions, key=_parse_version)
     except (httpx.HTTPError, ValueError):
         pass
 
