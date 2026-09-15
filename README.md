@@ -214,6 +214,10 @@ Measured on a running installation: the panel container uses about 100 MB of RAM
 
 ## Installation
 
+> **Minimum server for the panel:** 1 CPU core, 1 GB RAM, 10 GB disk.
+> **For comfortable installation and management:** 2 CPU cores, 2 GB RAM, 20 GB disk, Ubuntu 22.04/24.04 or Debian 11/12 on x86_64.
+> Running the panel and a node on the same server: at least 2 GB RAM and 25 GB disk. Details in [Requirements](#requirements).
+
 ### Panel
 
 ```bash
@@ -233,10 +237,6 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules and starts the `tifusi-node` container on the host network. Select **Sync** in the panel to push the initial configuration.
 
 ### First-run setup
-
-<p align="center">
-  <img src="docs/screenshots/login.png" width="80%" alt="Tifusi Panel sign-in screen" />
-</p>
 
 1. Open the dashboard. When no administrator exists, the sign-in screen offers the setup procedure.
 2. Generate a one-time setup key on the panel server:
