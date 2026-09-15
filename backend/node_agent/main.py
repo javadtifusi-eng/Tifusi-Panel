@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import ipsec
+from node_agent import ipsec, ipsec_stats
 
 API_KEY = os.environ.get("TIFUSI_NODE_API_KEY", "")
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
@@ -29,6 +29,13 @@ CONFIG_PATH = Path(os.environ.get("XRAY_CONFIG_PATH", "./data/xray-config.json")
 STATS_API_ADDR = "127.0.0.1:10085"
 
 app = FastAPI(title="Tifusi Node Agent")
+
+# Best effort: a node without ppp (or a read-only /etc) still serves Xray
+# and IKEv2; only L2TP accounting would be missing.
+try:
+    ipsec_stats.install_ppp_hooks()
+except OSError:
+    pass
 
 _process: subprocess.Popen | None = None
 _started_at: float | None = None
@@ -158,10 +165,19 @@ async def stats(x_node_api_key: str | None = Header(default=None)) -> dict:
     """Per-user traffic since the last call — `-reset` makes Xray zero each
     counter out as it's read, so the panel (app/traffic/sync.py) can just
     add whatever comes back onto used_traffic without tracking a baseline
-    itself or ever double-counting a byte."""
+    itself or ever double-counting a byte. IKEv2 and L2TP users never pass
+    through Xray; node_agent/ipsec_stats.py keeps the same since-last-call
+    contract for them."""
     _check_key(x_node_api_key)
+
+    users: dict[str, dict[str, int]] = {}
+    for username, (uplink, downlink) in ipsec_stats.read_deltas().items():
+        bucket = users.setdefault(username, {"uplink": 0, "downlink": 0})
+        bucket["uplink"] += uplink
+        bucket["downlink"] += downlink
+
     if _process is None or _process.poll() is not None:
-        return {"users": {}}
+        return {"users": users}
 
     try:
         result = subprocess.run(
@@ -172,9 +188,8 @@ async def stats(x_node_api_key: str | None = Header(default=None)) -> dict:
         )
         data = json.loads(result.stdout or "{}")
     except Exception:
-        return {"users": {}}
+        return {"users": users}
 
-    users: dict[str, dict[str, int]] = {}
     for entry in data.get("stat", []):
         # Xray names each counter "user>>>{email}>>>traffic>>>{uplink|downlink}".
         parts = entry.get("name", "").split(">>>")
