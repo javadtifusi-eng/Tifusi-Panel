@@ -1,93 +1,111 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { TifusiMark } from '../components/Logo'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { IconArrow, IconBolt, IconCopy, IconEye, IconEyeOff, IconLock, IconPulse, IconShield, IconUser } from '../components/icons'
+import { StrengthBars, passwordScore, useReducedMotion } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import { ApiError, createAdmin, getSetupStatus, login as loginApi } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
 const COMMAND = 'docker exec -it tifusi-panel tifusi-cli generate-admin-key'
 
-function UserIcon() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
-    </svg>
-  )
-}
-
-function LockIcon() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="5" y="11" width="14" height="9" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </svg>
-  )
-}
-
-function ArrowIcon() {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="rtl:-scale-x-100"
-    >
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  )
-}
-
-function CopyIcon() {
-  return (
-    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="8" y="8" width="13" height="13" rx="2" />
-      <path d="M4.5 15.5H4a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 4 2.5h10A1.5 1.5 0 0 1 15.5 4v.5" />
-    </svg>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  )
-}
-
 type Screen = 'setup' | 'login'
 
-// The studio sign-in look: #0e0e0e fields on a #141414 card, an orange
-// focus ring and an orange primary button with near-black text.
-const fieldClass =
-  'w-full rounded-[10px] border border-[#262626] bg-field py-[11px] text-sm text-primary outline-none transition-[border-color,box-shadow] duration-150 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(249,115,22,0.12)]'
-const labelClass = 'mb-1.5 block text-xs text-muted'
-const linkClass = 'text-xs font-medium text-accent hover:underline'
-const primaryClass =
-  'hover-btn mt-1 w-full'
+// The brand side: a warm aurora breathes behind the griffin and one bright dot
+// orbits it, large and bright in front, small and faint behind. Calling the
+// returned function speeds it up for a moment after a successful sign-in.
+function useBrandCanvas(canvas: React.RefObject<HTMLCanvasElement>, stage: React.RefObject<HTMLDivElement>, reduce: boolean) {
+  const boost = useRef(0)
+  useEffect(() => {
+    const cv = canvas.current
+    const ctx = cv?.getContext('2d')
+    if (!cv || !ctx) return
+    let W = 0
+    let H = 0
+    let frame = 0
+    let angle = 0
+    let last = performance.now()
+    const t0 = performance.now()
+    const trail: [number, number, number][] = []
 
-function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2 rounded-[10px] border border-well-edge bg-field p-3">
-      <div className="flex items-center gap-2 text-[12.5px] text-muted">
-        <span className="grid h-5 w-5 flex-shrink-0 place-items-center rounded-full bg-accent/[0.14] font-en text-[11px] text-accent">
-          {n}
-        </span>
-        <span>{title}</span>
-      </div>
-      {children}
-    </div>
-  )
+    function blob(x: number, y: number, r: number, rgb: string, a: number) {
+      const g = ctx!.createRadialGradient(x, y, 0, x, y, r)
+      g.addColorStop(0, `rgba(${rgb},${a})`)
+      g.addColorStop(1, `rgba(${rgb},0)`)
+      ctx!.fillStyle = g
+      ctx!.fillRect(x - r, y - r, r * 2, r * 2)
+    }
+    function draw(now: number) {
+      const c = ctx!
+      const el = (now - t0) / 1000
+      const dt = Math.min(0.05, (now - last) / 1000)
+      last = now
+      c.clearRect(0, 0, W, H)
+      const box = cv!.getBoundingClientRect()
+      const st = stage.current?.getBoundingClientRect()
+      const cx = st ? st.left - box.left + st.width / 2 : W / 2
+      const cy = st ? st.top - box.top + st.height / 2 : H / 2
+      const base = Math.max(90, Math.min(W, 420) * 0.32)
+      const b = boost.current
+      const breath = reduce ? 1 : 1 + 0.06 * Math.sin(el * 0.9) + b * 0.15
+      c.globalCompositeOperation = 'lighter'
+      blob(cx, cy, base * 1.25 * breath, '249,115,22', 0.3 + b * 0.15)
+      blob(cx + Math.cos(el * 0.35) * base * 0.35, cy - base * 0.25 + Math.sin(el * 0.5) * base * 0.12, base * 0.9, '251,191,36', 0.16)
+      blob(cx - Math.cos(el * 0.3) * base * 0.4, cy + base * 0.3 + Math.cos(el * 0.45) * base * 0.1, base * 0.95, '219,39,119', 0.16)
+      c.globalCompositeOperation = 'source-over'
+      angle = reduce ? Math.PI / 2 : angle + dt * (0.9 + b * 4)
+      boost.current = Math.max(0, b - dt * 0.8)
+      const rx = base * 0.95
+      const ry = base * 0.38
+      const tilt = -0.18
+      const x0 = Math.cos(angle) * rx
+      const y0 = Math.sin(angle) * ry
+      const dx = cx + x0 * Math.cos(tilt) - y0 * Math.sin(tilt)
+      const dy = cy + x0 * Math.sin(tilt) + y0 * Math.cos(tilt)
+      const depth = (Math.sin(angle) + 1) / 2
+      trail.unshift([dx, dy, depth])
+      if (trail.length > 26) trail.pop()
+      trail.forEach(([x, y, d], i) => {
+        const f = 1 - i / trail.length
+        c.beginPath()
+        c.arc(x, y, (1 + d * 2) * f, 0, Math.PI * 2)
+        c.fillStyle = `rgba(253,186,116,${0.35 * f * (0.25 + 0.75 * d)})`
+        c.fill()
+      })
+      const glow = 0.25 + 0.75 * depth
+      blob(dx, dy, 10 + depth * 16, '253,186,116', 0.55 * glow)
+      c.beginPath()
+      c.arc(dx, dy, 1.8 + depth * 2.4, 0, Math.PI * 2)
+      c.fillStyle = `rgba(255,247,237,${glow})`
+      c.fill()
+      if (!reduce) frame = requestAnimationFrame(draw)
+    }
+    function resize() {
+      const r = cv!.getBoundingClientRect()
+      const dpr = Math.min(2, window.devicePixelRatio || 1)
+      W = r.width
+      H = r.height
+      cv!.width = W * dpr
+      cv!.height = H * dpr
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0)
+      if (reduce) draw(performance.now())
+    }
+    const ro = new ResizeObserver(resize)
+    ro.observe(cv)
+    resize()
+    if (!reduce) frame = requestAnimationFrame(draw)
+    return () => {
+      ro.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [canvas, stage, reduce])
+  return () => {
+    boost.current = 1
+  }
 }
 
 export default function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }) {
-  const { lang, setLang, t, dir, align } = useLang()
-  const iconSideClass = dir === 'rtl' ? 'right-3' : 'left-3'
-  const iconPadClass = dir === 'rtl' ? 'pr-[38px] pl-3.5' : 'pl-[38px] pr-3.5'
+  const { lang, setLang, t, dir } = useLang()
+  const u = t.ui.login
+  const reduce = useReducedMotion()
   const [screen, setScreen] = useState<Screen>('setup')
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -95,8 +113,18 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
   const [key, setKey] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPass, setShowPass] = useState(false)
+  const [caps, setCaps] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [shake, setShake] = useState(0)
+  const [done, setDone] = useState<string | null>(null)
+  const [burstOn, setBurstOn] = useState(false)
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const burst = useBrandCanvas(canvasRef, stageRef, reduce)
 
   useEffect(() => {
     getSetupStatus()
@@ -105,24 +133,58 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
       .finally(() => setLoadingStatus(false))
   }, [])
 
+  // Restart the shake animation on every failed attempt.
+  useEffect(() => {
+    if (!shake || reduce) return
+    const el = cardRef.current
+    if (!el) return
+    el.classList.remove('shake')
+    void el.offsetWidth
+    el.classList.add('shake')
+  }, [shake, reduce])
+
   function switchScreen(next: Screen) {
     setScreen(next)
     setError(null)
     setCopied(false)
+    setForgotOpen(false)
   }
 
   async function handleCopy() {
-    const ok = await copyToClipboard(COMMAND)
-
-    if (ok) {
+    if (await copyToClipboard(COMMAND)) {
       setCopied(true)
       setCopyFailed(false)
       window.setTimeout(() => setCopied(false), 2000)
     } else {
-      // Both copy methods failed — tell the admin to select the command
-      // (it is always shown in step 1) instead of leaving an icon that
-      // silently does nothing.
+      // Both copy methods failed: the command is on screen to select by hand.
       setCopyFailed(true)
+    }
+  }
+
+  function succeed(token: string) {
+    setDone(username)
+    burst()
+    setBurstOn(true)
+    window.setTimeout(() => onAuthenticated(token), reduce ? 200 : 900)
+  }
+
+  async function handleLogin(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!username.trim() || !password) {
+      setError(u.errEmpty)
+      setShake((n) => n + 1)
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await loginApi({ username, password })
+      succeed(res.access_token)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric)
+      setShake((n) => n + 1)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -131,209 +193,284 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
     setError(null)
     setSubmitting(true)
     try {
-      const res = await createAdmin({ key, username, password })
-      onAuthenticated(res.access_token)
+      const res = await createAdmin({ key: key.trim(), username, password })
+      succeed(res.access_token)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric)
+      setShake((n) => n + 1)
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function handleLogin(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-    setSubmitting(true)
-    try {
-      const res = await loginApi({ username, password })
-      onAuthenticated(res.access_token)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.errorGeneric)
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  const keyIn = key.trim().length > 0
+  const step1Done = copied || keyIn
+  const step3Done = username.trim().length > 0 && password.length >= 8
+  const strengthLevel = Math.max(0, passwordScore(password) - 1)
 
-  if (loadingStatus) {
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-app font-body text-sm text-faint">
-        {t.loading}
-      </div>
-    )
-  }
-
-  const usernameField = (
-    <div className="relative">
-      <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-faint ${iconSideClass}`}>
-        <UserIcon />
-      </span>
-      <input
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        required
-        autoComplete="username"
-        placeholder={t.userPlaceholder}
-        aria-label={t.userLabel}
-        className={`${fieldClass} ${iconPadClass} ${align}`}
-      />
-    </div>
+  const eyeButton = (
+    <button type="button" className="eye" onClick={() => setShowPass((v) => !v)} aria-label={showPass ? u.hidePass : u.showPass}>
+      {showPass ? <IconEyeOff size={17} /> : <IconEye size={17} />}
+    </button>
   )
-
-  const passwordField = (
-    <div className="relative">
-      <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-faint ${iconSideClass}`}>
-        <LockIcon />
-      </span>
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-        minLength={screen === 'setup' ? 8 : undefined}
-        autoComplete={screen === 'setup' ? 'new-password' : 'current-password'}
-        placeholder={t.passPlaceholder}
-        aria-label={t.passLabel}
-        className={`${fieldClass} ${iconPadClass} ${align}`}
-      />
-    </div>
-  )
-
-  const errorBox = error && (
-    <div role="alert" className="rounded-lg border border-danger/25 bg-danger/[0.08] px-2.5 py-2 text-xs text-danger">
-      {error}
-    </div>
-  )
+  const onCapsKey = (e: React.KeyboardEvent) => setCaps(e.getModifierState?.('CapsLock') ?? false)
 
   return (
-    <div
-      dir={dir}
-      className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-app px-4 py-12 font-body text-primary"
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-[8%] h-[420px] w-[620px] max-w-full -translate-x-1/2"
-        style={{ background: 'radial-gradient(closest-side, rgba(249,115,22,0.10), rgba(249,115,22,0))' }}
-      />
-
-      <section className="relative w-full max-w-[400px] rounded-2xl border border-subtle bg-surface px-[26px] pb-6 pt-7">
-        <div className="mb-[22px] flex flex-col items-center gap-2.5 text-center">
-          <TifusiMark size={56} />
-          {screen === 'setup' && (
-            <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/[0.14] px-2.5 py-0.5 text-[11px] text-accent">
-              {t.badgeSetup}
-            </span>
-          )}
-          <h1 className="text-xl font-semibold text-heading [text-wrap:balance]">
-            {screen === 'setup' ? t.headingSetup : t.headingLogin}
-          </h1>
-          <p className="text-[12.5px] text-muted">{t.welcome}</p>
+    <div dir={dir} className="pg-login">
+      <section className={`brand ${burstOn ? 'burst' : ''}`} aria-label="Tifusi">
+        <canvas ref={canvasRef} aria-hidden="true" />
+        <div className="wordmark">
+          <i />
+          TIFUSI
         </div>
+        <div className="mark-stage" ref={stageRef}>
+          <div className="mark" role="img" aria-label="Tifusi" />
+        </div>
+        <ul className="features">
+          <li>
+            <IconShield />
+            {t.features.secure}
+          </li>
+          <li>
+            <IconPulse />
+            {t.features.monitor}
+          </li>
+          <li>
+            <IconBolt />
+            {t.features.perf}
+          </li>
+          <li>
+            <IconLock />
+            {t.features.crypto}
+          </li>
+        </ul>
+      </section>
 
-        {screen === 'setup' ? (
-          <form onSubmit={handleCreateAdmin} className="flex flex-col gap-3.5">
-            <Step n={1} title={t.step1}>
-              <div dir="ltr" className="flex items-center gap-2 rounded-lg border border-[#222] bg-app px-2.5 py-2">
-                <code
-                  onClick={(e) => window.getSelection()?.selectAllChildren(e.currentTarget)}
-                  className="flex-1 cursor-text select-all overflow-x-auto whitespace-nowrap font-mono text-[11.5px] text-[#d4d4d4]"
-                >
-                  {COMMAND}
-                </code>
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  title={COMMAND}
-                  aria-label={copied ? t.copied : t.copy}
-                  className={`grid flex-shrink-0 place-items-center rounded-md border border-edge bg-[#1a1a1a] p-[5px] transition-colors ${
-                    copied ? 'text-success' : 'text-muted hover:text-primary'
-                  }`}
-                >
-                  {copied ? <CheckIcon /> : <CopyIcon />}
-                </button>
+      <section className="form-side">
+        <div className="lcard" ref={cardRef} onAnimationEnd={() => cardRef.current?.classList.remove('shake')}>
+          {loadingStatus ? (
+            <div className="done-view" style={{ color: 'var(--faint)', fontSize: '.84rem' }}>
+              {t.loading}
+            </div>
+          ) : done !== null ? (
+            <div className="done-view" aria-live="polite">
+              <svg className="tick" viewBox="0 0 64 64" aria-hidden="true">
+                <circle cx="32" cy="32" r="29" />
+                <path d="M20 33l8 8 16-17" />
+              </svg>
+              <h2 style={{ margin: '6px 0 0', fontSize: '1.1rem' }}>{screen === 'setup' ? u.doneSetup(done) : u.doneLogin(done)}</h2>
+              <p style={{ margin: 0, fontSize: '.82rem', color: 'var(--muted)' }}>{u.opening}</p>
+            </div>
+          ) : screen === 'login' ? (
+            <>
+              <div className="head">
+                <h1>{t.headingLogin}</h1>
+                <p>{t.welcome}</p>
               </div>
-              {copyFailed && <div className={`text-[11px] text-warning ${align}`}>{t.copyFailedHint}</div>}
-            </Step>
+              <form onSubmit={handleLogin} noValidate>
+                <div>
+                  <label className="lbl" htmlFor="login-user">
+                    {t.userLabel}
+                  </label>
+                  <div className="fld">
+                    <span className="ico">
+                      <IconUser size={16} />
+                    </span>
+                    <input
+                      id="login-user"
+                      className="input"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      autoComplete="username"
+                      placeholder={t.userPlaceholder}
+                      aria-invalid={!!error && !username.trim()}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="lbl" htmlFor="login-pass">
+                    {t.passLabel}
+                  </label>
+                  <div className="fld">
+                    <span className="ico">
+                      <IconLock size={16} />
+                    </span>
+                    <input
+                      id="login-pass"
+                      className="input has-eye"
+                      type={showPass ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={onCapsKey}
+                      onKeyUp={onCapsKey}
+                      onBlur={() => setCaps(false)}
+                      autoComplete="current-password"
+                      placeholder={t.passPlaceholder}
+                      aria-invalid={!!error && !!username.trim()}
+                    />
+                    {eyeButton}
+                  </div>
+                  {caps && <div className="caps">⇪ {u.caps}</div>}
+                </div>
+                {error && (
+                  <div className="tf-alert" role="alert">
+                    <span>✕</span>
+                    <span>{error}</span>
+                  </div>
+                )}
+                <button type="submit" className={`primary ${submitting ? 'loading' : ''}`} disabled={submitting}>
+                  <span>{submitting ? u.signingIn : t.signInBtn}</span>
+                  <IconArrow size={16} strokeWidth={2.2} className="arrow" />
+                </button>
+                <div style={{ textAlign: 'center' }}>
+                  <button type="button" className="link" onClick={() => setForgotOpen((v) => !v)}>
+                    {t.forgot}
+                  </button>
+                  {forgotOpen && <div className="hint">{u.forgotHint}</div>}
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <button type="button" className="ghost" onClick={() => switchScreen('setup')}>
+                    {t.switchToSetup}
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
+              <div className="head">
+                <span className="badge">{t.badgeSetup}</span>
+                <h1>{t.headingSetup}</h1>
+                <p>{u.setupLead}</p>
+              </div>
+              <form onSubmit={handleCreateAdmin} noValidate>
+                <ol className="steps">
+                  <li className={`step ${step1Done ? 'done' : 'now'}`}>
+                    <span className="num">1</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="title">{t.step1}</div>
+                      <div className="term">
+                        <div className="term-bar">
+                          <i />
+                          <i />
+                          <i />
+                          <span>root@server</span>
+                        </div>
+                        <div className="term-line">
+                          <code>
+                            <span className="p">$ </span>
+                            {COMMAND}
+                          </code>
+                          <button type="button" className={`copy ${copied ? 'ok' : ''}`} onClick={handleCopy}>
+                            <IconCopy size={13} />
+                            {copied ? t.copied : t.copy}
+                          </button>
+                        </div>
+                      </div>
+                      {copyFailed && (
+                        <div className="hint" style={{ color: 'var(--warn)' }}>
+                          {t.copyFailedHint}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                  <li className={`step ${keyIn ? 'done' : step1Done ? 'now' : ''}`}>
+                    <span className="num">2</span>
+                    <div style={{ minWidth: 0 }}>
+                      <label className="title" htmlFor="setup-key" style={{ display: 'block' }}>
+                        {t.step2Label}
+                      </label>
+                      <input
+                        id="setup-key"
+                        className="input ltr mono"
+                        value={key}
+                        onChange={(e) => setKey(e.target.value)}
+                        autoComplete="off"
+                        placeholder={t.step2Placeholder}
+                      />
+                      {keyIn && (
+                        <div className="hint" style={{ color: 'var(--ok)' }}>
+                          ✓ {u.keyIn}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                  <li className={`step ${step3Done ? 'done' : keyIn ? 'now' : ''}`}>
+                    <span className="num">3</span>
+                    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div className="title" style={{ margin: '3px 0 0' }}>
+                        {t.step3}
+                      </div>
+                      <div className="fld">
+                        <span className="ico">
+                          <IconUser size={16} />
+                        </span>
+                        <input
+                          className="input"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          autoComplete="username"
+                          placeholder={t.userLabel}
+                          aria-label={t.userLabel}
+                        />
+                      </div>
+                      <div className="fld">
+                        <span className="ico">
+                          <IconLock size={16} />
+                        </span>
+                        <input
+                          className="input has-eye"
+                          type={showPass ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          autoComplete="new-password"
+                          placeholder={u.passMin}
+                          aria-label={t.passLabel}
+                        />
+                        {eyeButton}
+                      </div>
+                      {password && (
+                        <div>
+                          <StrengthBars password={password} />
+                          <div className="hint">
+                            {u.strengthPrefix}
+                            {u.strength[strengthLevel]}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                </ol>
+                {error && (
+                  <div className="tf-alert" role="alert">
+                    <span>✕</span>
+                    <span>{error}</span>
+                  </div>
+                )}
+                <button type="submit" className={`primary ${submitting ? 'loading' : ''}`} disabled={submitting || !keyIn || !step3Done}>
+                  <span>{submitting ? u.creating : t.createBtn}</span>
+                  <IconArrow size={16} strokeWidth={2.2} className="arrow" />
+                </button>
+                <div style={{ textAlign: 'center' }}>
+                  <button type="button" className="ghost" onClick={() => switchScreen('login')}>
+                    {t.switchToLogin}
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
 
-            <Step n={2} title={t.step2Label}>
-              <input
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                required
-                placeholder={t.step2Placeholder}
-                aria-label={t.step2Label}
-                className={`${fieldClass} px-3.5 ${align}`}
-              />
-            </Step>
-
-            <Step n={3} title={t.step3}>
-              {usernameField}
-              {passwordField}
-            </Step>
-
-            {errorBox}
-
-            <button type="submit" disabled={submitting} className={primaryClass}>
-              {t.createBtn}
-              <ArrowIcon />
-            </button>
-
-            <div className="text-center">
-              <button type="button" onClick={() => switchScreen('login')} className="hover-btn hover-btn-sm">
-                {t.switchToLogin}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={handleLogin} className="flex flex-col gap-3.5">
-            <div>
-              <label className={`${labelClass} ${align}`}>{t.userLabel}</label>
-              {usernameField}
-            </div>
-
-            <div>
-              <label className={`${labelClass} ${align}`}>{t.passLabel}</label>
-              {passwordField}
-            </div>
-
-            <div className={align}>
-              <a href="#" className={linkClass}>
-                {t.forgot}
-              </a>
-            </div>
-
-            {errorBox}
-
-            <button type="submit" disabled={submitting} className={primaryClass}>
-              {t.signInBtn}
-              <ArrowIcon />
-            </button>
-
-            <div className="text-center">
-              <button type="button" onClick={() => switchScreen('setup')} className="hover-btn hover-btn-sm">
-                {t.switchToSetup}
-              </button>
-            </div>
-          </form>
-        )}
-
-        <div className="mt-[18px] flex items-center justify-between gap-2.5 border-t border-hair pt-3.5 text-[11.5px] text-faint">
-          <span dir="ltr" className="truncate font-en">
-            {window.location.host}
-          </span>
-          <div className="flex flex-shrink-0 gap-1">
-            {(['fa', 'en'] as const).map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => setLang(code)}
-                aria-pressed={lang === code}
-                className={`rounded-md border px-2 py-0.5 font-en text-[11px] transition-colors ${
-                  lang === code ? 'border-[#333] bg-raised text-primary' : 'border-subtle text-muted hover:text-primary'
-                }`}
-              >
-                {code === 'fa' ? 'فا' : 'EN'}
-              </button>
-            ))}
+          <div className="foot">
+            <span className="host">
+              <IconLock size={12} strokeWidth={2} />
+              {window.location.host}
+            </span>
+            <span className="lang">
+              {(['fa', 'en'] as const).map((code) => (
+                <button key={code} type="button" aria-pressed={lang === code} onClick={() => setLang(code)}>
+                  {code === 'fa' ? 'فا' : 'EN'}
+                </button>
+              ))}
+            </span>
           </div>
         </div>
       </section>

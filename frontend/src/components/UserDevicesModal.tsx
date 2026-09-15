@@ -1,17 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useLang } from '../i18n/LangContext'
 import { ApiError, deleteUserDevice, listUserDevices, resetUserDevices, type UserDevice } from '../lib/api'
+import { parseServerDate } from '../lib/format'
+import { Modal } from './ui'
 
-export default function UserDevicesModal({
-  userId,
-  username,
-  onClose,
-}: {
-  userId: number
-  username: string
-  onClose: () => void
-}) {
-  const { t, dir } = useLang()
+export default function UserDevicesModal({ userId, username, onClose }: { userId: number; username: string; onClose: () => void }) {
+  const { t } = useLang()
   const [devices, setDevices] = useState<UserDevice[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<number | null>(null)
@@ -57,66 +51,36 @@ export default function UserDevicesModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div
-        dir={dir}
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-subtle bg-surface p-6"
-        style={{ boxShadow: '0 24px 60px rgba(0,0,0,0.55)' }}
-      >
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-heading">{t.userDevicesModal.title(username)}</h2>
-          <button onClick={onClose} className="text-muted hover:text-body">
-            ✕
-          </button>
-        </div>
-        <p className="mb-4 text-xs text-faint">{t.userDevicesModal.desc}</p>
-
-        {error && <div className="mb-3 text-sm text-danger">{error}</div>}
-        {!devices && !error && <div className="text-sm text-faint">{t.loading}</div>}
-
-        {devices && (
-          <>
-            {devices.length === 0 ? (
-              <div className="text-sm text-faint">{t.userDevicesModal.noDevicesYet}</div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {devices.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-subtle bg-field p-2.5"
-                  >
-                    <div>
-                      <div dir="ltr" className="text-left font-mono text-xs text-body">
-                        {d.identifier}
-                      </div>
-                      <div className="text-[11px] text-faint">
-                        {t.userDevicesModal.lastSeen(new Date(d.last_seen).toLocaleString())}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleDelete(d)}
-                      disabled={busyId === d.id}
-                      className="hover-btn hover-btn-sm hover-btn-danger flex-shrink-0"
-                    >
-                      {t.common.delete}
-                    </button>
-                  </div>
-                ))}
+    <Modal title={t.userDevicesModal.title(username)} sub={t.userDevicesModal.desc} onClose={onClose}>
+      {error && <div className="tf-alert">{error}</div>}
+      {!devices && !error && <div className="hint">{t.loading}</div>}
+      {devices && devices.length === 0 && <div className="hint">{t.userDevicesModal.noDevicesYet}</div>}
+      {devices && devices.length > 0 && (
+        <>
+          <div className="flex flex-col gap-2">
+            {devices.map((d) => (
+              <div key={d.id} className="tf-linkrow">
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="mono" style={{ color: 'var(--body)' }}>
+                    {d.label || d.identifier}
+                  </span>
+                  <span className="hint" style={{ margin: 0 }}>
+                    {t.userDevicesModal.lastSeen(parseServerDate(d.last_seen).toLocaleString())}
+                  </span>
+                </span>
+                <button onClick={() => handleDelete(d)} disabled={busyId === d.id} className="btn danger">
+                  {t.common.delete}
+                </button>
               </div>
-            )}
-            {devices.length > 0 && (
-              <button
-                onClick={handleResetAll}
-                disabled={resetting}
-                className="hover-btn hover-btn-sm hover-btn-danger mt-4"
-              >
-                {t.userDevicesModal.resetAllBtn}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+            ))}
+          </div>
+          <div>
+            <button onClick={handleResetAll} disabled={resetting} className="btn danger">
+              {t.userDevicesModal.resetAllBtn}
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
   )
 }

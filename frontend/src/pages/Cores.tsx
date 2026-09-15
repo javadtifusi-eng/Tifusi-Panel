@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { IconCopy, IconPlus } from '../components/icons'
+import { Empty, Field, Sheet, highlightJsonLines, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
@@ -18,17 +20,9 @@ import {
   type Node,
   type RealityScanResult,
 } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 
-// The theme accent (see --c-accent in index.css).
-const ACCENT = 'rgb(var(--c-accent))'
-
-const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
-const labelClass = 'mb-1.5 block text-xs text-muted'
-const monoTextarea =
-  'w-full rounded-lg border border-edge bg-well p-3 font-mono text-xs text-body outline-none focus:border-accent/60'
-
-const CORE_TYPES: CoreType[] = ['xray', 'l2tp', 'ikev2']
+const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'l2tp']
 
 // Where node_agent/ipsec.py actually writes these two fields once synced to
 // a node (IKEV2_LEAF_CERT / IKEV2_LEAF_KEY) — shown read-only so the admin
@@ -145,7 +139,11 @@ type RoutingRule = {
   type: 'field'
   domain?: string[]
   ip?: string[]
+  inboundTag?: string[]
+  port?: string | number
+  network?: string
   outboundTag?: string
+  balancerTag?: string
 }
 
 // A standard, admin-agnostic starting point — nothing here ever contains a
@@ -185,26 +183,14 @@ function applyRecommendedRouting(configText: string): string {
   const dns = (config.dns as { servers?: string[] } | undefined) ?? {}
   const dnsServers = Array.isArray(dns.servers) && dns.servers.length > 0 ? dns.servers : RECOMMENDED_DNS_SERVERS
 
-  return JSON.stringify(
-    { ...config, outbounds, routing: { ...routing, rules }, dns: { ...dns, servers: dnsServers } },
-    null,
-    2,
-  )
+  return JSON.stringify({ ...config, outbounds, routing: { ...routing, rules }, dns: { ...dns, servers: dnsServers } }, null, 2)
 }
 
 // RoutingEditor edits config.routing.rules directly on the same raw JSON
 // string the rest of the form (and the inbound wizard above it) already
 // treats as the single source of truth - no separate state to drift out
 // of sync with a manual edit to the JSON textarea below.
-function RoutingEditor({
-  configText,
-  setConfigText,
-  t,
-}: {
-  configText: string
-  setConfigText: (text: string) => void
-  t: ReturnType<typeof useLang>['t']
-}) {
+function RoutingEditor({ configText, setConfigText, t }: { configText: string; setConfigText: (text: string) => void; t: ReturnType<typeof useLang>['t'] }) {
   const config = parseConfig(configText)
   const routing = (config.routing as { rules?: RoutingRule[] } | undefined) ?? {}
   const rules = Array.isArray(routing.rules) ? routing.rules : []
@@ -215,14 +201,8 @@ function RoutingEditor({
   function commit(nextRules: RoutingRule[]) {
     setConfigText(JSON.stringify({ ...config, routing: { ...routing, rules: nextRules } }, null, 2))
   }
-  function addRule() {
-    commit([...rules, { type: 'field', domain: [], ip: [], outboundTag: tagOptions[0] }])
-  }
   function updateRule(i: number, patch: Partial<RoutingRule>) {
     commit(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
-  }
-  function removeRule(i: number) {
-    commit(rules.filter((_, idx) => idx !== i))
   }
   function moveRule(i: number, dir: -1 | 1) {
     const j = i + dir
@@ -233,83 +213,65 @@ function RoutingEditor({
   }
 
   return (
-    <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
-      <div className="mb-1 flex items-center justify-between">
-        <div className="text-xs font-bold text-secondary">{t.coresPage.routingTitle}</div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setConfigText(applyRecommendedRouting(configText))}
-            title={t.coresPage.applyRecommendedHint}
-            className="hover-btn hover-btn-sm"
-          >
+    <div className="form-section">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 style={{ margin: 0 }}>{t.coresPage.routingTitle}</h4>
+        <span className="flex gap-1.5">
+          <button type="button" onClick={() => setConfigText(applyRecommendedRouting(configText))} title={t.coresPage.applyRecommendedHint} className="btn">
             {t.coresPage.applyRecommendedBtn}
           </button>
-          <button type="button" onClick={addRule} className="hover-btn hover-btn-sm">
+          <button type="button" onClick={() => commit([...rules, { type: 'field', domain: [], ip: [], outboundTag: tagOptions[0] }])} className="btn">
             {t.coresPage.addRuleBtn}
           </button>
-        </div>
+        </span>
       </div>
-      <div className="mb-3 text-[11px] text-faint">{t.coresPage.routingHint}</div>
-      {rules.length === 0 && <div className="text-xs text-faint">{t.coresPage.noRulesYet}</div>}
-      <div className="flex flex-col gap-2">
-        {rules.map((r, i) => (
-          <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-subtle p-2">
-            <div>
-              <label className="mb-1 block text-[10px] text-faint">{t.coresPage.ruleDomainLabel}</label>
-              <input
-                dir="ltr"
-                value={(r.domain ?? []).join(', ')}
-                onChange={(e) => updateRule(i, { domain: csvToList(e.target.value) })}
-                placeholder="geosite:category-ads-all, example.com"
-                className={`${inputClass} w-64 text-left`}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] text-faint">{t.coresPage.ruleIpLabel}</label>
-              <input
-                dir="ltr"
-                value={(r.ip ?? []).join(', ')}
-                onChange={(e) => updateRule(i, { ip: csvToList(e.target.value) })}
-                placeholder="geoip:private, geoip:ir"
-                className={`${inputClass} w-52 text-left`}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] text-faint">{t.coresPage.ruleOutboundLabel}</label>
-              <select
-                dir="ltr"
-                value={r.outboundTag ?? tagOptions[0]}
-                onChange={(e) => updateRule(i, { outboundTag: e.target.value })}
-                className={inputClass}
-              >
-                {tagOptions.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => moveRule(i, -1)} className="text-xs text-muted hover:text-body">
-                ↑
-              </button>
-              <button type="button" onClick={() => moveRule(i, 1)} className="text-xs text-muted hover:text-body">
-                ↓
-              </button>
-              <button type="button" onClick={() => removeRule(i)} className="hover-btn hover-btn-sm hover-btn-danger">
-                {t.common.delete}
-              </button>
-            </div>
+      <div className="hint" style={{ margin: 0 }}>
+        {t.coresPage.routingHint}
+      </div>
+      {rules.length === 0 && <div className="hint">{t.coresPage.noRulesYet}</div>}
+      {rules.map((r, i) => (
+        <div key={i} className="rule-edit">
+          <div style={{ flex: '1 1 200px' }}>
+            <label className="lbl">{t.coresPage.ruleDomainLabel}</label>
+            <input
+              className="input ltr"
+              value={(r.domain ?? []).join(', ')}
+              onChange={(e) => updateRule(i, { domain: csvToList(e.target.value) })}
+              placeholder="geosite:category-ads-all, example.com"
+            />
           </div>
-        ))}
-      </div>
+          <div style={{ flex: '1 1 160px' }}>
+            <label className="lbl">{t.coresPage.ruleIpLabel}</label>
+            <input className="input ltr" value={(r.ip ?? []).join(', ')} onChange={(e) => updateRule(i, { ip: csvToList(e.target.value) })} placeholder="geoip:private, geoip:ir" />
+          </div>
+          <div style={{ flex: '0 1 120px' }}>
+            <label className="lbl">{t.coresPage.ruleOutboundLabel}</label>
+            <select className="input ltr" value={r.outboundTag ?? tagOptions[0]} onChange={(e) => updateRule(i, { outboundTag: e.target.value })}>
+              {tagOptions.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="flex gap-1">
+            <button type="button" onClick={() => moveRule(i, -1)} className="btn" aria-label="↑">
+              ↑
+            </button>
+            <button type="button" onClick={() => moveRule(i, 1)} className="btn" aria-label="↓">
+              ↓
+            </button>
+            <button type="button" onClick={() => commit(rules.filter((_, idx) => idx !== i))} className="btn danger">
+              {t.common.delete}
+            </button>
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
 
 const OUTBOUND_PROTOCOLS = ['freedom', 'blackhole', 'vless', 'vmess', 'trojan', 'shadowsocks', 'socks', 'http'] as const
-type OutboundProtocol = (typeof OUTBOUND_PROTOCOLS)[number]
 
 type OutboundEntry = {
   tag?: string
@@ -331,7 +293,6 @@ function outboundServerFields(protocol: string | undefined, settings: Record<str
     case 'vmess':
       return { address: (vnext?.address as string) ?? '', port: vnext?.port != null ? String(vnext.port) : '', secret: (users?.id as string) ?? '' }
     case 'trojan':
-      return { address: (server?.address as string) ?? '', port: server?.port != null ? String(server.port) : '', secret: (server?.password as string) ?? '' }
     case 'shadowsocks':
       return { address: (server?.address as string) ?? '', port: server?.port != null ? String(server.port) : '', secret: (server?.password as string) ?? '' }
     case 'socks':
@@ -342,10 +303,7 @@ function outboundServerFields(protocol: string | undefined, settings: Record<str
   }
 }
 
-function buildOutboundSettings(
-  protocol: string | undefined,
-  fields: { address: string; port: string; secret: string },
-): Record<string, unknown> {
+function buildOutboundSettings(protocol: string | undefined, fields: { address: string; port: string; secret: string }): Record<string, unknown> {
   const port = parseInt(fields.port, 10) || 0
   switch (protocol) {
     case 'vless':
@@ -366,29 +324,15 @@ function buildOutboundSettings(
 
 // OutboundsEditor edits config.outbounds the same way RoutingEditor edits
 // config.routing.rules - reads/writes the same raw configText string.
-function OutboundsEditor({
-  configText,
-  setConfigText,
-  t,
-}: {
-  configText: string
-  setConfigText: (text: string) => void
-  t: ReturnType<typeof useLang>['t']
-}) {
+function OutboundsEditor({ configText, setConfigText, t }: { configText: string; setConfigText: (text: string) => void; t: ReturnType<typeof useLang>['t'] }) {
   const config = parseConfig(configText)
   const outbounds = Array.isArray(config.outbounds) ? (config.outbounds as OutboundEntry[]) : []
 
   function commit(next: OutboundEntry[]) {
     setConfigText(JSON.stringify({ ...config, outbounds: next }, null, 2))
   }
-  function addOutbound() {
-    commit([...outbounds, { tag: `outbound-${outbounds.length + 1}`, protocol: 'freedom', settings: {} }])
-  }
   function updateOutbound(i: number, patch: Partial<OutboundEntry>) {
     commit(outbounds.map((o, idx) => (idx === i ? { ...o, ...patch } : o)))
-  }
-  function removeOutbound(i: number) {
-    commit(outbounds.filter((_, idx) => idx !== i))
   }
   function moveOutbound(i: number, dir: -1 | 1) {
     const j = i + dir
@@ -399,119 +343,90 @@ function OutboundsEditor({
   }
 
   return (
-    <div className="mt-4 rounded-lg border border-subtle bg-well p-3">
-      <div className="mb-1 flex items-center justify-between">
-        <div className="text-xs font-bold text-secondary">{t.coresPage.outboundsTitle}</div>
-        <button type="button" onClick={addOutbound} className="hover-btn hover-btn-sm">
+    <div className="form-section">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 style={{ margin: 0 }}>{t.coresPage.outboundsTitle}</h4>
+        <button type="button" onClick={() => commit([...outbounds, { tag: `outbound-${outbounds.length + 1}`, protocol: 'freedom', settings: {} }])} className="btn">
           {t.coresPage.addOutboundBtn}
         </button>
       </div>
-      <div className="mb-3 text-[11px] text-faint">{t.coresPage.outboundsHint}</div>
-      {outbounds.length === 0 && <div className="text-xs text-faint">{t.coresPage.noOutboundsYet}</div>}
-      <div className="flex flex-col gap-2">
-        {outbounds.map((o, i) => {
-          const needsServer = o.protocol !== 'freedom' && o.protocol !== 'blackhole'
-          const fields = outboundServerFields(o.protocol, o.settings ?? {})
-          return (
-            <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-subtle p-2">
-              <div>
-                <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundTagLabel}</label>
-                <input
-                  dir="ltr"
-                  value={o.tag ?? ''}
-                  onChange={(e) => updateOutbound(i, { tag: e.target.value })}
-                  className={`${inputClass} w-32 text-left`}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundProtocolLabel}</label>
-                <select
-                  dir="ltr"
-                  value={o.protocol ?? 'freedom'}
-                  onChange={(e) => updateOutbound(i, { protocol: e.target.value, settings: {} })}
-                  className={inputClass}
-                >
-                  {OUTBOUND_PROTOCOLS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {needsServer && (
-                <>
-                  <div>
-                    <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundAddressLabel}</label>
-                    <input
-                      dir="ltr"
-                      value={fields.address}
-                      onChange={(e) =>
-                        updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, address: e.target.value }) })
-                      }
-                      className={`${inputClass} w-40 text-left`}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundPortLabel}</label>
-                    <input
-                      dir="ltr"
-                      type="number"
-                      value={fields.port}
-                      onChange={(e) =>
-                        updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, port: e.target.value }) })
-                      }
-                      className={`${inputClass} w-20 text-left`}
-                    />
-                  </div>
-                  {(o.protocol === 'vless' || o.protocol === 'vmess' || o.protocol === 'trojan' || o.protocol === 'shadowsocks') && (
-                    <div>
-                      <label className="mb-1 block text-[10px] text-faint">{t.coresPage.outboundSecretLabel}</label>
-                      <input
-                        dir="ltr"
-                        value={fields.secret}
-                        onChange={(e) =>
-                          updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, secret: e.target.value }) })
-                        }
-                        className={`${inputClass} w-40 text-left font-mono`}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="flex items-center gap-1.5">
-                <button type="button" onClick={() => moveOutbound(i, -1)} className="text-xs text-muted hover:text-body">
-                  ↑
-                </button>
-                <button type="button" onClick={() => moveOutbound(i, 1)} className="text-xs text-muted hover:text-body">
-                  ↓
-                </button>
-                <button type="button" onClick={() => removeOutbound(i)} className="hover-btn hover-btn-sm hover-btn-danger">
-                  {t.common.delete}
-                </button>
-              </div>
-            </div>
-          )
-        })}
+      <div className="hint" style={{ margin: 0 }}>
+        {t.coresPage.outboundsHint}
       </div>
+      {outbounds.length === 0 && <div className="hint">{t.coresPage.noOutboundsYet}</div>}
+      {outbounds.map((o, i) => {
+        const needsServer = o.protocol !== 'freedom' && o.protocol !== 'blackhole'
+        const fields = outboundServerFields(o.protocol, o.settings ?? {})
+        return (
+          <div key={i} className="rule-edit">
+            <div style={{ flex: '0 1 120px' }}>
+              <label className="lbl">{t.coresPage.outboundTagLabel}</label>
+              <input className="input ltr" value={o.tag ?? ''} onChange={(e) => updateOutbound(i, { tag: e.target.value })} />
+            </div>
+            <div style={{ flex: '0 1 120px' }}>
+              <label className="lbl">{t.coresPage.outboundProtocolLabel}</label>
+              <select className="input ltr" value={o.protocol ?? 'freedom'} onChange={(e) => updateOutbound(i, { protocol: e.target.value, settings: {} })}>
+                {OUTBOUND_PROTOCOLS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {needsServer && (
+              <>
+                <div style={{ flex: '1 1 140px' }}>
+                  <label className="lbl">{t.coresPage.outboundAddressLabel}</label>
+                  <input
+                    className="input ltr"
+                    value={fields.address}
+                    onChange={(e) => updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, address: e.target.value }) })}
+                  />
+                </div>
+                <div style={{ flex: '0 1 90px' }}>
+                  <label className="lbl">{t.coresPage.outboundPortLabel}</label>
+                  <input
+                    className="input ltr"
+                    type="number"
+                    value={fields.port}
+                    onChange={(e) => updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, port: e.target.value }) })}
+                  />
+                </div>
+                {(o.protocol === 'vless' || o.protocol === 'vmess' || o.protocol === 'trojan' || o.protocol === 'shadowsocks') && (
+                  <div style={{ flex: '1 1 160px' }}>
+                    <label className="lbl">{t.coresPage.outboundSecretLabel}</label>
+                    <input
+                      className="input ltr mono"
+                      value={fields.secret}
+                      onChange={(e) => updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, secret: e.target.value }) })}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+            <span className="flex gap-1">
+              <button type="button" onClick={() => moveOutbound(i, -1)} className="btn" aria-label="↑">
+                ↑
+              </button>
+              <button type="button" onClick={() => moveOutbound(i, 1)} className="btn" aria-label="↓">
+                ↓
+              </button>
+              <button type="button" onClick={() => commit(outbounds.filter((_, idx) => idx !== i))} className="btn danger">
+                {t.common.delete}
+              </button>
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-// NodeAssignmentEditor is how "which node runs this core" actually gets
-// set now — moved here from the Node form (which only owned repeating a
-// core_id/ipsec_core_id dropdown) so the core/node relationship lives in
-// exactly one place instead of two forms that could disagree.
-function NodeAssignmentEditor({
-  core,
-  nodes,
-  onChanged,
-  t,
-}: {
-  core: Core
-  nodes: Node[]
-  onChanged: () => void
-  t: ReturnType<typeof useLang>['t']
-}) {
+// Node chips on a core card are how "which node runs this core" gets set —
+// the core/node relationship lives here and nowhere else.
+function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[]; onChanged: () => void }) {
+  const { t } = useLang()
+  const say = useToast()
   const [busyId, setBusyId] = useState<number | null>(null)
   const [egressDrafts, setEgressDrafts] = useState<Record<number, string>>({})
   const isIpsec = core.core_type === 'l2tp' || core.core_type === 'ikev2'
@@ -522,6 +437,7 @@ function NodeAssignmentEditor({
       if (isIpsec) await updateNode(node.id, { ipsec_core_id: assign ? core.id : null })
       else await updateNode(node.id, { core_id: assign ? core.id : null })
       onChanged()
+      say(assign ? t.ui.cores.assigned(node.name) : t.ui.cores.unassigned(node.name))
     } finally {
       setBusyId(null)
     }
@@ -533,80 +449,292 @@ function NodeAssignmentEditor({
     try {
       await updateNode(node.id, { l2tp_egress_vless: value || null })
       onChanged()
+      say(t.common.saved)
     } finally {
       setBusyId(null)
     }
   }
 
+  const assigned = nodes.filter((n) => (isIpsec ? n.ipsec_core_id === core.id : n.core_id === core.id))
+
   return (
-    <div className="mt-3 border-t border-hair pt-3">
-      <div className="mb-2 text-xs font-bold text-secondary">{t.coresPage.assignedNodesTitle}</div>
-      {nodes.length === 0 && <div className="text-xs text-faint">{t.nodesPage.noNodesYet}</div>}
-      <div className="flex flex-col gap-1.5">
+    <>
+      <div className="node-row">
+        <span className="hint" style={{ margin: 0, alignSelf: 'center' }}>
+          {t.coresPage.assignedNodesTitle}:
+        </span>
+        {nodes.length === 0 && <span className="hint">{t.nodesPage.noNodesYet}</span>}
         {nodes.map((n) => {
-          const assignedHere = isIpsec ? n.ipsec_core_id === core.id : n.core_id === core.id
-          const assignedElsewhere = !assignedHere && (isIpsec ? n.ipsec_core_id != null : n.core_id != null)
+          const here = isIpsec ? n.ipsec_core_id === core.id : n.core_id === core.id
+          const elsewhere = !here && (isIpsec ? n.ipsec_core_id != null : n.core_id != null)
           return (
-            <div key={n.id} className="rounded-lg border border-subtle p-2">
-              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs">
-                <span className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={assignedHere}
-                    disabled={busyId === n.id}
-                    onChange={(e) => toggle(n, e.target.checked)}
-                  />
-                  <span className="text-body">{n.name}</span>
-                  <span dir="ltr" className="font-mono text-[10px] text-faint">
-                    {n.address}
-                  </span>
-                </span>
-                {assignedElsewhere && <span className="text-[10px] text-warning">{t.coresPage.assignedElsewhere}</span>}
-              </label>
-              {core.core_type === 'l2tp' && assignedHere && (
-                <div className="mt-2">
-                  <label className="mb-1 block text-[10px] text-faint" title={t.nodesPage.l2tpEgressHint}>
-                    {t.nodesPage.l2tpEgressLabel}
-                  </label>
-                  <div className="flex gap-1.5">
-                    <input
-                      dir="ltr"
-                      value={egressDrafts[n.id] ?? n.l2tp_egress_vless ?? ''}
-                      onChange={(e) => setEgressDrafts((d) => ({ ...d, [n.id]: e.target.value }))}
-                      placeholder="vless://..."
-                      className={`${inputClass} flex-1 text-left font-mono text-[11px]`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => saveEgress(n)}
-                      disabled={busyId === n.id}
-                      className="hover-btn hover-btn-sm"
-                    >
-                      {t.common.save}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <button
+              key={n.id}
+              type="button"
+              className="node-chip"
+              aria-pressed={here}
+              disabled={busyId === n.id}
+              onClick={() => toggle(n, !here)}
+              title={elsewhere ? t.coresPage.assignedElsewhere : undefined}
+            >
+              <span className={`tf-led ${here ? (n.status === 'connected' ? 'on' : n.status === 'error' ? 'err' : 'wait') : ''}`} />
+              <b>{n.name}</b>
+              {elsewhere && <span className="elsewhere">{t.ui.cores.elsewhere}</span>}
+            </button>
           )
         })}
       </div>
+      {core.core_type === 'l2tp' &&
+        assigned.map((n) => (
+          <div key={n.id} className="egress">
+            <span className="chip en" title={t.nodesPage.l2tpEgressHint}>
+              {n.name} · {t.nodesPage.l2tpEgressLabel}
+            </span>
+            <input
+              className="input ltr"
+              value={egressDrafts[n.id] ?? n.l2tp_egress_vless ?? ''}
+              onChange={(e) => setEgressDrafts((d) => ({ ...d, [n.id]: e.target.value }))}
+              placeholder="vless://..."
+            />
+            <button type="button" onClick={() => saveEgress(n)} disabled={busyId === n.id} className="btn">
+              {t.common.save}
+            </button>
+          </div>
+        ))}
+    </>
+  )
+}
+
+interface FlowRule {
+  n: string
+  match: string
+  to: string
+  inboundTags: string[]
+  def?: boolean
+}
+
+// Inbounds → routing rules → outbounds, read straight from the stored config.
+function XrayFlow({ core, onOpen }: { core: Core; onOpen: (part: string) => void }) {
+  const { t, dir } = useLang()
+  const c = t.ui.cores
+  const config = (core.config ?? {}) as Record<string, unknown>
+  const rawInbounds = Array.isArray(config.inbounds) ? (config.inbounds as Record<string, unknown>[]) : []
+  const rawOutbounds = Array.isArray(config.outbounds) ? (config.outbounds as Record<string, unknown>[]) : []
+  const rawRules = Array.isArray((config.routing as { rules?: unknown })?.rules) ? ((config.routing as { rules: RoutingRule[] }).rules as RoutingRule[]) : []
+  const parsed = new Map(core.inbounds.map((i) => [i.tag, i]))
+  const firstOutbound = (rawOutbounds[0]?.tag as string | undefined) ?? 'direct'
+  const outProto = new Map(rawOutbounds.map((o) => [String(o.tag ?? ''), String(o.protocol ?? '')]))
+
+  const rules: FlowRule[] = rawRules.map((r, i) => ({
+    n: String(i + 1),
+    match:
+      [...(r.inboundTag ?? []).map((x) => `inbound:${x}`), ...(r.domain ?? []), ...(r.ip ?? []), r.port != null ? `port:${r.port}` : '', r.network ?? '']
+        .filter(Boolean)
+        .join(' · ') || '*',
+    to: r.outboundTag ?? r.balancerTag ?? '—',
+    inboundTags: r.inboundTag ?? [],
+  }))
+  rules.push({ n: '—', match: c.restOfTraffic, to: firstOutbound, inboundTags: [], def: true })
+
+  const kindOf = (tag: string) => {
+    const p = outProto.get(tag)
+    if (p === 'blackhole') return 'block'
+    if (p === 'freedom') return 'direct'
+    return ''
+  }
+
+  const flowRef = useRef<HTMLDivElement>(null)
+  const [beams, setBeams] = useState<{ d: string; kind: string }[]>([])
+
+  useLayoutEffect(() => {
+    const flow = flowRef.current
+    if (!flow) return
+    function draw() {
+      if (!flow || flow.offsetParent === null) return
+      const box = flow.getBoundingClientRect()
+      const rect = (id: string) => flow.querySelector<HTMLElement>(`[data-flow="${id}"]`)?.getBoundingClientRect()
+      const curve = (a: DOMRect, b: DOMRect) => {
+        const x1 = (dir === 'rtl' ? a.left : a.right) - box.left
+        const x2 = (dir === 'rtl' ? b.right : b.left) - box.left
+        const y1 = a.top + a.height / 2 - box.top
+        const y2 = b.top + b.height / 2 - box.top
+        const mx = (x1 + x2) / 2
+        return `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`
+      }
+      const out: { d: string; kind: string }[] = []
+      rawInbounds.forEach((inb, i) => {
+        const tag = String(inb.tag ?? i)
+        const a = rect(`in${i}`)
+        if (!a) return
+        const targeted = rules.findIndex((r) => r.inboundTags.includes(tag))
+        const b = rect(targeted >= 0 ? `r${targeted}` : 'rules')
+        const internal = inb.protocol === 'dokodemo-door'
+        if (b) out.push({ d: curve(a, b), kind: internal ? 'quiet' : '' })
+      })
+      rules.forEach((r, i) => {
+        const a = rect(`r${i}`)
+        const oi = rawOutbounds.findIndex((o) => o.tag === r.to)
+        const b = rect(oi >= 0 ? `out${oi}` : '')
+        if (a && b) out.push({ d: curve(a, b), kind: kindOf(r.to) === 'block' ? 'block' : r.inboundTags.length && !r.def ? 'quiet' : '' })
+      })
+      setBeams(out)
+    }
+    draw()
+    const ro = new ResizeObserver(draw)
+    ro.observe(flow)
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [core, dir])
+
+  return (
+    <div className="tf-card flow-card">
+      <div className="tf-card-head">
+        <h3>{c.flowTitle}</h3>
+        <span className="flex flex-wrap items-center gap-2.5">
+          <small>{c.flowHint}</small>
+          <button type="button" className="btn" onClick={() => onOpen('all')}>
+            {c.jsonFile}
+          </button>
+        </span>
+      </div>
+      <div className="flow" ref={flowRef}>
+        <svg className="beams" aria-hidden="true">
+          {beams.map((b, i) => (
+            <g key={i}>
+              <path className="beam-base" d={b.d} />
+              <path className={`beam-run ${b.kind}`} d={b.d} />
+            </g>
+          ))}
+        </svg>
+        <div className="col">
+          <span className="col-title">{c.colInbounds}</span>
+          {rawInbounds.length === 0 && <span className="hint">{t.coresPage.noInbounds}</span>}
+          {rawInbounds.map((inb, i) => {
+            const tag = String(inb.tag ?? `#${i + 1}`)
+            const p = parsed.get(tag)
+            const internal = inb.protocol === 'dokodemo-door'
+            return (
+              <button key={i} type="button" data-flow={`in${i}`} className={`blk ${internal ? 'dim' : ''}`} onClick={() => onOpen(`inbounds.${i}`)}>
+                <span className="top">
+                  <span className="tag">{tag}</span>
+                  {inb.port != null && <span className="chip en">:{String(inb.port)}</span>}
+                </span>
+                <span className="sub">
+                  {internal
+                    ? c.internalInbound
+                    : [String(inb.protocol ?? '').toUpperCase(), p?.security && p.security !== 'none' ? p.security.toUpperCase() : '', p ? c.hostsCount(p.host_count) : '']
+                        .filter(Boolean)
+                        .join(' · ')}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <div className="col">
+          <span className="col-title">{c.colRules}</span>
+          <button type="button" data-flow="rules" className="blk rules" onClick={() => onOpen('routing')}>
+            {rules.map((r, i) => (
+              <span key={i} data-flow={`r${i}`} className={`rule ${r.def ? 'def' : ''}`}>
+                <span className="n">{r.n}</span>
+                <span className="m" title={r.match}>
+                  {r.match}
+                </span>
+                <span className={`to ${kindOf(r.to)}`}>{r.to}</span>
+              </span>
+            ))}
+          </button>
+        </div>
+        <div className="col">
+          <span className="col-title">{c.colOutbounds}</span>
+          {rawOutbounds.length === 0 && <span className="hint">{t.coresPage.noOutboundsYet}</span>}
+          {rawOutbounds.map((o, i) => (
+            <button key={i} type="button" data-flow={`out${i}`} className="blk" onClick={() => onOpen(`outbounds.${i}`)}>
+              <span className="top">
+                <span className="tag">{String(o.tag ?? `#${i + 1}`)}</span>
+                <span className="chip en">{String(o.protocol ?? '')}</span>
+              </span>
+              {i === 0 && <span className="sub">{c.defaultOutbound}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="flow-note">{c.flowNote}</p>
     </div>
   )
 }
 
-export default function CoresPage() {
+function CodeSheet({ core, part, onPart, onClose }: { core: Core; part: string; onPart: (p: string) => void; onClose: () => void }) {
   const { t } = useLang()
+  const say = useToast()
+  const config = (core.config ?? {}) as Record<string, unknown>
+  const pick = (p: string): unknown => (p === 'all' ? config : p.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], config))
+  const text = JSON.stringify(pick(part) ?? null, null, 2)
+  const tree: { part: string; label: string; lvl: number }[] = [{ part: 'all', label: 'config.json', lvl: 0 }]
+  for (const key of Object.keys(config)) {
+    const val = config[key]
+    if (Array.isArray(val)) {
+      tree.push({ part: key, label: key, lvl: 0 })
+      val.forEach((item, i) => tree.push({ part: `${key}.${i}`, label: String((item as { tag?: string })?.tag ?? `${key}[${i}]`), lvl: 1 }))
+    } else tree.push({ part: key, label: key, lvl: 1 })
+  }
+
+  return (
+    <Sheet title={core.name} sub={t.ui.cores.jsonFile} onClose={onClose} width={720} className="tf-code-sheet">
+      <div style={{ margin: '-16px -18px', display: 'flex', flexDirection: 'column', minHeight: 'calc(100% + 32px)' }}>
+        <div className="code-head">
+          <span className="dots">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="file">{part === 'all' ? 'config.json' : `config.json › ${part.replace(/\./g, ' › ')}`}</span>
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => {
+              if (await copyToClipboard(text)) say(t.common.copiedCheck)
+            }}
+          >
+            <IconCopy size={13} />
+            {t.copy}
+          </button>
+        </div>
+        <div className="code-body">
+          <nav className="tree" aria-label="config">
+            {tree.map((n) => (
+              <button key={n.part} type="button" className={n.lvl ? 'lvl1' : ''} aria-current={n.part === part} onClick={() => onPart(n.part)}>
+                {n.label}
+              </button>
+            ))}
+          </nav>
+          <pre className="code">
+            {highlightJsonLines(text).map((html, i) => (
+              <span key={i} className="ln" dangerouslySetInnerHTML={{ __html: html || ' ' }} />
+            ))}
+          </pre>
+        </div>
+      </div>
+    </Sheet>
+  )
+}
+
+export default function CoresPage({ createSignal = 0 }: { createSignal?: number } = {}) {
+  const { t } = useLang()
+  const c = t.ui.cores
+  const say = useToast()
   const protocolLabels = t.coresPage.protocolLabels
   const [cores, setCores] = useState<Core[] | null>(null)
   const [nodes, setNodes] = useState<Node[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [engine, setEngine] = useState<CoreType>('xray')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm())
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [lastWarnings, setLastWarnings] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [code, setCode] = useState<{ coreId: number; part: string } | null>(null)
 
   const [wizard, setWizard] = useState(emptyWizard())
   const [addedFlash, setAddedFlash] = useState(false)
@@ -617,24 +745,16 @@ export default function CoresPage() {
     !!wizard.port &&
     !!wizard.protocol &&
     (!isTransportProtocol ||
-      (!!wizard.network &&
-        !!wizard.security &&
-        (wizard.security !== 'reality' || (!!wizard.sni && !!wizard.realityPrivateKey && !!wizard.realityShortId))))
+      (!!wizard.network && !!wizard.security && (wizard.security !== 'reality' || (!!wizard.sni && !!wizard.realityPrivateKey && !!wizard.realityShortId))))
 
   const [scanning, setScanning] = useState(false)
   const [scanResults, setScanResults] = useState<RealityScanResult[] | null>(null)
   const [generatingKeys, setGeneratingKeys] = useState(false)
-  const [generatedKey, setGeneratedKey] = useState<{ private_key: string; public_key: string; short_id: string } | null>(
-    null,
-  )
-  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [generatedKey, setGeneratedKey] = useState<{ private_key: string; public_key: string; short_id: string } | null>(null)
   const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
   const [usingPanelCert, setUsingPanelCert] = useState(false)
 
-  function updateWizard<K extends keyof ReturnType<typeof emptyWizard>>(
-    key: K,
-    value: ReturnType<typeof emptyWizard>[K],
-  ) {
+  function updateWizard<K extends keyof ReturnType<typeof emptyWizard>>(key: K, value: ReturnType<typeof emptyWizard>[K]) {
     setWizard((w) => ({ ...w, [key]: value }))
   }
 
@@ -644,7 +764,7 @@ export default function CoresPage() {
     try {
       config = form.configText.trim() ? JSON.parse(form.configText) : { inbounds: [] }
     } catch {
-      setError(t.coresPage.invalidJson)
+      setFormError(t.coresPage.invalidJson)
       return
     }
     if (!Array.isArray(config.inbounds)) config.inbounds = []
@@ -654,7 +774,7 @@ export default function CoresPage() {
     if (idx >= 0) inbounds[idx] = newInbound
     else inbounds.push(newInbound)
     setForm((f) => ({ ...f, configText: JSON.stringify(config, null, 2) }))
-    setError(null)
+    setFormError(null)
     setAddedFlash(true)
     window.setTimeout(() => setAddedFlash(false), 1500)
   }
@@ -673,7 +793,7 @@ export default function CoresPage() {
       const res = await listNodes()
       setNodes(res.nodes)
     } catch {
-      // The node-assignment list is a convenience next to each core; a
+      // The node-assignment chips are a convenience next to each core; a
       // failed fetch here shouldn't block the rest of the Cores page.
     }
   }
@@ -683,6 +803,21 @@ export default function CoresPage() {
     refreshNodes()
   }, [])
 
+  useEffect(() => {
+    if (createSignal > 0) openNew(engine)
+  }, [createSignal])
+
+  function openNew(type: CoreType | '') {
+    setEditingId(null)
+    setForm({ ...emptyForm(), coreType: type })
+    setWizard(emptyWizard())
+    setScanResults(null)
+    setGeneratedKey(null)
+    setLastWarnings([])
+    setFormError(null)
+    setShowForm(true)
+  }
+
   function resetForm() {
     setEditingId(null)
     setForm(emptyForm())
@@ -691,7 +826,7 @@ export default function CoresPage() {
     setGeneratedKey(null)
     setShowForm(false)
     setLastWarnings([])
-    setError(null)
+    setFormError(null)
   }
 
   function startEdit(core: Core) {
@@ -711,6 +846,7 @@ export default function CoresPage() {
     })
     setWizard(emptyWizard())
     setLastWarnings([])
+    setFormError(null)
     setShowForm(true)
   }
 
@@ -722,26 +858,20 @@ export default function CoresPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function copy(text: string, field: string) {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // Clipboard API unavailable — value stays visible to select by hand.
-    }
-    setCopiedField(field)
-    window.setTimeout(() => setCopiedField((f) => (f === field ? null : f)), 1200)
+  async function copyValue(text: string) {
+    if (await copyToClipboard(text)) say(t.coresPage.copied)
   }
 
   async function runScan() {
     setScanning(true)
-    setError(null)
+    setFormError(null)
     setScanResults(null)
     try {
       const res = await scanReality()
       setScanResults(res.results)
-      if (!res.results.some((r) => r.recommended)) setError(t.coresPage.noTargetFound)
+      if (!res.results.some((r) => r.recommended)) setFormError(t.coresPage.noTargetFound)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.coresPage.scanFailed)
+      setFormError(err instanceof ApiError ? err.message : t.coresPage.scanFailed)
     } finally {
       setScanning(false)
     }
@@ -749,13 +879,13 @@ export default function CoresPage() {
 
   async function generateKeys() {
     setGeneratingKeys(true)
-    setError(null)
+    setFormError(null)
     try {
       const keys = await getRealityKeypair()
       setGeneratedKey(keys)
       setWizard((w) => ({ ...w, realityPrivateKey: keys.private_key, realityShortId: keys.short_id }))
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
+      setFormError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
     } finally {
       setGeneratingKeys(false)
     }
@@ -763,12 +893,12 @@ export default function CoresPage() {
 
   async function generateIkev2ServerCert() {
     setGeneratingIkev2Cert(true)
-    setError(null)
+    setFormError(null)
     try {
       const pair = await generateIkev2Cert(form.ikev2RemoteId)
       setForm((f) => ({ ...f, ikev2Certificate: pair.certificate, ikev2CertificateKey: pair.key }))
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
+      setFormError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
     } finally {
       setGeneratingIkev2Cert(false)
     }
@@ -776,12 +906,12 @@ export default function CoresPage() {
 
   async function usePanelCertForIkev2() {
     setUsingPanelCert(true)
-    setError(null)
+    setFormError(null)
     try {
       const pair = await getPanelCertForIkev2()
       setForm((f) => ({ ...f, ikev2Certificate: pair.certificate, ikev2CertificateKey: pair.key }))
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
+      setFormError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
     } finally {
       setUsingPanelCert(false)
     }
@@ -789,7 +919,7 @@ export default function CoresPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    setError(null)
+    setFormError(null)
     setLastWarnings([])
     if (!form.coreType) return
 
@@ -798,7 +928,7 @@ export default function CoresPage() {
       try {
         config = JSON.parse(form.configText)
       } catch {
-        setError(t.coresPage.invalidJson)
+        setFormError(t.coresPage.invalidJson)
         return
       }
     }
@@ -820,10 +950,14 @@ export default function CoresPage() {
       }
       const result = editingId ? await updateCore(editingId, payload) : await createCore(payload)
       setLastWarnings(result.warnings)
-      if (result.warnings.length === 0) resetForm()
+      setEngine(result.core_type)
+      if (result.warnings.length === 0) {
+        resetForm()
+        say(editingId ? c.saved : c.created)
+      }
       await refresh()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.common.genericError)
+      setFormError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setSubmitting(false)
     }
@@ -839,671 +973,574 @@ export default function CoresPage() {
     }
   }
 
+  const byType = (type: CoreType) => (cores ?? []).filter((x) => x.core_type === type)
+  const nodesRunning = (type: CoreType) => nodes.filter((n) => byType(type).some((x) => (type === 'xray' ? n.core_id === x.id : n.ipsec_core_id === x.id)))
+  const shown = byType(engine)
+  const codeCore = code ? cores?.find((x) => x.id === code.coreId) : undefined
+  const engineSub: Record<CoreType, string> = { xray: c.xraySub, ikev2: c.ikev2Sub, l2tp: c.l2tpSub }
+
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-end">
-        <h1 className="sr-only">{t.coresPage.title}</h1>
-        <button
-          onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="hover-btn"
-        >
-          {t.coresPage.newBtn}
+    <div className="pg-cores">
+      <h1 className="sr-only">{t.coresPage.title}</h1>
+
+      <div className="engines" role="tablist" aria-label={t.coresPage.coreTypeLabel}>
+        {CORE_TYPES.map((type) => {
+          const count = byType(type).length
+          const running = nodesRunning(type)
+          return (
+            <button
+              key={type}
+              type="button"
+              role="tab"
+              aria-selected={engine === type}
+              className={`engine ${count === 0 ? 'empty-engine' : ''}`}
+              onClick={() => setEngine(type)}
+            >
+              <span className="mark">{type === 'xray' ? 'XRAY' : type === 'ikev2' ? 'IKEv2' : 'L2TP'}</span>
+              <span className="t">
+                <b>{t.coresPage.coreTypeLabels[type]}</b>
+                <small>{engineSub[type]}</small>
+                <span className="nodes">
+                  {count === 0 ? (
+                    c.notCreated
+                  ) : (
+                    <>
+                      {running.slice(0, 4).map((n) => (
+                        <span key={n.id} className={`tf-led ${n.status === 'connected' ? 'on' : n.status === 'error' ? 'err' : 'wait'}`} />
+                      ))}
+                      {c.engineCount(count, running.length)}
+                    </>
+                  )}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="sub-head">
+        <p className="tf-note" style={{ margin: 0, maxWidth: '80ch' }}>
+          {engine === 'xray' ? t.coresPage.intro : engineSub[engine]}
+        </p>
+        <button type="button" className="btn solid" onClick={() => openNew(engine)}>
+          <IconPlus size={14} />
+          {c.newOfType(t.coresPage.coreTypeLabels[engine])}
         </button>
       </div>
-      <p className="mb-6 text-sm text-muted">{t.coresPage.intro}</p>
+
+      {error && <div className="tf-alert">{error}</div>}
+
+      {cores === null ? (
+        <div className="skel" style={{ height: 260, borderRadius: 18 }} />
+      ) : shown.length === 0 ? (
+        <Empty
+          title={c.emptyTitle(t.coresPage.coreTypeLabels[engine])}
+          text={engine === 'l2tp' ? t.hostsPage.l2tpHint : engine === 'ikev2' ? t.coresPage.ikev2CertHint : t.coresPage.intro}
+          action={
+            <button type="button" className="btn solid" onClick={() => openNew(engine)}>
+              <IconPlus size={14} />
+              {c.newOfType(t.coresPage.coreTypeLabels[engine])}
+            </button>
+          }
+        />
+      ) : (
+        shown.map((core) => {
+          const config = (core.config ?? {}) as Record<string, unknown>
+          const ruleCount = Array.isArray((config.routing as { rules?: unknown[] })?.rules) ? ((config.routing as { rules: unknown[] }).rules.length as number) : 0
+          const outCount = Array.isArray(config.outbounds) ? (config.outbounds as unknown[]).length : 0
+          const runningNodes = nodes.filter((n) => (core.core_type === 'xray' ? n.core_id === core.id : n.ipsec_core_id === core.id))
+          return (
+            <div key={core.id} className="flex flex-col gap-3.5">
+              <div className="tf-card">
+                <div className="core-head">
+                  <span className="t">
+                    <b>{core.name}</b>
+                    <small>{core.note || t.coresPage.coreTypeLabels[core.core_type]}</small>
+                  </span>
+                  {core.core_type === 'xray' &&
+                    (core.warnings.length === 0 ? <span className="valid">✓ {c.validJson}</span> : <span className="pill warn">{c.warnings(core.warnings.length)}</span>)}
+                  <span className="chips">
+                    {core.core_type === 'xray' ? (
+                      <>
+                        <span className="chip">{c.inboundsCount(core.inbounds.length)}</span>
+                        <span className="chip">{c.rulesCount(ruleCount)}</span>
+                        <span className="chip">{c.outboundsCount(outCount)}</span>
+                      </>
+                    ) : (
+                      <span className="chip">{c.hostsCount(core.host_count)}</span>
+                    )}
+                    <span className="chip">{c.nodesCount(runningNodes.length)}</span>
+                  </span>
+                  <span className="acts">
+                    {core.core_type === 'xray' && (
+                      <button type="button" className="btn" onClick={() => setCode({ coreId: core.id, part: 'all' })}>
+                        {c.jsonFile}
+                      </button>
+                    )}
+                    <button type="button" className="btn solid" onClick={() => startEdit(core)}>
+                      {t.common.edit}
+                    </button>
+                    <button type="button" className="btn danger" onClick={() => handleDelete(core)}>
+                      {t.common.delete}
+                    </button>
+                  </span>
+                </div>
+                {core.warnings.length > 0 && (
+                  <div className="warn-box">
+                    {core.warnings.map((w, i) => (
+                      <div key={i}>• {w}</div>
+                    ))}
+                  </div>
+                )}
+                <NodeAssignment
+                  core={core}
+                  nodes={nodes}
+                  onChanged={() => {
+                    refreshNodes()
+                    refresh()
+                  }}
+                />
+              </div>
+
+              {core.core_type === 'xray' && <XrayFlow core={core} onOpen={(part) => setCode({ coreId: core.id, part })} />}
+
+              {core.core_type === 'ikev2' && (
+                <div className="ike-grid">
+                  <div className="cert">
+                    <div className="cert-top">
+                      <small>SERVER CERTIFICATE</small>
+                      <b>{core.ikev2_remote_id ?? '—'}</b>
+                      <span style={{ fontSize: '.74rem', color: '#a08b6a' }}>
+                        {core.ikev2_certificate ? t.coresPage.ikev2CertStatusCustom : t.coresPage.ikev2CertStatusAuto}
+                      </span>
+                    </div>
+                    <div className="cert-kv">
+                      <div>
+                        <span>Remote ID</span>
+                        <b className="mono">{core.ikev2_remote_id ?? '—'}</b>
+                      </div>
+                      <div>
+                        <span>{t.coresPage.ikev2AuthModeLabel}</span>
+                        <b>{core.ikev2_auth_mode === 'psk' ? t.coresPage.ikev2AuthModePsk : t.coresPage.ikev2AuthModeEap}</b>
+                      </div>
+                      <div>
+                        <span>PSK</span>
+                        <b className="en">{core.ikev2_psk ? '••••••••' : '—'}</b>
+                      </div>
+                      <div>
+                        <span>{t.coresPage.colHosts}</span>
+                        <b className="en">{core.host_count}</b>
+                      </div>
+                    </div>
+                    <p className="hint" style={{ marginTop: 12 }}>
+                      {core.ikev2_auth_mode === 'psk' ? t.coresPage.ikev2AuthModePskHint : t.coresPage.ikev2AuthModeEapHint}
+                    </p>
+                  </div>
+                  <div className="tf-card chain-card">
+                    <div className="tf-card-head">
+                      <h3>{c.chainTitle}</h3>
+                    </div>
+                    <div className="chain">
+                      <div className="hop">
+                        <span className="box">{c.hopDevice}</span>
+                        <small>{c.hopDeviceSub}</small>
+                      </div>
+                      <div className="chain-wire" />
+                      <div className="hop">
+                        <span className="box">IKEv2</span>
+                        <small className="en">{runningNodes.map((n) => n.name).join(', ') || '—'}</small>
+                      </div>
+                      {core.ikev2_egress_vless && (
+                        <>
+                          <div className="chain-wire" />
+                          <div className="hop extra">
+                            <span className="box">VLESS</span>
+                            <small>{c.hopEgress}</small>
+                          </div>
+                        </>
+                      )}
+                      <div className="chain-wire" />
+                      <div className="hop">
+                        <span className="box">WWW</span>
+                        <small>{c.hopInternet}</small>
+                      </div>
+                    </div>
+                    <p className="chain-note">{core.ikev2_egress_vless ? c.chainEgress : c.chainDirect}</p>
+                  </div>
+                </div>
+              )}
+
+              {core.core_type === 'l2tp' && (
+                <div className="tf-card" style={{ padding: 16 }}>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="chip">PSK {core.l2tp_psk ? '••••••••' : '—'}</span>
+                    <span className="chip en">UDP 500 · 1701 · 4500</span>
+                    <span className="chip">{c.hostsCount(core.host_count)}</span>
+                  </div>
+                  <p className="hint">{t.hostsPage.l2tpHint}</p>
+                </div>
+              )}
+            </div>
+          )
+        })
+      )}
+
+      {code && codeCore && <CodeSheet core={codeCore} part={code.part} onPart={(part) => setCode({ coreId: codeCore.id, part })} onClose={() => setCode(null)} />}
 
       {showForm && (
-        <div className="mb-6 rounded-xl border border-subtle bg-surface p-4">
-          <div className="mb-4">
-            <label className={labelClass}>{t.coresPage.coreTypeLabel}</label>
-            <div className="flex flex-wrap gap-2">
+        <Sheet
+          title={editingId ? c.formEdit(form.name) : c.formNew}
+          sub={form.coreType ? t.coresPage.coreTypeLabels[form.coreType] : t.coresPage.coreTypeLabel}
+          onClose={resetForm}
+          width={760}
+          footer={
+            form.coreType ? (
+              <>
+                <button type="submit" form="core-form" disabled={submitting} className="btn primary lg">
+                  {submitting ? t.common.saving : editingId ? t.common.save : t.coresPage.createCoreBtn}
+                </button>
+                <button type="button" className="btn lg" onClick={resetForm}>
+                  {t.usersPage.cancelAction}
+                </button>
+              </>
+            ) : undefined
+          }
+        >
+          <div>
+            <div className="lbl">{t.coresPage.coreTypeLabel}</div>
+            <div className="tf-seg">
               {CORE_TYPES.map((ct) => (
                 <button
                   key={ct}
                   type="button"
+                  aria-pressed={form.coreType === ct}
                   disabled={!!editingId}
                   onClick={() => setForm((f) => ({ ...emptyForm(), coreType: ct, name: f.name, note: f.note }))}
-                  className={`hover-btn ${form.coreType === ct ? 'hover-btn-active' : ''}`}
                 >
                   {t.coresPage.coreTypeLabels[ct]}
                 </button>
               ))}
             </div>
-            {editingId && <div className="mt-1.5 text-[11px] text-faint">{t.coresPage.coreTypeHint}</div>}
+            {editingId && <div className="hint">{t.coresPage.coreTypeHint}</div>}
           </div>
 
           {form.coreType === 'xray' && (
-          <div className="mb-4 rounded-lg border border-subtle bg-well p-3">
-            <div className="mb-1 text-xs font-bold text-secondary">{t.coresPage.wizardTitle}</div>
-            <div className="mb-3 text-[11px] text-faint">{t.coresPage.wizardHint}</div>
-
-            <div className="flex flex-wrap gap-3">
-              <div>
-                <label className={labelClass}>{t.coresPage.tagLabel}</label>
-                <input
-                  dir="ltr"
-                  value={wizard.tag}
-                  onChange={(e) => updateWizard('tag', e.target.value)}
-                  placeholder="vless-reality-1"
-                  className={`${inputClass} w-40 text-left`}
-                />
+            <div className="form-section">
+              <h4>{t.coresPage.wizardTitle}</h4>
+              <div className="hint" style={{ marginTop: -4 }}>
+                {t.coresPage.wizardHint}
               </div>
-              <div>
-                <label className={labelClass}>{t.coresPage.protocolLabel}</label>
-                <select
-                  value={wizard.protocol}
-                  onChange={(e) => updateWizard('protocol', e.target.value as WizardProtocol)}
-                  className={inputClass}
-                >
-                  <option value="" disabled>
-                    {t.coresPage.selectPlaceholder}
-                  </option>
-                  <option value="vless">{protocolLabels.vless}</option>
-                  <option value="vmess">{protocolLabels.vmess}</option>
-                  <option value="trojan">{protocolLabels.trojan}</option>
-                  <option value="shadowsocks">{protocolLabels.shadowsocks}</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>{t.coresPage.portLabel}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max="65535"
-                    value={wizard.port}
-                    onChange={(e) => updateWizard('port', e.target.value)}
-                    className={`${inputClass} w-24`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => updateWizard('port', randomPort())}
-                    className="hover-btn hover-btn-sm"
-                  >
-                    🎲
-                  </button>
-                </div>
-              </div>
-
-              {isTransportProtocol && (
-                <>
-                  <div>
-                    <label className={labelClass}>{t.coresPage.networkLabel}</label>
-                    <select
-                      value={wizard.network}
-                      onChange={(e) => updateWizard('network', e.target.value as typeof wizard.network)}
-                      className={inputClass}
-                    >
-                      <option value="" disabled>
-                        {t.coresPage.selectPlaceholder}
-                      </option>
-                      <option value="tcp">{t.coresPage.networkTcp}</option>
-                      <option value="ws">{t.coresPage.networkWs}</option>
-                      <option value="grpc">{t.coresPage.networkGrpc}</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelClass}>{t.coresPage.securityLabel}</label>
-                    <select
-                      value={wizard.security}
-                      onChange={(e) => updateWizard('security', e.target.value as typeof wizard.security)}
-                      className={inputClass}
-                    >
-                      <option value="" disabled>
-                        {t.coresPage.selectPlaceholder}
-                      </option>
-                      <option value="none">{t.coresPage.securityNone}</option>
-                      <option value="tls">{t.coresPage.securityTls}</option>
-                      <option value="reality">{t.coresPage.securityReality}</option>
-                    </select>
-                  </div>
-                </>
-              )}
-              {wizard.protocol === 'shadowsocks' && (
-                <div>
-                  <label className={labelClass}>{t.coresPage.methodLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={wizard.method}
-                    onChange={(e) => updateWizard('method', e.target.value)}
-                    placeholder="2022-blake3-aes-128-gcm"
-                    className={`${inputClass} w-52 text-left`}
-                  />
-                </div>
-              )}
-            </div>
-
-            {isTransportProtocol && (wizard.security === 'tls' || wizard.security === 'reality') && (
-              <div className="mt-3 flex flex-wrap gap-3">
-                <div>
-                  <label className={labelClass}>{t.coresPage.sniLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={wizard.sni}
-                    onChange={(e) => updateWizard('sni', e.target.value)}
-                    placeholder="www.example.com"
-                    className={`${inputClass} text-left`}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>{t.coresPage.fingerprintLabel}</label>
-                  <select
-                    dir="ltr"
-                    value={wizard.fingerprint}
-                    onChange={(e) => updateWizard('fingerprint', e.target.value)}
-                    className={`${inputClass} w-36 text-left`}
-                  >
-                    <option value="">{t.coresPage.selectPlaceholder}</option>
-                    {FINGERPRINTS.map((fp) => (
-                      <option key={fp} value={fp}>
-                        {fp}
-                      </option>
-                    ))}
+              <div className="form-grid">
+                <Field label={t.coresPage.tagLabel}>
+                  <input className="input ltr" value={wizard.tag} onChange={(e) => updateWizard('tag', e.target.value)} placeholder="vless-reality-1" />
+                </Field>
+                <Field label={t.coresPage.protocolLabel}>
+                  <select className="input" value={wizard.protocol} onChange={(e) => updateWizard('protocol', e.target.value as WizardProtocol)}>
+                    <option value="" disabled>
+                      {t.coresPage.selectPlaceholder}
+                    </option>
+                    <option value="vless">{protocolLabels.vless}</option>
+                    <option value="vmess">{protocolLabels.vmess}</option>
+                    <option value="trojan">{protocolLabels.trojan}</option>
+                    <option value="shadowsocks">{protocolLabels.shadowsocks}</option>
                   </select>
-                </div>
-                {wizard.security === 'tls' && (
-                  <div>
-                    <label className={labelClass}>{t.coresPage.alpnLabel}</label>
-                    <input
-                      dir="ltr"
-                      value={wizard.alpn}
-                      onChange={(e) => updateWizard('alpn', e.target.value)}
-                      placeholder="h2,http/1.1"
-                      className={`${inputClass} text-left`}
-                    />
-                  </div>
+                </Field>
+                <Field label={t.coresPage.portLabel}>
+                  <span className="flex gap-1.5">
+                    <input className="input" type="number" min="1" max="65535" value={wizard.port} onChange={(e) => updateWizard('port', e.target.value)} />
+                    <button type="button" onClick={() => updateWizard('port', randomPort())} className="btn" title="random">
+                      🎲
+                    </button>
+                  </span>
+                </Field>
+                {isTransportProtocol && (
+                  <>
+                    <Field label={t.coresPage.networkLabel}>
+                      <select className="input" value={wizard.network} onChange={(e) => updateWizard('network', e.target.value as typeof wizard.network)}>
+                        <option value="" disabled>
+                          {t.coresPage.selectPlaceholder}
+                        </option>
+                        <option value="tcp">{t.coresPage.networkTcp}</option>
+                        <option value="ws">{t.coresPage.networkWs}</option>
+                        <option value="grpc">{t.coresPage.networkGrpc}</option>
+                      </select>
+                    </Field>
+                    <Field label={t.coresPage.securityLabel}>
+                      <select className="input" value={wizard.security} onChange={(e) => updateWizard('security', e.target.value as typeof wizard.security)}>
+                        <option value="" disabled>
+                          {t.coresPage.selectPlaceholder}
+                        </option>
+                        <option value="none">{t.coresPage.securityNone}</option>
+                        <option value="tls">{t.coresPage.securityTls}</option>
+                        <option value="reality">{t.coresPage.securityReality}</option>
+                      </select>
+                    </Field>
+                  </>
+                )}
+                {wizard.protocol === 'shadowsocks' && (
+                  <Field label={t.coresPage.methodLabel}>
+                    <input className="input ltr" value={wizard.method} onChange={(e) => updateWizard('method', e.target.value)} placeholder="2022-blake3-aes-128-gcm" />
+                  </Field>
+                )}
+                {isTransportProtocol && (wizard.security === 'tls' || wizard.security === 'reality') && (
+                  <>
+                    <Field label={t.coresPage.sniLabel}>
+                      <input className="input ltr" value={wizard.sni} onChange={(e) => updateWizard('sni', e.target.value)} placeholder="www.example.com" />
+                    </Field>
+                    <Field label={t.coresPage.fingerprintLabel}>
+                      <select className="input ltr" value={wizard.fingerprint} onChange={(e) => updateWizard('fingerprint', e.target.value)}>
+                        <option value="">{t.coresPage.selectPlaceholder}</option>
+                        {FINGERPRINTS.map((fp) => (
+                          <option key={fp} value={fp}>
+                            {fp}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {wizard.security === 'tls' && (
+                      <Field label={t.coresPage.alpnLabel}>
+                        <input className="input ltr" value={wizard.alpn} onChange={(e) => updateWizard('alpn', e.target.value)} placeholder="h2,http/1.1" />
+                      </Field>
+                    )}
+                  </>
+                )}
+                {isTransportProtocol && (wizard.network === 'ws' || wizard.network === 'grpc') && (
+                  <>
+                    <Field label={wizard.network === 'ws' ? t.coresPage.wsPathLabel : t.coresPage.grpcServiceLabel}>
+                      <input className="input ltr" value={wizard.path} onChange={(e) => updateWizard('path', e.target.value)} />
+                    </Field>
+                    {wizard.network === 'ws' && (
+                      <Field label={t.coresPage.hostHeaderLabel}>
+                        <input className="input ltr" value={wizard.hostHeader} onChange={(e) => updateWizard('hostHeader', e.target.value)} />
+                      </Field>
+                    )}
+                  </>
                 )}
               </div>
-            )}
 
-            {isTransportProtocol && wizard.security === 'reality' && (
-              <div className="mt-3 rounded-lg border border-subtle bg-well p-3">
-                <div className="mb-2 text-xs font-bold text-secondary">{t.coresPage.realityToolsTitle}</div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={generateKeys}
-                    disabled={generatingKeys}
-                    className="hover-btn hover-btn-sm"
-                  >
-                    {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={runScan}
-                    disabled={scanning}
-                    className="hover-btn hover-btn-sm"
-                  >
-                    {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
-                  </button>
-                  <div className="text-[11px] text-faint">
-                    <span dir="ltr" className="font-mono">
-                      privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'} · shortId:{' '}
-                      {wizard.realityShortId || '—'}
+              {isTransportProtocol && wizard.security === 'reality' && (
+                <div className="form-section">
+                  <h4>{t.coresPage.realityToolsTitle}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={generateKeys} disabled={generatingKeys} className="btn">
+                      {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
+                    </button>
+                    <button type="button" onClick={runScan} disabled={scanning} className="btn">
+                      {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
+                    </button>
+                    <span className="hint mono" style={{ margin: 0 }}>
+                      privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'} · shortId: {wizard.realityShortId || '—'}
                     </span>
                   </div>
-                </div>
-
-                {generatedKey && (
-                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    {(['private_key', 'public_key', 'short_id'] as const).map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => copy(generatedKey[key], key)}
-                        dir="ltr"
-                        className="truncate rounded-lg border border-subtle bg-well px-2 py-1.5 text-left font-mono text-[11px] text-glass hover:border-glass/40"
-                        title={generatedKey[key]}
-                      >
-                        {copiedField === key ? t.coresPage.copied : `${key}: ${generatedKey[key]}`}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {scanResults !== null && scanResults.length > 0 && (
-                  <div className="mt-3 max-h-64 overflow-y-auto overflow-x-auto rounded-lg border border-subtle">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-subtle text-muted">
-                          <th className="px-3 py-2 text-left font-medium" dir="ltr">
-                            {t.coresPage.scanColHost}
-                          </th>
-                          <th className="px-3 py-2 font-medium">{t.coresPage.scanColStatus}</th>
-                          <th className="px-3 py-2 font-medium">{t.coresPage.scanColTls}</th>
-                          <th className="px-3 py-2 font-medium">{t.coresPage.scanColLatency}</th>
-                          <th className="px-3 py-2 font-medium"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scanResults.map((r) => (
-                          <tr key={r.host} className="border-b border-hair last:border-0">
-                            <td dir="ltr" className="px-3 py-2 text-left font-mono text-body">
-                              {r.host}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              {r.recommended ? (
-                                <span className="font-bold" style={{ color: ACCENT }}>
-                                  {t.coresPage.scanStatusRecommended}
-                                </span>
-                              ) : r.reachable ? (
-                                <span className="text-secondary">{t.coresPage.scanStatusUsable}</span>
-                              ) : (
-                                <span className="text-danger">{t.coresPage.scanStatusUnreachable}</span>
-                              )}
-                            </td>
-                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
-                              {r.tls_version ?? '—'}
-                            </td>
-                            <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
-                              {r.latency_ms != null ? `${r.latency_ms}ms` : '—'}
-                            </td>
-                            <td className="px-3 py-2 text-left">
-                              {r.reachable && (
-                                <button
-                                  type="button"
-                                  onClick={() => updateWizard('sni', r.host)}
-                                  className="hover-btn hover-btn-sm"
-                                >
-                                  {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
-                                </button>
-                              )}
-                            </td>
+                  {generatedKey && (
+                    <div className="flex flex-col gap-1.5">
+                      {(['private_key', 'public_key', 'short_id'] as const).map((key) => (
+                        <div key={key} className="tf-linkrow">
+                          <span className="hint en" style={{ margin: 0, width: 80, flex: 'none' }}>
+                            {key}
+                          </span>
+                          <span className="mono">{generatedKey[key]}</span>
+                          <button type="button" className="btn" onClick={() => copyValue(generatedKey[key])}>
+                            {t.copy}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {scanResults !== null && scanResults.length > 0 && (
+                    <div style={{ maxHeight: 260, overflow: 'auto' }}>
+                      <table className="scan-table">
+                        <thead>
+                          <tr>
+                            <th>{t.coresPage.scanColHost}</th>
+                            <th>{t.coresPage.scanColStatus}</th>
+                            <th>{t.coresPage.scanColTls}</th>
+                            <th>{t.coresPage.scanColLatency}</th>
+                            <th />
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isTransportProtocol && (wizard.network === 'ws' || wizard.network === 'grpc') && (
-              <div className="mt-3 flex flex-wrap gap-3">
-                <div>
-                  <label className={labelClass}>
-                    {wizard.network === 'ws' ? t.coresPage.wsPathLabel : t.coresPage.grpcServiceLabel}
-                  </label>
-                  <input
-                    dir="ltr"
-                    value={wizard.path}
-                    onChange={(e) => updateWizard('path', e.target.value)}
-                    className={`${inputClass} w-40 text-left`}
-                  />
+                        </thead>
+                        <tbody>
+                          {scanResults.map((r) => (
+                            <tr key={r.host}>
+                              <td className="mono" style={{ textAlign: 'left' }}>
+                                {r.host}
+                              </td>
+                              <td>
+                                {r.recommended ? (
+                                  <span className="pill accent">{t.coresPage.scanStatusRecommended}</span>
+                                ) : r.reachable ? (
+                                  <span className="pill ok">{t.coresPage.scanStatusUsable}</span>
+                                ) : (
+                                  <span className="pill bad">{t.coresPage.scanStatusUnreachable}</span>
+                                )}
+                              </td>
+                              <td className="mono">{r.tls_version ?? '—'}</td>
+                              <td className="mono">{r.latency_ms != null ? `${r.latency_ms}ms` : '—'}</td>
+                              <td>
+                                {r.reachable && (
+                                  <button type="button" onClick={() => updateWizard('sni', r.host)} className={`btn ${wizard.sni === r.host ? 'on' : ''}`}>
+                                    {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-                {wizard.network === 'ws' && (
-                  <div>
-                    <label className={labelClass}>{t.coresPage.hostHeaderLabel}</label>
-                    <input
-                      dir="ltr"
-                      value={wizard.hostHeader}
-                      onChange={(e) => updateWizard('hostHeader', e.target.value)}
-                      className={`${inputClass} w-40 text-left`}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            <button
-              type="button"
-              onClick={addWizardToJson}
-              disabled={!wizardCanAdd}
-              className="hover-btn hover-btn-sm mt-3"
-            >
-              {addedFlash ? t.coresPage.addedToJson : t.coresPage.addToJsonBtn}
-            </button>
-          </div>
+              <div>
+                <button type="button" onClick={addWizardToJson} disabled={!wizardCanAdd} className="btn solid">
+                  {addedFlash ? t.coresPage.addedToJson : t.coresPage.addToJsonBtn}
+                </button>
+              </div>
+            </div>
           )}
 
           {form.coreType && (
-          <form onSubmit={handleSubmit}>
-            <div className="flex flex-wrap gap-3">
-              <div>
-                <label className={labelClass}>{t.coresPage.nameLabel}</label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  required
-                  className={inputClass}
-                />
+            <form id="core-form" onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+              <div className="form-grid">
+                <Field label={t.coresPage.nameLabel}>
+                  <input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+                </Field>
+                <Field label={t.coresPage.noteLabel}>
+                  <input className="input" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
+                </Field>
               </div>
-              <div>
-                <label className={labelClass}>{t.coresPage.noteLabel}</label>
-                <input
-                  value={form.note}
-                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-                  className={`${inputClass} w-56`}
-                />
-              </div>
-            </div>
 
-            {form.coreType === 'xray' && (
-            <>
-            <div className="mt-3">
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className={labelClass}>{t.coresPage.configLabel}</label>
-                <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/json,.json"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="core-json-upload"
-                  />
-                  <label
-                    htmlFor="core-json-upload"
-                    className="cursor-pointer rounded-lg border px-3 py-1 text-xs font-bold"
-                    style={{ borderColor: 'rgb(var(--c-accent) / 0.35)', color: ACCENT }}
-                  >
-                    {t.coresPage.uploadJsonBtn}
-                  </label>
-                </div>
-              </div>
-              <textarea
-                dir="ltr"
-                value={form.configText}
-                onChange={(e) => setForm((f) => ({ ...f, configText: e.target.value }))}
-                placeholder={t.coresPage.configPlaceholder}
-                required
-                rows={14}
-                className={monoTextarea}
-              />
-            </div>
-
-            <RoutingEditor
-              configText={form.configText}
-              setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))}
-              t={t}
-            />
-            <OutboundsEditor
-              configText={form.configText}
-              setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))}
-              t={t}
-            />
-            </>
-            )}
-
-            {form.coreType === 'l2tp' && (
-              <div className="mt-3 flex flex-wrap gap-3">
-                <div>
-                  <label className={labelClass}>{t.hostsPage.l2tpPskLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={form.l2tpPsk}
-                    onChange={(e) => setForm((f) => ({ ...f, l2tpPsk: e.target.value }))}
-                    required
-                    className={`${inputClass} w-64 font-mono text-xs`}
-                  />
-                </div>
-                <div className="self-end pb-2 text-[10px] text-faint">{t.hostsPage.l2tpHint}</div>
-              </div>
-            )}
-
-            {form.coreType === 'ikev2' && (
-              <div className="mt-3 flex flex-col gap-3">
-                <div>
-                  <label className={labelClass}>{t.coresPage.ikev2AuthModeLabel}</label>
-                  <div className="flex flex-wrap gap-2">
-                    {(['eap', 'psk'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, ikev2AuthMode: mode }))}
-                        className={`hover-btn hover-btn-sm hover-btn-block ${form.ikev2AuthMode === mode ? 'hover-btn-active' : ''}`}
-                      >
-                        <div className="font-bold">
-                          {mode === 'eap' ? t.coresPage.ikev2AuthModeEap : t.coresPage.ikev2AuthModePsk}
-                        </div>
-                        <div className="mt-0.5 max-w-xs text-[10px] text-faint">
-                          {mode === 'eap' ? t.coresPage.ikev2AuthModeEapHint : t.coresPage.ikev2AuthModePskHint}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
+              {form.coreType === 'xray' && (
+                <>
                   <div>
-                    <label className={labelClass}>{t.coresPage.ikev2RemoteIdLabel}</label>
-                    <input
-                      dir="ltr"
-                      value={form.ikev2RemoteId}
-                      onChange={(e) => setForm((f) => ({ ...f, ikev2RemoteId: e.target.value }))}
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="lbl" htmlFor="core-json">
+                        {t.coresPage.configLabel}
+                      </label>
+                      <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={handleFileUpload} className="hidden" id="core-json-upload" />
+                      <label htmlFor="core-json-upload" className="btn" style={{ marginBottom: 5 }}>
+                        {t.coresPage.uploadJsonBtn}
+                      </label>
+                    </div>
+                    <textarea
+                      id="core-json"
+                      className="input"
+                      value={form.configText}
+                      onChange={(e) => setForm((f) => ({ ...f, configText: e.target.value }))}
+                      placeholder={t.coresPage.configPlaceholder}
                       required
-                      className={`${inputClass} w-56 text-left`}
+                      rows={14}
                     />
                   </div>
-                  <div>
-                    <label className={labelClass}>{t.hostsPage.ikev2PskLabel}</label>
-                    <input
-                      dir="ltr"
-                      value={form.ikev2Psk}
-                      onChange={(e) => setForm((f) => ({ ...f, ikev2Psk: e.target.value }))}
-                      required={form.ikev2AuthMode === 'psk'}
-                      className={`${inputClass} w-64 font-mono text-xs`}
-                    />
-                  </div>
-                  <div className="self-end pb-2 text-[10px] text-faint">{t.hostsPage.ikev2PortsHint}</div>
-                </div>
+                  <RoutingEditor configText={form.configText} setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))} t={t} />
+                  <OutboundsEditor configText={form.configText} setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))} t={t} />
+                </>
+              )}
 
-                {form.ikev2AuthMode === 'eap' && (
+              {form.coreType === 'l2tp' && (
+                <Field label={t.hostsPage.l2tpPskLabel} hint={t.hostsPage.l2tpHint}>
+                  <input className="input ltr mono" value={form.l2tpPsk} onChange={(e) => setForm((f) => ({ ...f, l2tpPsk: e.target.value }))} required />
+                </Field>
+              )}
+
+              {form.coreType === 'ikev2' && (
+                <>
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <label className={labelClass}>{t.coresPage.ikev2CertSourceLabel}</label>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={usePanelCertForIkev2}
-                          disabled={usingPanelCert}
-                          className="hover-btn hover-btn-sm"
-                        >
-                          {usingPanelCert ? '…' : t.coresPage.ikev2UsePanelCertButton}
+                    <div className="lbl">{t.coresPage.ikev2AuthModeLabel}</div>
+                    <div className="tf-seg">
+                      {(['eap', 'psk'] as const).map((mode) => (
+                        <button key={mode} type="button" aria-pressed={form.ikev2AuthMode === mode} onClick={() => setForm((f) => ({ ...f, ikev2AuthMode: mode }))}>
+                          {mode === 'eap' ? t.coresPage.ikev2AuthModeEap : t.coresPage.ikev2AuthModePsk}
                         </button>
-                        <button
-                          type="button"
-                          onClick={generateIkev2ServerCert}
-                          disabled={generatingIkev2Cert}
-                          className="hover-btn hover-btn-sm"
-                        >
-                          {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
-                        </button>
+                      ))}
+                    </div>
+                    <div className="hint">{form.ikev2AuthMode === 'eap' ? t.coresPage.ikev2AuthModeEapHint : t.coresPage.ikev2AuthModePskHint}</div>
+                  </div>
+                  <div className="form-grid">
+                    <Field label={t.coresPage.ikev2RemoteIdLabel}>
+                      <input className="input ltr" value={form.ikev2RemoteId} onChange={(e) => setForm((f) => ({ ...f, ikev2RemoteId: e.target.value }))} required />
+                    </Field>
+                    <Field label={t.hostsPage.ikev2PskLabel} hint={t.hostsPage.ikev2PortsHint}>
+                      <input
+                        className="input ltr mono"
+                        value={form.ikev2Psk}
+                        onChange={(e) => setForm((f) => ({ ...f, ikev2Psk: e.target.value }))}
+                        required={form.ikev2AuthMode === 'psk'}
+                      />
+                    </Field>
+                    <Field label={t.coresPage.ikev2EgressVlessLabel} hint={t.coresPage.ikev2EgressVlessHint} wide>
+                      <input
+                        className="input ltr mono"
+                        value={form.ikev2EgressVless}
+                        onChange={(e) => setForm((f) => ({ ...f, ikev2EgressVless: e.target.value }))}
+                        placeholder="vless://..."
+                      />
+                    </Field>
+                  </div>
+                  {form.ikev2AuthMode === 'eap' && (
+                    <div className="form-section">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 style={{ margin: 0 }}>{t.coresPage.ikev2CertSourceLabel}</h4>
+                        <span className="flex gap-1.5">
+                          <button type="button" onClick={usePanelCertForIkev2} disabled={usingPanelCert} className="btn">
+                            {usingPanelCert ? '…' : t.coresPage.ikev2UsePanelCertButton}
+                          </button>
+                          <button type="button" onClick={generateIkev2ServerCert} disabled={generatingIkev2Cert} className="btn">
+                            {generatingIkev2Cert ? '…' : t.coresPage.ikev2GenerateCertButton}
+                          </button>
+                        </span>
+                      </div>
+                      <div className="form-grid">
+                        <Field label={t.coresPage.ikev2CertificateLabel}>
+                          <textarea
+                            className="input"
+                            rows={4}
+                            value={form.ikev2Certificate}
+                            onChange={(e) => setForm((f) => ({ ...f, ikev2Certificate: e.target.value }))}
+                            placeholder="-----BEGIN CERTIFICATE-----"
+                          />
+                        </Field>
+                        <Field label={t.coresPage.ikev2CertificateKeyLabel}>
+                          <textarea
+                            className="input"
+                            rows={4}
+                            value={form.ikev2CertificateKey}
+                            onChange={(e) => setForm((f) => ({ ...f, ikev2CertificateKey: e.target.value }))}
+                            placeholder="-----BEGIN PRIVATE KEY-----"
+                          />
+                        </Field>
+                        <Field label={t.coresPage.ikev2CertPathLabel}>
+                          <input className="input ltr mono" readOnly disabled value={IKEV2_CERT_NODE_PATH} />
+                        </Field>
+                        <Field label={t.coresPage.ikev2CertKeyPathLabel}>
+                          <input className="input ltr mono" readOnly disabled value={IKEV2_CERT_KEY_NODE_PATH} />
+                        </Field>
+                      </div>
+                      <div className="hint" style={{ margin: 0 }}>
+                        {t.coresPage.ikev2CertHint}
+                      </div>
+                      <div className="hint" style={{ margin: 0 }}>
+                        {t.coresPage.ikev2CertPathHint}
                       </div>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className={labelClass}>{t.coresPage.ikev2CertificateLabel}</label>
-                        <textarea
-                          dir="ltr"
-                          rows={4}
-                          value={form.ikev2Certificate}
-                          onChange={(e) => setForm((f) => ({ ...f, ikev2Certificate: e.target.value }))}
-                          placeholder="-----BEGIN CERTIFICATE-----"
-                          className={monoTextarea}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>{t.coresPage.ikev2CertificateKeyLabel}</label>
-                        <textarea
-                          dir="ltr"
-                          rows={4}
-                          value={form.ikev2CertificateKey}
-                          onChange={(e) => setForm((f) => ({ ...f, ikev2CertificateKey: e.target.value }))}
-                          placeholder="-----BEGIN PRIVATE KEY-----"
-                          className={monoTextarea}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>{t.coresPage.ikev2CertPathLabel}</label>
-                        <input
-                          dir="ltr"
-                          readOnly
-                          disabled
-                          value={IKEV2_CERT_NODE_PATH}
-                          className={`${inputClass} w-full cursor-default font-mono text-xs text-faint`}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>{t.coresPage.ikev2CertKeyPathLabel}</label>
-                        <input
-                          dir="ltr"
-                          readOnly
-                          disabled
-                          value={IKEV2_CERT_KEY_NODE_PATH}
-                          className={`${inputClass} w-full cursor-default font-mono text-xs text-faint`}
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-1.5 text-[10px] text-faint">{t.coresPage.ikev2CertHint}</div>
-                    <div className="mt-1 text-[10px] text-faint">{t.coresPage.ikev2CertPathHint}</div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </>
+              )}
 
-            {lastWarnings.length > 0 && (
-              <div className="mt-3 rounded-lg border border-warning/30 bg-warning-tint p-3 text-xs text-warning">
-                <div className="mb-1 font-bold">{t.coresPage.warningsTitle}</div>
-                <ul className="list-inside list-disc">
+              {lastWarnings.length > 0 && (
+                <div className="tf-alert" style={{ color: 'var(--warn)', background: 'rgb(245 158 11 / .08)', borderColor: 'rgb(245 158 11 / .3)', flexDirection: 'column' }}>
+                  <b>{t.coresPage.warningsTitle}</b>
                   {lastWarnings.map((w, i) => (
-                    <li key={i}>{w}</li>
+                    <span key={i}>• {w}</span>
                   ))}
-                </ul>
-              </div>
-            )}
-
-            {error && <div className="mt-3 text-xs text-danger">{error}</div>}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="hover-btn mt-4"
-            >
-              {editingId ? t.common.save : t.coresPage.createCoreBtn}
-            </button>
-          </form>
-          )}
-        </div>
-      )}
-
-      {!showForm && error && <div className="mb-4 text-sm text-danger">{error}</div>}
-
-      {cores === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
-      {cores !== null && cores.length === 0 && (
-        <div className="rounded-xl border border-subtle py-8 text-center text-faint">
-          {t.coresPage.noCoresYet}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-4">
-        {cores?.map((c) => (
-          <div key={c.id} className="rounded-xl border border-subtle bg-surface p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-primary">{c.name}</span>
-                  <span className="rounded-full border border-edge bg-field px-2 py-0.5 text-[10px] text-secondary">
-                    {t.coresPage.coreTypeLabels[c.core_type]}
-                  </span>
                 </div>
-                {c.note && <div className="text-xs text-faint">{c.note}</div>}
-              </div>
-              <div className="flex items-center gap-4">
-                {c.core_type === 'xray' ? (
-                  <span className="text-xs text-muted">
-                    {t.coresPage.colNodes}: <span className="text-body">{c.node_count}</span>
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted">
-                    {t.coresPage.colHosts}: <span className="text-body">{c.host_count}</span>
-                  </span>
-                )}
-                <button onClick={() => startEdit(c)} className="hover-btn hover-btn-sm">
-                  {t.common.edit}
-                </button>
-                <button onClick={() => handleDelete(c)} className="hover-btn hover-btn-sm hover-btn-danger">
-                  {t.common.delete}
-                </button>
-              </div>
-            </div>
-
-            {c.core_type === 'l2tp' && (
-              <div className="text-xs text-muted">PSK: {c.l2tp_psk ? '••••••••' : '—'}</div>
-            )}
-            {c.core_type === 'ikev2' && (
-              <div className="text-xs text-muted">
-                {c.ikev2_certificate ? t.coresPage.ikev2CertStatusCustom : t.coresPage.ikev2CertStatusAuto}
-                {c.ikev2_remote_id && (
-                  <span dir="ltr" className="font-mono">
-                    {' '}
-                    · {c.ikev2_remote_id}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {c.core_type === 'xray' && c.inbounds.length === 0 ? (
-              <div className="text-xs text-faint">{t.coresPage.noInbounds}</div>
-            ) : c.core_type === 'xray' ? (
-              <div className="overflow-x-auto rounded-lg border border-subtle">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-subtle text-muted">
-                      <th className="px-3 py-2 text-left font-medium" dir="ltr">
-                        {t.coresPage.inboundColTag}
-                      </th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.inboundColProtocol}</th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.inboundColNetwork}</th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.inboundColSecurity}</th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.inboundColPort}</th>
-                      <th className="px-3 py-2 font-medium">{t.coresPage.inboundColHosts}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {c.inbounds.map((i) => (
-                      <tr key={i.id} className="border-b border-hair last:border-0">
-                        <td dir="ltr" className="px-3 py-2 text-left font-mono text-body">
-                          {i.tag}
-                        </td>
-                        <td className="px-3 py-2 text-center text-secondary">
-                          {protocolLabels[i.protocol as keyof typeof protocolLabels] ?? i.protocol}
-                        </td>
-                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
-                          {i.network}
-                        </td>
-                        <td className="px-3 py-2 text-center text-muted">
-                          {i.security === 'reality' ? (
-                            <span style={{ color: ACCENT }}>REALITY</span>
-                          ) : (
-                            i.security
-                          )}
-                        </td>
-                        <td dir="ltr" className="px-3 py-2 text-center font-mono text-muted">
-                          {i.port ?? '—'}
-                        </td>
-                        <td className="px-3 py-2 text-center text-muted">{i.host_count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-
-            {(c.core_type === 'xray' || c.core_type === 'l2tp' || c.core_type === 'ikev2') && (
-              <NodeAssignmentEditor
-                core={c}
-                nodes={nodes}
-                onChanged={() => {
-                  refreshNodes()
-                  refresh()
-                }}
-                t={t}
-              />
-            )}
-          </div>
-        ))}
-      </div>
+              )}
+              {formError && <div className="tf-alert">{formError}</div>}
+            </form>
+          )}
+        </Sheet>
+      )}
     </div>
   )
 }

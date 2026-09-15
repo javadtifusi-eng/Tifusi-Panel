@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useLang } from '../i18n/LangContext'
 import { getSystemStats, type SystemStats } from '../lib/api'
 
-// Needle gauges for CPU, RAM and disk (0% on the left, 100% on the right),
-// refreshed every 5 seconds from /api/system/stats.
+// Needle gauges for CPU, RAM and disk (0% on the left, 100% on the right)
+// plus an uptime tile, refreshed every 5 seconds from /api/system/stats.
 
 const R = 72
 const CX = 100
@@ -37,6 +37,8 @@ function formatGb(bytes: number): string {
   const gb = bytes / 1024 ** 3
   return gb >= 10 ? gb.toFixed(1) : gb.toFixed(2)
 }
+
+const CARD = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-subtle bg-surface px-4 pb-3.5 pt-3'
 
 function GaugeFace({ value, label }: { value: number; label: string }) {
   return (
@@ -88,7 +90,7 @@ function NeedleGauge({ percent, label, sub }: { percent: number; label: string; 
   }, [value])
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-subtle bg-surface px-4 pb-3.5 pt-3">
+    <div className={CARD}>
       <GaugeFace value={shown} label={label} />
       <div>
         <div className="text-xs text-muted">{label}</div>
@@ -109,7 +111,7 @@ function NeedleGauge({ percent, label, sub }: { percent: number; label: string; 
 
 function GaugeSkeleton({ label, failed, failedText }: { label: string; failed: boolean; failedText: string }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-subtle bg-surface px-4 pb-3.5 pt-3">
+    <div className={CARD}>
       <svg viewBox="0 0 200 112" aria-hidden="true" className="h-auto w-full max-w-[170px]">
         <path d={ARC_PATH} fill="none" stroke="#1f1f1f" strokeWidth={9} strokeLinecap="round" />
       </svg>
@@ -130,6 +132,7 @@ function GaugeSkeleton({ label, failed, failedText }: { label: string; failed: b
 
 export default function ServerGauges() {
   const { t } = useLang()
+  const d = t.ui.dash
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -155,9 +158,11 @@ export default function ServerGauges() {
   }, [])
 
   const labels = [t.dashboardStats.cpu, t.dashboardStats.ram, t.dashboardStats.disk]
+  const days = stats ? Math.floor(stats.uptime_seconds / 86400) : 0
+  const hours = stats ? Math.floor((stats.uptime_seconds % 86400) / 3600) : 0
 
   return (
-    <section aria-label={t.overviewPage.serverTitle} className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+    <section aria-label={t.overviewPage.serverTitle} className="row-b">
       {stats ? (
         <>
           <NeedleGauge percent={stats.cpu_percent} label={labels[0]} sub={`${stats.cpu_count} ${t.dashboardStats.cores}`} />
@@ -177,6 +182,15 @@ export default function ServerGauges() {
           <GaugeSkeleton key={label} label={label} failed={failed} failedText={t.overviewPage.statsUnavailable} />
         ))
       )}
+      <div className="uptime">
+        <span className="lbl">{d.uptimeTitle}</span>
+        <b>{stats ? d.uptimeValue(days, hours) : '—'}</b>
+        <small>{d.uptimeHint}</small>
+        <span className="tf-live">
+          <i />
+          {d.refreshEvery}
+        </span>
+      </div>
     </section>
   )
 }

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { StrengthBars, highlightJsonLines, passwordScore, toggleInSet, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
@@ -27,58 +28,111 @@ import {
   type AdminProfile,
   type ApiKeyCreateResponse,
   type ApiKeyListItem,
+  type PanelSettings,
   type PermissionScope,
   type TlsStatus,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
+import { initials, parseServerDate } from '../lib/format'
 
-const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
-const labelClass = 'mb-1.5 block text-xs text-muted'
-const cardClass = 'rounded-xl border border-subtle bg-surface p-4'
-const buttonClass = 'hover-btn'
+type SectionId = 'url' | 'pass' | 'notify' | 'api' | 'tls' | 'admins' | 'backup' | 'danger'
+type NotifyTab = 'telegram' | 'webhook' | 'discord'
+
+// The exact text the panel sends when a node drops (app/nodes/sync.py), so the
+// preview shows a real message rather than an invented one.
+const SAMPLE_NODE = 'node-1'
+const SAMPLE_TEXT = `🔴 نود «${SAMPLE_NODE}» از دسترس خارج شد.`
+
+function Section({
+  id,
+  mark,
+  title,
+  sub,
+  pill,
+  children,
+  footer,
+  hidden,
+  flash,
+  className = '',
+}: {
+  id: SectionId
+  mark: string
+  title: string
+  sub: string
+  pill?: ReactNode
+  children: ReactNode
+  footer?: ReactNode
+  hidden: boolean
+  flash: boolean
+  className?: string
+}) {
+  if (hidden) return null
+  return (
+    <section id={`set-${id}`} className={`sec ${flash ? 'flash' : ''} ${className}`}>
+      <div className="sec-head">
+        <span className="mk">{mark}</span>
+        <span className="t">
+          <b>{title}</b>
+          <small>{sub}</small>
+        </span>
+        {pill}
+      </div>
+      <div className="sec-body">{children}</div>
+      {footer && <div className="sec-foot">{footer}</div>}
+    </section>
+  )
+}
+
+function Pill({ tone, children }: { tone: 'ok' | 'warn' | 'idle' | 'info' | 'bad'; children: ReactNode }) {
+  return (
+    <span className={`pill ${tone}`}>
+      <i />
+      {children}
+    </span>
+  )
+}
 
 export default function SettingsPage() {
-  const { t, align } = useLang()
+  const { t, lang } = useLang()
+  const s = t.ui.set
+  const sp = t.settingsPage
+  const say = useToast()
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const canSettings = !profile || profile.is_owner || profile.permissions === null || profile.permissions.includes('settings')
 
+  const [saved, setSaved] = useState<PanelSettings | null>(null)
   const [publicUrl, setPublicUrl] = useState('')
   const [urlSaving, setUrlSaving] = useState(false)
-  const [urlSaved, setUrlSaved] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [pwSubmitting, setPwSubmitting] = useState(false)
-  const [pwSaved, setPwSaved] = useState(false)
   const [pwError, setPwError] = useState<string | null>(null)
 
   const [backupDownloading, setBackupDownloading] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [restoreDone, setRestoreDone] = useState(false)
   const [backupError, setBackupError] = useState<string | null>(null)
+  const [restoreOpen, setRestoreOpen] = useState(false)
+  const [restoreWord, setRestoreWord] = useState('')
   const restoreInputRef = useRef<HTMLInputElement>(null)
 
   const [tls, setTls] = useState<TlsStatus | null>(null)
-  const tlsEnabled = tls?.enabled ?? null
+  const [tlsMode, setTlsMode] = useState<'free' | 'upload'>('free')
   const [tlsCertFile, setTlsCertFile] = useState<File | null>(null)
   const [tlsKeyFile, setTlsKeyFile] = useState<File | null>(null)
   const [tlsUploading, setTlsUploading] = useState(false)
-  const [tlsUploaded, setTlsUploaded] = useState(false)
   const [tlsError, setTlsError] = useState<string | null>(null)
-
   const [sslDomain, setSslDomain] = useState('')
   const [sslRequesting, setSslRequesting] = useState(false)
-  const [sslError, setSslError] = useState<string | null>(null)
 
   const [admins, setAdmins] = useState<AdminListItem[] | null>(null)
+  const [showNewAdmin, setShowNewAdmin] = useState(false)
   const [newAdminUsername, setNewAdminUsername] = useState('')
   const [newAdminPassword, setNewAdminPassword] = useState('')
-  const [newAdminPermissions, setNewAdminPermissions] = useState<Set<PermissionScope>>(
-    new Set(PERMISSION_SCOPES),
-  )
+  const [newAdminPermissions, setNewAdminPermissions] = useState<Set<PermissionScope>>(new Set(PERMISSION_SCOPES))
   const [adminSubmitting, setAdminSubmitting] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
   const [editingPermsId, setEditingPermsId] = useState<number | null>(null)
@@ -90,30 +144,20 @@ export default function SettingsPage() {
   const [keyCreating, setKeyCreating] = useState(false)
   const [keyError, setKeyError] = useState<string | null>(null)
   const [justCreatedKey, setJustCreatedKey] = useState<ApiKeyCreateResponse | null>(null)
-  const [keyCopied, setKeyCopied] = useState(false)
 
+  const [notifyTab, setNotifyTab] = useState<NotifyTab>('telegram')
   const [botToken, setBotToken] = useState('')
   const [chatId, setChatId] = useState('')
-  const [telegramSaving, setTelegramSaving] = useState(false)
-  const [telegramSaved, setTelegramSaved] = useState(false)
-  const [telegramTesting, setTelegramTesting] = useState(false)
-  const [telegramTestOk, setTelegramTestOk] = useState(false)
-  const [telegramError, setTelegramError] = useState<string | null>(null)
-
   const [webhookUrl, setWebhookUrl] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
-  const [webhookSaving, setWebhookSaving] = useState(false)
-  const [webhookSaved, setWebhookSaved] = useState(false)
-  const [webhookTesting, setWebhookTesting] = useState(false)
-  const [webhookTestOk, setWebhookTestOk] = useState(false)
-  const [webhookError, setWebhookError] = useState<string | null>(null)
-
   const [discordUrl, setDiscordUrl] = useState('')
-  const [discordSaving, setDiscordSaving] = useState(false)
-  const [discordSaved, setDiscordSaved] = useState(false)
-  const [discordTesting, setDiscordTesting] = useState(false)
-  const [discordTestOk, setDiscordTestOk] = useState(false)
-  const [discordError, setDiscordError] = useState<string | null>(null)
+  const [notifySaving, setNotifySaving] = useState(false)
+  const [notifyTesting, setNotifyTesting] = useState(false)
+  const [notifyError, setNotifyError] = useState<string | null>(null)
+
+  const [query, setQuery] = useState('')
+  const [flash, setFlash] = useState<SectionId | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   async function refreshAdmins() {
     try {
@@ -124,23 +168,39 @@ export default function SettingsPage() {
     }
   }
 
+  function applySettings(res: PanelSettings) {
+    setSaved(res)
+    setPublicUrl(res.public_url ?? '')
+    setBotToken(res.telegram_bot_token ?? '')
+    setChatId(res.telegram_chat_id ?? '')
+    setWebhookUrl(res.webhook_url ?? '')
+    setWebhookSecret(res.webhook_secret ?? '')
+    setDiscordUrl(res.discord_webhook_url ?? '')
+  }
+
   useEffect(() => {
-    getAdminProfile().then((p) => {
-      setProfile(p)
-      if (p.is_owner) refreshAdmins()
-    }).catch(() => undefined)
-    getSettings()
-      .then((s) => {
-        setPublicUrl(s.public_url ?? '')
-        setBotToken(s.telegram_bot_token ?? '')
-        setChatId(s.telegram_chat_id ?? '')
-        setWebhookUrl(s.webhook_url ?? '')
-        setWebhookSecret(s.webhook_secret ?? '')
-        setDiscordUrl(s.discord_webhook_url ?? '')
+    getAdminProfile()
+      .then((p) => {
+        setProfile(p)
+        if (p.is_owner) refreshAdmins()
       })
       .catch(() => undefined)
+    getSettings().then(applySettings).catch(() => undefined)
     refreshTls()
     refreshApiKeys()
+  }, [])
+
+  // "/" jumps to the settings search, like most dashboards.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+      if (e.key === '/' && tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [])
 
   async function refreshTls() {
@@ -165,12 +225,9 @@ export default function SettingsPage() {
     e.preventDefault()
     setUrlSaving(true)
     setUrlError(null)
-    setUrlSaved(false)
     try {
-      const res = await updateSettings({ public_url: publicUrl.trim() || null })
-      setPublicUrl(res.public_url ?? '')
-      setUrlSaved(true)
-      window.setTimeout(() => setUrlSaved(false), 2000)
+      applySettings(await updateSettings({ public_url: publicUrl.trim() || null }))
+      say(s.urlSaved)
     } catch (err) {
       setUrlError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
@@ -181,9 +238,8 @@ export default function SettingsPage() {
   async function handleChangePassword(e: FormEvent) {
     e.preventDefault()
     setPwError(null)
-    setPwSaved(false)
     if (newPassword !== confirmPassword) {
-      setPwError(t.settingsPage.passwordMismatch)
+      setPwError(sp.passwordMismatch)
       return
     }
     setPwSubmitting(true)
@@ -192,8 +248,7 @@ export default function SettingsPage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      setPwSaved(true)
-      window.setTimeout(() => setPwSaved(false), 2000)
+      say(sp.passwordChanged)
     } catch (err) {
       setPwError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
@@ -207,25 +262,24 @@ export default function SettingsPage() {
     try {
       await downloadBackup()
     } catch (err) {
-      setBackupError(err instanceof ApiError ? err.message : t.settingsPage.downloadFailed)
+      setBackupError(err instanceof ApiError ? err.message : sp.downloadFailed)
     } finally {
       setBackupDownloading(false)
     }
   }
 
+  // The typed RESTORE word is the confirmation; picking the file starts it.
   async function handleRestoreFile(file: File) {
-    if (!window.confirm(t.settingsPage.restoreConfirm)) {
-      if (restoreInputRef.current) restoreInputRef.current.value = ''
-      return
-    }
     setRestoring(true)
     setBackupError(null)
     setRestoreDone(false)
     try {
       await restoreBackup(file)
       setRestoreDone(true)
+      setRestoreOpen(false)
+      setRestoreWord('')
     } catch (err) {
-      setBackupError(err instanceof ApiError ? err.message : t.settingsPage.restoreFailed)
+      setBackupError(err instanceof ApiError ? err.message : sp.restoreFailed)
     } finally {
       setRestoring(false)
       if (restoreInputRef.current) restoreInputRef.current.value = ''
@@ -237,16 +291,14 @@ export default function SettingsPage() {
     if (!tlsCertFile || !tlsKeyFile) return
     setTlsUploading(true)
     setTlsError(null)
-    setTlsUploaded(false)
     try {
       await uploadTls(tlsCertFile, tlsKeyFile)
       setTlsCertFile(null)
       setTlsKeyFile(null)
       await refreshTls()
-      setTlsUploaded(true)
-      window.setTimeout(() => setTlsUploaded(false), 3000)
+      say(sp.tlsUploaded)
     } catch (err) {
-      setTlsError(err instanceof ApiError ? err.message : t.settingsPage.tlsUploadFailed)
+      setTlsError(err instanceof ApiError ? err.message : sp.tlsUploadFailed)
     } finally {
       setTlsUploading(false)
     }
@@ -256,36 +308,28 @@ export default function SettingsPage() {
     e.preventDefault()
     if (!sslDomain.trim()) return
     setSslRequesting(true)
-    setSslError(null)
+    setTlsError(null)
     try {
       await requestSsl(sslDomain.trim())
       setSslDomain('')
       await refreshTls()
+      say(sp.tlsEnabled)
     } catch (err) {
-      setSslError(err instanceof ApiError ? err.message : t.common.genericError)
+      setTlsError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setSslRequesting(false)
     }
   }
 
   async function handleRemoveTls() {
-    if (!window.confirm(t.settingsPage.tlsRemoveConfirm)) return
+    if (!window.confirm(sp.tlsRemoveConfirm)) return
     setTlsError(null)
     try {
       await removeTls()
       await refreshTls()
     } catch (err) {
-      setTlsError(err instanceof ApiError ? err.message : t.settingsPage.tlsRemoveFailed)
+      setTlsError(err instanceof ApiError ? err.message : sp.tlsRemoveFailed)
     }
-  }
-
-  function toggleNewAdminPermission(scope: PermissionScope) {
-    setNewAdminPermissions((prev) => {
-      const next = new Set(prev)
-      if (next.has(scope)) next.delete(scope)
-      else next.add(scope)
-      return next
-    })
   }
 
   async function handleCreateAdmin(e: FormEvent) {
@@ -302,6 +346,7 @@ export default function SettingsPage() {
       setNewAdminUsername('')
       setNewAdminPassword('')
       setNewAdminPermissions(new Set(PERMISSION_SCOPES))
+      setShowNewAdmin(false)
       await refreshAdmins()
     } catch (err) {
       setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
@@ -311,7 +356,7 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteAdmin(a: AdminListItem) {
-    if (!window.confirm(t.settingsPage.confirmDeleteAdmin(a.username))) return
+    if (!window.confirm(sp.confirmDeleteAdmin(a.username))) return
     try {
       await deleteAdminAccount(a.id)
       await refreshAdmins()
@@ -320,18 +365,10 @@ export default function SettingsPage() {
     }
   }
 
-  function startEditPerms(a: AdminListItem) {
+  function toggleScope(a: AdminListItem, scope: PermissionScope) {
+    const base = editingPermsId === a.id ? editingPermsSet : new Set(a.permissions ?? PERMISSION_SCOPES)
     setEditingPermsId(a.id)
-    setEditingPermsSet(new Set(a.permissions ?? PERMISSION_SCOPES))
-  }
-
-  function toggleEditingPermission(scope: PermissionScope) {
-    setEditingPermsSet((prev) => {
-      const next = new Set(prev)
-      if (next.has(scope)) next.delete(scope)
-      else next.add(scope)
-      return next
-    })
+    setEditingPermsSet(toggleInSet(base, scope))
   }
 
   async function saveEditingPerms() {
@@ -343,6 +380,7 @@ export default function SettingsPage() {
       await updateAdminPermissions(editingPermsId, allChecked ? null : Array.from(editingPermsSet))
       setEditingPermsId(null)
       await refreshAdmins()
+      say(s.permsSaved)
     } catch (err) {
       setAdminError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
@@ -367,7 +405,7 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteApiKey(key: ApiKeyListItem) {
-    if (!window.confirm(t.settingsPage.confirmDeleteApiKey(key.name))) return
+    if (!window.confirm(sp.confirmDeleteApiKey(key.name))) return
     try {
       await deleteApiKey(key.id)
       if (justCreatedKey?.id === key.id) setJustCreatedKey(null)
@@ -377,618 +415,684 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleSaveTelegram(e: FormEvent) {
+  async function handleSaveNotify(e: FormEvent) {
     e.preventDefault()
-    setTelegramSaving(true)
-    setTelegramError(null)
-    setTelegramSaved(false)
-    setTelegramTestOk(false)
+    setNotifySaving(true)
+    setNotifyError(null)
     try {
-      const res = await updateSettings({
-        telegram_bot_token: botToken.trim() || null,
-        telegram_chat_id: chatId.trim() || null,
-      })
-      setBotToken(res.telegram_bot_token ?? '')
-      setChatId(res.telegram_chat_id ?? '')
-      setTelegramSaved(true)
-      window.setTimeout(() => setTelegramSaved(false), 2000)
+      const payload: Partial<PanelSettings> =
+        notifyTab === 'telegram'
+          ? { telegram_bot_token: botToken.trim() || null, telegram_chat_id: chatId.trim() || null }
+          : notifyTab === 'webhook'
+            ? { webhook_url: webhookUrl.trim() || null, webhook_secret: webhookSecret.trim() || null }
+            : { discord_webhook_url: discordUrl.trim() || null }
+      applySettings(await updateSettings(payload))
+      say(t.common.saved)
     } catch (err) {
-      setTelegramError(err instanceof ApiError ? err.message : t.common.genericError)
+      setNotifyError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
-      setTelegramSaving(false)
+      setNotifySaving(false)
     }
   }
 
-  async function handleTestTelegram() {
-    setTelegramTesting(true)
-    setTelegramError(null)
-    setTelegramTestOk(false)
+  async function handleTestNotify() {
+    setNotifyTesting(true)
+    setNotifyError(null)
     try {
-      await testTelegram()
-      setTelegramTestOk(true)
-      window.setTimeout(() => setTelegramTestOk(false), 3000)
+      if (notifyTab === 'telegram') await testTelegram()
+      else if (notifyTab === 'webhook') await testWebhook()
+      else await testDiscord()
+      say(sp.sent)
     } catch (err) {
-      setTelegramError(err instanceof ApiError ? err.message : t.settingsPage.testTelegramFailed)
+      const fallback = notifyTab === 'telegram' ? sp.testTelegramFailed : notifyTab === 'webhook' ? sp.testWebhookFailed : sp.testDiscordFailed
+      setNotifyError(err instanceof ApiError ? err.message : fallback)
     } finally {
-      setTelegramTesting(false)
+      setNotifyTesting(false)
     }
   }
 
-  async function handleSaveWebhook(e: FormEvent) {
-    e.preventDefault()
-    setWebhookSaving(true)
-    setWebhookError(null)
-    setWebhookSaved(false)
-    setWebhookTestOk(false)
-    try {
-      const res = await updateSettings({
-        webhook_url: webhookUrl.trim() || null,
-        webhook_secret: webhookSecret.trim() || null,
-      })
-      setWebhookUrl(res.webhook_url ?? '')
-      setWebhookSecret(res.webhook_secret ?? '')
-      setWebhookSaved(true)
-      window.setTimeout(() => setWebhookSaved(false), 2000)
-    } catch (err) {
-      setWebhookError(err instanceof ApiError ? err.message : t.common.genericError)
-    } finally {
-      setWebhookSaving(false)
-    }
+  async function copyKey(text: string) {
+    if (await copyToClipboard(text)) say(t.common.copiedCheck)
   }
 
-  async function handleTestWebhook() {
-    setWebhookTesting(true)
-    setWebhookError(null)
-    setWebhookTestOk(false)
-    try {
-      await testWebhook()
-      setWebhookTestOk(true)
-      window.setTimeout(() => setWebhookTestOk(false), 3000)
-    } catch (err) {
-      setWebhookError(err instanceof ApiError ? err.message : t.settingsPage.testWebhookFailed)
-    } finally {
-      setWebhookTesting(false)
-    }
+  // ── Health checklist (only what this admin can change here).
+  const telegramOn = !!(saved?.telegram_bot_token && saved?.telegram_chat_id)
+  const webhookOn = !!saved?.webhook_url
+  const discordOn = !!saved?.discord_webhook_url
+  const notifyOn = telegramOn || webhookOn || discordOn
+  const checks: { id: SectionId; label: string; done: boolean }[] = canSettings
+    ? [
+        { id: 'url', label: s.checkUrl, done: !!saved?.public_url },
+        { id: 'notify', label: s.checkNotify, done: notifyOn },
+        { id: 'tls', label: s.checkTls, done: !!tls?.enabled },
+        { id: 'api', label: s.checkKey, done: (apiKeys?.length ?? 0) > 0 },
+      ]
+    : []
+  const doneCount = checks.filter((c) => c.done).length
+  const circ = 2 * Math.PI * 52
+
+  function jump(id: SectionId) {
+    setQuery('')
+    window.setTimeout(() => {
+      document.getElementById(`set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setFlash(id)
+      window.setTimeout(() => setFlash(null), 1400)
+    }, 30)
   }
 
-  async function handleSaveDiscord(e: FormEvent) {
-    e.preventDefault()
-    setDiscordSaving(true)
-    setDiscordError(null)
-    setDiscordSaved(false)
-    setDiscordTestOk(false)
-    try {
-      const res = await updateSettings({ discord_webhook_url: discordUrl.trim() || null })
-      setDiscordUrl(res.discord_webhook_url ?? '')
-      setDiscordSaved(true)
-      window.setTimeout(() => setDiscordSaved(false), 2000)
-    } catch (err) {
-      setDiscordError(err instanceof ApiError ? err.message : t.common.genericError)
-    } finally {
-      setDiscordSaving(false)
-    }
+  const q = query.trim().toLowerCase()
+  const matches = (id: SectionId, ...texts: string[]) => !q || [s.kw[id], ...texts].join(' ').toLowerCase().includes(q)
+  const visible: Record<SectionId, boolean> = {
+    url: canSettings && matches('url', sp.publicUrlTitle),
+    pass: matches('pass', sp.changePasswordTitle),
+    notify: canSettings && matches('notify', s.notifyTitle),
+    api: matches('api', sp.apiKeysTitle),
+    tls: canSettings && matches('tls', sp.tlsTitle),
+    admins: !!profile?.is_owner && matches('admins', sp.adminsTitle),
+    backup: canSettings && matches('backup', sp.backupTitle),
+    danger: canSettings && matches('danger', s.dangerTitle),
   }
+  const anyVisible = Object.values(visible).some(Boolean)
 
-  async function handleTestDiscord() {
-    setDiscordTesting(true)
-    setDiscordError(null)
-    setDiscordTestOk(false)
-    try {
-      await testDiscord()
-      setDiscordTestOk(true)
-      window.setTimeout(() => setDiscordTestOk(false), 3000)
-    } catch (err) {
-      setDiscordError(err instanceof ApiError ? err.message : t.settingsPage.testDiscordFailed)
-    } finally {
-      setDiscordTesting(false)
-    }
-  }
+  const urlBase = publicUrl.trim().replace(/\/+$/, '')
+  const webhookBody = JSON.stringify(
+    { event: 'node_disconnected', timestamp: new Date().toISOString(), data: { node_id: 1, name: SAMPLE_NODE } },
+    null,
+    2,
+  )
+  const pwLevel = Math.max(0, passwordScore(newPassword) - 1)
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat(lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }).format(parseServerDate(iso))
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-end">
-        <h1 className="sr-only">{t.settingsPage.title}</h1>
-        {profile && (
-          <span className="text-xs text-muted">
-            {t.settingsPage.signedInAs} <span className="text-body">{profile.username}</span>
-          </span>
-        )}
+    <div className="pg-set">
+      <h1 className="sr-only">{sp.title}</h1>
+
+      {canSettings && (
+        <section className="health" aria-labelledby="set-health-title">
+          <div className="score" role="img" aria-label={s.ofN(doneCount, checks.length)}>
+            <svg viewBox="0 0 120 120">
+              <circle className="track" cx="60" cy="60" r="52" />
+              <circle
+                className="val"
+                cx="60"
+                cy="60"
+                r="52"
+                strokeDasharray={circ}
+                strokeDashoffset={saved ? circ * (1 - doneCount / Math.max(1, checks.length)) : circ}
+              />
+            </svg>
+            <span className="sl">
+              <span>
+                <b>{doneCount}</b>
+                <small>{s.ofTotal(checks.length)}</small>
+              </span>
+            </span>
+          </div>
+          <div className="h-body">
+            <h2 id="set-health-title">{s.healthTitle}</h2>
+            <p>{doneCount === checks.length ? s.healthDone : s.healthLeft(checks.length - doneCount)}</p>
+            <div className="checks">
+              {checks.map((c) => (
+                <button key={c.id} type="button" className={`check ${c.done ? 'done' : 'todo'}`} onClick={() => jump(c.id)}>
+                  <span className="ic">{c.done ? '✓' : '!'}</span>
+                  <span className="t">{c.label}</span>
+                  <span className="go">{c.done ? s.stateDone : s.stateTodo}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="search">
+        <input
+          ref={searchRef}
+          className="input"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={s.search}
+          aria-label={s.search}
+          autoComplete="off"
+        />
+        <kbd>/</kbd>
       </div>
+      {!anyVisible && <div className="no-match">{s.noMatch}</div>}
 
-      <div className="flex flex-col gap-6">
-        {canSettings && (
-        <form onSubmit={handleSaveUrl} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.publicUrlTitle}</h2>
-          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.publicUrlDesc}</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1" style={{ minWidth: 240 }}>
-              <label className={labelClass}>{t.settingsPage.publicUrlLabel}</label>
-              <input
-                dir="ltr"
-                value={publicUrl}
-                onChange={(e) => setPublicUrl(e.target.value)}
-                placeholder="https://panel.example.com"
-                className={`${inputClass} w-full text-left`}
-              />
-            </div>
-            <button type="submit" disabled={urlSaving} className={buttonClass}>
-              {urlSaving ? t.common.saving : urlSaved ? t.common.saved : t.common.save}
-            </button>
-          </div>
-          {urlError && <div className="mt-3 text-xs text-danger">{urlError}</div>}
-        </form>
-        )}
-
-        <form onSubmit={handleChangePassword} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.changePasswordTitle}</h2>
-          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.changePasswordDesc}</p>
-          <div className="flex flex-wrap gap-3">
-            <div>
-              <label className={labelClass}>{t.settingsPage.currentPassword}</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>{t.settingsPage.newPassword}</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={8}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>{t.settingsPage.confirmPassword}</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={8}
-                className={inputClass}
-              />
+      <div className="secgrid">
+        <Section
+          id="url"
+          mark="URL"
+          title={sp.publicUrlTitle}
+          sub={s.urlSub}
+          hidden={!visible.url}
+          flash={flash === 'url'}
+          pill={saved?.public_url ? <Pill tone="ok">{s.pillSet}</Pill> : <Pill tone="idle">{s.pillEmpty}</Pill>}
+          footer={
+            <>
+              {urlError && <span className="msg err-text">{urlError}</span>}
+              <button type="submit" form="set-url-form" disabled={urlSaving} className="btn solid">
+                {urlSaving ? t.common.saving : t.common.save}
+              </button>
+            </>
+          }
+        >
+          <form id="set-url-form" onSubmit={handleSaveUrl}>
+            <label className="lbl" htmlFor="set-url">
+              {sp.publicUrlLabel}
+            </label>
+            <input id="set-url" className="input ltr" value={publicUrl} onChange={(e) => setPublicUrl(e.target.value)} placeholder="https://panel.example.com" />
+            <div className="hint">{sp.publicUrlDesc}</div>
+          </form>
+          <div className="preview">
+            <div className="cap">{s.previewCap}</div>
+            <div className="url">
+              {urlBase ? (
+                <>
+                  {urlBase}/sub/<span className="dim">…</span>
+                </>
+              ) : (
+                <span className="dim" dir="auto">
+                  {s.previewFallback(window.location.origin)}
+                </span>
+              )}
             </div>
           </div>
-          {pwError && <div className="mt-3 text-xs text-danger">{pwError}</div>}
-          <button
-            type="submit"
-            disabled={pwSubmitting}
-            className={`${buttonClass} mt-4`}
-          >
-            {pwSubmitting ? t.common.saving : pwSaved ? t.settingsPage.passwordChanged : t.settingsPage.changePasswordBtn}
-          </button>
-        </form>
+        </Section>
 
-        <div className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.apiKeysTitle}</h2>
-          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.apiKeysDesc}</p>
-
-          <form onSubmit={handleCreateApiKey} className="mb-3 flex flex-wrap items-end gap-3">
+        <Section
+          id="pass"
+          mark="•••"
+          title={sp.changePasswordTitle}
+          sub={sp.changePasswordDesc}
+          hidden={!visible.pass}
+          flash={flash === 'pass'}
+          pill={profile ? <span className="chip en">{profile.username}</span> : undefined}
+          footer={
+            <>
+              {pwError && <span className="msg err-text">{pwError}</span>}
+              <button type="submit" form="set-pass-form" disabled={pwSubmitting} className="btn solid">
+                {pwSubmitting ? t.common.saving : sp.changePasswordBtn}
+              </button>
+            </>
+          }
+        >
+          <form id="set-pass-form" onSubmit={handleChangePassword} className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>{t.settingsPage.apiKeyNameLabel}</label>
-              <input
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-                required
-                placeholder={t.settingsPage.apiKeyNamePlaceholder}
-                className={inputClass}
-              />
+              <label className="lbl" htmlFor="set-pw-cur">
+                {sp.currentPassword}
+              </label>
+              <input id="set-pw-cur" className="input" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required autoComplete="current-password" />
             </div>
-            <button type="submit" disabled={keyCreating} className={buttonClass}>
-              {keyCreating ? t.settingsPage.creating : t.settingsPage.newApiKeyBtn}
+            <div className="row2">
+              <div>
+                <label className="lbl" htmlFor="set-pw-new">
+                  {sp.newPassword}
+                </label>
+                <input id="set-pw-new" className="input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+              </div>
+              <div>
+                <label className="lbl" htmlFor="set-pw-rep">
+                  {sp.confirmPassword}
+                </label>
+                <input id="set-pw-rep" className="input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+              </div>
+            </div>
+            <StrengthBars password={newPassword} />
+            <div className="hint" style={{ margin: 0 }}>
+              {newPassword ? `${s.strengthPrefix}${s.strength[pwLevel]}` : s.strengthPrefix + '—'}
+              {confirmPassword && newPassword !== confirmPassword && <span style={{ color: 'var(--bad)' }}> · {sp.passwordMismatch}</span>}
+            </div>
+          </form>
+        </Section>
+
+        <Section
+          id="notify"
+          mark="MSG"
+          title={s.notifyTitle}
+          sub={s.notifySub}
+          hidden={!visible.notify}
+          flash={flash === 'notify'}
+          pill={notifyOn ? <Pill tone="info">{s.notifyOn([telegramOn, webhookOn, discordOn].filter(Boolean).length)}</Pill> : <Pill tone="idle">{s.pillOff}</Pill>}
+          footer={
+            <>
+              {notifyError && <span className="msg err-text">{notifyError}</span>}
+              <button type="button" className="btn" onClick={handleTestNotify} disabled={notifyTesting}>
+                {notifyTesting ? sp.sending : sp.sendTestMsg}
+              </button>
+              <button type="submit" form="set-notify-form" className="btn solid" disabled={notifySaving}>
+                {notifySaving ? t.common.saving : t.common.save}
+              </button>
+            </>
+          }
+        >
+          <div className="ntabs" role="tablist">
+            {(
+              [
+                ['telegram', s.tabTelegram, telegramOn],
+                ['webhook', s.tabWebhook, webhookOn],
+                ['discord', s.tabDiscord, discordOn],
+              ] as [NotifyTab, string, boolean][]
+            ).map(([id, label, on]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={notifyTab === id}
+                onClick={() => {
+                  setNotifyTab(id)
+                  setNotifyError(null)
+                }}
+              >
+                {label}
+                {on && <span className="on-dot" aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
+          <form id="set-notify-form" onSubmit={handleSaveNotify} className="flex flex-col gap-3">
+            {notifyTab === 'telegram' && (
+              <>
+                <div className="row2">
+                  <div>
+                    <label className="lbl" htmlFor="set-tg-token">
+                      {sp.botToken}
+                    </label>
+                    <input id="set-tg-token" className="input ltr mono" value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder="123456:ABC-def..." />
+                  </div>
+                  <div>
+                    <label className="lbl" htmlFor="set-tg-chat">
+                      {sp.chatId}
+                    </label>
+                    <input id="set-tg-chat" className="input ltr mono" value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="123456789" />
+                  </div>
+                </div>
+                <div className="hint" style={{ margin: 0 }}>
+                  {sp.telegramDesc1} <span className="en">@BotFather</span> {sp.telegramDesc2} <span className="en">@userinfobot</span>.
+                </div>
+                <div>
+                  <div className="lbl">{s.sampleCap}</div>
+                  <div className="tg">
+                    <div className="tg-bubble" dir="rtl">
+                      {SAMPLE_TEXT}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            {notifyTab === 'webhook' && (
+              <>
+                <div className="row2">
+                  <div>
+                    <label className="lbl" htmlFor="set-hook-url">
+                      {sp.webhookUrlLabel}
+                    </label>
+                    <input id="set-hook-url" className="input ltr" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://example.com/hook" />
+                  </div>
+                  <div>
+                    <label className="lbl" htmlFor="set-hook-secret">
+                      {sp.webhookSecretLabel}
+                    </label>
+                    <input id="set-hook-secret" className="input ltr mono" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} />
+                  </div>
+                </div>
+                <div className="hint" style={{ margin: 0 }}>
+                  {sp.webhookDesc}
+                </div>
+                <div>
+                  <div className="lbl">{s.requestCap}</div>
+                  <div className="preview">
+                    <pre className="json" style={{ color: 'var(--muted)', marginBottom: 6 }}>
+                      {`POST ${webhookUrl.trim() || 'https://example.com/hook'}${webhookSecret.trim() ? '\nX-Webhook-Secret: ••••••' : ''}`}
+                    </pre>
+                    <pre
+                      className="json"
+                      dangerouslySetInnerHTML={{ __html: highlightJsonLines(webhookBody).join('\n') }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+            {notifyTab === 'discord' && (
+              <>
+                <div>
+                  <label className="lbl" htmlFor="set-dc-url">
+                    {sp.discordUrlLabel}
+                  </label>
+                  <input id="set-dc-url" className="input ltr" value={discordUrl} onChange={(e) => setDiscordUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/..." />
+                </div>
+                <div className="hint" style={{ margin: 0 }}>
+                  {sp.discordDesc}
+                </div>
+                <div>
+                  <div className="lbl">{s.sampleCap}</div>
+                  <div className="dc">
+                    <span className="bar" />
+                    <div>
+                      <b className="en">Tifusi Panel</b>
+                      <p dir="rtl">{SAMPLE_TEXT}</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </form>
+        </Section>
+
+        <Section
+          id="api"
+          mark="API"
+          title={sp.apiKeysTitle}
+          sub={s.apiSub}
+          hidden={!visible.api}
+          flash={flash === 'api'}
+          pill={apiKeys && apiKeys.length > 0 ? <Pill tone="ok">{s.keysCount(apiKeys.length)}</Pill> : <Pill tone="idle">{s.noKeys}</Pill>}
+        >
+          <form onSubmit={handleCreateApiKey} className="row2" style={{ alignItems: 'end' }}>
+            <div>
+              <label className="lbl" htmlFor="set-key-name">
+                {sp.apiKeyNameLabel}
+              </label>
+              <input id="set-key-name" className="input" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} required placeholder={sp.apiKeyNamePlaceholder} />
+            </div>
+            <button type="submit" disabled={keyCreating} className="btn solid lg block">
+              {keyCreating ? sp.creating : sp.newApiKeyBtn}
             </button>
           </form>
-          {keyError && <div className="mb-3 text-xs text-danger">{keyError}</div>}
-
+          {keyError && <div className="err-text">{keyError}</div>}
           {justCreatedKey && (
-            <div className="mb-3 rounded-lg border border-accent/30 bg-accent-tint p-3">
-              <div className={`mb-1.5 text-xs text-secondary ${align}`}>{t.settingsPage.apiKeyShowOnceWarning}</div>
-              <div className="flex items-center gap-2">
-                <code dir="ltr" className="flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-well-strong px-2.5 py-1.5 text-left text-xs text-accent">
-                  {justCreatedKey.key}
-                </code>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!(await copyToClipboard(justCreatedKey.key))) return
-                    setKeyCopied(true)
-                    window.setTimeout(() => setKeyCopied(false), 1500)
-                  }}
-                  className="hover-btn hover-btn-sm flex-shrink-0"
-                >
-                  {keyCopied ? t.common.copiedCheck : t.settingsPage.copyKey}
+            <div className="keybox">
+              <span className="warnline">⚠ {sp.apiKeyShowOnceWarning}</span>
+              <div className="keyline">
+                <code>{justCreatedKey.key}</code>
+                <button type="button" className="btn" onClick={() => copyKey(justCreatedKey.key)}>
+                  {sp.copyKey}
                 </button>
               </div>
             </div>
           )}
-
-          <div className="flex flex-col gap-2">
-            {apiKeys?.length === 0 && <div className="text-xs text-faint">{t.settingsPage.noApiKeysYet}</div>}
+          <div className="flex flex-col gap-1.5">
+            {apiKeys?.length === 0 && <div className="hint">{sp.noApiKeysYet}</div>}
             {apiKeys?.map((k) => (
-              <div key={k.id} className="flex items-center justify-between rounded-lg border border-subtle bg-field px-3 py-2">
-                <div>
-                  <div className="text-sm text-primary">{k.name}</div>
-                  <div dir="ltr" className="text-left font-mono text-[11px] text-faint">
-                    {k.key_prefix}…{' '}
-                    {k.last_used_at ? t.settingsPage.lastUsed(new Date(k.last_used_at).toLocaleDateString()) : t.settingsPage.neverUsed}
-                  </div>
-                </div>
-                <button onClick={() => handleDeleteApiKey(k)} className="hover-btn hover-btn-sm hover-btn-danger">
+              <div key={k.id} className="keyrow">
+                <span className="t">
+                  <b>{k.name}</b>
+                  <small>
+                    <span className="mono">{k.key_prefix}…</span> · {k.last_used_at ? sp.lastUsed(formatDate(k.last_used_at)) : sp.neverUsed}
+                  </small>
+                </span>
+                <button onClick={() => handleDeleteApiKey(k)} className="btn danger">
                   {t.common.delete}
                 </button>
               </div>
             ))}
           </div>
-        </div>
+        </Section>
 
-        {canSettings && (
-        <>
-        <form onSubmit={handleSaveTelegram} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.telegramTitle}</h2>
-          <p className={`mb-3 text-xs text-faint ${align}`}>
-            {t.settingsPage.telegramDesc1}{' '}
-            <span dir="ltr" className="font-mono">
-              @BotFather
-            </span>{' '}
-            {t.settingsPage.telegramDesc2}{' '}
-            <span dir="ltr" className="font-mono">
-              @userinfobot
-            </span>
-            .
-          </p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className={labelClass}>{t.settingsPage.botToken}</label>
-              <input
-                dir="ltr"
-                value={botToken}
-                onChange={(e) => setBotToken(e.target.value)}
-                placeholder="123456:ABC-def..."
-                className={`${inputClass} w-64 text-left font-mono text-xs`}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>{t.settingsPage.chatId}</label>
-              <input
-                dir="ltr"
-                value={chatId}
-                onChange={(e) => setChatId(e.target.value)}
-                placeholder="123456789"
-                className={`${inputClass} w-40 text-left font-mono text-xs`}
-              />
-            </div>
-            <button type="submit" disabled={telegramSaving} className={buttonClass}>
-              {telegramSaving ? t.common.saving : telegramSaved ? t.common.saved : t.common.save}
-            </button>
-            <button
-              type="button"
-              onClick={handleTestTelegram}
-              disabled={telegramTesting}
-              className="hover-btn"
-            >
-              {telegramTesting ? t.settingsPage.sending : telegramTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
-            </button>
-          </div>
-          {telegramError && <div className="mt-3 text-xs text-danger">{telegramError}</div>}
-        </form>
-
-        <form onSubmit={handleSaveWebhook} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.webhookTitle}</h2>
-          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.webhookDesc}</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1" style={{ minWidth: 240 }}>
-              <label className={labelClass}>{t.settingsPage.webhookUrlLabel}</label>
-              <input
-                dir="ltr"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                placeholder="https://example.com/hook"
-                className={`${inputClass} w-full text-left`}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>{t.settingsPage.webhookSecretLabel}</label>
-              <input
-                dir="ltr"
-                value={webhookSecret}
-                onChange={(e) => setWebhookSecret(e.target.value)}
-                className={`${inputClass} w-48 text-left font-mono text-xs`}
-              />
-            </div>
-            <button type="submit" disabled={webhookSaving} className={buttonClass}>
-              {webhookSaving ? t.common.saving : webhookSaved ? t.common.saved : t.common.save}
-            </button>
-            <button
-              type="button"
-              onClick={handleTestWebhook}
-              disabled={webhookTesting}
-              className="hover-btn"
-            >
-              {webhookTesting ? t.settingsPage.sending : webhookTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
-            </button>
-          </div>
-          {webhookError && <div className="mt-3 text-xs text-danger">{webhookError}</div>}
-        </form>
-
-        <form onSubmit={handleSaveDiscord} className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.discordTitle}</h2>
-          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.discordDesc}</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1" style={{ minWidth: 240 }}>
-              <label className={labelClass}>{t.settingsPage.discordUrlLabel}</label>
-              <input
-                dir="ltr"
-                value={discordUrl}
-                onChange={(e) => setDiscordUrl(e.target.value)}
-                placeholder="https://discord.com/api/webhooks/..."
-                className={`${inputClass} w-full text-left`}
-              />
-            </div>
-            <button type="submit" disabled={discordSaving} className={buttonClass}>
-              {discordSaving ? t.common.saving : discordSaved ? t.common.saved : t.common.save}
-            </button>
-            <button
-              type="button"
-              onClick={handleTestDiscord}
-              disabled={discordTesting}
-              className="hover-btn"
-            >
-              {discordTesting ? t.settingsPage.sending : discordTestOk ? t.settingsPage.sent : t.settingsPage.sendTestMsg}
-            </button>
-          </div>
-          {discordError && <div className="mt-3 text-xs text-danger">{discordError}</div>}
-        </form>
-
-        <div className={cardClass}>
-          <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.backupTitle}</h2>
-          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.backupDesc}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={handleDownloadBackup}
-              disabled={backupDownloading}
-              className={buttonClass}
-            >
-              {backupDownloading ? t.settingsPage.downloading : t.settingsPage.downloadBackup}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => restoreInputRef.current?.click()}
-              disabled={restoring}
-              className="hover-btn hover-btn-danger"
-            >
-              {restoring ? t.settingsPage.restoring : restoreDone ? t.settingsPage.restored : t.settingsPage.restoreFromFile}
-            </button>
-            <input
-              ref={restoreInputRef}
-              type="file"
-              accept=".db"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleRestoreFile(file)
-              }}
-            />
-          </div>
-          {backupError && <div className="mt-3 text-xs text-danger">{backupError}</div>}
-          {restoreDone && <div className="mt-3 text-xs text-muted">{t.settingsPage.restoreDoneNote}</div>}
-        </div>
-
-        <div className={cardClass}>
-          <div className={`mb-1 flex items-center justify-between ${align}`}>
-            <h2 className="text-sm font-bold text-primary">{t.settingsPage.tlsTitle}</h2>
-            {tlsEnabled !== null && (
-              <span
-                className="rounded-full border px-2.5 py-1 text-[11px]"
-                style={
-                  tlsEnabled
-                    ? { borderColor: 'rgb(var(--c-success) / 0.3)', color: 'rgb(var(--c-success))', backgroundColor: 'rgb(var(--c-success) / 0.08)' }
-                    : { borderColor: 'rgb(var(--c-border-default))', color: 'rgb(var(--c-text-muted))', backgroundColor: 'rgb(var(--c-neutral-tint))' }
-                }
-              >
-                {tlsEnabled ? t.settingsPage.tlsEnabled : t.settingsPage.tlsDisabled}
-              </span>
-            )}
-          </div>
-          <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.tlsDesc}</p>
-          {tlsEnabled && tls?.domain && (
-            <div className={`mb-4 rounded-lg border border-subtle bg-well px-3 py-2 text-xs text-muted ${align}`}>
-              {tls.self_signed
-                ? t.settingsPage.tlsInfoSelfSigned(tls.domain)
-                : t.settingsPage.tlsInfoCa(tls.domain, tls.issuer ?? '?')}
-              {tls.expires_at && ' · ' + t.settingsPage.tlsExpiresAt(new Date(tls.expires_at).toLocaleDateString())}
-            </div>
-          )}
-
-          <form onSubmit={handleRequestSsl} className="mb-4 border-b border-subtle pb-4">
-            <h3 className={`mb-1 text-xs font-bold text-secondary ${align}`}>{t.settingsPage.sslAutoTitle}</h3>
-            <p className={`mb-2 text-[11px] text-faint ${align}`}>{t.settingsPage.sslAutoDesc}</p>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex-1" style={{ minWidth: 200 }}>
-                <label className={labelClass}>{t.settingsPage.sslDomainLabel}</label>
-                <input
-                  dir="ltr"
-                  value={sslDomain}
-                  onChange={(e) => setSslDomain(e.target.value)}
-                  placeholder="panel.example.com"
-                  className={`${inputClass} w-full text-left`}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={sslRequesting || !sslDomain.trim()}
-                className={buttonClass}
-              >
-                {sslRequesting ? t.settingsPage.sslRequesting : t.settingsPage.sslRequestBtn}
-              </button>
-            </div>
-            {sslError && <div className="mt-2 whitespace-pre-wrap text-xs text-danger">{sslError}</div>}
-          </form>
-
-          <form onSubmit={handleUploadTls}>
-            <h3 className={`mb-1 text-xs font-bold text-secondary ${align}`}>{t.settingsPage.tlsManualTitle}</h3>
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className={labelClass}>{t.settingsPage.tlsCertLabel}</label>
-                <input
-                  type="file"
-                  accept=".pem,.crt,.cer"
-                  onChange={(e) => setTlsCertFile(e.target.files?.[0] ?? null)}
-                  required
-                  className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>{t.settingsPage.tlsKeyLabel}</label>
-                <input
-                  type="file"
-                  accept=".pem,.key"
-                  onChange={(e) => setTlsKeyFile(e.target.files?.[0] ?? null)}
-                  required
-                  className="block text-xs text-secondary file:mr-2 file:rounded-md file:border-0 file:bg-field file:px-3 file:py-1.5 file:text-xs file:text-body"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={tlsUploading || !tlsCertFile || !tlsKeyFile}
-                className={buttonClass}
-              >
-                {tlsUploading ? t.settingsPage.tlsUploading : tlsUploaded ? t.settingsPage.tlsUploaded : t.settingsPage.tlsUploadBtn}
-              </button>
-              {tlsEnabled && (
-                <button
-                  type="button"
-                  onClick={handleRemoveTls}
-                  className="hover-btn hover-btn-danger"
-                >
-                  {t.settingsPage.tlsRemoveBtn}
+        <Section
+          id="tls"
+          mark="TLS"
+          title={sp.tlsTitle}
+          sub={s.tlsSub}
+          hidden={!visible.tls}
+          flash={flash === 'tls'}
+          pill={tls?.enabled ? <Pill tone="ok">{s.tlsOn}</Pill> : <Pill tone="warn">{s.tlsOff}</Pill>}
+          footer={
+            <>
+              {tlsError && <span className="msg err-text" style={{ whiteSpace: 'pre-wrap' }}>{tlsError}</span>}
+              {tlsMode === 'free' ? (
+                <button type="submit" form="set-ssl-form" className="btn solid" disabled={sslRequesting || !sslDomain.trim()}>
+                  {sslRequesting ? sp.sslRequesting : sp.sslRequestBtn}
+                </button>
+              ) : (
+                <button type="submit" form="set-tls-form" className="btn solid" disabled={tlsUploading || !tlsCertFile || !tlsKeyFile}>
+                  {tlsUploading ? sp.tlsUploading : sp.tlsUploadBtn}
                 </button>
               )}
+            </>
+          }
+        >
+          {tls?.enabled && tls.domain && (
+            <div className="tls-card">
+              <b className="en">{tls.domain}</b>
+              <span>
+                {tls.self_signed ? sp.tlsInfoSelfSigned(tls.domain) : sp.tlsInfoCa(tls.domain, tls.issuer ?? '?')}
+                {tls.expires_at && ` · ${sp.tlsExpiresAt(formatDate(tls.expires_at))}`}
+              </span>
             </div>
-            {tlsError && <div className="mt-3 text-xs text-danger">{tlsError}</div>}
-          </form>
-        </div>
-        </>
-        )}
-
-        {profile?.is_owner && (
-          <div className={cardClass}>
-            <h2 className={`mb-1 text-sm font-bold text-primary ${align}`}>{t.settingsPage.adminsTitle}</h2>
-            <p className={`mb-3 text-xs text-faint ${align}`}>{t.settingsPage.adminsDesc}</p>
-
-            <form onSubmit={handleCreateAdmin} className="mb-4 flex flex-wrap items-end gap-3">
-              <div>
-                <label className={labelClass}>{t.usersPage.username}</label>
-                <input
-                  value={newAdminUsername}
-                  onChange={(e) => setNewAdminUsername(e.target.value)}
-                  required
-                  pattern="[a-zA-Z0-9_-]+"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>{t.passLabel}</label>
-                <input
-                  type="password"
-                  value={newAdminPassword}
-                  onChange={(e) => setNewAdminPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  className={inputClass}
-                />
-              </div>
-              <div className="w-full">
-                <label className={labelClass}>{t.settingsPage.permissionsLabel}</label>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-subtle bg-well p-2">
-                  {PERMISSION_SCOPES.map((scope) => (
-                    <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={newAdminPermissions.has(scope)}
-                        onChange={() => toggleNewAdminPermission(scope)}
-                      />
-                      <span className="text-body">{t.settingsPage.permissionScopes[scope]}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-1 text-[11px] text-faint">{t.settingsPage.permissionsHint}</div>
-              </div>
-              <button type="submit" disabled={adminSubmitting} className={buttonClass}>
-                {adminSubmitting ? t.settingsPage.creating : t.settingsPage.newAdminBtn}
-              </button>
+          )}
+          <div className="tf-seg" role="group" aria-label={sp.tlsTitle} style={{ alignSelf: 'flex-start' }}>
+            <button type="button" aria-pressed={tlsMode === 'free'} onClick={() => setTlsMode('free')}>
+              {s.tlsFree}
+            </button>
+            <button type="button" aria-pressed={tlsMode === 'upload'} onClick={() => setTlsMode('upload')}>
+              {s.tlsUpload}
+            </button>
+          </div>
+          {tlsMode === 'free' ? (
+            <form id="set-ssl-form" onSubmit={handleRequestSsl}>
+              <label className="lbl" htmlFor="set-ssl-domain">
+                {sp.sslDomainLabel}
+              </label>
+              <input id="set-ssl-domain" className="input ltr" value={sslDomain} onChange={(e) => setSslDomain(e.target.value)} placeholder="panel.example.com" />
+              <div className="hint">{sp.sslAutoDesc}</div>
             </form>
-            {adminError && <div className="mb-3 text-xs text-danger">{adminError}</div>}
+          ) : (
+            <form id="set-tls-form" onSubmit={handleUploadTls} className="flex flex-col gap-2">
+              <div className="drops">
+                {(
+                  [
+                    [sp.tlsCertLabel, tlsCertFile, setTlsCertFile, '.pem,.crt,.cer'],
+                    [sp.tlsKeyLabel, tlsKeyFile, setTlsKeyFile, '.pem,.key'],
+                  ] as [string, File | null, (f: File | null) => void, string][]
+                ).map(([label, file, setFile, accept]) => (
+                  <label
+                    key={label}
+                    className={`drop ${file ? 'has' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.add('over')
+                    }}
+                    onDragLeave={(e) => e.currentTarget.classList.remove('over')}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.remove('over')
+                      const f = e.dataTransfer.files?.[0]
+                      if (f) setFile(f)
+                    }}
+                  >
+                    <span>{label}</span>
+                    <b>{file ? file.name : s.dropPick}</b>
+                    <input type="file" hidden accept={accept} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                  </label>
+                ))}
+              </div>
+              <div className="hint" style={{ margin: 0 }}>
+                {sp.tlsDesc}
+              </div>
+            </form>
+          )}
+        </Section>
 
-            <div className="flex flex-col gap-2">
-              {admins?.map((a) => (
-                <div key={a.id} className="rounded-lg border border-subtle bg-field px-3 py-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-primary">{a.username}</span>
-                      {a.is_owner ? (
-                        <span className="rounded-full border border-edge px-2 py-0.5 text-[10px] text-muted">
-                          owner
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-faint">
-                          {a.permissions === null
-                            ? t.settingsPage.fullAccess
-                            : a.permissions.map((s) => t.settingsPage.permissionScopes[s]).join(', ') ||
-                              t.settingsPage.noAccess}
-                        </span>
+        <Section
+          id="admins"
+          mark="ADM"
+          title={sp.adminsTitle}
+          sub={s.adminsSub}
+          hidden={!visible.admins}
+          flash={flash === 'admins'}
+          pill={admins ? <Pill tone="ok">{s.adminsCount(admins.length)}</Pill> : undefined}
+          footer={
+            <>
+              {adminError && <span className="msg err-text">{adminError}</span>}
+              <button type="button" className="btn solid" onClick={() => setShowNewAdmin((v) => !v)}>
+                {sp.newAdminBtn}
+              </button>
+            </>
+          }
+        >
+          {admins?.map((a) => {
+            const editing = editingPermsId === a.id
+            const scopes = editing ? editingPermsSet : new Set(a.permissions ?? PERMISSION_SCOPES)
+            return (
+              <div key={a.id} className="admin">
+                <div className="atop">
+                  <span className="av">{initials(a.username)}</span>
+                  <b className="en">{a.username}</b>
+                  <span className="chip">
+                    {a.is_owner ? s.ownerChip : a.permissions === null ? sp.fullAccess : a.permissions.length ? s.limitedChip : sp.noAccess}
+                  </span>
+                  {!a.is_owner && (
+                    <span className="flex gap-1.5" style={{ marginInlineStart: 'auto' }}>
+                      {editing && (
+                        <>
+                          <button type="button" className="btn solid" onClick={saveEditingPerms} disabled={permsSaving}>
+                            {t.common.save}
+                          </button>
+                          <button type="button" className="btn" onClick={() => setEditingPermsId(null)}>
+                            {t.usersPage.cancelAction}
+                          </button>
+                        </>
                       )}
-                    </div>
-                    {!a.is_owner && (
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => (editingPermsId === a.id ? setEditingPermsId(null) : startEditPerms(a))}
-                          className="hover-btn hover-btn-sm"
-                        >
-                          {t.settingsPage.editPermissions}
-                        </button>
-                        <button onClick={() => handleDeleteAdmin(a)} className="hover-btn hover-btn-sm hover-btn-danger">
-                          {t.common.delete}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {editingPermsId === a.id && (
-                    <div className="mt-2 border-t border-subtle pt-2">
-                      <div className="flex flex-wrap gap-x-4 gap-y-1">
-                        {PERMISSION_SCOPES.map((scope) => (
-                          <label key={scope} className="flex cursor-pointer items-center gap-1.5 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={editingPermsSet.has(scope)}
-                              onChange={() => toggleEditingPermission(scope)}
-                            />
-                            <span className="text-body">{t.settingsPage.permissionScopes[scope]}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <button
-                        onClick={saveEditingPerms}
-                        disabled={permsSaving}
-                        className="hover-btn hover-btn-sm mt-2"
-                      >
-                        {t.common.save}
+                      <button type="button" className="btn danger" onClick={() => handleDeleteAdmin(a)}>
+                        {t.common.delete}
                       </button>
-                    </div>
+                    </span>
                   )}
                 </div>
-              ))}
+                <div className="scopes">
+                  {PERMISSION_SCOPES.map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      className="scope"
+                      aria-pressed={a.is_owner || scopes.has(scope)}
+                      disabled={a.is_owner}
+                      onClick={() => toggleScope(a, scope)}
+                    >
+                      {sp.permissionScopes[scope]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {showNewAdmin && (
+            <form onSubmit={handleCreateAdmin} className="form-section">
+              <div className="row2">
+                <div>
+                  <label className="lbl" htmlFor="set-adm-user">
+                    {t.usersPage.username}
+                  </label>
+                  <input id="set-adm-user" className="input ltr" value={newAdminUsername} onChange={(e) => setNewAdminUsername(e.target.value)} required pattern="[a-zA-Z0-9_-]+" />
+                </div>
+                <div>
+                  <label className="lbl" htmlFor="set-adm-pass">
+                    {t.passLabel}
+                  </label>
+                  <input id="set-adm-pass" className="input" type="password" value={newAdminPassword} onChange={(e) => setNewAdminPassword(e.target.value)} required minLength={8} />
+                </div>
+              </div>
+              <div>
+                <div className="lbl">{sp.permissionsLabel}</div>
+                <div className="scopes">
+                  {PERMISSION_SCOPES.map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      className="scope"
+                      aria-pressed={newAdminPermissions.has(scope)}
+                      onClick={() => setNewAdminPermissions((p) => toggleInSet(p, scope))}
+                    >
+                      {sp.permissionScopes[scope]}
+                    </button>
+                  ))}
+                </div>
+                <div className="hint">{sp.permissionsHint}</div>
+              </div>
+              <div>
+                <button type="submit" disabled={adminSubmitting} className="btn solid">
+                  {adminSubmitting ? sp.creating : sp.newAdminBtn}
+                </button>
+              </div>
+            </form>
+          )}
+        </Section>
+
+        <Section
+          id="backup"
+          mark="DB"
+          title={sp.backupTitle}
+          sub={s.backupSub}
+          hidden={!visible.backup}
+          flash={flash === 'backup'}
+          footer={
+            <button type="button" onClick={handleDownloadBackup} disabled={backupDownloading} className="btn solid">
+              {backupDownloading ? sp.downloading : sp.downloadBackup}
+            </button>
+          }
+        >
+          <div className="tf-note">{s.backupNote}</div>
+          {backupError && <div className="err-text">{backupError}</div>}
+          {restoreDone && <div className="ok-text">{sp.restoreDoneNote}</div>}
+        </Section>
+
+        <Section
+          id="danger"
+          mark="!"
+          title={s.dangerTitle}
+          sub={s.dangerSub}
+          hidden={!visible.danger}
+          flash={flash === 'danger'}
+          className="danger-zone"
+        >
+          <div className="dz-row">
+            <div>
+              <b>{sp.restoreFromFile}</b>
+              <p>{sp.restoreConfirm}</p>
+              {restoreOpen && (
+                <div className="confirm">
+                  <span className="hint" style={{ margin: 0 }}>
+                    {s.typeToConfirm} <b className="en">RESTORE</b>
+                  </span>
+                  <input className="input en" value={restoreWord} onChange={(e) => setRestoreWord(e.target.value)} aria-label="RESTORE" autoFocus />
+                  <button
+                    type="button"
+                    className="btn danger"
+                    disabled={restoreWord.trim() !== 'RESTORE' || restoring}
+                    onClick={() => restoreInputRef.current?.click()}
+                  >
+                    {restoring ? sp.restoring : s.chooseFile}
+                  </button>
+                </div>
+              )}
+              <input
+                ref={restoreInputRef}
+                type="file"
+                accept=".db"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleRestoreFile(file)
+                }}
+              />
             </div>
+            <button type="button" className="btn danger" onClick={() => setRestoreOpen((v) => !v)}>
+              {s.restoreBtn}
+            </button>
           </div>
-        )}
+          {tls?.enabled && (
+            <div className="dz-row">
+              <div>
+                <b>{sp.tlsRemoveBtn}</b>
+                <p>{sp.tlsRemoveConfirm}</p>
+              </div>
+              <button type="button" className="btn danger" onClick={handleRemoveTls}>
+                {sp.tlsRemoveBtn}
+              </button>
+            </div>
+          )}
+        </Section>
       </div>
     </div>
   )

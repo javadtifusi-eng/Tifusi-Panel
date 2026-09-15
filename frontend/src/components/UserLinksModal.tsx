@@ -3,6 +3,8 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useLang } from '../i18n/LangContext'
 import { ApiError, getUserLinks, listUserAppReports, type AppReport, type UserLinks } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
+import { parseServerDate } from '../lib/format'
+import { Modal } from './ui'
 
 function protocolLabel(link: string): string {
   return link.split('://')[0].toUpperCase()
@@ -11,22 +13,51 @@ function protocolLabel(link: string): string {
 // Anything the app reports that isn't a known success/soft-failure is
 // shown as a failure — an unfamiliar result from a newer app is more
 // likely a new way to fail than a new way to succeed.
-function reportResultClass(result: string): string {
-  if (result === 'connected' || result === 'ok') return 'text-success'
-  if (result === 'disconnected_early') return 'text-warning'
-  return 'text-danger'
+function reportPill(result: string): string {
+  if (result === 'connected' || result === 'ok') return 'ok'
+  if (result === 'disconnected_early') return 'warn'
+  return 'bad'
 }
 
-export default function UserLinksModal({
-  userId,
-  username,
-  onClose,
+function ConfigCard({
+  title,
+  fields,
+  text,
+  copied,
+  onCopy,
 }: {
-  userId: number
-  username: string
-  onClose: () => void
+  title: string
+  fields: [string, string][]
+  text: string
+  copied: string | null
+  onCopy: (v: string) => void
 }) {
-  const { t, dir } = useLang()
+  const { t } = useLang()
+  return (
+    <div className="form-section">
+      <div className="flex items-center justify-between gap-2">
+        <span className="chip en">{title}</span>
+        <button onClick={() => onCopy(text)} className="btn">
+          {copied === text ? t.copied : t.userLinksModal.copyConfig}
+        </button>
+      </div>
+      {fields.map(([label, value]) => (
+        <div key={label} className="tf-linkrow">
+          <span className="hint" style={{ margin: 0, width: 64, flex: 'none' }}>
+            {label}
+          </span>
+          <span className="mono">{value}</span>
+          <button onClick={() => onCopy(value)} className="btn">
+            {copied === value ? t.copied : t.copy}
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function UserLinksModal({ userId, username, onClose }: { userId: number; username: string; onClose: () => void }) {
+  const { t } = useLang()
   const [data, setData] = useState<UserLinks | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -51,207 +82,104 @@ export default function UserLinksModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div
-        dir={dir}
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-subtle bg-surface p-6"
-        style={{ boxShadow: '0 24px 60px rgba(0,0,0,0.55)' }}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-heading">{t.userLinksModal.title(username)}</h2>
-          <button onClick={onClose} className="text-muted hover:text-body">
-            ✕
-          </button>
-        </div>
+    <Modal title={t.userLinksModal.title(username)} onClose={onClose} width={560}>
+      {error && <div className="tf-alert">{error}</div>}
+      {!data && !error && <div className="hint">{t.loading}</div>}
 
-        {error && <div className="text-sm text-danger">{error}</div>}
-        {!data && !error && <div className="text-sm text-faint">{t.loading}</div>}
-
-        {data && (
-          <>
-            <div className="mb-6 flex flex-col items-center gap-3 rounded-xl border border-subtle bg-well p-4">
-              {data.links.length > 0 && (
-                <div className="rounded-lg bg-white p-3">
-                  <QRCodeSVG value={data.subscription_url} size={160} />
-                </div>
-              )}
-              <div className="text-xs text-muted">{t.userLinksModal.subscriptionLinkLabel}</div>
-              <div
-                dir="ltr"
-                className="w-full break-all rounded-lg bg-field px-3 py-2 text-center font-mono text-[11px] text-accent"
-              >
-                {data.subscription_url}
+      {data && (
+        <>
+          <div className="form-section" style={{ alignItems: 'center', textAlign: 'center' }}>
+            {data.links.length > 0 && (
+              <div className="tf-qr">
+                <QRCodeSVG value={data.subscription_url} size={160} />
               </div>
-              <button
-                onClick={() => copy(data.subscription_url)}
-                className="hover-btn hover-btn-sm"
-              >
+            )}
+            <div className="hint">{t.userLinksModal.subscriptionLinkLabel}</div>
+            <div className="tf-linkrow" style={{ width: '100%' }}>
+              <span className="mono">{data.subscription_url}</span>
+              <button onClick={() => copy(data.subscription_url)} className="btn">
                 {copied === data.subscription_url ? t.common.copiedCheck : t.userLinksModal.copySubLink}
               </button>
-
-              <div className="mt-2 w-full border-t border-hair pt-3 text-center text-xs text-muted">
-                {t.userLinksModal.appCodeLabel}
-              </div>
-              <div
-                dir="ltr"
-                className="w-full rounded-lg bg-field px-3 py-2 text-center font-mono text-base font-bold tracking-wider text-accent"
-              >
+            </div>
+            <div className="hint">{t.userLinksModal.appCodeLabel}</div>
+            <div className="tf-linkrow" style={{ width: '100%' }}>
+              <span className="mono" style={{ fontSize: '1rem', color: 'var(--amber)', textAlign: 'center', letterSpacing: '.08em' }}>
                 {data.app_code}
-              </div>
-              <button
-                onClick={() => copy(data.app_code)}
-                className="hover-btn hover-btn-sm"
-              >
+              </span>
+              <button onClick={() => copy(data.app_code)} className="btn">
                 {copied === data.app_code ? t.common.copiedCheck : t.userLinksModal.copyAppCode}
               </button>
             </div>
+          </div>
 
-            {data.links.length === 0 &&
-            data.ikev2_configs.length === 0 &&
-            data.l2tp_configs.length === 0 ? (
-              <div className="text-sm text-faint">{t.userLinksModal.noHostsForLinks}</div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {data.links.map((link) => (
-                  <div
-                    key={link}
-                    className="flex items-center gap-2 rounded-lg border border-subtle bg-field p-2.5"
-                  >
-                    <span className="flex-shrink-0 rounded-full border border-edge px-2 py-1 text-[10px] text-secondary">
-                      {protocolLabel(link)}
-                    </span>
-                    <span dir="ltr" className="flex-1 truncate text-left font-mono text-[11px] text-muted">
-                      {link}
-                    </span>
-                    <button onClick={() => copy(link)} className="hover-btn hover-btn-sm flex-shrink-0">
-                      {copied === link ? t.copied : t.copy}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {data.ikev2_configs.length > 0 && (
-              <div className="mt-4 flex flex-col gap-3">
-                {data.ikev2_configs.map((ike, idx) => {
-                  const text = `Server: ${ike.server}\nRemote ID: ${ike.remote_id ?? ike.server}\nPSK: ${ike.psk ?? '—'}\nUsername: ${ike.username}\nPassword: ${ike.password}`
-                  const fields: [string, string][] = [
-                    ['Server', ike.server],
-                    ...(ike.remote_id ? ([['Remote ID', ike.remote_id]] as [string, string][]) : []),
-                    ...(ike.psk ? ([['PSK', ike.psk]] as [string, string][]) : []),
-                    ['Username', ike.username],
-                    ['Password', ike.password],
-                  ]
-                  return (
-                    <div key={`${idx}-${ike.remark}`} className="rounded-lg border border-subtle bg-field p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="rounded-full border border-edge px-2 py-1 text-[10px] text-secondary">
-                          IKEV2 · {ike.remark}
-                        </span>
-                        <button onClick={() => copy(text)} className="hover-btn hover-btn-sm">
-                          {copied === text ? t.copied : t.userLinksModal.copyConfig}
-                        </button>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {fields.map(([label, value]) => (
-                          <div key={label} className="flex items-center gap-2 rounded-lg bg-well px-2.5 py-1.5">
-                            <span className="w-16 flex-shrink-0 text-[10px] text-faint">{label}</span>
-                            <span dir="ltr" className="flex-1 truncate text-left font-mono text-[11px] text-muted">
-                              {value}
-                            </span>
-                            <button
-                              onClick={() => copy(value)}
-                              className="hover-btn hover-btn-sm flex-shrink-0"
-                            >
-                              {copied === value ? t.copied : t.copy}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {data.l2tp_configs.length > 0 && (
-              <div className="mt-4 flex flex-col gap-3">
-                {data.l2tp_configs.map((l2tp, idx) => {
-                  const text = `Server: ${l2tp.server}\nPSK: ${l2tp.psk ?? '—'}\nUsername: ${l2tp.username}\nPassword: ${l2tp.password}`
-                  const fields: [string, string][] = [
-                    ['Server', l2tp.server],
-                    ...(l2tp.psk ? ([['PSK', l2tp.psk]] as [string, string][]) : []),
-                    ['Username', l2tp.username],
-                    ['Password', l2tp.password],
-                  ]
-                  return (
-                    <div key={`${idx}-${l2tp.remark}`} className="rounded-lg border border-subtle bg-field p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="rounded-full border border-edge px-2 py-1 text-[10px] text-secondary">
-                          L2TP · {l2tp.remark}
-                        </span>
-                        <button onClick={() => copy(text)} className="hover-btn hover-btn-sm">
-                          {copied === text ? t.copied : t.userLinksModal.copyConfig}
-                        </button>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {fields.map(([label, value]) => (
-                          <div key={label} className="flex items-center gap-2 rounded-lg bg-well px-2.5 py-1.5">
-                            <span className="w-16 flex-shrink-0 text-[10px] text-faint">{label}</span>
-                            <span dir="ltr" className="flex-1 truncate text-left font-mono text-[11px] text-muted">
-                              {value}
-                            </span>
-                            <button
-                              onClick={() => copy(value)}
-                              className="hover-btn hover-btn-sm flex-shrink-0"
-                            >
-                              {copied === value ? t.copied : t.copy}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </>
-        )}
-
-        <div className="mt-6 border-t border-hair pt-4">
-          <div className="mb-2 text-xs font-bold text-secondary">{t.userLinksModal.appReportsTitle}</div>
-          {reportsError && <div className="text-xs text-danger">{reportsError}</div>}
-          {!reports && !reportsError && <div className="text-xs text-faint">{t.loading}</div>}
-          {reports && reports.length === 0 && (
-            <div className="text-xs text-faint">{t.userLinksModal.appReportsEmpty}</div>
-          )}
-          {reports && reports.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              {reports.map((r) => (
-                <div key={r.id} className="rounded-lg border border-subtle bg-field px-2.5 py-1.5 text-[11px]">
-                  <div className="flex items-center gap-2">
-                    <span className={`flex-shrink-0 font-bold ${reportResultClass(r.result)}`}>
-                      {resultLabels[r.result] ?? r.result}
-                    </span>
-                    <span dir="ltr" className="flex-1 truncate text-left text-muted">
-                      {[r.protocol, r.network, r.carrier].filter(Boolean).join(' · ')}
-                    </span>
-                    <span dir="ltr" className="flex-shrink-0 text-faint">
-                      {new Date(r.reported_at).toLocaleString()}
-                    </span>
-                  </div>
-                  {r.detail && (
-                    <div dir="ltr" title={r.detail} className="mt-0.5 truncate text-left font-mono text-[10px] text-faint">
-                      {r.detail}
-                    </div>
-                  )}
+          {data.links.length === 0 && data.ikev2_configs.length === 0 && data.l2tp_configs.length === 0 ? (
+            <div className="hint">{t.userLinksModal.noHostsForLinks}</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {data.links.map((link) => (
+                <div key={link} className="tf-linkrow">
+                  <span className="chip en">{protocolLabel(link)}</span>
+                  <span className="mono">{link}</span>
+                  <button onClick={() => copy(link)} className="btn">
+                    {copied === link ? t.copied : t.copy}
+                  </button>
                 </div>
               ))}
             </div>
           )}
-        </div>
+
+          {data.ikev2_configs.map((ike, idx) => {
+            const text = `Server: ${ike.server}\nRemote ID: ${ike.remote_id ?? ike.server}\nPSK: ${ike.psk ?? '—'}\nUsername: ${ike.username}\nPassword: ${ike.password}`
+            const fields: [string, string][] = [
+              ['Server', ike.server],
+              ...(ike.remote_id ? ([['Remote ID', ike.remote_id]] as [string, string][]) : []),
+              ...(ike.psk ? ([['PSK', ike.psk]] as [string, string][]) : []),
+              ['Username', ike.username],
+              ['Password', ike.password],
+            ]
+            return <ConfigCard key={`ike-${idx}`} title={`IKEV2 · ${ike.remark}`} fields={fields} text={text} copied={copied} onCopy={copy} />
+          })}
+
+          {data.l2tp_configs.map((l2tp, idx) => {
+            const text = `Server: ${l2tp.server}\nPSK: ${l2tp.psk ?? '—'}\nUsername: ${l2tp.username}\nPassword: ${l2tp.password}`
+            const fields: [string, string][] = [
+              ['Server', l2tp.server],
+              ...(l2tp.psk ? ([['PSK', l2tp.psk]] as [string, string][]) : []),
+              ['Username', l2tp.username],
+              ['Password', l2tp.password],
+            ]
+            return <ConfigCard key={`l2tp-${idx}`} title={`L2TP · ${l2tp.remark}`} fields={fields} text={text} copied={copied} onCopy={copy} />
+          })}
+        </>
+      )}
+
+      <div className="form-section">
+        <h4>{t.userLinksModal.appReportsTitle}</h4>
+        {reportsError && <div className="err-text">{reportsError}</div>}
+        {!reports && !reportsError && <div className="hint">{t.loading}</div>}
+        {reports && reports.length === 0 && <div className="hint">{t.userLinksModal.appReportsEmpty}</div>}
+        {reports && reports.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            {reports.map((r) => (
+              <div key={r.id} className="tf-linkrow" style={{ flexWrap: 'wrap' }}>
+                <span className={`pill ${reportPill(r.result)}`}>
+                  <i />
+                  {resultLabels[r.result] ?? r.result}
+                </span>
+                <span className="mono">{[r.protocol, r.network, r.carrier].filter(Boolean).join(' · ')}</span>
+                <span className="hint en" style={{ margin: 0 }} dir="ltr">
+                  {parseServerDate(r.reported_at).toLocaleString()}
+                </span>
+                {r.detail && (
+                  <span className="mono" title={r.detail} style={{ flexBasis: '100%', fontSize: '.66rem', color: 'var(--faint)' }}>
+                    {r.detail}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }

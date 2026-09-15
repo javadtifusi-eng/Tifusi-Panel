@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { IconCopy, IconPlus } from '../components/icons'
+import { Empty, Field, Sheet, useReducedMotion, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
@@ -20,24 +22,10 @@ import {
   type TunnelTransport,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
+import { parseServerDate } from '../lib/format'
 
 const TRANSPORTS: TunnelTransport[] = ['tcp', 'tls', 'ws', 'wss', 'tcpmux', 'wsmux', 'wssmux', 'udp']
-
-const statusDot: Record<TunnelStatus, string> = {
-  connected: 'bg-success',
-  pending: 'bg-neutral',
-  error: 'bg-danger',
-}
-
-const statusBadge: Record<TunnelStatus, string> = {
-  connected: 'bg-success-tint text-success border-success/30',
-  pending: 'bg-neutral-tint text-muted border-neutral/30',
-  error: 'bg-danger-tint text-danger border-danger/30',
-}
-
-const inputClass =
-  'rounded-lg border border-edge bg-field px-3 py-2 text-sm text-primary outline-none focus:border-accent/60'
-const labelClass = 'mb-1.5 block text-xs text-muted'
+const PILL: Record<TunnelStatus, string> = { connected: 'ok live', pending: 'idle', error: 'bad' }
 
 type ForeignSource = 'node' | 'address'
 
@@ -45,21 +33,40 @@ function emptyForward(): TunnelForward {
   return { name: '', listen_port: 0, net: 'tcp', target_port: 0 }
 }
 
-export default function TunnelsPage() {
+function code(name: string): string {
+  return (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '#').toUpperCase()
+}
+
+interface MapEnd {
+  key: string
+  label: string
+  sub: string
+  x: number
+  y: number
+}
+
+type StepState = 'wait' | 'now' | 'done' | 'fail'
+
+export default function TunnelsPage({ createSignal = 0 }: { createSignal?: number } = {}) {
   const { t } = useLang()
+  const tn = t.ui.tunnels
+  const say = useToast()
+  const reduce = useReducedMotion()
   const [tunnels, setTunnels] = useState<Tunnel[] | null>(null)
   const [nodes, setNodes] = useState<Node[]>([])
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [testingId, setTestingId] = useState<number | null>(null)
   const [testResults, setTestResults] = useState<Record<number, TunnelTestResult>>({})
+  const [steps, setSteps] = useState<Record<number, StepState[]>>({})
   const [configId, setConfigId] = useState<number | null>(null)
   const [configData, setConfigData] = useState<TunnelConfig | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
   const [recommending, setRecommending] = useState(false)
   const [recommendResult, setRecommendResult] = useState<TunnelRecommendResult | null>(null)
+  const [focusKey, setFocusKey] = useState<string | null>(null)
 
   const [name, setName] = useState('')
   const [iranAddress, setIranAddress] = useState('')
@@ -92,6 +99,15 @@ export default function TunnelsPage() {
       .catch(() => undefined)
   }, [])
 
+  useEffect(() => {
+    if (createSignal > 0) openNew()
+  }, [createSignal])
+
+  function openNew() {
+    resetForm()
+    setShowForm(true)
+  }
+
   function resetForm() {
     setEditingId(null)
     setName('')
@@ -108,6 +124,7 @@ export default function TunnelsPage() {
     setForwards([])
     setShowForm(false)
     setRecommendResult(null)
+    setFormError(null)
   }
 
   function startEdit(tunnel: Tunnel) {
@@ -124,6 +141,8 @@ export default function TunnelsPage() {
     setPath(tunnel.path ?? '')
     setConnectionCount(String(tunnel.connection_count))
     setForwards(tunnel.forwards)
+    setRecommendResult(null)
+    setFormError(null)
     setShowForm(true)
   }
 
@@ -131,11 +150,11 @@ export default function TunnelsPage() {
     e.preventDefault()
     if (!transport) return
     if (!foreignSource || (foreignSource === 'node' && foreignNodeId == null) || (foreignSource === 'address' && !foreignAddress)) {
-      setError(t.tunnelsPage.noNeedForeign)
+      setFormError(t.tunnelsPage.noNeedForeign)
       return
     }
     setSubmitting(true)
-    setError(null)
+    setFormError(null)
     try {
       const payload = {
         name,
@@ -150,15 +169,14 @@ export default function TunnelsPage() {
         connection_count: parseInt(connectionCount, 10) || 8,
         forwards: forwards.filter((f) => f.name && f.listen_port && f.target_port),
       }
-      if (editingId) {
-        await updateTunnel(editingId, payload)
-      } else {
-        await createTunnel(payload)
-      }
+      if (editingId) await updateTunnel(editingId, payload)
+      else await createTunnel(payload)
+      const wasEdit = !!editingId
       resetForm()
       await refresh()
+      say(wasEdit ? tn.saved : tn.created)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.common.genericError)
+      setFormError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setSubmitting(false)
     }
@@ -166,15 +184,15 @@ export default function TunnelsPage() {
 
   async function handleRecommend() {
     if (!iranAddress) {
-      setError(t.tunnelsPage.recommendNeedsIran)
+      setFormError(t.tunnelsPage.recommendNeedsIran)
       return
     }
     if (!foreignSource || (foreignSource === 'node' && foreignNodeId == null) || (foreignSource === 'address' && !foreignAddress)) {
-      setError(t.tunnelsPage.noNeedForeign)
+      setFormError(t.tunnelsPage.noNeedForeign)
       return
     }
     setRecommending(true)
-    setError(null)
+    setFormError(null)
     try {
       const result = await recommendTunnelTransport({
         iran_address: iranAddress,
@@ -185,21 +203,43 @@ export default function TunnelsPage() {
       setRecommendResult(result)
       if (result.ranked.length > 0) setTransport(result.ranked[0].transport)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.common.genericError)
+      setFormError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setRecommending(false)
     }
   }
 
+  // The test is one request; the three steps show what it checks and fill in from its result.
   async function handleTest(tunnel: Tunnel) {
     if (testingId !== null) return
     setTestingId(tunnel.id)
     setError(null)
+    setSteps((s) => ({ ...s, [tunnel.id]: ['now', 'wait', 'wait'] }))
+    const started = performance.now()
     try {
       const result = await testTunnel(tunnel.id)
+      const minWait = reduce ? 0 : Math.max(0, 900 - (performance.now() - started))
+      await new Promise((r) => window.setTimeout(r, minWait))
+      const final: StepState[] = [
+        result.iran_reachable ? 'done' : 'fail',
+        result.foreign_reachable ? 'done' : 'fail',
+        result.status === 'connected' ? 'done' : 'fail',
+      ]
+      setSteps((s) => ({ ...s, [tunnel.id]: final }))
       setTestResults((r) => ({ ...r, [tunnel.id]: result }))
       await refresh()
+      say(result.status === 'connected' ? tn.testOk : result.error ?? tn.testFail)
+      window.setTimeout(() => setSteps((s) => {
+        const next = { ...s }
+        delete next[tunnel.id]
+        return next
+      }), 5000)
     } catch (err) {
+      setSteps((s) => {
+        const next = { ...s }
+        delete next[tunnel.id]
+        return next
+      })
       setError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
       setTestingId(null)
@@ -232,392 +272,520 @@ export default function TunnelsPage() {
   }
 
   async function copy(text: string) {
-    if (!(await copyToClipboard(text))) return
-    setCopied(text)
-    window.setTimeout(() => setCopied((c) => (c === text ? null : c)), 1500)
+    if (await copyToClipboard(text)) say(t.common.copiedCheck)
   }
 
   function updateForward(idx: number, patch: Partial<TunnelForward>) {
     setForwards((fs) => fs.map((f, i) => (i === idx ? { ...f, ...patch } : f)))
   }
 
+  // ── Map: Iran entries on the right, servers abroad on the left.
+  const list = tunnels ?? []
+  const foreignKey = (tu: Tunnel) => (tu.foreign_node_id != null ? `n${tu.foreign_node_id}` : `a${tu.foreign_address}`)
+  const foreignLabel = (tu: Tunnel) => {
+    const node = tu.foreign_node_id != null ? nodeById.get(tu.foreign_node_id) : undefined
+    return { label: node?.name ?? tu.foreign_address ?? '—', sub: node?.address ?? tu.foreign_address ?? '' }
+  }
+  const irans = [...new Set(list.map((tu) => tu.iran_address))]
+  const foreigns = [...new Map(list.map((tu) => [foreignKey(tu), tu])).values()]
+  const spread = (i: number, count: number, lo: number, hi: number) => (count <= 1 ? (lo + hi) / 2 : lo + ((hi - lo) * i) / (count - 1))
+  const iranEnds: MapEnd[] = irans.map((addr, i) => ({ key: `ir:${addr}`, label: tn.iranEntry, sub: addr, x: 660, y: spread(i, irans.length, 110, 320) }))
+  const foreignEnds: MapEnd[] = foreigns.map((tu, i) => ({
+    key: `fo:${foreignKey(tu)}`,
+    ...foreignLabel(tu),
+    x: i % 2 === 0 ? 200 : 250,
+    y: spread(i, foreigns.length, 80, 350),
+  }))
+  const endByKey = new Map([...iranEnds, ...foreignEnds].map((e) => [e.key, e]))
+  const pairCount = new Map<string, number>()
+  const wires = list.map((tu) => {
+    const a = endByKey.get(`ir:${tu.iran_address}`)!
+    const b = endByKey.get(`fo:${foreignKey(tu)}`)!
+    const pair = `${a.key}|${b.key}`
+    const k = pairCount.get(pair) ?? 0
+    pairCount.set(pair, k + 1)
+    const bend = (k % 2 === 0 ? -1 : 1) * (40 + k * 30)
+    const mx = (a.x + b.x) / 2
+    const my = (a.y + b.y) / 2 + bend
+    return { tu, a, b, d: `M${a.x} ${a.y} Q${mx} ${my} ${b.x} ${b.y}`, mid: { x: (a.x + 2 * mx + b.x) / 4, y: (a.y + 2 * my + b.y) / 4 } }
+  })
+  const focused = focusKey ? endByKey.get(focusKey) : iranEnds[0]
+  const focusedTunnels = focused
+    ? list.filter((tu) => (focused.key.startsWith('ir:') ? `ir:${tu.iran_address}` === focused.key : `fo:${foreignKey(tu)}` === focused.key))
+    : []
+  const focusedUp = focusedTunnels.filter((tu) => tu.status === 'connected').length
+  const focusedDown = focusedTunnels.some((tu) => tu.status === 'error')
+
+  function latencyOf(tu: Tunnel): string {
+    const r = testResults[tu.id]
+    if (!r) return '—'
+    const ms = [r.iran_latency_ms, r.foreign_latency_ms].filter((v): v is number => v != null)
+    return ms.length ? `${Math.round(Math.max(...ms))} ms` : '—'
+  }
+
+  function checkedAgo(tu: Tunnel): string {
+    if (!tu.last_checked_at) return t.tunnelsPage.status.pending
+    const minutes = Math.round((Date.now() - parseServerDate(tu.last_checked_at).getTime()) / 60000)
+    if (minutes < 60) return t.usersPage.minutesAgo(Math.max(1, minutes))
+    const hours = Math.round(minutes / 60)
+    return hours < 24 ? t.usersPage.hoursAgo(hours) : t.usersPage.daysAgo(Math.round(hours / 24))
+  }
+
+  const stepLabels = [tn.stepIran, tn.stepForeign, tn.stepTunnel]
+
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-end">
-        <h1 className="sr-only">{t.tunnelsPage.title}</h1>
-        <button
-          onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="hover-btn"
-        >
-          {t.tunnelsPage.newBtn}
+    <div className="pg-tunnels">
+      <h1 className="sr-only">{t.tunnelsPage.title}</h1>
+
+      {tunnels !== null && tunnels.length > 0 && (
+        <div className="map-card">
+          <div className="map" dir="ltr">
+            <svg viewBox="0 0 900 430" role="img" aria-label={t.tunnelsPage.title}>
+              <defs>
+                <linearGradient id="tfBeamGrad" x1="0" x2="1">
+                  <stop offset="0" stopColor="#f97316" stopOpacity="0" />
+                  <stop offset=".6" stopColor="#f97316" />
+                  <stop offset="1" stopColor="#fde68a" />
+                </linearGradient>
+              </defs>
+              <g className="sonar">
+                {[70, 140, 220, 310].map((r) => (
+                  <circle key={r} cx={660} cy={215} r={r} />
+                ))}
+              </g>
+              {wires.map(({ tu, d, mid }) =>
+                tu.status === 'connected' ? (
+                  <g key={tu.id}>
+                    <path id={`tfw${tu.id}`} className="wire-base" d={d} />
+                    <path className="wire-beam" d={d} style={{ animationDelay: `${-(tu.id % 5) * 0.6}s` }} />
+                    {!reduce && (
+                      <circle className="packet" r={3.2}>
+                        <animateMotion dur={`${2.6 + (tu.id % 3) * 0.5}s`} repeatCount="indefinite" path={d} />
+                      </circle>
+                    )}
+                  </g>
+                ) : tu.status === 'error' ? (
+                  <g key={tu.id}>
+                    <path className="wire-cut" d={d} />
+                    <g transform={`translate(${mid.x} ${mid.y})`}>
+                      <line className="xmark" x1={-7} y1={-7} x2={7} y2={7} />
+                      <line className="xmark" x1={7} y1={-7} x2={-7} y2={7} />
+                    </g>
+                  </g>
+                ) : (
+                  <path key={tu.id} className="wire-wait" d={d} />
+                ),
+              )}
+              {foreignEnds.map((e) => {
+                const mine = list.filter((tu) => `fo:${foreignKey(tu)}` === e.key)
+                const down = mine.some((tu) => tu.status === 'error')
+                const up = mine.some((tu) => tu.status === 'connected')
+                return (
+                  <g
+                    key={e.key}
+                    className={`mnode ${focused?.key === e.key ? 'active' : ''}`}
+                    tabIndex={0}
+                    onPointerEnter={() => setFocusKey(e.key)}
+                    onFocus={() => setFocusKey(e.key)}
+                  >
+                    {up && !reduce && (
+                      <g className="orbit" style={{ transformOrigin: `${e.x}px ${e.y}px` }}>
+                        <circle cx={e.x} cy={e.y - 44} r={3} />
+                        <circle cx={e.x + 40} cy={e.y} r={2.4} />
+                        <circle cx={e.x - 30} cy={e.y + 32} r={2.2} />
+                      </g>
+                    )}
+                    <circle className="disc" cx={e.x} cy={e.y} r={26} style={down ? { stroke: 'rgb(239 68 68 / .5)' } : undefined} />
+                    <text className="code" x={e.x} y={e.y + 4} style={down ? { fill: '#ef4444' } : undefined}>
+                      {code(e.label)}
+                    </text>
+                    <text x={e.x} y={e.y + 46}>
+                      {e.label}
+                    </text>
+                    <text className="sub" x={e.x} y={e.y + 60}>
+                      {e.sub !== e.label ? e.sub : ''}
+                    </text>
+                  </g>
+                )
+              })}
+              {iranEnds.map((e) => (
+                <g
+                  key={e.key}
+                  className={`mnode ${focused?.key === e.key ? 'active' : ''}`}
+                  tabIndex={0}
+                  onPointerEnter={() => setFocusKey(e.key)}
+                  onFocus={() => setFocusKey(e.key)}
+                >
+                  {!reduce && <circle className="hub-pulse" cx={e.x} cy={e.y} r={34} strokeWidth={1.5} />}
+                  <circle className="disc" cx={e.x} cy={e.y} r={34} style={{ stroke: 'rgb(249 115 22 / .55)' }} />
+                  <text className="code" x={e.x} y={e.y + 5} style={{ fontSize: 14 }}>
+                    IR
+                  </text>
+                  <text x={e.x} y={e.y + 56}>
+                    {tn.iranEntry}
+                  </text>
+                  <text className="sub" x={e.x} y={e.y + 70}>
+                    {e.sub}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          </div>
+          <aside className="details" aria-live="polite">
+            {focused && (
+              <>
+                <h3>
+                  <span className="dot" style={{ ['--c' as string]: focusedDown ? 'var(--bad)' : focusedUp ? 'var(--ok)' : 'var(--muted)' }} />
+                  <span className="en" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {focused.label}
+                  </span>
+                </h3>
+                <div className="route mono">{focused.sub}</div>
+                <div className="tf-facts">
+                  <div>
+                    <span>{t.tunnelsPage.title}</span>
+                    <b className="en">{focusedTunnels.length}</b>
+                  </div>
+                  <div>
+                    <span>{t.tunnelsPage.status.connected}</span>
+                    <b className="en">
+                      {focusedUp} / {focusedTunnels.length}
+                    </b>
+                  </div>
+                  <div>
+                    <span>{t.tunnelsPage.transportLabel}</span>
+                    <b className="en">{[...new Set(focusedTunnels.map((tu) => tu.transport.toUpperCase()))].join(', ') || '—'}</b>
+                  </div>
+                  <div>
+                    <span>{tn.forwardsTitle}</span>
+                    <b className="en">{focusedTunnels.reduce((s, tu) => s + tu.forwards.length, 0)}</b>
+                  </div>
+                </div>
+                <div className="hint" style={{ margin: 0 }}>
+                  {tn.mapHint}
+                </div>
+              </>
+            )}
+            <div className="map-legend">
+              <span>
+                <i style={{ background: 'linear-gradient(90deg,#f97316,#fde68a)' }} />
+                {tn.legendUp}
+              </span>
+              <span>
+                <i style={{ background: 'repeating-linear-gradient(90deg,#ef4444 0 4px,transparent 4px 9px)' }} />
+                {tn.legendDown}
+              </span>
+              <span>
+                <i style={{ background: 'repeating-linear-gradient(90deg,#5c5c5c 0 2px,transparent 2px 8px)' }} />
+                {tn.legendWait}
+              </span>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <div className="sub-head">
+        <h2>
+          {t.tunnelsPage.title}
+          {tunnels && (
+            <span className="chip en" style={{ marginInlineStart: 8 }}>
+              {tunnels.length}
+            </span>
+          )}
+        </h2>
+        <button type="button" className="btn solid" onClick={openNew}>
+          <IconPlus size={14} />
+          {t.tunnelsPage.newBtn.replace(/^\+\s*/, '')}
         </button>
       </div>
-      <p className="mb-6 text-sm text-muted">{t.tunnelsPage.intro}</p>
+
+      {error && <div className="tf-alert">{error}</div>}
+
+      {tunnels === null ? (
+        <div className="cards">
+          {[0, 1].map((i) => (
+            <div key={i} className="skel" style={{ height: 210, borderRadius: 18 }} />
+          ))}
+        </div>
+      ) : tunnels.length === 0 ? (
+        <Empty
+          title={t.tunnelsPage.noTunnelsYet}
+          text={t.tunnelsPage.intro}
+          action={
+            <button type="button" className="btn solid" onClick={openNew}>
+              <IconPlus size={14} />
+              {t.tunnelsPage.newBtn.replace(/^\+\s*/, '')}
+            </button>
+          }
+        />
+      ) : (
+        <div className="cards">
+          {tunnels.map((tunnel) => {
+            const foreign = foreignLabel(tunnel)
+            const isTesting = testingId === tunnel.id
+            const tunnelSteps = steps[tunnel.id]
+            return (
+              <div key={tunnel.id} className={`rc-shell ${isTesting ? 'testing' : ''}`}>
+                <article className="route-card">
+                  <div className="top-strip">
+                    <span className="name">{tunnel.name}</span>
+                    <span className={`pill ${PILL[tunnel.status]}`}>
+                      <i />
+                      {isTesting ? t.tunnelsPage.testing : t.tunnelsPage.status[tunnel.status]}
+                    </span>
+                  </div>
+                  <div className="route">
+                    <div className="end">
+                      <span className="box">IR</span>
+                      <small>
+                        {tunnel.iran_address}:{tunnel.iran_port}
+                      </small>
+                    </div>
+                    <svg className="wire" viewBox="0 0 200 24" preserveAspectRatio="none" aria-hidden="true">
+                      {tunnel.status === 'connected' ? (
+                        <>
+                          <line x1="0" y1="12" x2="200" y2="12" />
+                          <line className="flow" x1="0" y1="12" x2="200" y2="12" />
+                        </>
+                      ) : (
+                        <line className={tunnel.status === 'error' ? 'cut' : 'wait'} x1="0" y1="12" x2="200" y2="12" />
+                      )}
+                    </svg>
+                    <div className="end">
+                      <span className="box" style={tunnel.status === 'error' ? { color: 'var(--bad)' } : undefined}>
+                        {code(foreign.label)}
+                      </span>
+                      <small>{foreign.label}</small>
+                    </div>
+                  </div>
+                  <div className="facts-line">
+                    <span>
+                      {t.tunnelsPage.transportLabel} <b className="en">{t.tunnelsPage.transportLabels[tunnel.transport]}</b>
+                    </span>
+                    <span>
+                      {tn.ports}{' '}
+                      <b className="mono">
+                        {tunnel.forwards.length ? tunnel.forwards.map((f) => `${f.listen_port}→${f.target_port}`).join(' · ') : '—'}
+                      </b>
+                    </span>
+                    <span>
+                      {tn.latency} <b className="en">{latencyOf(tunnel)}</b>
+                    </span>
+                    <span>
+                      {tn.checked} <b>{checkedAgo(tunnel)}</b>
+                    </span>
+                  </div>
+                  {tunnel.last_error && tunnel.status === 'error' && <p className="alert">{tunnel.last_error}</p>}
+                  {tunnelSteps && (
+                    <ol className="steps">
+                      {stepLabels.map((label, i) => (
+                        <li key={label} className={tunnelSteps[i] === 'wait' ? '' : tunnelSteps[i]}>
+                          <span className="ic">{tunnelSteps[i] === 'done' ? '✓' : tunnelSteps[i] === 'fail' ? '✕' : tunnelSteps[i] === 'now' ? '' : i + 1}</span>
+                          {label}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {configId === tunnel.id && configData && (
+                    <div className="cfg">
+                      {(
+                        [
+                          [t.tunnelsPage.iranInstallCommandLabel, configData.iran_install_command],
+                          [t.tunnelsPage.foreignInstallCommandLabel, configData.foreign_install_command],
+                        ] as const
+                      ).map(([label, command]) => (
+                        <div key={label} className="tf-linkrow">
+                          <span style={{ flex: 1, fontSize: '.76rem', color: 'var(--muted)' }}>{label}</span>
+                          <button type="button" className="btn solid" onClick={() => copy(command)}>
+                            <IconCopy size={13} />
+                            {t.tunnelsPage.copyConfig}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="foot">
+                    <button type="button" className="btn solid" onClick={() => handleTest(tunnel)} disabled={testingId !== null}>
+                      {isTesting ? t.tunnelsPage.testing : t.tunnelsPage.test}
+                    </button>
+                    <button type="button" className={`btn ${configId === tunnel.id ? 'on' : ''}`} onClick={() => toggleConfig(tunnel)}>
+                      {tn.installCmd}
+                    </button>
+                    <button type="button" className="btn" onClick={() => startEdit(tunnel)}>
+                      {t.common.edit}
+                    </button>
+                    <button type="button" className="btn danger" onClick={() => handleDelete(tunnel)}>
+                      {t.common.delete}
+                    </button>
+                  </div>
+                </article>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {showForm && (
-        <form
-          onSubmit={handleSubmit}
-          className="mb-6 flex flex-col gap-4 rounded-xl border border-subtle bg-surface p-4"
+        <Sheet
+          title={editingId ? tn.formEdit(name) : tn.formNew}
+          sub={t.tunnelsPage.intro}
+          onClose={resetForm}
+          width={600}
+          footer={
+            <>
+              <button type="submit" form="tunnel-form" disabled={submitting || !transport} className="btn primary lg">
+                {submitting ? t.common.saving : editingId ? t.common.save : t.tunnelsPage.registerBtn}
+              </button>
+              <button type="button" className="btn lg" onClick={resetForm}>
+                {t.usersPage.cancelAction}
+              </button>
+            </>
+          }
         >
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className={labelClass}>{t.tunnelsPage.nameLabel}</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} />
+          <form id="tunnel-form" onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+            <div className="form-grid">
+              <Field label={t.tunnelsPage.nameLabel} wide>
+                <input className="input" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+              </Field>
+              <Field label={t.tunnelsPage.iranAddressLabel}>
+                <input className="input ltr" value={iranAddress} onChange={(e) => setIranAddress(e.target.value)} required placeholder="1.2.3.4" />
+              </Field>
+              <Field label={t.tunnelsPage.iranPortLabel}>
+                <input className="input" type="number" min="1" max="65535" value={iranPort} onChange={(e) => setIranPort(e.target.value)} required />
+              </Field>
             </div>
-            <div>
-              <label className={labelClass}>{t.tunnelsPage.iranAddressLabel}</label>
-              <input
-                dir="ltr"
-                value={iranAddress}
-                onChange={(e) => setIranAddress(e.target.value)}
-                required
-                placeholder="1.2.3.4"
-                className={`${inputClass} text-left`}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>{t.tunnelsPage.iranPortLabel}</label>
-              <input
-                type="number"
-                min="1"
-                max="65535"
-                value={iranPort}
-                onChange={(e) => setIranPort(e.target.value)}
-                required
-                className={`${inputClass} w-28`}
-              />
-            </div>
-          </div>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className={labelClass}>{t.tunnelsPage.foreignSourceLabel}</label>
-              <div className="flex gap-2">
+            <div className="form-section">
+              <h4>{t.tunnelsPage.foreignSourceLabel}</h4>
+              <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
                 {(['node', 'address'] as ForeignSource[]).map((src) => (
-                  <button
-                    key={src}
-                    type="button"
-                    onClick={() => setForeignSource(src)}
-                    className={`hover-btn hover-btn-sm ${foreignSource === src ? 'hover-btn-active' : ''}`}
-                  >
+                  <button key={src} type="button" aria-pressed={foreignSource === src} onClick={() => setForeignSource(src)}>
                     {src === 'node' ? t.tunnelsPage.foreignNodeOption : t.tunnelsPage.foreignAddressOption}
                   </button>
                 ))}
               </div>
+              {foreignSource === 'node' && (
+                <Field label={t.tunnelsPage.foreignNodeLabel}>
+                  <select className="input" value={foreignNodeId ?? ''} onChange={(e) => setForeignNodeId(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">{t.coresPage.selectPlaceholder}</option>
+                    {nodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+              {foreignSource === 'address' && (
+                <Field label={t.tunnelsPage.foreignAddressLabel}>
+                  <input className="input ltr" value={foreignAddress} onChange={(e) => setForeignAddress(e.target.value)} placeholder="5.6.7.8" />
+                </Field>
+              )}
             </div>
-            {foreignSource === 'node' && (
-              <div>
-                <label className={labelClass}>{t.tunnelsPage.foreignNodeLabel}</label>
-                <select
-                  value={foreignNodeId ?? ''}
-                  onChange={(e) => setForeignNodeId(e.target.value ? Number(e.target.value) : null)}
-                  className={inputClass}
-                >
-                  <option value="">{t.coresPage.selectPlaceholder}</option>
-                  {nodes.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {foreignSource === 'address' && (
-              <div>
-                <label className={labelClass}>{t.tunnelsPage.foreignAddressLabel}</label>
-                <input
-                  dir="ltr"
-                  value={foreignAddress}
-                  onChange={(e) => setForeignAddress(e.target.value)}
-                  placeholder="5.6.7.8"
-                  className={`${inputClass} text-left`}
-                />
-              </div>
-            )}
-          </div>
 
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label className="block text-xs text-muted" title={t.tunnelsPage.transportHint}>
-                {t.tunnelsPage.transportLabel}
-              </label>
-              <button
-                type="button"
-                onClick={handleRecommend}
-                disabled={recommending}
-                className="hover-btn hover-btn-sm"
-              >
-                {recommending ? t.tunnelsPage.recommending : t.tunnelsPage.recommendBtn}
-              </button>
-            </div>
-            {recommendResult && (
-              <div className="mb-2 flex flex-col gap-1 rounded-lg border border-subtle bg-well p-2 text-[11px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted">{t.tunnelsPage.testResultIran}</span>
-                  <span className={recommendResult.iran_reachable ? 'text-success' : 'text-danger'}>
-                    {recommendResult.iran_reachable
-                      ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.iran_latency_ms ?? 0)}ms)`
-                      : t.tunnelsPage.unreachable}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted">{t.tunnelsPage.testResultForeign}</span>
-                  <span className={recommendResult.foreign_reachable ? 'text-success' : 'text-danger'}>
-                    {recommendResult.foreign_reachable
-                      ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.foreign_latency_ms ?? 0)}ms)`
-                      : t.tunnelsPage.unreachable}
-                  </span>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {recommendResult.ranked.map((r, i) => (
-                    <button
-                      key={r.transport}
-                      type="button"
-                      onClick={() => setTransport(r.transport)}
-                      className={`hover-btn hover-btn-sm ${transport === r.transport ? 'hover-btn-active' : ''}`}
-                    >
-                      {i === 0 ? '★ ' : ''}
-                      {t.tunnelsPage.transportLabels[r.transport]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {TRANSPORTS.map((tr) => (
-                <button
-                  key={tr}
-                  type="button"
-                  onClick={() => setTransport(tr)}
-                  title={t.tunnelsPage.transportHints[tr]}
-                  className={`hover-btn hover-btn-sm ${transport === tr ? 'hover-btn-active' : ''}`}
-                >
-                  {t.tunnelsPage.transportLabels[tr]}
+            <div className="form-section">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 style={{ margin: 0 }} title={t.tunnelsPage.transportHint}>
+                  {t.tunnelsPage.transportLabel}
+                </h4>
+                <button type="button" onClick={handleRecommend} disabled={recommending} className="btn">
+                  {recommending ? t.tunnelsPage.recommending : t.tunnelsPage.recommendBtn}
                 </button>
-              ))}
-            </div>
-            {transport && <div className="mt-1.5 text-[11px] text-faint">{t.tunnelsPage.transportHints[transport]}</div>}
-          </div>
-
-          {transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
-            <div className="flex flex-wrap items-end gap-3">
-              {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
-                <div>
-                  <label className={labelClass}>{t.tunnelsPage.sniLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={sni}
-                    onChange={(e) => setSni(e.target.value)}
-                    placeholder="www.bing.com"
-                    className={`${inputClass} text-left`}
-                  />
+              </div>
+              {recommendResult && (
+                <div className="tf-facts">
+                  <div>
+                    <span>{t.tunnelsPage.testResultIran}</span>
+                    <b style={{ color: recommendResult.iran_reachable ? 'var(--ok)' : 'var(--bad)' }}>
+                      {recommendResult.iran_reachable ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.iran_latency_ms ?? 0)}ms)` : t.tunnelsPage.unreachable}
+                    </b>
+                  </div>
+                  <div>
+                    <span>{t.tunnelsPage.testResultForeign}</span>
+                    <b style={{ color: recommendResult.foreign_reachable ? 'var(--ok)' : 'var(--bad)' }}>
+                      {recommendResult.foreign_reachable
+                        ? `${t.tunnelsPage.reachable} (${Math.round(recommendResult.foreign_latency_ms ?? 0)}ms)`
+                        : t.tunnelsPage.unreachable}
+                    </b>
+                  </div>
                 </div>
               )}
-              {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
-                <div>
-                  <label className={labelClass}>{t.tunnelsPage.domainLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={domain}
-                    onChange={(e) => setDomain(e.target.value)}
-                    placeholder="vpn.example.com"
-                    className={`${inputClass} text-left`}
-                  />
-                </div>
-              )}
-              {(transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
-                <div>
-                  <label className={labelClass}>{t.tunnelsPage.pathLabel}</label>
-                  <input
-                    dir="ltr"
-                    value={path}
-                    onChange={(e) => setPath(e.target.value)}
-                    placeholder="/tunnel"
-                    className={`${inputClass} text-left`}
-                  />
-                </div>
-              )}
+              <div className="flex flex-wrap gap-1.5">
+                {(recommendResult ? recommendResult.ranked.map((r) => r.transport) : TRANSPORTS).map((tr, i) => (
+                  <button key={tr} type="button" onClick={() => setTransport(tr)} title={t.tunnelsPage.transportHints[tr]} className={`btn ${transport === tr ? 'on' : ''}`}>
+                    {recommendResult && i === 0 ? '★ ' : ''}
+                    {t.tunnelsPage.transportLabels[tr]}
+                  </button>
+                ))}
+              </div>
+              {transport && <div className="hint" style={{ margin: 0 }}>{t.tunnelsPage.transportHints[transport]}</div>}
             </div>
-          )}
 
-          <div>
-            <label className={labelClass}>{t.tunnelsPage.connectionCountLabel}</label>
-            <input
-              type="number"
-              min="1"
-              max="256"
-              value={connectionCount}
-              onChange={(e) => setConnectionCount(e.target.value)}
-              className={`${inputClass} w-28`}
-            />
-          </div>
+            {transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
+              <div className="form-grid">
+                {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
+                  <>
+                    <Field label={t.tunnelsPage.sniLabel}>
+                      <input className="input ltr" value={sni} onChange={(e) => setSni(e.target.value)} placeholder="www.bing.com" />
+                    </Field>
+                    <Field label={t.tunnelsPage.domainLabel}>
+                      <input className="input ltr" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="vpn.example.com" />
+                    </Field>
+                  </>
+                )}
+                {(transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
+                  <Field label={t.tunnelsPage.pathLabel}>
+                    <input className="input ltr" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/tunnel" />
+                  </Field>
+                )}
+              </div>
+            )}
 
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-xs text-muted">{t.tunnelsPage.forwardsLabel}</label>
-              <button
-                type="button"
-                onClick={() => setForwards((fs) => [...fs, emptyForward()])}
-                className="hover-btn hover-btn-sm"
-              >
-                {t.tunnelsPage.addForwardBtn}
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
+            <Field label={t.tunnelsPage.connectionCountLabel}>
+              <input className="input" type="number" min="1" max="256" value={connectionCount} onChange={(e) => setConnectionCount(e.target.value)} />
+            </Field>
+
+            <div className="form-section">
+              <div className="flex items-center justify-between gap-2">
+                <h4 style={{ margin: 0 }}>{t.tunnelsPage.forwardsLabel}</h4>
+                <button type="button" onClick={() => setForwards((fs) => [...fs, emptyForward()])} className="btn">
+                  {t.tunnelsPage.addForwardBtn}
+                </button>
+              </div>
               {forwards.map((fwd, idx) => (
-                <div key={idx} className="flex flex-wrap items-end gap-2 rounded-lg border border-subtle p-2">
+                <div key={idx} className="rule-edit" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 8, padding: 8, borderRadius: 12, border: '1px solid var(--hair)', background: 'var(--well)' }}>
+                  <input className="input" style={{ flex: '1 1 110px', width: 'auto' }} value={fwd.name} onChange={(e) => updateForward(idx, { name: e.target.value })} placeholder={t.tunnelsPage.forwardNameLabel} />
                   <input
-                    value={fwd.name}
-                    onChange={(e) => updateForward(idx, { name: e.target.value })}
-                    placeholder={t.tunnelsPage.forwardNameLabel}
-                    className={`${inputClass} w-32`}
-                  />
-                  <input
-                    dir="ltr"
+                    className="input ltr"
+                    style={{ flex: '1 1 110px', width: 'auto' }}
                     type="number"
                     value={fwd.listen_port || ''}
                     onChange={(e) => updateForward(idx, { listen_port: parseInt(e.target.value, 10) || 0 })}
                     placeholder={t.tunnelsPage.forwardListenPortLabel}
-                    className={`${inputClass} w-32 text-left`}
                   />
-                  <select
-                    value={fwd.net}
-                    onChange={(e) => updateForward(idx, { net: e.target.value as 'tcp' | 'udp' })}
-                    className={inputClass}
-                  >
+                  <select className="input" style={{ flex: '0 1 90px', width: 'auto' }} value={fwd.net} onChange={(e) => updateForward(idx, { net: e.target.value as 'tcp' | 'udp' })}>
                     <option value="tcp">TCP</option>
                     <option value="udp">UDP</option>
                   </select>
                   <input
-                    dir="ltr"
+                    className="input ltr"
+                    style={{ flex: '1 1 110px', width: 'auto' }}
                     type="number"
                     value={fwd.target_port || ''}
                     onChange={(e) => updateForward(idx, { target_port: parseInt(e.target.value, 10) || 0 })}
                     placeholder={t.tunnelsPage.forwardTargetPortLabel}
-                    className={`${inputClass} w-32 text-left`}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setForwards((fs) => fs.filter((_, i) => i !== idx))}
-                    className="hover-btn hover-btn-sm hover-btn-danger"
-                  >
+                  <button type="button" onClick={() => setForwards((fs) => fs.filter((_, i) => i !== idx))} className="btn danger">
                     {t.tunnelsPage.removeForward}
                   </button>
                 </div>
               ))}
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={submitting || !transport}
-              className="hover-btn"
-            >
-              {editingId ? t.common.save : t.tunnelsPage.registerBtn}
-            </button>
-          </div>
-        </form>
+            {formError && <div className="tf-alert">{formError}</div>}
+          </form>
+        </Sheet>
       )}
-
-      {error && <div className="mb-4 text-sm text-danger">{error}</div>}
-
-      {tunnels === null && <div className="py-8 text-center text-faint">{t.loading}</div>}
-      {tunnels !== null && tunnels.length === 0 && (
-        <div className="rounded-xl border border-subtle py-8 text-center text-faint">{t.tunnelsPage.noTunnelsYet}</div>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {tunnels?.map((tunnel) => {
-          const foreignNode = tunnel.foreign_node_id != null ? nodeById.get(tunnel.foreign_node_id) : undefined
-          const isTesting = testingId === tunnel.id
-          const result = testResults[tunnel.id]
-          return (
-            <div key={tunnel.id} className="rounded-xl border border-subtle bg-surface p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${
-                      isTesting ? 'animate-pulse bg-accent' : statusDot[tunnel.status]
-                    }`}
-                  />
-                  <span className="font-bold text-primary">{tunnel.name}</span>
-                </div>
-                <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge[tunnel.status]}`}>
-                  {isTesting ? t.tunnelsPage.testing : t.tunnelsPage.status[tunnel.status]}
-                </span>
-              </div>
-
-              <div dir="ltr" className="mb-1 text-left font-mono text-xs text-muted">
-                {tunnel.iran_address}:{tunnel.iran_port} → {foreignNode ? foreignNode.address : tunnel.foreign_address}
-              </div>
-              <div className="mb-3 text-xs text-faint">
-                {t.tunnelsPage.transportLabels[tunnel.transport]}
-                {tunnel.forwards.length > 0 && ` · ${tunnel.forwards.length}`}
-              </div>
-
-              {result && (
-                <div className="mb-3 flex flex-col gap-1 rounded-lg border border-subtle bg-well p-2 text-[11px]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted">{t.tunnelsPage.testResultIran}</span>
-                    <span className={result.iran_reachable ? 'text-success' : 'text-danger'}>
-                      {result.iran_reachable
-                        ? `${t.tunnelsPage.reachable} (${Math.round(result.iran_latency_ms ?? 0)}ms)`
-                        : t.tunnelsPage.unreachable}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted">{t.tunnelsPage.testResultForeign}</span>
-                    <span className={result.foreign_reachable ? 'text-success' : 'text-danger'}>
-                      {result.foreign_reachable
-                        ? `${t.tunnelsPage.reachable} (${Math.round(result.foreign_latency_ms ?? 0)}ms)`
-                        : t.tunnelsPage.unreachable}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {configId === tunnel.id && configData && (
-                <div className="mb-3 flex flex-col gap-2">
-                  {/* The install commands carry each side's config, so only copying them matters. */}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {([
-                      [t.tunnelsPage.iranInstallCommandLabel, configData.iran_install_command],
-                      [t.tunnelsPage.foreignInstallCommandLabel, configData.foreign_install_command],
-                    ] as const).map(([label, command]) => (
-                      <button
-                        key={label}
-                        onClick={() => copy(command)}
-                        className="hover-btn hover-btn-sm w-full"
-                      >
-                        <span className="text-muted">{label}</span>
-                        <span className="shrink-0 font-bold text-glass">
-                          {copied === command ? t.common.copiedCheck : t.tunnelsPage.copyConfig}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3 border-t border-hair pt-3">
-                <button onClick={() => handleTest(tunnel)} className="hover-btn hover-btn-sm">
-                  {t.tunnelsPage.test}
-                </button>
-                <button onClick={() => toggleConfig(tunnel)} className="hover-btn hover-btn-sm">
-                  {t.tunnelsPage.showConfig}
-                </button>
-                <button onClick={() => startEdit(tunnel)} className="hover-btn hover-btn-sm">
-                  {t.common.edit}
-                </button>
-                <button onClick={() => handleDelete(tunnel)} className="hover-btn hover-btn-sm hover-btn-danger">
-                  {t.common.delete}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
     </div>
   )
 }
