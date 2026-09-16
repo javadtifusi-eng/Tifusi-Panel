@@ -504,10 +504,10 @@ select.input { padding-block: 7px; }
 .pg-hosts .pass-main { padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; transform-style: preserve-3d; min-width: 0; }
 .pg-hosts .pass-top { display: flex; align-items: center; gap: 10px; transform: translateZ(34px); }
 .pg-hosts .mono-badge { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(145deg, rgb(249 115 22 / 0.22), rgb(251 191 36 / 0.08)); border: 1px solid rgb(249 115 22 / 0.35); font-family: var(--font-en); font-weight: 600; font-size: 0.86rem; color: #ffd9b8; flex: none; }
-.pg-hosts .pass-top .kind { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
-.pg-hosts .pass-top .kind b { font-family: var(--font-en); font-weight: 600; }
-.pg-hosts .pass-top .kind small { font-family: var(--font-en); font-size: 0.64rem; letter-spacing: 0.12em; color: var(--faint); text-transform: uppercase; }
-.pg-hosts .pass-top .pill { margin-inline-start: auto; }
+.pg-hosts .pass-top .kind { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; overflow: hidden; }
+.pg-hosts .pass-top .kind b { font-family: var(--font-en); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-hosts .pass-top .kind small { font-family: var(--font-en); font-size: 0.64rem; letter-spacing: 0.12em; color: var(--faint); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-hosts .pass-top .pill { margin-inline-start: auto; flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .pg-hosts .pass-name { font-size: 1.12rem; font-weight: 600; transform: translateZ(46px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-hosts .pass-route { font-size: 0.8rem; color: var(--amber); transform: translateZ(26px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .pg-hosts .pass-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px dashed var(--edge2); transform: translateZ(18px); }

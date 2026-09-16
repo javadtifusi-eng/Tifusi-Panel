@@ -58,6 +58,12 @@ export const dict = {
       resellerRole: 'نماینده',
       switchLang: 'English',
       switchLangShort: 'EN',
+      avatarMenu: 'عکس پروفایل',
+      avatarUpload: 'انتخاب عکس',
+      avatarRemove: 'حذف عکس',
+      avatarSaved: 'عکس پروفایل ذخیره شد',
+      avatarRemoved: 'عکس پروفایل حذف شد',
+      avatarBadFile: 'این فایل عکس نیست یا خوانده نمی‌شود.',
       subtitles: {
         overview: (name: string) =>
           name ? `خوش آمدی ${name}، وضعیت امروز پنل را اینجا می‌بینی.` : 'وضعیت امروز پنل را اینجا می‌بینی.',
@@ -1165,6 +1171,12 @@ export const dict = {
       resellerRole: 'Reseller',
       switchLang: 'فارسی',
       switchLangShort: 'فا',
+      avatarMenu: 'Profile photo',
+      avatarUpload: 'Choose photo',
+      avatarRemove: 'Remove photo',
+      avatarSaved: 'Profile photo saved',
+      avatarRemoved: 'Profile photo removed',
+      avatarBadFile: 'That file is not an image that can be read.',
       subtitles: {
         overview: (name: string) =>
           name ? `Welcome back, ${name}. Here is how the panel is doing today.` : 'Here is how the panel is doing today.',

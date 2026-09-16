@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -37,6 +37,11 @@ class Admin(Base):
     max_users: Mapped[int | None] = mapped_column(Integer, nullable=True)
     data_quota: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     protocols: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+    # Profile picture shown in the sidebar, as a data: URL. The dashboard
+    # shrinks the image before upload and app/schemas/admin.AvatarUpdate caps
+    # the size, so it fits a MySQL TEXT column too.
+    avatar: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

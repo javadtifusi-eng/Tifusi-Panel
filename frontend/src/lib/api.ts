@@ -894,6 +894,8 @@ export interface AdminProfile {
   permissions: PermissionScope[] | null
   is_reseller?: boolean
   reseller?: ResellerQuota | null
+  /** Profile picture as a data: URL, or null when none is set. */
+  avatar?: string | null
 }
 
 export interface Reseller {
@@ -941,6 +943,11 @@ export async function deleteReseller(id: number): Promise<void> {
 export async function getAdminProfile(): Promise<AdminProfile> {
   const res = await authorizedFetch('/admin/me')
   return res.json()
+}
+
+/** null removes the picture. */
+export async function setAdminAvatar(avatar: string | null): Promise<void> {
+  await authorizedFetch('/admin/me/avatar', { method: 'PUT', body: JSON.stringify({ avatar }) })
 }
 
 export async function changePassword(payload: { current_password: string; new_password: string }): Promise<void> {

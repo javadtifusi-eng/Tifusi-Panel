@@ -1,3 +1,5 @@
+import base64
+import binascii
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -24,6 +26,42 @@ class AdminProfileResponse(BaseModel):
     is_reseller: bool = False
     # Only for a reseller: its limits and how much of them is in use.
     reseller: ResellerQuota | None = None
+    avatar: str | None = None
+
+
+# Leading bytes of each accepted format. SVG is deliberately absent: it can
+# carry script, and the avatar is rendered straight into an <img src>.
+_AVATAR_SIGNATURES = {
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/webp": (b"RIFF",),
+}
+# Below MySQL's 65,535-byte TEXT limit with room to spare.
+AVATAR_MAX_CHARS = 60_000
+
+
+class AvatarUpdate(BaseModel):
+    # None removes the picture.
+    avatar: str | None = None
+
+    @field_validator("avatar")
+    @classmethod
+    def _valid_data_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if len(value) > AVATAR_MAX_CHARS:
+            raise ValueError("image is too large")
+        prefix, sep, payload = value.partition(",")
+        mime = prefix.removeprefix("data:").removesuffix(";base64")
+        if not sep or not prefix.startswith("data:") or not prefix.endswith(";base64") or mime not in _AVATAR_SIGNATURES:
+            raise ValueError("expected a base64 PNG, JPEG or WebP data URL")
+        try:
+            raw = base64.b64decode(payload, validate=True)
+        except binascii.Error as exc:
+            raise ValueError("invalid base64 image data") from exc
+        if not raw.startswith(_AVATAR_SIGNATURES[mime]) or (mime == "image/webp" and raw[8:12] != b"WEBP"):
+            raise ValueError("image content does not match its type")
+        return value
 
 
 class ChangePasswordRequest(BaseModel):

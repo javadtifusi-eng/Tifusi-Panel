@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import LiveClock from '../components/LiveClock'
 import { TifusiMark } from '../components/Logo'
 import {
@@ -17,11 +17,12 @@ import {
   IconSettings,
   IconTunnel,
   IconUsers,
+  IconX,
   type IconProps,
 } from '../components/icons'
-import { ToastProvider, trackPointer } from '../components/ui'
+import { ToastProvider, trackPointer, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
-import { getAdminProfile, getVersion, type AdminProfile, type VersionInfo } from '../lib/api'
+import { ApiError, getAdminProfile, getVersion, setAdminAvatar, type AdminProfile, type VersionInfo } from '../lib/api'
 import { initials } from '../lib/format'
 import CoresPage from './Cores'
 import GroupsPage from './Groups'
@@ -260,17 +261,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
           </a>
 
           <div className="flex items-center gap-2.5 border-t border-subtle px-2 pt-3">
-            <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-[#e5e5e5] font-en text-xs font-semibold text-app">
-              {profile ? initials(profile.username) : ''}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-en text-[13px] font-medium text-primary">
-                <bdi>{profile?.username ?? '…'}</bdi>
-              </div>
-              <div className="truncate text-[11px] text-faint">
-                {profile ? (profile.is_owner ? t.nav.ownerRole : profile.is_reseller ? t.nav.resellerRole : t.nav.adminRole) : ' '}
-              </div>
-            </div>
+            <ProfileChip profile={profile} onAvatarChange={(avatar) => setProfile((p) => (p ? { ...p, avatar } : p))} />
             <button
               type="button"
               onClick={() => setLang(lang === 'fa' ? 'en' : 'fa')}
@@ -495,5 +486,177 @@ function CommandPalette({ items, onClose }: { items: PaletteItem[]; onClose: () 
         </div>
       </div>
     </>
+  )
+}
+
+const AVATAR_PX = 160
+// Mirrors AVATAR_MAX_CHARS in backend/app/schemas/admin.py.
+const AVATAR_MAX_CHARS = 60_000
+
+// Crops the picked image to a centred square and re-encodes it as a small
+// JPEG, so any phone photo fits the backend's size cap.
+async function avatarDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file)
+  const side = Math.min(bitmap.width, bitmap.height)
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = AVATAR_PX
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('no 2d context')
+  // JPEG has no alpha; transparent areas would otherwise turn black.
+  ctx.fillStyle = '#e5e5e5'
+  ctx.fillRect(0, 0, AVATAR_PX, AVATAR_PX)
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, AVATAR_PX, AVATAR_PX)
+  bitmap.close()
+  for (const quality of [0.86, 0.7, 0.5]) {
+    const url = canvas.toDataURL('image/jpeg', quality)
+    if (url.length <= AVATAR_MAX_CHARS) return url
+  }
+  throw new Error('image too large')
+}
+
+function CameraGlyph() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+      <circle cx="12" cy="13.5" r="3.5" />
+    </svg>
+  )
+}
+
+// The signed-in admin at the foot of the sidebar. Tapping it opens a small
+// menu to set or remove the profile picture.
+function ProfileChip({
+  profile,
+  onAvatarChange,
+}: {
+  profile: AdminProfile | null
+  onAvatarChange: (avatar: string | null) => void
+}) {
+  const { t } = useLang()
+  const say = useToast()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(e: PointerEvent) {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  async function save(avatar: string | null) {
+    setBusy(true)
+    try {
+      await setAdminAvatar(avatar)
+      onAvatarChange(avatar)
+      say(avatar ? t.nav.avatarSaved : t.nav.avatarRemoved)
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : t.errorGeneric)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onPick(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    // Cleared so picking the same file again still fires onChange.
+    e.target.value = ''
+    if (!file) return
+    let url: string
+    try {
+      url = await avatarDataUrl(file)
+    } catch {
+      say(t.nav.avatarBadFile)
+      return
+    }
+    await save(url)
+  }
+
+  const role = profile ? (profile.is_owner ? t.nav.ownerRole : profile.is_reseller ? t.nav.resellerRole : t.nav.adminRole) : ' '
+
+  return (
+    <div ref={wrap} className="relative min-w-0 flex-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={!profile || busy}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={t.nav.avatarMenu}
+        className="group -m-1 flex w-[calc(100%+0.5rem)] min-w-0 items-center gap-2.5 rounded-lg p-1 text-start transition-colors hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f97316] disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        <span className="relative grid h-8 w-8 flex-shrink-0 place-items-center overflow-hidden rounded-full bg-[#e5e5e5] font-en text-xs font-semibold text-app">
+          {profile?.avatar ? (
+            <img src={profile.avatar} alt="" className="h-full w-full object-cover" />
+          ) : profile ? (
+            initials(profile.username)
+          ) : (
+            ''
+          )}
+          <span
+            aria-hidden="true"
+            className={`absolute inset-0 grid place-items-center bg-black/55 text-white transition-opacity ${
+              busy ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+            }`}
+          >
+            {busy ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <CameraGlyph />}
+          </span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-en text-[13px] font-medium text-primary">
+            <bdi>{profile?.username ?? '…'}</bdi>
+          </span>
+          <span className="block truncate text-[11px] text-faint">{role}</span>
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute bottom-full z-20 mb-2 flex w-44 flex-col gap-0.5 rounded-lg border border-subtle bg-surface p-1 shadow-lg ltr:left-0 rtl:right-0"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              fileInput.current?.click()
+            }}
+            className="flex items-center gap-2 rounded-md px-2.5 py-2 text-start text-[13px] text-primary transition-colors hover:bg-hover"
+          >
+            <CameraGlyph />
+            {t.nav.avatarUpload}
+          </button>
+          {profile?.avatar && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                void save(null)
+              }}
+              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-start text-[13px] text-danger transition-colors hover:bg-hover"
+            >
+              <IconX size={14} />
+              {t.nav.avatarRemove}
+            </button>
+          )}
+        </div>
+      )}
+
+      <input ref={fileInput} type="file" accept="image/*" hidden onChange={onPick} />
+    </div>
   )
 }

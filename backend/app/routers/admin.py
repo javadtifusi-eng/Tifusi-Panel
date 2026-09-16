@@ -12,6 +12,7 @@ from app.schemas.admin import (
     AdminListItem,
     AdminPermissionsUpdate,
     AdminProfileResponse,
+    AvatarUpdate,
     ChangePasswordRequest,
 )
 from app.schemas.reseller import ProtocolOption, ResellerQuota
@@ -46,7 +47,19 @@ async def get_me(
         permissions=admin.permissions,
         is_reseller=admin.is_reseller,
         reseller=reseller,
+        avatar=admin.avatar,
     )
+
+
+@router.put("/me/avatar", status_code=204)
+async def update_avatar(
+    payload: AvatarUpdate,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    admin.avatar = payload.avatar
+    db.add(admin)
+    await db.commit()
 
 
 @router.put("/password", status_code=204)
