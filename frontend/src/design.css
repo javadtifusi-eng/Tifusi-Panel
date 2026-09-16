@@ -484,10 +484,9 @@ select.input { padding-block: 7px; }
 .pg-hosts .c-line.hot { stroke: var(--accent); stroke-dasharray: 6 6; animation: tf-cflow 0.9s linear infinite; }
 .pg-hosts .c-line.dim { stroke: #1d1d1d; }
 @keyframes tf-cflow { to { stroke-dashoffset: -24; } }
-.pg-hosts .c-flow { stroke: var(--ok); stroke-width: 1.6; stroke-dasharray: 5 7; vector-effect: non-scaling-stroke; animation: tf-cback 2.4s ease-in-out infinite alternate; }
+.pg-hosts .c-flow { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 7; vector-effect: non-scaling-stroke; animation: tf-cback 2.4s ease-in-out infinite alternate; }
 @keyframes tf-cback { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -72; } }
-.pg-hosts .p-node.live .badge { border-color: rgb(34 197 94 / 0.6); box-shadow: 0 0 22px rgb(34 197 94 / 0.18); }
-.pg-hosts .p-node.live .cnt { background: var(--ok); }
+.pg-hosts .p-node.live .badge { border-color: rgb(249 115 22 / 0.55); box-shadow: 0 0 22px rgb(249 115 22 / 0.16); }
 @media (prefers-reduced-motion: reduce) { .pg-hosts .c-flow, .pg-hosts .c-line.hot { animation: none; } }
 .pg-hosts .c-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 78px; height: 78px; border-radius: 24px; display: grid; place-items: center; background: linear-gradient(145deg, #1b1b1b, #0f0f0f); border: 1px solid var(--edge2); box-shadow: 0 0 0 8px rgb(249 115 22 / 0.04), 0 0 50px rgb(249 115 22 / 0.12); }
 .pg-hosts .c-hub i { width: 46px; aspect-ratio: 640 / 490; background: #e5e5e5; -webkit-mask: url('/logo-tifusi.png') center / contain no-repeat; mask: url('/logo-tifusi.png') center / contain no-repeat; }

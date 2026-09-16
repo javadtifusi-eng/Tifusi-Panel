@@ -328,7 +328,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
       kind: [sec === 'none' ? '' : sec.toUpperCase(), (host.network ?? '').toUpperCase()].filter(Boolean).join(' · ') || '—',
       pill:
         sec === 'reality'
-          ? { cls: 'accent', text: 'REALITY' }
+          ? { cls: 'ok', text: 'REALITY' }
           : sec === 'tls'
             ? { cls: 'ok', text: 'TLS' }
             : { cls: 'idle', text: t.hostsPage.securityNone },
