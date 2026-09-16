@@ -113,20 +113,21 @@ export function FeatureIcon({ type, accent = '#f97316' }: { type: FeatureIconTyp
   }
 }
 
-// The Tifusi horse-capital logo on its black tile, the artwork of the Tifusi
-// VPN launcher icon. The panel's brand mark in the sidebar, the mobile top bar
-// and next to the app download link. The tile keeps its own black in both
-// themes, like an app icon, so the silver artwork stays readable.
+// The Tifusi Persepolis capital (logo-tifusi.png, the logo on the project's
+// README), as the panel's brand mark in the sidebar, the mobile top bar and
+// next to the app download link. `size` is the height; the capital is wider
+// than tall, so it is drawn at its own proportions instead of in a square.
+const MARK_ASPECT = 640 / 487
+
 export function TifusiMark({ size = 30 }: { size?: number }) {
   return (
     <img
-      src="/tifusi-mark.png"
-      width={size}
+      src="/logo-tifusi.png"
+      width={Math.round(size * MARK_ASPECT)}
       height={size}
       alt=""
       aria-hidden="true"
       className="flex-shrink-0"
-      style={{ borderRadius: Math.round(size * 0.22) }}
     />
   )
 }
