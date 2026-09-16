@@ -539,7 +539,11 @@ function XrayFlow({ core, live, onOpen }: { core: Core; live: boolean; onOpen: (
   const c = t.ui.cores
   const config = (core.config ?? {}) as Record<string, unknown>
   const rawInbounds = Array.isArray(config.inbounds) ? (config.inbounds as Record<string, unknown>[]) : []
-  const rawOutbounds = Array.isArray(config.outbounds) ? (config.outbounds as Record<string, unknown>[]) : []
+  const configOutbounds = Array.isArray(config.outbounds) ? (config.outbounds as Record<string, unknown>[]) : []
+  // A config without outbounds still runs: the node adds a freedom "direct" outbound itself. Showing
+  // it keeps the flow complete (inbound → rule → outbound) instead of ending at the rules column.
+  const implicitOutbound = configOutbounds.length === 0
+  const rawOutbounds = implicitOutbound ? [{ tag: 'direct', protocol: 'freedom' }] : configOutbounds
   const rawRules = Array.isArray((config.routing as { rules?: unknown })?.rules) ? ((config.routing as { rules: RoutingRule[] }).rules as RoutingRule[]) : []
   const parsed = new Map(core.inbounds.map((i) => [i.tag, i]))
   const firstOutbound = (rawOutbounds[0]?.tag as string | undefined) ?? 'direct'
@@ -666,14 +670,19 @@ function XrayFlow({ core, live, onOpen }: { core: Core; live: boolean; onOpen: (
         </div>
         <div className="col">
           <span className="col-title">{c.colOutbounds}</span>
-          {rawOutbounds.length === 0 && <span className="hint">{t.coresPage.noOutboundsYet}</span>}
           {rawOutbounds.map((o, i) => (
-            <button key={i} type="button" data-flow={`out${i}`} className="blk" onClick={() => onOpen(`outbounds.${i}`)}>
+            <button
+              key={i}
+              type="button"
+              data-flow={`out${i}`}
+              className="blk"
+              onClick={() => (implicitOutbound ? onOpen('all') : onOpen(`outbounds.${i}`))}
+            >
               <span className="top">
                 <span className="tag">{String(o.tag ?? `#${i + 1}`)}</span>
                 <span className="chip en">{String(o.protocol ?? '')}</span>
               </span>
-              {i === 0 && <span className="sub">{c.defaultOutbound}</span>}
+              {i === 0 && <span className="sub">{implicitOutbound ? c.implicitOutbound : c.defaultOutbound}</span>}
             </button>
           ))}
         </div>
