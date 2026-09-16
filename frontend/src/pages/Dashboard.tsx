@@ -5,7 +5,6 @@ import {
   IconBell,
   IconBriefcase,
   IconChip,
-  IconDownload,
   IconGlobe,
   IconGrid,
   IconHome,
@@ -49,9 +48,6 @@ const NAV_ICONS: Record<ActiveTab, (p: IconProps) => JSX.Element> = {
   tunnels: IconTunnel,
   settings: IconSettings,
 }
-
-// Always the newest build: GitHub serves the latest release's asset at this fixed URL.
-const APP_DOWNLOAD_URL = 'https://github.com/javadtifusi-eng/Tifusi-VPN/releases/latest/download/tifusi-vpn.apk'
 
 interface PaletteItem {
   group: string
@@ -186,15 +182,6 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         sub: labelFor(tab),
         run: () => openCreate(tab),
       }))
-    actions.push({
-      group: t.ui.shell.actionsGroup,
-      icon: <IconDownload size={14} />,
-      title: t.nav.appDownload,
-      sub: 'APK',
-      run: () => {
-        window.open(APP_DOWNLOAD_URL, '_blank', 'noopener')
-      },
-    })
     return [...pages, ...actions]
     // canSee/labelFor only read profile and t.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,16 +236,6 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
           </nav>
 
           <div className="flex-1" />
-
-          <a
-            href={APP_DOWNLOAD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-[#1f1f1f] px-2.5 py-[9px] font-en text-[12px] text-primary transition-colors hover:bg-hover"
-          >
-            <TifusiMark size={22} />
-            <span>{t.nav.appDownload}</span>
-          </a>
 
           <div className="flex items-center gap-2.5 border-t border-subtle px-2 pt-3">
             <ProfileChip profile={profile} onAvatarChange={(avatar) => setProfile((p) => (p ? { ...p, avatar } : p))} />
