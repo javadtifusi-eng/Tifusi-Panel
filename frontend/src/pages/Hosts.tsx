@@ -10,6 +10,7 @@ import {
   listCores,
   listGroups,
   listHosts,
+  listNodes,
   updateHost,
   type Core,
   type Group,
@@ -17,6 +18,7 @@ import {
   type HostProtocol,
   type HostSecurity,
   type Inbound,
+  type Node,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
@@ -24,15 +26,16 @@ const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'h
 const XRAY_PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks']
 const PLACEHOLDER_KEYS = ['username', 'protocol', 'days_left', 'expire_date', 'data_limit_gb', 'data_left_gb'] as const
 
-// Where each protocol sits around the hub (percent of the stage).
+// Where each protocol sits around the hub, in percent of .c-orbit — a box inset from the stage
+// by more than half a node's size, so nodes on its very edge (0 / 100) still show whole.
 const NODE_POS: Record<HostProtocol, [number, number]> = {
-  vless: [18, 22],
-  vmess: [50, 11],
-  trojan: [82, 22],
-  shadowsocks: [90, 64],
-  hysteria2: [66, 89],
-  ikev2: [34, 89],
-  l2tp: [10, 64],
+  vless: [14, 14],
+  vmess: [50, 0],
+  trojan: [86, 14],
+  shadowsocks: [100, 62],
+  hysteria2: [70, 100],
+  ikev2: [30, 100],
+  l2tp: [0, 62],
 }
 const BADGE: Record<HostProtocol, string> = {
   vless: 'VLESS',
@@ -79,6 +82,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   const [hosts, setHosts] = useState<Host[] | null>(null)
   const [cores, setCores] = useState<Core[]>([])
   const [groups, setGroups] = useState<Group[]>([])
+  const [nodes, setNodes] = useState<Node[]>([])
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -115,6 +119,15 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
     listGroups()
       .then((res) => setGroups(res.groups))
       .catch(() => undefined)
+    // Node status drives which protocols show live traffic on the map. The panel re-checks node
+    // health in the background, so re-read it while the page is open.
+    const loadNodes = () =>
+      listNodes()
+        .then((res) => setNodes(res.nodes))
+        .catch(() => undefined)
+    loadNodes()
+    const timer = window.setInterval(loadNodes, 30_000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -228,6 +241,22 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   const shown = (hosts ?? []).filter((x) => !protoFilter || x.protocol === protoFilter)
   const lit = protoFilter ?? protoHover
 
+  // A protocol is live when one of its hosts is served by a node that is currently connected:
+  // xray hosts through their inbound's core, IKEv2/L2TP hosts through their own core. Hysteria2
+  // has no core yet, so there is nothing to check it against and it never shows as live.
+  const liveCoreIds = new Set(
+    nodes.filter((n) => n.status === 'connected').flatMap((n) => [n.core_id, n.ipsec_core_id]).filter((id): id is number => id != null),
+  )
+  const coreOfInbound = new Map(cores.flatMap((c) => c.inbounds.map((i) => [i.id, c.id] as const)))
+  const hostIsLive = (host: Host) => {
+    const coreId = host.inbound_id != null ? coreOfInbound.get(host.inbound_id) : host.core_id
+    return coreId != null && liveCoreIds.has(coreId)
+  }
+  const live = Object.fromEntries(PROTOCOLS.map((p) => [p, (hosts ?? []).some((x) => x.protocol === p && hostIsLive(x))])) as Record<
+    HostProtocol,
+    boolean
+  >
+
   // Which groups gate a host: xray hosts through their inbound, the rest directly.
   function hostGroups(host: Host): string[] {
     if (host.inbound_id != null) {
@@ -329,39 +358,46 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
           )}
         </div>
         <div className="c-stage" dir="ltr">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <div className="c-orbit">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {PROTOCOLS.map((p) => (
+                <g key={p}>
+                  <line
+                    className={`c-line ${lit === p ? 'hot' : lit && protoFilter ? 'dim' : ''}`}
+                    x1="50"
+                    y1="50"
+                    x2={NODE_POS[p][0]}
+                    y2={NODE_POS[p][1]}
+                  />
+                  {/* Live protocols show traffic moving without being hovered or picked. */}
+                  {live[p] && lit !== p && !(lit && protoFilter) && (
+                    <line className="c-flow" x1="50" y1="50" x2={NODE_POS[p][0]} y2={NODE_POS[p][1]} />
+                  )}
+                </g>
+              ))}
+            </svg>
+            <div className="c-hub">
+              <i />
+            </div>
             {PROTOCOLS.map((p) => (
-              <line
+              <button
                 key={p}
-                className={`c-line ${lit === p ? 'hot' : lit && protoFilter ? 'dim' : ''}`}
-                x1="50"
-                y1="50"
-                x2={NODE_POS[p][0]}
-                y2={NODE_POS[p][1]}
-              />
+                type="button"
+                className={`p-node ${counts[p] === 0 ? 'zero' : live[p] ? 'live' : ''}`}
+                aria-pressed={protoFilter === p}
+                style={{ left: `${NODE_POS[p][0]}%`, top: `${NODE_POS[p][1]}%` }}
+                onClick={() => setProtoFilter((f) => (f === p ? null : p))}
+                onPointerEnter={() => setProtoHover(p)}
+                onPointerLeave={() => setProtoHover(null)}
+              >
+                <span className="badge">
+                  {BADGE[p]}
+                  <span className="cnt">{counts[p]}</span>
+                </span>
+                <small>{protocolLabels[p]}</small>
+              </button>
             ))}
-          </svg>
-          <div className="c-hub">
-            <i />
           </div>
-          {PROTOCOLS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={`p-node ${counts[p] === 0 ? 'zero' : ''}`}
-              aria-pressed={protoFilter === p}
-              style={{ left: `${NODE_POS[p][0]}%`, top: `${NODE_POS[p][1]}%` }}
-              onClick={() => setProtoFilter((f) => (f === p ? null : p))}
-              onPointerEnter={() => setProtoHover(p)}
-              onPointerLeave={() => setProtoHover(null)}
-            >
-              <span className="badge">
-                {BADGE[p]}
-                <span className="cnt">{counts[p]}</span>
-              </span>
-              <small>{protocolLabels[p]}</small>
-            </button>
-          ))}
         </div>
       </div>
 
