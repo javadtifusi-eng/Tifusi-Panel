@@ -77,7 +77,12 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         if (p.is_reseller) setActive((a) => (a === 'overview' ? 'users' : a))
       })
       .catch(() => undefined)
-    getVersion().then(setVersion).catch(() => undefined)
+    // Re-checked while the panel stays open, so a release published meanwhile
+    // still shows up under the logo and in the notifications.
+    const checkVersion = () => getVersion().then(setVersion).catch(() => undefined)
+    checkVersion()
+    const timer = window.setInterval(checkVersion, 30 * 60 * 1000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -226,7 +231,30 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         >
           <div className="flex items-center gap-2.5 px-2 py-1">
             <TifusiMark size={30} />
-            <strong className="font-en text-[15px] font-semibold text-heading">{t.nav.brand}</strong>
+            <div className="flex min-w-0 flex-col gap-1">
+              <strong className="font-en text-[15px] font-semibold leading-none text-heading">{t.nav.brand}</strong>
+              {version && (
+                <span
+                  className="flex items-center gap-1.5 whitespace-nowrap text-[11px] leading-none"
+                  title={updateAvailable && version.latest ? t.nav.updateNotice(version.latest) : undefined}
+                >
+                  {/* Only claim "up to date" when GitHub was actually reachable to compare against. */}
+                  <i
+                    className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                      updateAvailable ? 'bg-warning' : version.latest ? 'bg-success' : 'bg-faint'
+                    }`}
+                  />
+                  <span dir="ltr" className="font-en text-muted">
+                    v{version.current}
+                  </span>
+                  {updateAvailable ? (
+                    <span className="text-warning">{t.nav.updateAvailable}</span>
+                  ) : version.latest ? (
+                    <span className="text-success">{t.nav.upToDate}</span>
+                  ) : null}
+                </span>
+              )}
+            </div>
           </div>
 
           <nav aria-label={t.nav.menu} className="flex flex-col gap-0.5">
@@ -320,25 +348,6 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
 
               <div className="flex items-center gap-2.5 border-s border-hair ps-3">
                 <LiveClock />
-                {version && (
-                  <span className="flex flex-col items-center gap-0.5 leading-none">
-                    <span
-                      dir="ltr"
-                      title={updateAvailable && version.latest ? t.nav.updateNotice(version.latest) : t.nav.upToDate}
-                      className={`rounded-md border px-2 py-0.5 font-en text-[11px] ${
-                        updateAvailable ? 'border-warning/30 text-warning' : 'border-success/30 text-body'
-                      }`}
-                    >
-                      v{version.current}
-                    </span>
-                    {/* Only claim "up to date" when GitHub was actually reachable to compare against. */}
-                    {updateAvailable ? (
-                      <span className="whitespace-nowrap text-[10px] text-warning">{t.nav.updateAvailable}</span>
-                    ) : version.latest ? (
-                      <span className="whitespace-nowrap text-[10px] text-success">{t.nav.upToDate}</span>
-                    ) : null}
-                  </span>
-                )}
               </div>
             </div>
           </header>

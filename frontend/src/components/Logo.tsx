@@ -113,16 +113,16 @@ export function FeatureIcon({ type, accent = '#f97316' }: { type: FeatureIconTyp
   }
 }
 
-// The Tifusi Persepolis capital (logo-tifusi.png, the logo on the project's
-// README), as the panel's brand mark in the sidebar, the mobile top bar and
-// next to the app download link. `size` is the height; the capital is wider
-// than tall, so it is drawn at its own proportions instead of in a square.
-const MARK_ASPECT = 640 / 487
+// The Tifusi horse-capital logo with its black keyed out, as the brand mark in
+// the sidebar and the mobile top bar. `size` is the height; the mark is about
+// twice as wide, so it is drawn at its own proportions rather than in a square
+// where it would shrink to a thin strip.
+const MARK_ASPECT = 245 / 132
 
 export function TifusiMark({ size = 30 }: { size?: number }) {
   return (
     <img
-      src="/logo-tifusi.png"
+      src="/tifusi-mark.png"
       width={Math.round(size * MARK_ASPECT)}
       height={size}
       alt=""

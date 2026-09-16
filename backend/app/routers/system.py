@@ -13,7 +13,18 @@ router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(
 
 _BOOT_TIME = psutil.boot_time()
 
-_GITHUB_TAGS_URL = "https://api.github.com/repos/javadtifusi-eng/Tifusi-Panel/tags"
+# The git ref advertisement (what `git ls-remote` reads), not the REST API: the
+# API allows 60 unauthenticated requests an hour per IP, and once a server used
+# them up the panel could no longer tell whether it was up to date.
+_GITHUB_REFS_URL = "https://github.com/javadtifusi-eng/Tifusi-Panel.git/info/refs?service=git-upload-pack"
+# Release tags only; the repo also carries others such as "tunnel-agent".
+# Peeled entries ("refs/tags/v1.2^{}") are skipped by requiring the newline.
+_RELEASE_TAG = re.compile(r"refs/tags/([vV]?\d+(?:\.\d+)*)\n")
+_LATEST_TTL_SECONDS = 3600
+_LATEST_RETRY_SECONDS = 300
+
+# (monotonic time of the last check, highest release tag found then)
+_latest_cache: tuple[float | None, str | None] = (None, None)
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -25,28 +36,33 @@ def _parse_version(v: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
+async def _latest_release() -> str | None:
+    """Highest release tag on GitHub, re-read at most hourly. When GitHub can't
+    be reached the last known answer is kept and retried after a few minutes."""
+    global _latest_cache
+    checked_at, latest = _latest_cache
+    now = time.monotonic()
+    if checked_at is not None and now - checked_at < _LATEST_TTL_SECONDS:
+        return latest
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            resp = await client.get(_GITHUB_REFS_URL)
+        resp.raise_for_status()
+        versions = _RELEASE_TAG.findall(resp.text)
+        if versions:
+            latest = max(versions, key=_parse_version)
+        _latest_cache = (now, latest)
+    except httpx.HTTPError:
+        _latest_cache = (now - _LATEST_TTL_SECONDS + _LATEST_RETRY_SECONDS, latest)
+    return latest
+
+
 @router.get("/version")
 async def get_version() -> dict:
     current = __version__
-    latest: str | None = None
-    # Best-effort only: no network, GitHub rate-limiting, or a repo with no
-    # tags yet must never turn this into a 500 — the panel just reports
-    # "can't check right now" and moves on.
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(_GITHUB_TAGS_URL, headers={"Accept": "application/vnd.github+json"})
-            if resp.status_code == 200:
-                tags = resp.json()
-                # The repo also carries non-release tags (e.g. "tunnel-agent"),
-                # and GitHub's order isn't semantic: take the highest vX.Y tag.
-                if isinstance(tags, list):
-                    names = [t.get("name", "") for t in tags if isinstance(t, dict)]
-                    versions = [n for n in names if re.fullmatch(r"[vV]?\d+(\.\d+)*", n)]
-                    if versions:
-                        latest = max(versions, key=_parse_version)
-    except (httpx.HTTPError, ValueError):
-        pass
-
+    # Best-effort only: no network or a repo with no tags yet must never turn
+    # this into a 500 — the panel just reports "can't check right now".
+    latest = await _latest_release()
     update_available = latest is not None and _parse_version(latest) > _parse_version(current)
     return {"current": current, "latest": latest, "update_available": update_available}
 
