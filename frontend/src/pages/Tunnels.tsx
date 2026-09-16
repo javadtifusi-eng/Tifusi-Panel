@@ -416,7 +416,9 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   onPointerEnter={() => setFocusKey(e.key)}
                   onFocus={() => setFocusKey(e.key)}
                 >
-                  {!reduce && <circle className="hub-pulse" cx={e.x} cy={e.y} r={34} strokeWidth={1.5} />}
+                  {!reduce && list.some((tu) => tu.status === 'connected') && (
+                    <circle className="hub-pulse" cx={e.x} cy={e.y} r={34} strokeWidth={1.5} />
+                  )}
                   <circle className="disc" cx={e.x} cy={e.y} r={34} style={{ stroke: 'rgb(249 115 22 / .55)' }} />
                   <text className="code" x={e.x} y={e.y + 5} style={{ fontSize: 14 }}>
                     IR

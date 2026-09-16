@@ -774,6 +774,8 @@ select.input { padding-block: 7px; }
 .pg-cores .chain-wire { flex: 1; min-width: 24px; height: 2px; position: relative; margin: 0 6px 24px; background: #262626; overflow: hidden; border-radius: 2px; }
 .pg-cores .chain-wire::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(270deg, var(--accent) 0 8px, transparent 8px 18px); animation: tf-crwire 0.9s linear infinite; }
 [dir='ltr'] .pg-cores .chain-wire::after { background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 18px); }
+/* No connected node runs this core: the dashes stay put and dim instead of implying traffic. */
+.pg-cores .chain-wire.idle::after { animation: none; opacity: 0.25; }
 @keyframes tf-crwire { to { background-position: -18px 0; } }
 .pg-cores .chain-note { font-size: 0.74rem; color: var(--faint); margin: 0; line-height: 1.8; }
 .pg-cores .inb-row { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--hair); font-size: 0.76rem; color: var(--muted); }

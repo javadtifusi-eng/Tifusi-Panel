@@ -522,7 +522,7 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
         <div className="tile hero">
           <div className="row">
             <span className="tl">{u.allUsers}</span>
-            <span className="pill ok live">
+            <span className={`pill ${online > 0 ? 'ok live' : 'idle'}`}>
               <i />
               <span className="en">{online}</span> {u.onlineWord}
             </span>

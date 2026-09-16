@@ -514,7 +514,8 @@ interface FlowRule {
 }
 
 // Inbounds → routing rules → outbounds, read straight from the stored config.
-function XrayFlow({ core, onOpen }: { core: Core; onOpen: (part: string) => void }) {
+// `live`: a node running this core is connected; only then does traffic animate along the beams.
+function XrayFlow({ core, live, onOpen }: { core: Core; live: boolean; onOpen: (part: string) => void }) {
   const { t, dir } = useLang()
   const c = t.ui.cores
   const config = (core.config ?? {}) as Record<string, unknown>
@@ -602,7 +603,7 @@ function XrayFlow({ core, onOpen }: { core: Core; onOpen: (part: string) => void
           {beams.map((b, i) => (
             <g key={i}>
               <path className="beam-base" d={b.d} />
-              <path className={`beam-run ${b.kind}`} d={b.d} />
+              {live && <path className={`beam-run ${b.kind}`} d={b.d} />}
             </g>
           ))}
         </svg>
@@ -1049,6 +1050,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
           const ruleCount = Array.isArray((config.routing as { rules?: unknown[] })?.rules) ? ((config.routing as { rules: unknown[] }).rules.length as number) : 0
           const outCount = Array.isArray(config.outbounds) ? (config.outbounds as unknown[]).length : 0
           const runningNodes = nodes.filter((n) => (core.core_type === 'xray' ? n.core_id === core.id : n.ipsec_core_id === core.id))
+          const coreLive = runningNodes.some((n) => n.status === 'connected')
           return (
             <div key={core.id} className="flex flex-col gap-3.5">
               <div className="tf-card">
@@ -1102,7 +1104,9 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                 />
               </div>
 
-              {core.core_type === 'xray' && <XrayFlow core={core} onOpen={(part) => setCode({ coreId: core.id, part })} />}
+              {core.core_type === 'xray' && (
+                <XrayFlow core={core} live={coreLive} onOpen={(part) => setCode({ coreId: core.id, part })} />
+              )}
 
               {core.core_type === 'ikev2' && (
                 <div className="ike-grid">
@@ -1145,21 +1149,21 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                         <span className="box">{c.hopDevice}</span>
                         <small>{c.hopDeviceSub}</small>
                       </div>
-                      <div className="chain-wire" />
+                      <div className={`chain-wire ${coreLive ? '' : 'idle'}`} />
                       <div className="hop">
                         <span className="box">IKEv2</span>
                         <small className="en">{runningNodes.map((n) => n.name).join(', ') || '—'}</small>
                       </div>
                       {core.ikev2_egress_vless && (
                         <>
-                          <div className="chain-wire" />
+                          <div className={`chain-wire ${coreLive ? '' : 'idle'}`} />
                           <div className="hop extra">
                             <span className="box">VLESS</span>
                             <small>{c.hopEgress}</small>
                           </div>
                         </>
                       )}
-                      <div className="chain-wire" />
+                      <div className={`chain-wire ${coreLive ? '' : 'idle'}`} />
                       <div className="hop">
                         <span className="box">WWW</span>
                         <small>{c.hopInternet}</small>
