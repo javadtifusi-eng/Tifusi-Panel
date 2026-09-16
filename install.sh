@@ -43,59 +43,273 @@ info() { printf '%s[Tifusi]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
 warn() { printf '%s[Warning]%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
 fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
 
-# Runs a command in the background with a spinner in front of its message —
-# apt-get update, the Docker install script, and image pulls/builds can sit
-# with zero output for a minute or more otherwise, which reads as a hang
-# rather than progress (the gap this closes; every other panel's installer
-# animates something here). Falls back to a plain "before/after" line when
-# stdout isn't a real terminal, same rule as the color escapes above.
-_SPINNER_FRAMES='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+# Magenta for the panel installer, green for the node's, cyan for the admin
+# key command — the color alone tells which one produced the screen.
+C_ACCENT=$C_MAGENTA
+
+# ── Progress UI ──────────────────────────────────────────────────────────
+# Unicode bars (━) where the terminal can draw them, plain ASCII ([===>  ])
+# where it can't — an old phone SSH client or a datacenter web console with
+# no UTF-8 locale would otherwise show "?" or broken glyphs. TIFUSI_ASCII=1
+# forces the ASCII style. Everything redraws on one line, sized to the
+# terminal's width so a narrow phone screen doesn't wrap it into a mess.
+UI_UNICODE=""
+if [ -n "$IS_TTY" ] && [ -z "${TIFUSI_ASCII:-}" ] \
+  && printf '%s' "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" | grep -qiE 'utf-?8'; then
+  UI_UNICODE=1
+fi
+C_DIM=""; [ -n "$IS_TTY" ] && C_DIM=$'\033[2m'
+if [ -n "$UI_UNICODE" ]; then UI_OK="✔"; UI_FAIL="✘"; else UI_OK="[OK]"; UI_FAIL="[FAIL]"; fi
+
+_rep() { local s="" i; for ((i = 0; i < $1; i++)); do s+="$2"; done; printf '%s' "$s"; }
+_cols() { local c; c=$(tput cols 2>/dev/null || true); [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -gt 0 ] && echo "$c" || echo 80; }
+_clock() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }
+_took() { if [ "$1" -ge 60 ]; then printf '%dm %ds' $(($1 / 60)) $(($1 % 60)); else printf '%ds' "$1"; fi; }
+_mb() { printf '%d' $((($1 + 524288) / 1048576)); }
+
+# A bar `width` cells wide at `permille` (0-1000).
+_bar() {
+  local pm=$1 w=$2 full
+  full=$((pm * w / 1000))
+  if [ -n "$UI_UNICODE" ]; then
+    if [ "$full" -ge "$w" ]; then printf '%s%s%s' "$C_ACCENT" "$(_rep "$w" '━')" "$C_RESET"; return; fi
+    printf '%s%s╸%s%s%s%s' "$C_ACCENT" "$(_rep "$full" '━')" "$C_RESET" "$C_DIM" "$(_rep $((w - full - 1)) '━')" "$C_RESET"
+  else
+    if [ "$full" -ge "$w" ]; then printf '[%s]' "$(_rep "$w" '=')"; return; fi
+    printf '[%s%s%s]' "$(_rep $((full > 0 ? full - 1 : 0)) '=')" "$([ "$full" -gt 0 ] && echo '>')" "$(_rep $((w - full)) ' ')"
+  fi
+}
+
+# A bar with no known end: a lit segment sweeping across (Unicode) or a
+# bouncing <=> (ASCII), driven by the frame counter `tick`.
+_sweep() {
+  local tick=$1 w=$2 i out=""
+  if [ -n "$UI_UNICODE" ]; then
+    local pos=$((tick % (w + 6) - 6))
+    for ((i = 0; i < w; i++)); do
+      if [ "$i" -ge "$pos" ] && [ "$i" -lt $((pos + 6)) ]; then out+="$C_ACCENT━$C_RESET"; else out+="$C_DIM━$C_RESET"; fi
+    done
+    printf '%s' "$out"
+  else
+    local span=$((w - 3)) pos
+    [ "$span" -lt 1 ] && span=1
+    pos=$((tick % (span * 2))); [ "$pos" -gt "$span" ] && pos=$((span * 2 - pos))
+    printf '[%s<=>%s]' "$(_rep "$pos" ' ')" "$(_rep $((w - 3 - pos)) ' ')"
+  fi
+}
+
+# Draws "message  bar  tail" on the current line, giving the bar whatever
+# width is left; drops the bar entirely on a terminal too narrow for it.
+_draw() {
+  local msg="$1" tail="$2" kind="$3" value="$4" cols w
+  cols=$(_cols)
+  w=$((cols - ${#msg} - ${#tail} - 6))
+  [ "$w" -gt 34 ] && w=34
+  local bar=""
+  if [ "$w" -ge 8 ]; then
+    if [ "$kind" = sweep ]; then bar=$(_sweep "$value" "$w"); else bar=$(_bar "$value" "$w"); fi
+    bar="  $bar"
+  fi
+  printf '\r\033[K%s%s  %s%s%s' "$msg" "$bar" "$C_DIM" "$tail" "$C_RESET"
+}
+
+_finish_line() {
+  local status=$1 msg="$2" detail="$3"
+  msg="${msg%...}"
+  if [ "$status" -eq 0 ]; then
+    printf '\r\033[K%s%s%s %s  %s%s%s\n' "$C_GREEN" "$UI_OK" "$C_RESET" "$msg" "$C_DIM" "$detail" "$C_RESET"
+  else
+    printf '\r\033[K%s%s%s %s\n' "$C_RED" "$UI_FAIL" "$C_RESET" "$msg"
+  fi
+}
+
+# Runs a command in the background behind a sweeping bar and a clock; on
+# failure prints the command's own output so the error is still visible.
 run_spinner() {
   local msg="$1"; shift
-  local log; log="$(mktemp)"
+  local log start tick=0 status=0
+  log="$(mktemp)"; start=$SECONDS
   "$@" >"$log" 2>&1 &
   local pid=$!
   if [ -n "$IS_TTY" ]; then
-    local i=0 frame_count=${#_SPINNER_FRAMES}
     while kill -0 "$pid" 2>/dev/null; do
-      printf '\r%s%s%s %s' "$C_CYAN" "${_SPINNER_FRAMES:$((i % frame_count)):1}" "$C_RESET" "$msg"
-      i=$((i + 1))
+      _draw "$msg" "$(_clock $((SECONDS - start)))" sweep "$tick"
+      tick=$((tick + 1))
       sleep 0.1
     done
   else
-    printf '%s ...\n' "$msg"
+    printf '%s\n' "$msg"
   fi
-  local status=0
   wait "$pid" || status=$?
-  if [ "$status" -eq 0 ]; then
-    printf '\r%s✔%s %s%s\n' "$C_GREEN" "$C_RESET" "$msg" "$([ -n "$IS_TTY" ] && printf '%*s' 10 '' || true)"
-  else
-    printf '\r%s✘%s %s\n' "$C_RED" "$C_RESET" "$msg"
-    cat "$log"
-  fi
+  _finish_line "$status" "$msg" "$(_took $((SECONDS - start)))"
+  [ "$status" -eq 0 ] || cat "$log"
   rm -f "$log"
   return "$status"
 }
+
+# Compressed layer sizes of an image straight from its registry, as
+# "<12-char layer id> <bytes>" lines in file $2; prints the total. This is
+# what makes the percentage honest: layers differ wildly in size, so a
+# layer count alone would jump from 10% to 80% in one step.
+_registry_layers() {
+  local ref="$1" out="$2" host rest repo tag arch auth realm service token man digest
+  local accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json'
+  host=${ref%%/*}; rest=${ref#*/}
+  case "$host" in *.*) ;; *) return 1 ;; esac
+  tag=latest; repo=$rest
+  case "${rest##*/}" in *:*) tag=${rest##*:}; repo=${rest%:*} ;; esac
+  case "$(uname -m)" in aarch64 | arm64) arch=arm64 ;; *) arch=amd64 ;; esac
+  auth=$(curl -sS -m 15 -o /dev/null -D - -H "Accept: $accept" "https://$host/v2/$repo/manifests/$tag" | tr -d '\r' | grep -i '^www-authenticate:') || return 1
+  realm=$(printf '%s' "$auth" | sed -n 's/.*realm="\([^"]*\)".*/\1/p')
+  service=$(printf '%s' "$auth" | sed -n 's/.*service="\([^"]*\)".*/\1/p')
+  token=$(curl -fsS -m 15 "$realm?service=$service&scope=repository:$repo:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+  [ -n "$token" ] || return 1
+  # Registries may pretty-print; flattening whitespace puts each JSON object
+  # on one line once split on "{", so a layer's digest and size stay together.
+  man=$(curl -fsS -m 15 -H "Authorization: Bearer $token" -H "Accept: $accept" "https://$host/v2/$repo/manifests/$tag" | tr -d ' \t\r\n') || return 1
+  if printf '%s' "$man" | grep -q '"manifests"'; then
+    digest=$(printf '%s' "$man" | tr ',{}' '\n\n\n' \
+      | awk -v a="\"$arch\"" '/"digest"/ { d = $0 } /"architecture"/ && index($0, a) { print d; exit }' \
+      | grep -o 'sha256:[0-9a-f]*')
+    [ -n "$digest" ] || return 1
+    man=$(curl -fsS -m 15 -H "Authorization: Bearer $token" -H "Accept: $accept" "https://$host/v2/$repo/manifests/$digest" | tr -d ' \t\r\n') || return 1
+  fi
+  printf '%s' "$man" | tr '{' '\n' | awk -v out="$out" '
+    L && match($0, /"size": *[0-9]+/) {
+      s = substr($0, RSTART, RLENGTH); gsub(/[^0-9]/, "", s)
+      if (match($0, /sha256:[0-9a-f]+/)) { print substr($0, RSTART + 7, 12), s > out; t += s }
+    }
+    index($0, "\"layers\"") { L = 1 }
+    END { if (t > 0) print t; else exit 1 }'
+}
+
+# Pulls images through the Docker Engine API, which reports per-layer byte
+# counts (the `docker pull` CLI shows none when it isn't drawing to a
+# terminal), and renders one bar with percent, MB and time left across all
+# of them. Returns non-zero if any pull fails, so the caller can fall back
+# to building locally. Falls back itself to a plain `docker pull` behind a
+# sweeping bar when the socket API or the registry sizes aren't reachable.
+pull_with_progress() {
+  local msg="$1"; shift
+  local dir start grand=0 known=1 img i=0 sz
+  local -a sizes=()
+  dir="$(mktemp -d)"; start=$SECONDS
+  if [ -z "$IS_TTY" ] || [ ! -S /var/run/docker.sock ] || ! curl -s --unix-socket /var/run/docker.sock -o /dev/null http://localhost/_ping; then
+    rm -rf "$dir"
+    run_spinner "$msg" sh -c 'for i in "$@"; do docker pull -q "$i" || exit 1; done' _ "$@"
+    return
+  fi
+  for img in "$@"; do
+    sz=$(_registry_layers "$img" "$dir/map$i" 2>/dev/null) || { sz=0; known=""; : >"$dir/map$i"; }
+    sizes[i]=$sz; grand=$((grand + sz)); i=$((i + 1))
+  done
+  [ -n "$known" ] || grand=0
+
+  local offset=0 status=0 tick=0
+  i=0
+  for img in "$@"; do
+    local name=${img%:*} tag=latest state="$dir/state$i" err="$dir/err$i"
+    case "${img##*/}" in *:*) tag=${img##*:} ;; *) name=$img ;; esac
+    : >"$state"
+    curl -sS -N --unix-socket /var/run/docker.sock -X POST \
+      "http://localhost/images/create?fromImage=${name}&tag=${tag}" 2>"$err" \
+      | awk -v map="$dir/map$i" -v state="$state" -v errf="$err" '
+          BEGIN { while ((getline l < map) > 0) { split(l, a, " "); size[a[1]] = a[2] } }
+          {
+            id = ""; st = ""
+            if (match($0, /"id":"[^"]*"/)) id = substr($0, RSTART + 6, RLENGTH - 7)
+            if (match($0, /"status":"[^"]*"/)) st = substr($0, RSTART + 10, RLENGTH - 11)
+            if (index($0, "\"errorDetail\"") || index($0, "\"message\"")) {
+              e = 1; m = $0
+              if (match($0, /"message":"[^"]*"/)) m = substr($0, RSTART + 11, RLENGTH - 12)
+              print m > errf; close(errf)
+            }
+            if (length(id) == 12) {
+              if (!(id in seen)) { seen[id] = 1; n++ }
+              if (st == "Downloading" && match($0, /"current":[0-9]+/)) {
+                cur[id] = substr($0, RSTART + 10, RLENGTH - 10) + 0
+                if ((id in size) && cur[id] > size[id] + 0) cur[id] = size[id] + 0
+              }
+              if (st == "Download complete" || st == "Pull complete" || st == "Already exists") { if (id in size) cur[id] = size[id] }
+              if ((st == "Pull complete" || st == "Already exists") && !(id in fin)) { fin[id] = 1; d++ }
+            }
+            b = 0; for (k in cur) b += cur[k]
+            printf "%d %d %d %d\n", b, d, n, e > state; close(state)
+          }' &
+    local pid=$! b=0 d=0 n=0 e=0
+    while kill -0 "$pid" 2>/dev/null; do
+      local rb rd rn re el tail pm
+      # awk rewrites the state file on every event; a read that catches it
+      # mid-rewrite comes back empty, so the last good values are kept.
+      if read -r rb rd rn re <"$state" 2>/dev/null && [ -n "$re" ]; then b=$rb; d=$rd; n=$rn; e=$re; fi
+      el=$((SECONDS - start))
+      if [ "$grand" -gt 0 ]; then
+        pm=$(((offset + b) * 1000 / grand)); [ "$pm" -gt 1000 ] && pm=1000
+        tail="$(printf '%3d%%' $((pm / 10)))  $(_mb $((offset + b)))/$(_mb "$grand") MB"
+        if [ "$pm" -ge 30 ] && [ "$pm" -lt 1000 ]; then tail+="  eta $(_clock $((el * (1000 - pm) / pm)))"; fi
+        _draw "$msg" "$tail" bar "$pm"
+      else
+        tail="$(_mb $((offset + b))) MB  $d/$n layers  $(_clock "$el")"
+        _draw "$msg" "$tail" sweep "$tick"
+      fi
+      tick=$((tick + 1))
+      sleep 0.1
+    done
+    wait "$pid" || true
+    if read -r rb rd rn re <"$state" 2>/dev/null && [ -n "$re" ]; then b=$rb; n=$rn; e=$re; fi
+    # Content already in Docker's store (a reinstall) produces no layer
+    # events at all; the whole image counts as done.
+    [ "${n:-0}" -eq 0 ] && b=${sizes[i]:-0}
+    if [ "${e:-0}" != 0 ] || ! docker image inspect "$img" >/dev/null 2>&1; then
+      status=1
+      break
+    fi
+    offset=$((offset + b)); i=$((i + 1))
+  done
+
+  if [ "$status" -eq 0 ]; then
+    _finish_line 0 "$msg" "$(_mb "$offset") MB · $(_took $((SECONDS - start)))"
+  else
+    _finish_line 1 "$msg" ""
+    cat "$dir"/err* 2>/dev/null | grep -v '^$' | tail -n 3 || true
+  fi
+  rm -rf "$dir"
+  return "$status"
+}
+
+# One header per install phase: "▸ 3/8 ■■■□□□□□ Title" (or "> 3/8 [###-----]").
+STEP_NUM=0
+step() {
+  STEP_NUM=$((STEP_NUM + 1))
+  local f=$((STEP_NUM * 8 / STEP_TOTAL))
+  if [ -n "$UI_UNICODE" ]; then
+    printf '\n%s▸ %d/%d%s  %s%s%s%s%s  %s%s%s\n' "$C_ACCENT$C_BOLD" "$STEP_NUM" "$STEP_TOTAL" "$C_RESET" \
+      "$C_ACCENT" "$(_rep "$f" '■')" "$C_DIM" "$(_rep $((8 - f)) '□')" "$C_RESET" "$C_BOLD" "$1" "$C_RESET"
+  else
+    printf '\n%s> %d/%d  [%s%s]%s  %s\n' "$C_ACCENT$C_BOLD" "$STEP_NUM" "$STEP_TOTAL" "$(_rep "$f" '#')" "$(_rep $((8 - f)) '-')" "$C_RESET" "$1"
+  fi
+}
+done_line() { printf '%s%s%s %s\n' "$C_GREEN" "$UI_OK" "$C_RESET" "$1"; }
+# ── end Progress UI ──────────────────────────────────────────────────────
 
 # Renders `lines` inside a box-drawing rectangle wide enough for its widest
 # line, titled and colored — used for the SSL summary below so the cert
 # paths/fingerprint/content read as one clear block instead of scattered
 # log lines the way certbot's own raw output does.
-_repeat_char() { printf '%*s' "$1" '' | tr ' ' "$2"; }
+_repeat_char() { _rep "$1" "$2"; }
 print_box() {
   local title="$1" color="$2"; shift 2
   local -a lines=("$@")
   local w=0 l
-  for l in "${lines[@]}"; do (( ${#l} > w )) && w=${#l}; done
-  local title_w=$(( ${#title} + 2 ))
-  (( title_w > w )) && w=$title_w
-  printf '\n%s┌─ %s ' "$color" "$title"
-  printf '%s' "$(_repeat_char $((w - ${#title} - 1)) '─')"
-  printf '┐%s\n' "$C_RESET"
+  for l in "${lines[@]}"; do [ "${#l}" -gt "$w" ] && w=${#l}; done
+  [ $((${#title} + 2)) -gt "$w" ] && w=$((${#title} + 2))
+  local h="-" v="|" tl="+" tr="+" bl="+" br="+"
+  if [ -n "$UI_UNICODE" ]; then h="─"; v="│"; tl="┌"; tr="┐"; bl="└"; br="┘"; fi
+  printf '\n%s%s%s %s %s%s%s\n' "$color" "$tl" "$h" "$title" "$(_repeat_char $((w - ${#title} - 1)) "$h")" "$tr" "$C_RESET"
   for l in "${lines[@]}"; do
-    printf '%s│%s %-*s %s│%s\n' "$color" "$C_RESET" "$w" "$l" "$color" "$C_RESET"
+    printf '%s%s%s %-*s %s%s%s\n' "$color" "$v" "$C_RESET" "$w" "$l" "$color" "$v" "$C_RESET"
   done
-  printf '%s└%s┘%s\n' "$color" "$(_repeat_char $((w + 2)) '─')" "$C_RESET"
+  printf '%s%s%s%s%s\n' "$color" "$bl" "$(_repeat_char $((w + 2)) "$h")" "$br" "$C_RESET"
 }
 
 # Prints the paths, the full fullchain.pem content, and the panel access
@@ -133,15 +347,10 @@ show_ssl_summary() {
   print_box "Panel Access Info" "$C_MAGENTA" "Dashboard :  $public_url" "Port      :  $dash_port"
 }
 
-# One line per install phase (system deps, docker, repo, .env, SSL, build,
-# health check) — a percentage instead of a bare step count so a long build
-# still reads as visible progress rather than a silent hang.
-STEP_TOTAL=9
-STEP_NUM=0
-step() {
-  STEP_NUM=$((STEP_NUM + 1))
-  printf '%s[%d/%d · %d%%]%s %s\n' "$C_CYAN" "$STEP_NUM" "$STEP_TOTAL" $((STEP_NUM * 100 / STEP_TOTAL)) "$C_RESET" "$1"
-}
+# apt-get update used to be a step of its own, but nothing here installs an
+# apt package, so it only added a minute or more of waiting before anything
+# happened.
+STEP_TOTAL=8
 
 # Same big block-letter "TIFUSI" (figlet -f big) as backend/cli/main.py's
 # generate-admin-key banner, so the two feel like one product — but in
@@ -158,22 +367,16 @@ _BIG_TIFUSI='
 
 banner() {
   printf '\n%s%s%s\n' "$C_MAGENTA$C_BOLD" "$_BIG_TIFUSI" "$C_RESET"
-  printf '%s  Tifusi Panel installer%s\n\n' "$C_MAGENTA" "$C_RESET"
+  printf '%s  Tifusi Panel installer%s\n' "$C_MAGENTA" "$C_RESET"
 }
 
 banner
-info "Installing Tifusi Panel..."
-
-step "System packages"
-if command -v apt-get >/dev/null 2>&1; then
-  run_spinner "Updating the system's package list (apt-get update)..." \
-    env DEBIAN_FRONTEND=noninteractive apt-get update -y \
-    || warn "apt-get update failed — continuing anyway."
-fi
 
 step "Docker"
-if ! command -v docker >/dev/null 2>&1; then
-  run_spinner "Docker isn't installed — installing it with the official script..." \
+if command -v docker >/dev/null 2>&1; then
+  done_line "Docker is already installed"
+else
+  run_spinner "Installing Docker (official script)..." \
     bash -c 'curl -fsSL https://get.docker.com | sh' || true
   command -v docker >/dev/null 2>&1 \
     || fail "Automatic Docker install failed — try it manually: curl -fsSL https://get.docker.com | sh"
@@ -186,11 +389,9 @@ if [ -f "docker-compose.yml" ] && [ -d "backend" ] && [ -d "frontend" ]; then
   INSTALL_DIR="$(pwd)"
   info "Installing from the current directory ($INSTALL_DIR)."
 elif [ -d "$INSTALL_DIR/.git" ]; then
-  info "Repo already exists at $INSTALL_DIR, updating it..."
-  git -C "$INSTALL_DIR" pull --ff-only
+  run_spinner "Updating the existing copy in $INSTALL_DIR..." git -C "$INSTALL_DIR" pull --ff-only || exit 1
 else
-  info "Cloning the repo into $INSTALL_DIR..."
-  git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+  run_spinner "Downloading Tifusi Panel into $INSTALL_DIR..." git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" || exit 1
 fi
 
 cd "$INSTALL_DIR"
@@ -315,52 +516,59 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
 fi
 PANEL_PUBLIC_URL="${PANEL_PUBLIC_URL:-}"
 
-step "Building & starting containers"
-if run_spinner "Trying prebuilt images first (faster than building locally)..." docker compose pull; then
+step "Panel images"
+# Same image names docker-compose.yml resolves (an .env override included).
+env_value() { { grep -E "^$1=" .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2-; }
+PANEL_IMAGE="$(env_value TIFUSI_PANEL_IMAGE)"; PANEL_IMAGE="${PANEL_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-backend:latest}"
+DASHBOARD_IMAGE="$(env_value TIFUSI_DASHBOARD_IMAGE)"; DASHBOARD_IMAGE="${DASHBOARD_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-frontend:latest}"
+if pull_with_progress "Downloading panel images..." "$PANEL_IMAGE" "$DASHBOARD_IMAGE"; then
   BUILD_CMD=(docker compose up -d)
+  START_MSG="Starting containers..."
 else
   info "Prebuilt images aren't available (offline registry, or this repo's Packages aren't Public yet) — building locally instead. This can take a few minutes."
   BUILD_CMD=(docker compose up -d --build)
+  START_MSG="Building & starting containers..."
 fi
-run_spinner "Building & starting containers..." "${BUILD_CMD[@]}" || exit 1
+run_spinner "$START_MSG" "${BUILD_CMD[@]}" || exit 1
 
 step "Management command"
 mkdir -p /etc/tifusi-panel
 echo "$INSTALL_DIR" > /etc/tifusi-panel/install_dir
 source scripts/install-commands.sh
 install_panel_commands
-info "Installed the 'tifusi panel' command — run it any time to update, change ports, get SSL, back up, or uninstall."
+done_line "Installed the 'tifusi panel' command"
 
 step "Health check"
-info "Waiting for the panel to come up..."
-ready=""
-# The pro edition waits for MySQL's first-time initialisation before the panel starts.
-for _ in $(seq 1 $([ "$EDITION" = "pro" ] && echo 150 || echo 60)); do
-  if curl -fsSk "$PANEL_URL/api/setup/status" >/dev/null 2>&1; then
-    ready=1
-    break
-  fi
-  sleep 2
-done
-[ -n "$ready" ] || fail "The panel didn't come up in time — check the logs: docker compose logs panel"
+wait_for_panel() {
+  local _
+  # The pro edition waits for MySQL's first-time initialisation before the panel starts.
+  for _ in $(seq 1 $([ "$EDITION" = "pro" ] && echo 150 || echo 60)); do
+    curl -fsSk "$PANEL_URL/api/setup/status" >/dev/null 2>&1 && return 0
+    sleep 2
+  done
+  return 1
+}
+run_spinner "Waiting for the panel to come up..." wait_for_panel \
+  || fail "The panel didn't come up in time — check the logs: docker compose logs panel"
 
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 HOST_IP="${HOST_IP:-<server-ip>}"
-info "The panel is up."
+SUMMARY=()
 if [ "$EDITION" = "pro" ]; then
-  info "  Edition:    professional (MySQL 8.4, data in ${INSTALL_DIR}/mysql-data)"
+  SUMMARY+=("Edition   :  professional (MySQL 8.4, data in ${INSTALL_DIR}/mysql-data)")
 else
-  info "  Edition:    standard (SQLite, data in ${INSTALL_DIR}/data)"
+  SUMMARY+=("Edition   :  standard (SQLite, data in ${INSTALL_DIR}/data)")
 fi
 if [ -n "$PANEL_PUBLIC_URL" ]; then
-  info "  SSL:        enabled (Let's Encrypt, ${domain:-})"
-  info "  Certs:      ${INSTALL_DIR}/certs/fullchain.pem + privkey.pem"
-  info "  Dashboard:  $PANEL_PUBLIC_URL"
+  SUMMARY+=("SSL       :  enabled (Let's Encrypt, ${domain:-})")
+  SUMMARY+=("Certs     :  ${INSTALL_DIR}/certs/fullchain.pem + privkey.pem")
+  SUMMARY+=("Dashboard :  $PANEL_PUBLIC_URL")
 else
-  info "  Dashboard:  http://${HOST_IP}:${dashboard_port}"
+  SUMMARY+=("Dashboard :  http://${HOST_IP}:${dashboard_port}")
 fi
-info "  Panel API:  http://${HOST_IP}:${panel_port}"
-info ""
+SUMMARY+=("Panel API :  http://${HOST_IP}:${panel_port}")
+print_box "Panel Access Info" "$C_MAGENTA" "${SUMMARY[@]}"
+printf '\n'
 info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
 info "  tifusi panel key"
 info "Paste that key into the login page along with the username/password you want, and you're in."
