@@ -412,7 +412,8 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
                       <span className="mono-badge">{MONO[host.protocol]}</span>
                       <span className="kind">
                         <b>{protocolLabels[host.protocol]}</b>
-                        <small>{dt.kind}</small>
+                        {/* An IKEv2/L2TP core's type label is the protocol name again. */}
+                        {dt.kind.toLowerCase() !== protocolLabels[host.protocol].toLowerCase() && <small>{dt.kind}</small>}
                       </span>
                       <span className={`pill ${dt.pill.cls}`}>
                         <i />
