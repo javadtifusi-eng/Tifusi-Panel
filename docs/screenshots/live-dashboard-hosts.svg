@@ -9,10 +9,6 @@
     @keyframes draw { 0% { stroke-dashoffset: 900; } 55%, 100% { stroke-dashoffset: 0; } }
     .area { animation: fade 3.2s ease-out infinite; }
     @keyframes fade { 0%, 25% { opacity: 0; } 60%, 100% { opacity: 1; } }
-    .needle { transform-origin: 1036px 590px; animation: swing 4s ease-in-out infinite; }
-    @keyframes swing { 0% { transform: rotate(-40deg); } 50% { transform: rotate(10deg); } 100% { transform: rotate(-40deg); } }
-    .needle2 { transform-origin: 1188px 590px; animation: swing2 5s ease-in-out infinite; }
-    @keyframes swing2 { 0% { transform: rotate(12deg); } 50% { transform: rotate(28deg); } 100% { transform: rotate(12deg); } }
     .flow { stroke-dasharray: 5 7; animation: flow 0.9s linear infinite; }
     @keyframes flow { to { stroke-dashoffset: -24; } }
     .pulse { transform-box: fill-box; transform-origin: center; animation: pulse 2.4s ease-out infinite; }
@@ -32,8 +28,8 @@
   <g transform="translate(24 22)">
     <circle cx="6" cy="6" r="6" fill="#2a2a2a"/><circle cx="26" cy="6" r="6" fill="#2a2a2a"/><circle cx="46" cy="6" r="6" fill="#2a2a2a"/>
     <text x="72" y="11" font-size="13" class="muted">Tifusi Panel · live</text>
-    <circle cx="1216" cy="6" r="4" fill="#22c55e"><animate attributeName="opacity" values="1;.3;1" dur="1.6s" repeatCount="indefinite"/></circle>
-    <text x="1226" y="10" font-size="11" fill="#22c55e">LIVE</text>
+    <circle cx="1190" cy="6" r="4" fill="#22c55e"><animate attributeName="opacity" values="1;.3;1" dur="1.6s" repeatCount="indefinite"/></circle>
+    <text x="1200" y="10" font-size="11" fill="#22c55e">LIVE</text>
   </g>
   <line x1="0" y1="52" x2="1280" y2="52" stroke="#191919"/>
 
@@ -108,18 +104,20 @@
   <g transform="translate(330 538)">
     <rect class="card" width="284" height="160" rx="16"/>
     <text x="16" y="28" font-size="14" font-weight="600" fill="#f5f5f5">Server</text>
-    <g transform="translate(-866 -538)">
-      <path d="M968 590 A 68 68 0 0 1 1104 590" fill="none" stroke="#1f1f1f" stroke-width="9" stroke-linecap="round"/>
-      <path d="M968 590 A 68 68 0 0 1 1060 526" fill="none" stroke="#f97316" stroke-width="9" stroke-linecap="round"/>
-      <g class="needle"><line x1="1036" y1="590" x2="1036" y2="540" stroke="#f5f5f5" stroke-width="3" stroke-linecap="round"/></g>
-      <circle cx="1036" cy="590" r="6" fill="#f5f5f5"/>
-      <text x="1036" y="618" font-size="11" text-anchor="middle" class="muted">CPU</text>
-      <path d="M1128 590 A 60 60 0 0 1 1248 590" fill="none" stroke="#1f1f1f" stroke-width="9" stroke-linecap="round"/>
-      <path d="M1128 590 A 60 60 0 0 1 1214 541" fill="none" stroke="#facc15" stroke-width="9" stroke-linecap="round"/>
-      <g class="needle2"><line x1="1188" y1="590" x2="1188" y2="546" stroke="#f5f5f5" stroke-width="3" stroke-linecap="round"/></g>
-      <circle cx="1188" cy="590" r="6" fill="#f5f5f5"/>
-      <text x="1188" y="618" font-size="11" text-anchor="middle" class="muted">RAM</text>
-    </g>
+    <path d="M24 122 A 50 50 0 0 1 124 122" fill="none" stroke="#1f1f1f" stroke-width="9" stroke-linecap="round"/>
+    <path d="M24 122 A 50 50 0 0 1 92.4 75.5" fill="none" stroke="#f97316" stroke-width="9" stroke-linecap="round"/>
+    <line x1="74" y1="122" x2="74" y2="86" stroke="#f5f5f5" stroke-width="3" stroke-linecap="round">
+      <animateTransform attributeName="transform" type="rotate" values="-40 74 122;10 74 122;-40 74 122" dur="4s" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" repeatCount="indefinite"/>
+    </line>
+    <circle cx="74" cy="122" r="6" fill="#f5f5f5"/>
+    <text x="74" y="148" font-size="11" text-anchor="middle" class="muted">CPU</text>
+    <path d="M160 122 A 50 50 0 0 1 260 122" fill="none" stroke="#1f1f1f" stroke-width="9" stroke-linecap="round"/>
+    <path d="M160 122 A 50 50 0 0 1 241.9 83.5" fill="none" stroke="#facc15" stroke-width="9" stroke-linecap="round"/>
+    <line x1="210" y1="122" x2="210" y2="86" stroke="#f5f5f5" stroke-width="3" stroke-linecap="round">
+      <animateTransform attributeName="transform" type="rotate" values="12 210 122;28 210 122;12 210 122" dur="5s" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" repeatCount="indefinite"/>
+    </line>
+    <circle cx="210" cy="122" r="6" fill="#f5f5f5"/>
+    <text x="210" y="148" font-size="11" text-anchor="middle" class="muted">RAM</text>
   </g>
 
   <!-- ═══ HOSTS ═══ -->
