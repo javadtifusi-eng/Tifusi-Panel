@@ -9,7 +9,9 @@
 <p align="center">
   <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=F97316" alt="GitHub stars" /></a>
   <img src="https://img.shields.io/github/v/tag/javadtifusi-eng/Tifusi-Panel?filter=v*&sort=semver&label=version&style=flat-square&color=22C55E" alt="version" />
+  <a href="https://t.me/javadheydeari"><img src="https://img.shields.io/badge/Support-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram support" /></a>
   <img src="https://img.shields.io/github/last-commit/javadtifusi-eng/Tifusi-Panel?label=last%20update&style=flat-square&color=0EA5E9" alt="last update" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-source--available-DC2626?style=flat-square" alt="license" /></a>
 </p>
 
 <p align="center">
@@ -23,7 +25,7 @@
 </p>
 
 <p align="center">
-  🇬🇧 <a href="README.md">English</a> / 🇮🇷 <a href="README.fa.md">فارسی</a> / 🇷🇺 <b>Русский</b>
+  <img src="docs/brand/gb.png" height="14" alt="" /> <a href="README.md">English</a> &nbsp;·&nbsp; <img src="docs/brand/ir.png" height="14" alt="" /> <a href="README.fa.md">فارسی</a> &nbsp;·&nbsp; <img src="docs/brand/ru.png" height="14" alt="" /> <b>Русский</b>
 </p>
 
 <hr>
@@ -343,6 +345,10 @@ docker build -t tifusi-node-agent -f backend/node_agent/Dockerfile backend
 
 - [Tifusi VPN](https://github.com/javadtifusi-eng/Tifusi-VPN): Android-клиент для IKEv2 и VLESS REALITY, настраиваемый из этой панели по ссылке подписки, коду доступа или QR-коду.
 - [Tifusi Bot](https://github.com/javadtifusi-eng/Tifusi-Bot): Telegram-магазин, создающий пользователей через API панели.
+
+## Лицензия
+
+Исходный код Tifusi Panel **открыт для просмотра, но это не open source**. Вы можете читать код, устанавливать панель без изменений и использовать её для своих серверов и сервисов. Копирование любой части кода, изменение и повторная публикация, ребрендинг или продажа требуют письменного разрешения. Подробности в файле [LICENSE](LICENSE).
 
 ## Благодарности
 
