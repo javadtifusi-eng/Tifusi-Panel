@@ -10,9 +10,11 @@ import {
   listNodes,
   listTunnels,
   recommendTunnelTransport,
+  spoofTestCommands,
   testTunnel,
   updateTunnel,
   type Node,
+  type SpoofTestCommands,
   type Tunnel,
   type TunnelConfig,
   type TunnelForward,
@@ -45,7 +47,11 @@ interface MapEnd {
   y: number
 }
 
-type StepState = 'wait' | 'now' | 'done' | 'fail'
+type StepState = 'wait' | 'now' | 'done' | 'fail' | 'skip'
+
+function stepFor(reachable: boolean | null): StepState {
+  return reachable === null ? 'skip' : reachable ? 'done' : 'fail'
+}
 
 export default function TunnelsPage({ createSignal = 0 }: { createSignal?: number } = {}) {
   const { t } = useLang()
@@ -68,12 +74,21 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [recommendResult, setRecommendResult] = useState<TunnelRecommendResult | null>(null)
   const [focusKey, setFocusKey] = useState<string | null>(null)
 
+  const [showSpoof, setShowSpoof] = useState(false)
+  const [spoofForeign, setSpoofForeign] = useState('')
+  const [spoofPort, setSpoofPort] = useState('443')
+  const [spoofIp, setSpoofIp] = useState('')
+  const [spoofBusy, setSpoofBusy] = useState(false)
+  const [spoofError, setSpoofError] = useState<string | null>(null)
+  const [spoofCmds, setSpoofCmds] = useState<SpoofTestCommands | null>(null)
+
   const [name, setName] = useState('')
   const [iranAddress, setIranAddress] = useState('')
   const [iranPort, setIranPort] = useState('8443')
   const [foreignSource, setForeignSource] = useState<ForeignSource | null>(null)
   const [foreignNodeId, setForeignNodeId] = useState<number | null>(null)
   const [foreignAddress, setForeignAddress] = useState('')
+  const [foreignPort, setForeignPort] = useState('')
   const [transport, setTransport] = useState<TunnelTransport | null>(null)
   const [sni, setSni] = useState('')
   const [domain, setDomain] = useState('')
@@ -116,6 +131,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setForeignSource(null)
     setForeignNodeId(null)
     setForeignAddress('')
+    setForeignPort('')
     setTransport(null)
     setSni('')
     setDomain('')
@@ -135,6 +151,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setForeignSource(tunnel.foreign_node_id != null ? 'node' : 'address')
     setForeignNodeId(tunnel.foreign_node_id)
     setForeignAddress(tunnel.foreign_address ?? '')
+    setForeignPort(tunnel.foreign_port != null ? String(tunnel.foreign_port) : '')
     setTransport(tunnel.transport)
     setSni(tunnel.sni ?? '')
     setDomain(tunnel.domain ?? '')
@@ -153,6 +170,12 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       setFormError(t.tunnelsPage.noNeedForeign)
       return
     }
+    // Half-filled rows used to be dropped on save, so the admin walked away
+    // believing a port was forwarded when nothing had been stored.
+    if (forwards.some((f) => !f.name || !f.listen_port || !f.target_port)) {
+      setFormError(t.tunnelsPage.forwardIncomplete)
+      return
+    }
     setSubmitting(true)
     setFormError(null)
     try {
@@ -162,12 +185,13 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         iran_port: parseInt(iranPort, 10),
         foreign_node_id: foreignSource === 'node' ? foreignNodeId : null,
         foreign_address: foreignSource === 'address' ? foreignAddress : null,
+        foreign_port: foreignSource === 'address' && foreignPort ? parseInt(foreignPort, 10) : null,
         transport,
         sni: sni || null,
         domain: domain || null,
         path: path || null,
         connection_count: parseInt(connectionCount, 10) || 8,
-        forwards: forwards.filter((f) => f.name && f.listen_port && f.target_port),
+        forwards,
       }
       if (editingId) await updateTunnel(editingId, payload)
       else await createTunnel(payload)
@@ -199,9 +223,10 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         iran_port: parseInt(iranPort, 10) || 8443,
         foreign_node_id: foreignSource === 'node' ? foreignNodeId : null,
         foreign_address: foreignSource === 'address' ? foreignAddress : null,
+        foreign_port: foreignSource === 'address' && foreignPort ? parseInt(foreignPort, 10) : null,
       })
       setRecommendResult(result)
-      if (result.ranked.length > 0) setTransport(result.ranked[0].transport)
+      if (result.ranked.length > 0) setTransport(result.ranked[0])
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : t.common.genericError)
     } finally {
@@ -221,14 +246,20 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       const minWait = reduce ? 0 : Math.max(0, 900 - (performance.now() - started))
       await new Promise((r) => window.setTimeout(r, minWait))
       const final: StepState[] = [
-        result.iran_reachable ? 'done' : 'fail',
-        result.foreign_reachable ? 'done' : 'fail',
-        result.status === 'connected' ? 'done' : 'fail',
+        stepFor(result.iran_reachable),
+        stepFor(result.foreign_reachable),
+        result.status === 'connected' ? 'done' : result.status === 'pending' ? 'skip' : 'fail',
       ]
       setSteps((s) => ({ ...s, [tunnel.id]: final }))
       setTestResults((r) => ({ ...r, [tunnel.id]: result }))
       await refresh()
-      say(result.status === 'connected' ? tn.testOk : result.error ?? tn.testFail)
+      say(
+        result.status === 'connected'
+          ? tn.testOk
+          : result.status === 'pending'
+            ? tn.testSkipped
+            : result.error ?? tn.testFail,
+      )
       window.setTimeout(() => setSteps((s) => {
         const next = { ...s }
         delete next[tunnel.id]
@@ -273,6 +304,37 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
 
   async function copy(text: string) {
     if (await copyToClipboard(text)) say(t.common.copiedCheck)
+  }
+
+  function openSpoof() {
+    setSpoofForeign('')
+    setSpoofPort('443')
+    setSpoofIp('')
+    setSpoofCmds(null)
+    setSpoofError(null)
+    setShowSpoof(true)
+  }
+
+  async function handleSpoofGenerate(e: FormEvent) {
+    e.preventDefault()
+    if (!spoofForeign || !spoofIp) {
+      setSpoofError(tn.spoofNeedInputs)
+      return
+    }
+    setSpoofBusy(true)
+    setSpoofError(null)
+    try {
+      const cmds = await spoofTestCommands({
+        foreign_address: spoofForeign,
+        port: parseInt(spoofPort, 10) || 443,
+        spoof_ip: spoofIp,
+      })
+      setSpoofCmds(cmds)
+    } catch (err) {
+      setSpoofError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setSpoofBusy(false)
+    }
   }
 
   function updateForward(idx: number, patch: Partial<TunnelForward>) {
@@ -495,10 +557,15 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
             </span>
           )}
         </h2>
-        <button type="button" className="btn solid" onClick={openNew}>
-          <IconPlus size={14} />
-          {t.tunnelsPage.newBtn.replace(/^\+\s*/, '')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" className="btn" onClick={openSpoof}>
+            {tn.spoofTestBtn}
+          </button>
+          <button type="button" className="btn solid" onClick={openNew}>
+            <IconPlus size={14} />
+            {t.tunnelsPage.newBtn.replace(/^\+\s*/, '')}
+          </button>
+        </div>
       </div>
 
       {error && <div className="tf-alert">{error}</div>}
@@ -582,7 +649,9 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     <ol className="steps">
                       {stepLabels.map((label, i) => (
                         <li key={label} className={tunnelSteps[i] === 'wait' ? '' : tunnelSteps[i]}>
-                          <span className="ic">{tunnelSteps[i] === 'done' ? '✓' : tunnelSteps[i] === 'fail' ? '✕' : tunnelSteps[i] === 'now' ? '' : i + 1}</span>
+                          <span className="ic">
+                            {tunnelSteps[i] === 'done' ? '✓' : tunnelSteps[i] === 'fail' ? '✕' : tunnelSteps[i] === 'skip' ? '–' : tunnelSteps[i] === 'now' ? '' : i + 1}
+                          </span>
                           {label}
                         </li>
                       ))}
@@ -679,9 +748,17 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                 </Field>
               )}
               {foreignSource === 'address' && (
-                <Field label={t.tunnelsPage.foreignAddressLabel}>
-                  <input className="input ltr" value={foreignAddress} onChange={(e) => setForeignAddress(e.target.value)} placeholder="5.6.7.8" />
-                </Field>
+                <div className="form-grid">
+                  <Field label={t.tunnelsPage.foreignAddressLabel}>
+                    <input className="input ltr" value={foreignAddress} onChange={(e) => setForeignAddress(e.target.value)} placeholder="5.6.7.8" />
+                  </Field>
+                  <Field label={t.tunnelsPage.foreignPortLabel}>
+                    <input className="input" type="number" min="1" max="65535" value={foreignPort} onChange={(e) => setForeignPort(e.target.value)} placeholder="22" />
+                  </Field>
+                  <div className="hint" style={{ margin: 0, gridColumn: '1 / -1' }}>
+                    {t.tunnelsPage.foreignPortHint}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -712,8 +789,9 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   </div>
                 </div>
               )}
+              {recommendResult && <div className="hint" style={{ margin: 0 }}>{t.tunnelsPage.recommendReason[recommendResult.link]}</div>}
               <div className="flex flex-wrap gap-1.5">
-                {(recommendResult ? recommendResult.ranked.map((r) => r.transport) : TRANSPORTS).map((tr, i) => (
+                {(recommendResult ? recommendResult.ranked : TRANSPORTS).map((tr, i) => (
                   <button key={tr} type="button" onClick={() => setTransport(tr)} title={t.tunnelsPage.transportHints[tr]} className={`btn ${transport === tr ? 'on' : ''}`}>
                     {recommendResult && i === 0 ? '★ ' : ''}
                     {t.tunnelsPage.transportLabels[tr]}
@@ -786,6 +864,68 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
 
             {formError && <div className="tf-alert">{formError}</div>}
           </form>
+        </Sheet>
+      )}
+
+      {showSpoof && (
+        <Sheet
+          title={tn.spoofTestBtn}
+          sub={tn.spoofIntro}
+          onClose={() => setShowSpoof(false)}
+          width={600}
+          footer={
+            <button type="button" className="btn lg" onClick={() => setShowSpoof(false)}>
+              {t.usersPage.cancelAction}
+            </button>
+          }
+        >
+          <form onSubmit={handleSpoofGenerate} className="flex flex-col gap-3.5">
+            <div className="form-grid">
+              <Field label={tn.spoofForeignLabel}>
+                <input className="input ltr" value={spoofForeign} onChange={(e) => setSpoofForeign(e.target.value)} placeholder="5.6.7.8" required />
+              </Field>
+              <Field label={tn.spoofPortLabel}>
+                <input className="input" type="number" min="1" max="65535" value={spoofPort} onChange={(e) => setSpoofPort(e.target.value)} />
+              </Field>
+              <Field label={tn.spoofIpLabel} wide>
+                <input className="input ltr" value={spoofIp} onChange={(e) => setSpoofIp(e.target.value)} placeholder="1.2.3.4 · 1.2.3.0/24 · 1.2.3.4-1.2.3.9" required />
+              </Field>
+            </div>
+            <div className="hint" style={{ margin: 0 }}>{tn.spoofIpHint}</div>
+            <button type="submit" className="btn primary" disabled={spoofBusy}>
+              {spoofBusy ? t.common.saving : tn.spoofGenerate}
+            </button>
+            {spoofError && <div className="tf-alert">{spoofError}</div>}
+          </form>
+
+          {spoofCmds && (
+            <div className="flex flex-col gap-3" style={{ marginTop: 16 }}>
+              <ol className="tf-spoof-steps">
+                <li>
+                  <b>{tn.spoofStep1}</b>
+                  <div className="tf-linkrow">
+                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{spoofCmds.foreign_recv_command}</code>
+                    <button type="button" className="btn solid" onClick={() => copy(spoofCmds.foreign_recv_command)}>
+                      <IconCopy size={13} />
+                    </button>
+                  </div>
+                </li>
+                <li>
+                  <b>{tn.spoofStep2}</b>
+                  <div className="tf-linkrow">
+                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{spoofCmds.iran_send_command}</code>
+                    <button type="button" className="btn solid" onClick={() => copy(spoofCmds.iran_send_command)}>
+                      <IconCopy size={13} />
+                    </button>
+                  </div>
+                </li>
+                <li>
+                  <b>{tn.spoofStep3}</b>
+                  <div className="hint" style={{ margin: 0 }}>{tn.spoofStep3Hint}</div>
+                </li>
+              </ol>
+            </div>
+          )}
         </Sheet>
       )}
     </div>

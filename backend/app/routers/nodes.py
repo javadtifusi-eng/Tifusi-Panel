@@ -6,6 +6,7 @@ from app.cores.resolve import resolve_ipsec_core_id, resolve_xray_core_id
 from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
+from app.models.tunnel import Tunnel
 from app.nodes.sync import sync_node
 from app.schemas.node import NodeCreate, NodeList, NodeResponse, NodeSyncResult, NodeUpdate
 
@@ -70,6 +71,19 @@ async def update_node(node_id: int, payload: NodeUpdate, db: AsyncSession = Depe
 @router.delete("/{node_id}", status_code=204)
 async def delete_node(node_id: int, db: AsyncSession = Depends(get_db)) -> None:
     node = await _get_node_or_404(node_id, db)
+
+    # SQLite isn't enforcing the tunnels.foreign_node_id foreign key, so
+    # deleting the node here would leave those tunnels pointing at an id
+    # that no longer resolves: unlabelled in the UI and permanently failing
+    # their check, with nothing saying why. Make the admin repoint them.
+    result = await db.execute(select(Tunnel.name).where(Tunnel.foreign_node_id == node_id))
+    used_by = list(result.scalars().all())
+    if used_by:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Node is still the foreign side of these tunnels: {', '.join(used_by)}",
+        )
+
     await db.delete(node)
     await db.commit()
 

@@ -82,15 +82,9 @@ _SLOW_LINK_ORDER: list[TunnelTransport] = [
 _SLOW_LINK_THRESHOLD_MS = 150.0
 
 
-class TransportRank:
-    def __init__(self, transport: TunnelTransport, reason: str):
-        self.transport = transport
-        self.reason = reason
-
-
 async def recommend_transports(
     iran_host: str, iran_port: int, foreign_host: str, foreign_port: int
-) -> tuple[bool, float | None, bool, float | None, list[TransportRank]]:
+) -> tuple[bool, float | None, bool, float | None, str, list[TunnelTransport]]:
     iran_reachable, iran_latency = await ping_probe(iran_host, iran_port)
     foreign_reachable, foreign_latency = await ping_probe(foreign_host, foreign_port)
 
@@ -98,12 +92,6 @@ async def recommend_transports(
     slow_or_unreachable = (
         not iran_reachable or not foreign_reachable or combined > _SLOW_LINK_THRESHOLD_MS
     )
+    link = "slow" if slow_or_unreachable else "fast"
     order = _SLOW_LINK_ORDER if slow_or_unreachable else _FAST_LINK_ORDER
-
-    if slow_or_unreachable:
-        headline = "high latency or one side unreachable — favoring CDN-friendly, DPI-resistant transports"
-    else:
-        headline = "both sides fast and reachable — favoring lower-overhead transports"
-
-    ranked = [TransportRank(t, headline) for t in order]
-    return iran_reachable, iran_latency, foreign_reachable, foreign_latency, ranked
+    return iran_reachable, iran_latency, foreign_reachable, foreign_latency, link, order

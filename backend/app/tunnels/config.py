@@ -14,6 +14,12 @@ _INSTALL_RAW_URL = (
     "Tifusi-Panel/main/backend/tunnel_agent/install.sh"
 )
 
+# The fixed "tunnel-agent" release the build workflow publishes the prebuilt
+# binary on — the same one install.sh downloads (see its RELEASE var).
+_BINARY_RELEASE_URL = (
+    "https://github.com/javadtifusi-eng/Tifusi-Panel/releases/download/tunnel-agent"
+)
+
 _MUX_TRANSPORTS = {TunnelTransport.tcpmux, TunnelTransport.wsmux, TunnelTransport.wssmux}
 
 
@@ -58,6 +64,36 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
     else:
         config["pool"] = tunnel.connection_count
     return config
+
+
+def _download_binary_snippet() -> str:
+    """A shell prefix that fetches the right-arch prebuilt binary to a temp
+    path — the same release install.sh uses — so a spoof test can run on a
+    server that doesn't have the tunnel installed yet.
+    """
+    return (
+        'A=$(uname -m); case "$A" in x86_64) A=amd64;; aarch64|arm64) A=arm64;; esac; '
+        f'curl -fsSL {_BINARY_RELEASE_URL}/tifusi-tunnel-linux-$A -o /tmp/tifusi-tunnel '
+        '&& chmod +x /tmp/tifusi-tunnel'
+    )
+
+
+def build_spooftest_commands(
+    foreign_host: str, spoof_ip: str, port: int, seconds: int = 60
+) -> tuple[str, str]:
+    """The two copy-paste commands that measure whether the Iran server's
+    datacenter lets a packet leave with a forged source IP (the L3 filtering
+    national-internet mode enforces). The receiver runs on the foreign
+    server, the sender on the Iran server; the caller must have already
+    validated foreign_host/spoof_ip so neither can inject shell syntax.
+    """
+    prefix = _download_binary_snippet()
+    recv = f"{prefix} && /tmp/tifusi-tunnel spooftest recv --port {port} --seconds {seconds}"
+    send = (
+        f"{prefix} && sudo /tmp/tifusi-tunnel spooftest send "
+        f"--to {foreign_host} --port {port} --spoof {spoof_ip}"
+    )
+    return recv, send
 
 
 def build_install_command(config: dict) -> str:

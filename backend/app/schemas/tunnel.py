@@ -21,6 +21,7 @@ class TunnelCreate(BaseModel):
     iran_port: int = Field(default=8443, ge=1, le=65535)
     foreign_node_id: int | None = None
     foreign_address: str | None = Field(default=None, max_length=255)
+    foreign_port: int | None = Field(default=None, ge=1, le=65535)
     transport: TunnelTransport
     sni: str | None = Field(default=None, max_length=255)
     domain: str | None = Field(default=None, max_length=255)
@@ -35,6 +36,7 @@ class TunnelUpdate(BaseModel):
     iran_port: int | None = Field(default=None, ge=1, le=65535)
     foreign_node_id: int | None = None
     foreign_address: str | None = Field(default=None, max_length=255)
+    foreign_port: int | None = Field(default=None, ge=1, le=65535)
     transport: TunnelTransport | None = None
     sni: str | None = Field(default=None, max_length=255)
     domain: str | None = Field(default=None, max_length=255)
@@ -52,6 +54,7 @@ class TunnelResponse(BaseModel):
     iran_port: int
     foreign_node_id: int | None
     foreign_address: str | None
+    foreign_port: int | None
     transport: TunnelTransport
     token: str
     sni: str | None
@@ -71,10 +74,15 @@ class TunnelList(BaseModel):
 
 
 class TunnelTestResult(BaseModel):
+    """`None` on a side means the check was skipped rather than failed —
+    a udp tunnel's listener speaks KCP over UDP, which a TCP connect can
+    neither reach nor disprove, so reporting it as unreachable would mark
+    a perfectly healthy tunnel broken."""
+
     status: TunnelStatus
-    iran_reachable: bool
+    iran_reachable: bool | None
     iran_latency_ms: float | None
-    foreign_reachable: bool
+    foreign_reachable: bool | None
     foreign_latency_ms: float | None
     error: str | None
 
@@ -97,16 +105,35 @@ class TunnelRecommendRequest(BaseModel):
     iran_port: int = Field(default=8443, ge=1, le=65535)
     foreign_node_id: int | None = None
     foreign_address: str | None = Field(default=None, max_length=255)
+    foreign_port: int | None = Field(default=None, ge=1, le=65535)
 
 
-class RankedTransport(BaseModel):
-    transport: TunnelTransport
-    reason: str
+class SpoofTestRequest(BaseModel):
+    foreign_node_id: int | None = None
+    foreign_address: str | None = Field(default=None, max_length=255)
+    port: int = Field(default=443, ge=1, le=65535)
+    spoof_ip: str = Field(min_length=1, max_length=64)
+
+
+class SpoofTestCommands(BaseModel):
+    """The two ready-to-run commands for a spoof-ability check: paste
+    `foreign_recv_command` on the foreign server first, then
+    `iran_send_command` on the Iran server within its listen window. The
+    foreign server's output says which forged sources actually arrived."""
+
+    foreign_recv_command: str
+    iran_send_command: str
 
 
 class TunnelRecommendResult(BaseModel):
+    """`link` is why the ranking came out the way it did, and applies to the
+    whole list rather than to any one transport — the measurement behind it
+    is the link's latency, not anything per-transport. It is a flag, not a
+    sentence, so the UI can say it in the admin's own language."""
+
     iran_reachable: bool
     iran_latency_ms: float | None
     foreign_reachable: bool
     foreign_latency_ms: float | None
-    ranked: list[RankedTransport]
+    link: Literal["fast", "slow"]
+    ranked: list[TunnelTransport]

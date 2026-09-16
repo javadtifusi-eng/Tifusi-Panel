@@ -565,6 +565,7 @@ export interface Tunnel {
   iran_port: number
   foreign_node_id: number | null
   foreign_address: string | null
+  foreign_port: number | null
   transport: TunnelTransport
   token: string
   sni: string | null
@@ -583,11 +584,13 @@ export interface TunnelList {
   tunnels: Tunnel[]
 }
 
+/** A `null` side was skipped, not failed — a udp tunnel's KCP listener
+ *  can't be reached or disproved by the TCP connect this check makes. */
 export interface TunnelTestResult {
   status: TunnelStatus
-  iran_reachable: boolean
+  iran_reachable: boolean | null
   iran_latency_ms: number | null
-  foreign_reachable: boolean
+  foreign_reachable: boolean | null
   foreign_latency_ms: number | null
   error: string | null
 }
@@ -599,17 +602,15 @@ export interface TunnelConfig {
   foreign_install_command: string
 }
 
-export interface TunnelRankedTransport {
-  transport: TunnelTransport
-  reason: string
-}
-
 export interface TunnelRecommendResult {
   iran_reachable: boolean
   iran_latency_ms: number | null
   foreign_reachable: boolean
   foreign_latency_ms: number | null
-  ranked: TunnelRankedTransport[]
+  /** Why the list came out in this order — a property of the link, not of
+   *  any one transport, so it reads once above the whole ranking. */
+  link: 'fast' | 'slow'
+  ranked: TunnelTransport[]
 }
 
 export type TunnelPayload = {
@@ -618,6 +619,7 @@ export type TunnelPayload = {
   iran_port: number
   foreign_node_id?: number | null
   foreign_address?: string | null
+  foreign_port?: number | null
   transport: TunnelTransport
   sni?: string | null
   domain?: string | null
@@ -660,8 +662,24 @@ export async function recommendTunnelTransport(payload: {
   iran_port: number
   foreign_node_id?: number | null
   foreign_address?: string | null
+  foreign_port?: number | null
 }): Promise<TunnelRecommendResult> {
   const res = await authorizedFetch('/tunnels/recommend', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export interface SpoofTestCommands {
+  foreign_recv_command: string
+  iran_send_command: string
+}
+
+export async function spoofTestCommands(payload: {
+  foreign_node_id?: number | null
+  foreign_address?: string | null
+  port: number
+  spoof_ip: string
+}): Promise<SpoofTestCommands> {
+  const res = await authorizedFetch('/tunnels/spooftest', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }
 

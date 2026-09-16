@@ -461,7 +461,8 @@ setup_server() {
           domain:(if $dom=="" then null else $dom end), forwards:$fw}
          | with_entries(select(.value != null))')
   save_cfg "$cfg"
-  open_port "$port" tcp
+  # The "udp" transport listens with KCP over UDP; every other one is TCP.
+  if [ "$transport" = "udp" ]; then open_port "$port" udp; else open_port "$port" tcp; fi
   [ -n "$domain" ] && open_port 80 tcp
   ip=$(curl -fsSL --max-time 5 https://api.ipify.org 2>/dev/null || echo YOUR_IRAN_IP)
   echo
@@ -1081,7 +1082,7 @@ menu() {
 # menu at all. Contrast with the normal path (menu -> setup_server/
 # setup_client), which asks for every field one at a time.
 unattended_install() {
-  local b64="$1" cfg mode port proto
+  local b64="$1" cfg mode port proto listen_proto
   QUIET=1
   tunnel_art
 
@@ -1100,7 +1101,9 @@ unattended_install() {
   if [ "$mode" = "server" ]; then
     progress 80 "opening firewall ports"
     port=$(echo "$cfg" | jq -r '.listen' | sed 's/.*://')
-    open_port "$port" tcp >/dev/null
+    # The "udp" transport listens with KCP over UDP; every other one is TCP.
+    [ "$(echo "$cfg" | jq -r '.transport // empty')" = "udp" ] && listen_proto=udp || listen_proto=tcp
+    open_port "$port" "$listen_proto" >/dev/null
     [ "$(echo "$cfg" | jq -r '.domain // empty')" != "" ] && open_port 80 tcp >/dev/null
     while read -r port proto; do
       [ -n "$port" ] && open_port "$port" "$proto" >/dev/null

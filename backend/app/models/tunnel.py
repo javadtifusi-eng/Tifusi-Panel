@@ -52,6 +52,13 @@ class Tunnel(Base):
     foreign_node_id: Mapped[int | None] = mapped_column(ForeignKey("nodes.id"), nullable=True)
     foreign_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Probe-only: the foreign side dials out, so it never listens on a
+    # tunnel port of its own and there is nothing tunnel-specific to check
+    # there. This is just "is that box alive" — a Node reuses its agent
+    # port, a bare address needs a port the admin knows is open (SSH by
+    # default, but that is a guess worth overriding).
+    foreign_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     transport: Mapped[TunnelTransport] = mapped_column(Enum(TunnelTransport, native_enum=False, length=16))
     token: Mapped[str] = mapped_column(String(64), default=lambda: secrets.token_hex(16))
 

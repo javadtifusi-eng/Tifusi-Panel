@@ -1419,6 +1419,13 @@ loop:
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime)
 
+	// spooftest is a self-contained subcommand with its own flags; it never
+	// touches the tunnel config, so dispatch it before the flag parsing below.
+	if len(os.Args) > 1 && os.Args[1] == "spooftest" {
+		runSpoofTest(os.Args[2:])
+		return
+	}
+
 	cfgPath := flag.String("config", "/etc/tifusi/config.json", "path to the configuration file")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	token := flag.Bool("gen-token", false, "print a fresh random token and exit")

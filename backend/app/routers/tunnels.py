@@ -1,3 +1,5 @@
+import ipaddress
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,9 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
-from app.models.tunnel import Tunnel, TunnelStatus
+from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.schemas.tunnel import (
-    RankedTransport,
+    SpoofTestCommands,
+    SpoofTestRequest,
     TunnelConfig,
     TunnelCreate,
     TunnelList,
@@ -19,10 +22,55 @@ from app.schemas.tunnel import (
     TunnelTestResult,
     TunnelUpdate,
 )
-from app.tunnels.config import build_foreign_config, build_iran_config, build_install_command
+from app.tunnels.config import (
+    build_foreign_config,
+    build_install_command,
+    build_iran_config,
+    build_spooftest_commands,
+)
 from app.tunnels.probe import recommend_transports, tcp_probe
 
 router = APIRouter(prefix="/api/tunnels", tags=["tunnels"], dependencies=[Depends(require_permission("tunnels"))])
+
+# Used when a bare foreign address carries no probe port of its own: SSH is
+# the one port such a server almost always has open, so it is the least-bad
+# guess at "is this box alive" — but only a guess, hence foreign_port.
+_DEFAULT_FOREIGN_PROBE_PORT = 22
+
+# A host is only ever an IP or a DNS name here; anything with shell syntax is
+# rejected before it can reach the copy-paste command string a spoof test
+# builds (the admin runs that command themselves, but it should still never
+# carry injected syntax).
+_HOST_RE = re.compile(r"^[A-Za-z0-9.\-:]+$")
+
+
+def _validate_host(host: str) -> str:
+    if not host or not _HOST_RE.match(host):
+        raise HTTPException(status_code=400, detail="foreign address is not a valid host")
+    return host
+
+
+def _validate_spoof_ip(spec: str) -> None:
+    """A forged source may be a single IP, an a-b range, or a CIDR block."""
+    try:
+        ipaddress.ip_address(spec)
+        return
+    except ValueError:
+        pass
+    try:
+        ipaddress.ip_network(spec, strict=False)
+        return
+    except ValueError:
+        pass
+    if "-" in spec:
+        lo, _, hi = spec.partition("-")
+        try:
+            ipaddress.ip_address(lo)
+            ipaddress.ip_address(hi)
+            return
+        except ValueError:
+            pass
+    raise HTTPException(status_code=400, detail="spoof_ip must be an IP, range (a-b) or CIDR")
 
 
 async def _resolve_foreign_node_id(node_id: int | None, db: AsyncSession) -> int | None:
@@ -59,6 +107,7 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         iran_port=payload.iran_port,
         foreign_node_id=foreign_node_id,
         foreign_address=payload.foreign_address,
+        foreign_port=payload.foreign_port,
         transport=payload.transport,
         sni=payload.sni,
         domain=payload.domain,
@@ -144,9 +193,10 @@ async def recommend_tunnel_transport(
             raise HTTPException(status_code=400, detail="foreign_node_id not found")
         foreign_host, foreign_port = node.address, node.port
     else:
-        foreign_host, foreign_port = payload.foreign_address, 22
+        foreign_host = payload.foreign_address
+        foreign_port = payload.foreign_port or _DEFAULT_FOREIGN_PROBE_PORT
 
-    iran_reachable, iran_latency, foreign_reachable, foreign_latency, ranked = (
+    iran_reachable, iran_latency, foreign_reachable, foreign_latency, link, ranked = (
         await recommend_transports(payload.iran_address, payload.iran_port, foreign_host, foreign_port)
     )
     return TunnelRecommendResult(
@@ -154,42 +204,84 @@ async def recommend_tunnel_transport(
         iran_latency_ms=iran_latency,
         foreign_reachable=foreign_reachable,
         foreign_latency_ms=foreign_latency,
-        ranked=[RankedTransport(transport=r.transport, reason=r.reason) for r in ranked],
+        link=link,
+        ranked=ranked,
     )
+
+
+async def _foreign_probe_target(tunnel: Tunnel, db: AsyncSession) -> tuple[str, int] | None:
+    """Where to probe the tunnel's foreign side, or None if the row no
+    longer says. A Node's own agent port is always meant to be open, so
+    it's a far more meaningful target than any port guessed at on a bare
+    address (see probe.py's note on what this check can and can't promise).
+    """
+    if tunnel.foreign_node_id is not None:
+        node = await db.get(Node, tunnel.foreign_node_id)
+        if node is not None:
+            return node.address, node.port
+    if tunnel.foreign_address:
+        return tunnel.foreign_address, tunnel.foreign_port or _DEFAULT_FOREIGN_PROBE_PORT
+    return None
+
+
+@router.post("/spooftest", response_model=SpoofTestCommands)
+async def spooftest_commands(
+    payload: SpoofTestRequest, db: AsyncSession = Depends(get_db)
+) -> SpoofTestCommands:
+    """Builds the two copy-paste commands for a spoof-ability check without
+    touching any server — the admin runs them on the foreign and Iran boxes
+    to see whether the Iran datacenter lets a forged source IP egress at all,
+    which is the precondition for any spoofing tunnel to be worth building.
+    """
+    _validate_foreign(payload.foreign_node_id, payload.foreign_address)
+
+    if payload.foreign_node_id is not None:
+        node = await db.get(Node, payload.foreign_node_id)
+        if node is None:
+            raise HTTPException(status_code=400, detail="foreign_node_id not found")
+        foreign_host = node.address
+    else:
+        foreign_host = payload.foreign_address
+
+    _validate_host(foreign_host)
+    _validate_spoof_ip(payload.spoof_ip)
+
+    recv, send = build_spooftest_commands(foreign_host, payload.spoof_ip, payload.port)
+    return SpoofTestCommands(foreign_recv_command=recv, iran_send_command=send)
 
 
 @router.post("/{tunnel_id}/test", response_model=TunnelTestResult)
 async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> TunnelTestResult:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)
 
-    iran_reachable, iran_latency = await tcp_probe(tunnel.iran_address, tunnel.iran_port)
-
-    if tunnel.foreign_node_id is not None:
-        node = await db.get(Node, tunnel.foreign_node_id)
-        # A Node's own agent port is always meant to be open, so it's a far
-        # more meaningful probe target than guessing at a port on a bare
-        # address (see probe.py's own note on what this check can and
-        # can't promise).
-        foreign_host, foreign_port = (node.address, node.port) if node else (tunnel.foreign_address, 22)
+    # A udp tunnel listens with KCP over UDP, so a TCP connect to that port
+    # fails whether or not the tunnel is healthy — skipping is honest,
+    # reporting it unreachable would mark a working tunnel broken.
+    if tunnel.transport is TunnelTransport.udp:
+        iran_reachable, iran_latency = None, None
     else:
-        foreign_host, foreign_port = tunnel.foreign_address, 22
+        iran_reachable, iran_latency = await tcp_probe(tunnel.iran_address, tunnel.iran_port)
 
-    foreign_reachable, foreign_latency = (
-        await tcp_probe(foreign_host, foreign_port) if foreign_host else (False, None)
-    )
+    target = await _foreign_probe_target(tunnel, db)
+    foreign_reachable, foreign_latency = await tcp_probe(*target) if target else (False, None)
 
     tunnel.last_checked_at = datetime.now(timezone.utc)
-    if iran_reachable and foreign_reachable:
+    unreachable = [
+        side
+        for side, ok in (("Iran side", iran_reachable), ("foreign side", foreign_reachable))
+        if ok is False
+    ]
+    if unreachable:
+        tunnel.status = TunnelStatus.error
+        tunnel.last_error = f"{' and '.join(unreachable)} not reachable"
+    elif iran_reachable and foreign_reachable:
         tunnel.status = TunnelStatus.connected
         tunnel.last_error = None
     else:
-        tunnel.status = TunnelStatus.error
-        missing = []
-        if not iran_reachable:
-            missing.append("Iran side")
-        if not foreign_reachable:
-            missing.append("foreign side")
-        tunnel.last_error = f"{' and '.join(missing)} not reachable"
+        # Nothing failed, but a side was skipped — "untested" is the honest
+        # verdict, not "connected".
+        tunnel.status = TunnelStatus.pending
+        tunnel.last_error = None
 
     await db.commit()
 
