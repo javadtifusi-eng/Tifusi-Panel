@@ -4,6 +4,9 @@ or updated. Inbound rows are the panel's own bookkeeping, not a second
 source of truth: everything on them is re-derived from the JSON every time.
 """
 
+import asyncio
+import socket
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +15,28 @@ from app.models.core import Core
 from app.models.host import Host
 from app.models.inbound import Inbound
 from app.xray_config.inbound_parser import parse_inbounds
+
+
+async def _unresolvable_reality_targets(config: dict | None) -> list[str]:
+    """A REALITY inbound forwards every probe to its `dest`; if that host doesn't exist the node
+    resets each client connection with no error in its log. Catch the typo at save time instead."""
+    targets = []
+    for inbound in (config or {}).get("inbounds") or []:
+        stream = (inbound or {}).get("streamSettings") or {}
+        reality = stream.get("realitySettings") or {}
+        dest = reality.get("dest") or reality.get("target")
+        if isinstance(dest, str) and dest and not dest.startswith(("/", "@")) and not dest.isdigit():
+            targets.append((inbound.get("tag"), dest.rsplit(":", 1)[0]))
+    warnings = []
+    for tag, host in targets:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(socket.getaddrinfo, host, 443), timeout=5)
+        except Exception:
+            warnings.append(
+                f"اینباند REALITY «{tag}»: دامنه‌ی مقصد «{host}» پیدا نشد؛ کلاینت‌ها وصل نمی‌شوند. "
+                f"یک دامنه‌ی واقعی با TLS 1.3 (مثلاً از «پیشنهاد تارگت») انتخاب کنید."
+            )
+    return warnings
 
 
 async def sync_inbounds(core: Core, db: AsyncSession) -> list[str]:
@@ -80,4 +105,5 @@ async def sync_inbounds(core: Core, db: AsyncSession) -> list[str]:
         row.reality_public_key = p.reality_public_key
         row.reality_short_id = p.reality_short_id
 
+    warnings.extend(await _unresolvable_reality_targets(core.config))
     return warnings

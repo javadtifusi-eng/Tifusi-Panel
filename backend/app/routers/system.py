@@ -5,8 +5,12 @@ import time
 import httpx
 import psutil
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.dependencies import get_current_admin
+from app.models.admin import Admin
+from app.resellers import protocol_catalog
 from app.version import __version__
 
 router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(get_current_admin)])
@@ -55,6 +59,17 @@ async def _latest_release() -> str | None:
     except httpx.HTTPError:
         _latest_cache = (now - _LATEST_TTL_SECONDS + _LATEST_RETRY_SECONDS, latest)
     return latest
+
+
+@router.get("/protocols")
+async def available_protocols(
+    admin: Admin = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
+) -> list[dict]:
+    """Protocols that have at least one host, with how many — what an integration such as
+    Tifusi Bot needs to decide what it can sell, without reading host addresses or keys (and so
+    without the "hosts" permission). A reseller sees only its own protocols."""
+    only = (admin.protocols or []) if admin.is_reseller else None
+    return [{"protocol": c["protocol"], "hosts": len(c["hosts"])} for c in await protocol_catalog(db, only=only)]
 
 
 @router.get("/version")

@@ -70,6 +70,25 @@ function randomPort(): string {
   return String(10000 + Math.floor(Math.random() * 50000))
 }
 
+// Applies `patch` to every REALITY inbound already in the JSON. Returns the new text, or null when
+// the JSON doesn't parse or has no REALITY inbound yet (then the wizard's "add to JSON" adds one).
+function patchRealityInJson(text: string, patch: (reality: Record<string, unknown>) => void): string | null {
+  try {
+    const config = JSON.parse(text) as { inbounds?: { streamSettings?: { realitySettings?: Record<string, unknown> } }[] }
+    let found = false
+    for (const inbound of config.inbounds ?? []) {
+      const reality = inbound?.streamSettings?.realitySettings
+      if (reality && typeof reality === 'object') {
+        patch(reality)
+        found = true
+      }
+    }
+    return found ? JSON.stringify(config, null, 2) : null
+  } catch {
+    return null
+  }
+}
+
 function buildInboundJson(w: ReturnType<typeof emptyWizard>): Record<string, unknown> {
   const isTransport = w.protocol !== 'shadowsocks'
   const settings: Record<string, unknown> = { clients: [] }
@@ -859,10 +878,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function copyValue(text: string) {
-    if (await copyToClipboard(text)) say(t.coresPage.copied)
-  }
-
   async function runScan() {
     setScanning(true)
     setFormError(null)
@@ -885,6 +900,14 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
       const keys = await getRealityKeypair()
       setGeneratedKey(keys)
       setWizard((w) => ({ ...w, realityPrivateKey: keys.private_key, realityShortId: keys.short_id }))
+      const next = patchRealityInJson(form.configText, (reality) => {
+        reality.privateKey = keys.private_key
+        reality.shortIds = [keys.short_id]
+      })
+      if (next !== null) {
+        setForm((f) => ({ ...f, configText: next }))
+        say(t.coresPage.realityKeysApplied)
+      }
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : t.coresPage.keyGenFailed)
     } finally {
@@ -1337,18 +1360,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                     </span>
                   </div>
                   {generatedKey && (
-                    <div className="flex flex-col gap-1.5">
-                      {(['private_key', 'public_key', 'short_id'] as const).map((key) => (
-                        <div key={key} className="tf-linkrow">
-                          <span className="hint en" style={{ margin: 0, width: 80, flex: 'none' }}>
-                            {key}
-                          </span>
-                          <span className="mono">{generatedKey[key]}</span>
-                          <button type="button" className="btn" onClick={() => copyValue(generatedKey[key])}>
-                            {t.copy}
-                          </button>
-                        </div>
-                      ))}
+                    <div className="hint" style={{ margin: 0 }}>
+                      ✓ {t.coresPage.realityKeysInfo} <span className="mono">publicKey: {generatedKey.public_key}</span>
                     </div>
                   )}
                   {scanResults !== null && scanResults.length > 0 && (
@@ -1382,7 +1395,18 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                               <td className="mono">{r.latency_ms != null ? `${r.latency_ms}ms` : '—'}</td>
                               <td>
                                 {r.reachable && (
-                                  <button type="button" onClick={() => updateWizard('sni', r.host)} className={`btn ${wizard.sni === r.host ? 'on' : ''}`}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateWizard('sni', r.host)
+                                      const next = patchRealityInJson(form.configText, (reality) => {
+                                        reality.dest = `${r.host}:443`
+                                        reality.serverNames = [r.host]
+                                      })
+                                      if (next !== null) setForm((f) => ({ ...f, configText: next }))
+                                    }}
+                                    className={`btn ${wizard.sni === r.host ? 'on' : ''}`}
+                                  >
                                     {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
                                   </button>
                                 )}

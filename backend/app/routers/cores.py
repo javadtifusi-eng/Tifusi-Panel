@@ -2,7 +2,7 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from app.models.core import Core, CoreType
 from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.node import Node
+from app.nodes.sync import resync_nodes_in_background
 from app.schemas.core import CoreCreate, CoreList, CoreResponse, CoreUpdate, InboundResponse
 
 router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(require_permission("cores"))])
@@ -196,7 +197,9 @@ async def create_core(payload: CoreCreate, db: AsyncSession = Depends(get_db)) -
 
 
 @router.put("/{core_id}", response_model=CoreResponse)
-async def update_core(core_id: int, payload: CoreUpdate, db: AsyncSession = Depends(get_db)) -> CoreResponse:
+async def update_core(
+    core_id: int, payload: CoreUpdate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)
+) -> CoreResponse:
     core = await _get_core_or_404(core_id, db)
     updates = payload.model_dump(exclude_unset=True)
 
@@ -220,6 +223,9 @@ async def update_core(core_id: int, payload: CoreUpdate, db: AsyncSession = Depe
     db.add(core)
     await db.commit()
     await db.refresh(core)
+    # Nodes only read a core's config when they are synced; without this an edited core (a new
+    # Reality key, SNI or port, an IKEv2 PSK) stayed saved in the panel but never reached the node.
+    background_tasks.add_task(resync_nodes_in_background)
     return await _to_response(core, db, warnings)
 
 
