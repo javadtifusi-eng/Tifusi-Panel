@@ -244,6 +244,46 @@ action_admin_key() {
   docker exec -it tifusi-panel tifusi-cli generate-admin-key
 }
 
+action_edit_env() {
+  local editor=${EDITOR:-}
+  if [ -z "$editor" ]; then
+    for candidate in nano vi vim; do
+      command -v "$candidate" >/dev/null 2>&1 && { editor=$candidate; break; }
+    done
+  fi
+  [ -n "$editor" ] || { err "No editor found — install nano, or edit $INSTALL_DIR/.env by hand."; return; }
+
+  info "Opening $INSTALL_DIR/.env in $editor. Save and close to apply."
+  warn "The panel keeps its public address in its own database, so editing"
+  warn "TIFUSI_PUBLIC_URL here changes nothing — use Settings in the dashboard,"
+  warn "or: docker exec tifusi-panel tifusi-cli set-public-url https://your-address"
+  echo
+  read -r -p "Press Enter to open it..." _
+
+  # Kept so a bad edit (a stray quote, a deleted password) can be put back
+  # without the panel's own data being at risk in between.
+  local backup="$INSTALL_DIR/.env.bak"
+  cp .env "$backup"
+  "$editor" .env
+
+  if cmp -s "$backup" .env; then
+    info "No changes made."
+    rm -f "$backup"
+    return
+  fi
+  info "Applying (recreating containers)..."
+  if docker compose up -d; then
+    info "Applied. The previous file is kept at $backup"
+  else
+    err "The containers didn't come up with the new file."
+    read -r -p "Put the previous .env back and restart? [Y/n] " revert
+    if [[ "${revert:-Y}" =~ ^[Yy]$ ]]; then
+      mv -f "$backup" .env
+      docker compose up -d && info "Reverted."
+    fi
+  fi
+}
+
 action_remove_node() {
   local nodes
   nodes=$(docker exec tifusi-panel tifusi-cli list-nodes 2>/dev/null | grep -E '^[0-9]+	') || true
@@ -403,7 +443,8 @@ menu() {
   printf '  %s 8)%s Restore from backup\n' "$C_GREEN" "$C_RESET"
   printf '  %s 9)%s Show service status\n' "$C_GREEN" "$C_RESET"
   printf '  %s10)%s Remove a node from this panel\n' "$C_GREEN" "$C_RESET"
-  printf '  %s11)%s Uninstall panel completely\n' "$C_GREEN" "$C_RESET"
+  printf '  %s11)%s Edit the settings file (.env)\n' "$C_GREEN" "$C_RESET"
+  printf '  %s12)%s Uninstall panel completely\n' "$C_GREEN" "$C_RESET"
   printf '  %s 0)%s Exit\n\n' "$C_GRAY" "$C_RESET"
   read -r -p "$(printf '%sEnter your choice: %s' "$C_GREEN" "$C_RESET")" choice
   echo
@@ -418,7 +459,8 @@ menu() {
     8) action_restore ;;
     9) action_status ;;
     10) action_remove_node ;;
-    11) action_uninstall ;;
+    11) action_edit_env ;;
+    12) action_uninstall ;;
     0) exit 0 ;;
     *) warn "Invalid choice." ;;
   esac
@@ -437,6 +479,7 @@ case "${1:-}" in
   restore) action_restore ;;
   status) action_status ;;
   remove-node) action_remove_node ;;
+  env) action_edit_env ;;
   uninstall) action_uninstall ;;
   "")
     while true; do
