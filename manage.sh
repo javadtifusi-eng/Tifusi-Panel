@@ -57,6 +57,10 @@ next_free_port() {
   while port_in_use "$p"; do p=$((p + 1)); done
   echo "$p"
 }
+# See install.sh: docker-compose.yml already publishes 80 and 443, so handing
+# either to TIFUSI_PANEL_PORT/TIFUSI_DASHBOARD_PORT double-binds one host port
+# and the container stops starting at all.
+port_reserved() { [ "$1" = 80 ] || [ "$1" = 443 ]; }
 
 # The professional edition (install.sh --pro) keeps its data in the bundled MySQL.
 is_pro() { grep -q '^TIFUSI_EDITION=pro' .env 2>/dev/null; }
@@ -92,6 +96,9 @@ action_change_port() {
   read -r -p "New panel API port (Enter to keep ${cur_panel:-8000}): " panel_port
   panel_port=${panel_port:-$cur_panel}
   panel_port=${panel_port:-8000}
+  if port_reserved "$panel_port"; then
+    err "Port $panel_port is reserved by Tifusi Panel itself — pick a different one."; return
+  fi
   if port_in_use "$panel_port" && [ "$panel_port" != "$cur_panel" ]; then
     err "Port $panel_port is already in use."; return
   fi
@@ -99,6 +106,9 @@ action_change_port() {
   read -r -p "New dashboard port (Enter to keep ${cur_dash:-8080}): " dashboard_port
   dashboard_port=${dashboard_port:-$cur_dash}
   dashboard_port=${dashboard_port:-8080}
+  if port_reserved "$dashboard_port"; then
+    err "Port $dashboard_port is reserved by Tifusi Panel itself — pick a different one."; return
+  fi
   if port_in_use "$dashboard_port" && [ "$dashboard_port" != "$cur_dash" ]; then
     err "Port $dashboard_port is already in use."; return
   fi

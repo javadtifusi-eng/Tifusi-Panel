@@ -442,24 +442,38 @@ next_free_port() {
   while port_in_use "$p"; do p=$((p + 1)); done
   echo "$p"
 }
+# docker-compose.yml publishes 80 and 443 itself — certbot's HTTP-01 challenge
+# on the panel, the dashboard's HTTPS listener — so picking either here gives
+# one host port two bindings and the container can never start ("port is
+# already allocated"). Nothing is listening on them yet at this point in the
+# install, so port_in_use cannot catch this on its own.
+port_reserved() { [ "$1" = 80 ] || [ "$1" = 443 ]; }
 
-read -r -p "Panel API port (Enter to auto-pick, starting from 8000): " panel_port
-if [ -z "$panel_port" ]; then
-  panel_port=$(next_free_port 8000)
-  info "Auto-picked port $panel_port for the panel API."
-elif port_in_use "$panel_port"; then
-  warn "Port $panel_port is already in use on this server — pick a different one."
-  read -r -p "Panel API port: " panel_port
-fi
+ask_port() {
+  local label=$1 default=$2 target=$3 value
+  while true; do
+    # A non-interactive stdin makes read fail rather than block; fall back to
+    # the auto-pick instead of spinning on EOF forever.
+    read -r -p "$label (Enter to auto-pick, starting from $default): " value || value=""
+    if [ -z "$value" ]; then
+      value=$(next_free_port "$default")
+      info "Auto-picked port $value."
+      break
+    elif ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
+      warn "'$value' isn't a valid port number."
+    elif port_reserved "$value"; then
+      warn "Port $value is reserved by Tifusi Panel itself — pick a different one."
+    elif port_in_use "$value"; then
+      warn "Port $value is already in use on this server — pick a different one."
+    else
+      break
+    fi
+  done
+  printf -v "$target" '%s' "$value"
+}
 
-read -r -p "Dashboard (web UI) port (Enter to auto-pick, starting from 8080): " dashboard_port
-if [ -z "$dashboard_port" ]; then
-  dashboard_port=$(next_free_port 8080)
-  info "Auto-picked port $dashboard_port for the dashboard."
-elif port_in_use "$dashboard_port"; then
-  warn "Port $dashboard_port is already in use on this server — pick a different one."
-  read -r -p "Dashboard port: " dashboard_port
-fi
+ask_port "Panel API port" 8000 panel_port
+ask_port "Dashboard (web UI) port" 8080 dashboard_port
 awk -v p="$panel_port" -v d="$dashboard_port" '
   /^TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
   /^# TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
