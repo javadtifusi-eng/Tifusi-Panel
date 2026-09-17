@@ -180,7 +180,7 @@ async def reset_subscription_secret(
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    # The secret doubles as the IKEv2/L2TP password the nodes check.
+    # The secret is also the IKEv2/L2TP password for users who never picked their own.
     background_tasks.add_task(resync_nodes_in_background)
 
     html = await _render_info_page(user, request, db)

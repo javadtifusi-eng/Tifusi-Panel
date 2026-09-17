@@ -236,7 +236,7 @@ def build_ipsec_configs_for_user(
             # since it plays no part in that mode's actual authentication.
             "psk": host.core.ikev2_psk if host.core and host.core.ikev2_auth_mode == "psk" else None,
             "username": user.username,
-            "password": user.secret,
+            "password": user.ipsec_login_password,
             # The node's own cert is self-signed (admin-provided or the
             # node's own auto-generated fallback — see node_agent/ipsec.py),
             # so a client needs this to actually trust it. None here (no
@@ -258,7 +258,7 @@ def build_ipsec_configs_for_user(
             "server": host.address,
             "psk": host.core.l2tp_psk if host.core else None,
             "username": user.username,
-            "password": user.secret,
+            "password": user.ipsec_login_password,
         }
         for host in hosts
         if host.protocol == HostProtocol.l2tp

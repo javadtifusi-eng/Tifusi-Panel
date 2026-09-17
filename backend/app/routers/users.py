@@ -112,6 +112,7 @@ async def create_user(
         speed_limit_mbps=payload.speed_limit_mbps,
         note=payload.note,
         protocols=protocols,
+        ipsec_password=payload.ipsec_password,
         admin_id=admin.id,
     )
     user.groups = await resolve_groups(payload.group_ids, db) or []

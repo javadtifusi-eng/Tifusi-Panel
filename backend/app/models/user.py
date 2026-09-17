@@ -32,6 +32,12 @@ class ProxyUser(Base):
         String(36), unique=True, index=True, default=lambda: str(uuid_lib.uuid4())
     )
 
+    # An IKEv2/L2TP login password the user picked themselves. Kept apart
+    # from `secret` because that is also the subscription URL token and the
+    # VLESS UUID: letting someone choose it would make their subscription URL
+    # guessable and break their Xray configs. None falls back to `secret`.
+    ipsec_password: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     # None/0 means unlimited.
     data_limit: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -100,3 +106,7 @@ class ProxyUser(Base):
     @property
     def group_ids(self) -> list[int]:
         return [g.id for g in self.groups]
+
+    @property
+    def ipsec_login_password(self) -> str:
+        return self.ipsec_password or self.secret

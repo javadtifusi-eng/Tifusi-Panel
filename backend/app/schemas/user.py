@@ -7,6 +7,11 @@ from app.models.user import UserStatus
 from app.schemas.reseller import validate_protocols
 
 USERNAME_PATTERN = r"^[a-zA-Z0-9_-]+$"
+# The node writes this inside double quotes into swanctl.conf (escaping only
+# `"`) and chap-secrets (dropping `"` outright), so quotes, backslashes and
+# whitespace would leave IKEv2 or L2TP checking a different password than the
+# one the user was shown.
+IPSEC_PASSWORD_PATTERN = r"^[A-Za-z0-9@#$%&*._+=!-]{6,32}$"
 
 
 class ProxyUserCreate(BaseModel):
@@ -22,6 +27,8 @@ class ProxyUserCreate(BaseModel):
     group_ids: list[int] = Field(default_factory=list)
     # None = every protocol; a reseller's user gets the reseller's own when left out.
     protocols: list[str] | None = None
+    # None = log in to IKEv2/L2TP with `secret`, as before.
+    ipsec_password: str | None = Field(default=None, pattern=IPSEC_PASSWORD_PATTERN)
 
     _validate_protocols = field_validator("protocols")(validate_protocols)
 
@@ -44,6 +51,8 @@ class ProxyUserUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] | None = None
     protocols: list[str] | None = None
+    # An explicit null goes back to logging in with `secret`.
+    ipsec_password: str | None = Field(default=None, pattern=IPSEC_PASSWORD_PATTERN)
 
     _validate_protocols = field_validator("protocols")(validate_protocols)
 
@@ -55,6 +64,7 @@ class ProxyUserResponse(BaseModel):
     username: str
     status: UserStatus
     secret: str
+    ipsec_password: str | None
     data_limit: int | None
     data_limit_reset_days: int | None
     data_limit_reset_at: datetime | None

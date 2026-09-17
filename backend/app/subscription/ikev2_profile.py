@@ -115,7 +115,7 @@ def build_ikev2_mobileconfig(user: ProxyUser, host: Host) -> str:
                 <key>AuthName</key>
                 <string>{escape(user.username)}</string>
                 <key>AuthPassword</key>
-                <string>{escape(user.secret)}</string>
+                <string>{escape(user.ipsec_login_password)}</string>
                 <key>LocalIdentifier</key>
                 <string>{escape(user.username)}</string>"""
     return _build_plist(display_name, vpn_uuid, profile_uuid, remote_id, remote_address, auth_block, ca_payload)
