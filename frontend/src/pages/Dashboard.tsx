@@ -37,6 +37,11 @@ export type ActiveTab = 'overview' | 'users' | 'hosts' | 'groups' | 'nodes' | 'c
 
 const MAIN_TABS: ActiveTab[] = ['overview', 'users', 'hosts', 'groups', 'nodes', 'cores', 'resellers', 'tunnels']
 
+// Where the version badge and the update notice lead: the release notes say
+// what a version actually changed, which is what someone clicking "update
+// available" wants to read before running the update.
+const RELEASES_URL = 'https://github.com/javadtifusi-eng/Tifusi-Panel/releases'
+
 const NAV_ICONS: Record<ActiveTab, (p: IconProps) => JSX.Element> = {
   overview: IconHome,
   users: IconUsers,
@@ -234,9 +239,12 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
             <div className="flex min-w-0 flex-col gap-1">
               <strong className="font-en text-[15px] font-semibold leading-none text-heading">{t.nav.brand}</strong>
               {version && (
-                <span
-                  className="flex items-center gap-1.5 whitespace-nowrap text-[11px] leading-none"
-                  title={updateAvailable && version.latest ? t.nav.updateNotice(version.latest) : undefined}
+                <a
+                  href={RELEASES_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 whitespace-nowrap text-[11px] leading-none hover:underline"
+                  title={updateAvailable && version.latest ? t.nav.updateNotice(version.latest) : t.nav.releaseNotes}
                 >
                   {/* Only claim "up to date" when GitHub was actually reachable to compare against. */}
                   <i
@@ -252,7 +260,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
                   ) : version.latest ? (
                     <span className="text-success">{t.nav.upToDate}</span>
                   ) : null}
-                </span>
+                </a>
               )}
             </div>
           </div>
@@ -335,9 +343,16 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
                     <div className="absolute end-0 top-full z-40 mt-2 w-64 rounded-xl border border-subtle bg-surface p-3 text-xs shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
                       <div className="mb-2 text-[13px] font-semibold text-heading">{t.nav.notifications}</div>
                       {updateAvailable && version?.latest ? (
-                        <div className="rounded-[10px] border border-well-edge bg-well px-3 py-2 leading-relaxed text-body">
-                          {t.nav.updateNotice(version.latest)}
-                        </div>
+                        <a
+                          href={RELEASES_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-[10px] border border-well-edge bg-well px-3 py-2 leading-relaxed text-body hover:border-primary"
+                          onClick={() => setBellOpen(false)}
+                        >
+                          <div>{t.nav.updateNotice(version.latest)}</div>
+                          <div className="mt-1 text-primary">{t.nav.releaseNotes}</div>
+                        </a>
                       ) : (
                         <div className="text-faint">{t.nav.noNotifications}</div>
                       )}
