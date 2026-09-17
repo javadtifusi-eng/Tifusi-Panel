@@ -277,20 +277,13 @@ step() {
 done_line() { printf '%s%s%s %s\n' "$C_GREEN" "$UI_OK" "$C_RESET" "$1"; }
 # ── end Progress UI ──────────────────────────────────────────────────────
 
-_repeat_char() { _rep "$1" "$2"; }
-print_box() {
+# A titled block of lines — no frame, so a narrow phone SSH window can't
+# break the drawing, and the values stay easy to select and copy.
+print_block() {
   local title="$1" color="$2"; shift 2
-  local -a lines=("$@")
-  local w=0 l
-  for l in "${lines[@]}"; do [ "${#l}" -gt "$w" ] && w=${#l}; done
-  [ $((${#title} + 2)) -gt "$w" ] && w=$((${#title} + 2))
-  local h="-" v="|" tl="+" tr="+" bl="+" br="+"
-  if [ -n "$UI_UNICODE" ]; then h="─"; v="│"; tl="┌"; tr="┐"; bl="└"; br="┘"; fi
-  printf '\n%s%s%s %s %s%s%s\n' "$color" "$tl" "$h" "$title" "$(_rep $((w - ${#title} - 1)) "$h")" "$tr" "$C_RESET"
-  for l in "${lines[@]}"; do
-    printf '%s%s%s %-*s %s%s%s\n' "$color" "$v" "$C_RESET" "$w" "$l" "$color" "$v" "$C_RESET"
-  done
-  printf '%s%s%s%s%s\n' "$color" "$bl" "$(_rep $((w + 2)) "$h")" "$br" "$C_RESET"
+  printf '\n%s%s%s%s\n' "$color" "$C_BOLD" "$title" "$C_RESET"
+  local line
+  for line in "$@"; do printf '  %s\n' "$line"; done
 }
 
 # Same big block-letter "TIFUSI" (figlet -f big) as the panel installer,
@@ -432,7 +425,7 @@ else
   warn "Couldn't install the 'tifusi node' command — to remove this node later: docker rm -f tifusi-node"
 fi
 
-print_box "Node Ready" "$C_GREEN" \
+print_block "Node Ready" "$C_GREEN" \
   "Agent port :  $PORT" \
   "Network    :  host" \
   "Manage     :  tifusi node  (status, logs, restart, uninstall)" \

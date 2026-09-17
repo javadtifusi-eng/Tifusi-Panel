@@ -34,18 +34,17 @@ IS_TTY=""
 
 if [ -n "$IS_TTY" ]; then
   C_CYAN=$'\033[1;36m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
-  C_BOLD=$'\033[1m'; C_MAGENTA=$'\033[1;35m'; C_GREEN=$'\033[1;32m'
+  C_BOLD=$'\033[1m'; C_GREEN=$'\033[1;32m'
 else
-  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""; C_MAGENTA=""; C_GREEN=""
+  C_CYAN=""; C_YELLOW=""; C_RED=""; C_RESET=""; C_BOLD=""; C_GREEN=""
 fi
 
 info() { printf '%s[Tifusi]%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
 warn() { printf '%s[Warning]%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
 fail() { printf '%s[Error]%s %s\n' "$C_RED" "$C_RESET" "$1"; exit 1; }
 
-# Magenta for the panel installer, green for the node's, cyan for the admin
-# key command — the color alone tells which one produced the screen.
-C_ACCENT=$C_MAGENTA
+# Green for both installers, cyan for the admin key command.
+C_ACCENT=$C_GREEN
 
 # ── Progress UI ──────────────────────────────────────────────────────────
 # Unicode bars (━) where the terminal can draw them, plain ASCII ([===>  ])
@@ -296,20 +295,13 @@ done_line() { printf '%s%s%s %s\n' "$C_GREEN" "$UI_OK" "$C_RESET" "$1"; }
 # line, titled and colored — used for the SSL summary below so the cert
 # paths/fingerprint/content read as one clear block instead of scattered
 # log lines the way certbot's own raw output does.
-_repeat_char() { _rep "$1" "$2"; }
-print_box() {
+# A titled block of lines — no frame, so a narrow phone SSH window can't
+# break the drawing, and the values stay easy to select and copy.
+print_block() {
   local title="$1" color="$2"; shift 2
-  local -a lines=("$@")
-  local w=0 l
-  for l in "${lines[@]}"; do [ "${#l}" -gt "$w" ] && w=${#l}; done
-  [ $((${#title} + 2)) -gt "$w" ] && w=$((${#title} + 2))
-  local h="-" v="|" tl="+" tr="+" bl="+" br="+"
-  if [ -n "$UI_UNICODE" ]; then h="─"; v="│"; tl="┌"; tr="┐"; bl="└"; br="┘"; fi
-  printf '\n%s%s%s %s %s%s%s\n' "$color" "$tl" "$h" "$title" "$(_repeat_char $((w - ${#title} - 1)) "$h")" "$tr" "$C_RESET"
-  for l in "${lines[@]}"; do
-    printf '%s%s%s %-*s %s%s%s\n' "$color" "$v" "$C_RESET" "$w" "$l" "$color" "$v" "$C_RESET"
-  done
-  printf '%s%s%s%s%s\n' "$color" "$bl" "$(_repeat_char $((w + 2)) "$h")" "$br" "$C_RESET"
+  printf '\n%s%s%s%s\n' "$color" "$C_BOLD" "$title" "$C_RESET"
+  local line
+  for line in "$@"; do printf '  %s\n' "$line"; done
 }
 
 # Prints the paths, the full fullchain.pem content, and the panel access
@@ -342,9 +334,9 @@ show_ssl_summary() {
   printf '\n  %sFullchain%s :  %s%s%s\n' "$C_BOLD" "$C_RESET" "$C_GREEN" "$fullchain" "$C_RESET"
   printf '  %sPrivkey  %s :  %s%s%s\n' "$C_BOLD" "$C_RESET" "$C_GREEN" "$privkey" "$C_RESET"
 
-  print_box "Fullchain.pem" "$C_CYAN" "${cert_lines[@]}"
-  print_box "Privkey.pem (info only, not the raw key)" "$C_YELLOW" "${privkey_info[@]}"
-  print_box "Panel Access Info" "$C_MAGENTA" "Dashboard :  $public_url" "Port      :  $dash_port"
+  print_block "Fullchain.pem" "$C_CYAN" "${cert_lines[@]}"
+  print_block "Privkey.pem (info only, not the raw key)" "$C_YELLOW" "${privkey_info[@]}"
+  print_block "Panel Access Info" "$C_GREEN" "Dashboard :  $public_url" "Port      :  $dash_port"
 }
 
 # apt-get update used to be a step of its own, but nothing here installs an
@@ -366,8 +358,8 @@ _BIG_TIFUSI='
 '
 
 banner() {
-  printf '\n%s%s%s\n' "$C_MAGENTA$C_BOLD" "$_BIG_TIFUSI" "$C_RESET"
-  printf '%s  Tifusi Panel installer%s\n' "$C_MAGENTA" "$C_RESET"
+  printf '\n%s%s%s\n' "$C_GREEN$C_BOLD" "$_BIG_TIFUSI" "$C_RESET"
+  printf '%s  Tifusi Panel installer%s\n' "$C_GREEN" "$C_RESET"
 }
 
 banner
@@ -620,7 +612,7 @@ else
   SUMMARY+=("Dashboard :  http://${HOST_IP}:${dashboard_port}")
 fi
 SUMMARY+=("Panel API :  http://${HOST_IP}:${panel_port}")
-print_box "Panel Access Info" "$C_MAGENTA" "${SUMMARY[@]}"
+print_block "Panel Access Info" "$C_GREEN" "${SUMMARY[@]}"
 printf '\n'
 info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
 info "  tifusi panel key"
