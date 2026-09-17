@@ -60,7 +60,17 @@ next_free_port() {
 # See install.sh: docker-compose.yml already publishes 80 and 443, so handing
 # either to TIFUSI_PANEL_PORT/TIFUSI_DASHBOARD_PORT double-binds one host port
 # and the container stops starting at all.
-port_reserved() { [ "$1" = 80 ] || [ "$1" = 443 ]; }
+port_reserved() { [ "$1" = 80 ]; }
+# See install.sh: a free high port, so installs don't all sit on the same
+# well-known defaults. $RANDOM tops out at 32767, hence the pair of draws.
+random_free_port() {
+  local p
+  while true; do
+    p=$(( (RANDOM * 32768 + RANDOM) % 45001 + 20000 ))
+    port_reserved "$p" && continue
+    port_in_use "$p" || { echo "$p"; return; }
+  done
+}
 
 # The professional edition (install.sh --pro) keeps its data in the bundled MySQL.
 is_pro() { grep -q '^TIFUSI_EDITION=pro' .env 2>/dev/null; }
@@ -116,18 +126,28 @@ action_change_port() {
     picked+=("$value")
   }
 
-  read -r -p "New panel API port (Enter to keep $cur_panel): " panel_port
-  panel_port=${panel_port:-$cur_panel}
+  # 'r' here means the same thing it does in install.sh's prompts.
+  resolve_port() {
+    local value=$1 current=$2
+    case "$value" in
+      "") echo "$current" ;;
+      r|R) random_free_port ;;
+      *) echo "$value" ;;
+    esac
+  }
+
+  read -r -p "New panel API port (Enter to keep $cur_panel, 'r' for a random one): " panel_port
+  panel_port=$(resolve_port "$panel_port" "$cur_panel")
   check_port "$panel_port" "$cur_panel" || return
 
-  read -r -p "New dashboard HTTP port (Enter to keep $cur_dash): " dashboard_port
-  dashboard_port=${dashboard_port:-$cur_dash}
+  read -r -p "New dashboard HTTP port (Enter to keep $cur_dash, 'r' for a random one): " dashboard_port
+  dashboard_port=$(resolve_port "$dashboard_port" "$cur_dash")
   check_port "$dashboard_port" "$cur_dash" || return
 
   # Behind Cloudflare's proxy an origin is only reachable on 443, 2053, 2083,
   # 2087, 2096 or 8443, so this has to be changeable after install too.
-  read -r -p "New dashboard HTTPS port (Enter to keep $cur_https): " https_port
-  https_port=${https_port:-$cur_https}
+  read -r -p "New dashboard HTTPS port (Enter to keep $cur_https, 'r' for a random one): " https_port
+  https_port=$(resolve_port "$https_port" "$cur_https")
   check_port "$https_port" "$cur_https" || return
 
   # Moving the HTTPS port moves the URL clients fetch their subscription from,

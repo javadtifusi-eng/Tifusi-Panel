@@ -458,15 +458,32 @@ port_taken_here() {
   return 1
 }
 
+# A free port drawn from the high range, so two installs don't land on the
+# same handful of well-known defaults. $RANDOM only reaches 32767, hence the
+# pair of draws to cover the whole range.
+random_free_port() {
+  local p
+  while true; do
+    p=$(( (RANDOM * 32768 + RANDOM) % 45001 + 20000 ))
+    port_reserved "$p" && continue
+    port_taken_here "$p" && continue
+    port_in_use "$p" || { echo "$p"; return; }
+  done
+}
+
 ask_port() {
   local label=$1 default=$2 target=$3 value
   while true; do
     # A non-interactive stdin makes read fail rather than block; fall back to
     # the auto-pick instead of spinning on EOF forever.
-    read -r -p "$label (Enter to auto-pick, starting from $default): " value || value=""
+    read -r -p "$label (Enter for $default, 'r' for a random one, or type a port): " value || value=""
     if [ -z "$value" ]; then
       value=$(next_free_port "$default")
-      info "Auto-picked port $value."
+      info "Using port $value."
+      break
+    elif [ "$value" = r ] || [ "$value" = R ]; then
+      value=$(random_free_port)
+      info "Picked random port $value."
       break
     elif ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
       warn "'$value' isn't a valid port number."
