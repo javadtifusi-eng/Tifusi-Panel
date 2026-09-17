@@ -75,6 +75,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [focusKey, setFocusKey] = useState<string | null>(null)
 
   const [showSpoof, setShowSpoof] = useState(false)
+  const [spoofSource, setSpoofSource] = useState<ForeignSource>('node')
+  const [spoofNodeId, setSpoofNodeId] = useState<number | null>(null)
   const [spoofForeign, setSpoofForeign] = useState('')
   const [spoofPort, setSpoofPort] = useState('443')
   const [spoofIp, setSpoofIp] = useState('')
@@ -307,6 +309,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   }
 
   function openSpoof() {
+    setSpoofSource(nodes.length ? 'node' : 'address')
+    setSpoofNodeId(null)
     setSpoofForeign('')
     setSpoofPort('443')
     setSpoofIp('')
@@ -317,7 +321,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
 
   async function handleSpoofGenerate(e: FormEvent) {
     e.preventDefault()
-    if (!spoofForeign || !spoofIp) {
+    if ((spoofSource === 'node' ? spoofNodeId == null : !spoofForeign) || !spoofIp) {
       setSpoofError(tn.spoofNeedInputs)
       return
     }
@@ -325,7 +329,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofError(null)
     try {
       const cmds = await spoofTestCommands({
-        foreign_address: spoofForeign,
+        foreign_node_id: spoofSource === 'node' ? spoofNodeId : null,
+        foreign_address: spoofSource === 'address' ? spoofForeign : null,
         port: parseInt(spoofPort, 10) || 443,
         spoof_ip: spoofIp,
       })
@@ -880,10 +885,34 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
           }
         >
           <form onSubmit={handleSpoofGenerate} className="flex flex-col gap-3.5">
+            <div className="form-section">
+              <h4>{t.tunnelsPage.foreignSourceLabel}</h4>
+              <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
+                {(['node', 'address'] as ForeignSource[]).map((src) => (
+                  <button key={src} type="button" aria-pressed={spoofSource === src} onClick={() => setSpoofSource(src)}>
+                    {src === 'node' ? t.tunnelsPage.foreignNodeOption : t.tunnelsPage.foreignAddressOption}
+                  </button>
+                ))}
+              </div>
+              {spoofSource === 'node' && (
+                <Field label={t.tunnelsPage.foreignNodeLabel}>
+                  <select className="input" value={spoofNodeId ?? ''} onChange={(e) => setSpoofNodeId(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">{t.coresPage.selectPlaceholder}</option>
+                    {nodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name} — {n.address}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+            </div>
             <div className="form-grid">
-              <Field label={tn.spoofForeignLabel}>
-                <input className="input ltr" value={spoofForeign} onChange={(e) => setSpoofForeign(e.target.value)} placeholder="5.6.7.8" required />
-              </Field>
+              {spoofSource === 'address' && (
+                <Field label={tn.spoofForeignLabel}>
+                  <input className="input ltr" value={spoofForeign} onChange={(e) => setSpoofForeign(e.target.value)} placeholder="5.6.7.8" />
+                </Field>
+              )}
               <Field label={tn.spoofPortLabel}>
                 <input className="input" type="number" min="1" max="65535" value={spoofPort} onChange={(e) => setSpoofPort(e.target.value)} />
               </Field>
