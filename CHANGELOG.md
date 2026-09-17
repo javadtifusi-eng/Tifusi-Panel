@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.3 — 2026-09-17
+
+### Connection limits
+- The user device limit is now enforced on the nodes as simultaneous connections, for Xray, IKEv2 (EAP) and L2TP. Devices already connected stay connected; one more waits until a place frees up. Before, it was only checked when the subscription link was fetched, so IKEv2/L2TP logins could be shared without limit.
+- For Xray a device is a client IP, and the check matches the user as well as the IP, so customers behind one carrier IP don't affect each other.
+- Hysteria2 (not run by the nodes) and IKEv2 in PSK mode (no per-user identity) can't be limited this way.
+
+### Users
+- Optional per-user IKEv2/L2TP password (`ipsec_password`), kept separate from the subscription secret. Users without one keep logging in as before.
+
+### Install and management
+- The dashboard's HTTPS port is configurable (`TIFUSI_DASHBOARD_HTTPS_PORT`) during install and with `tifusi panel port`; `TIFUSI_PUBLIC_URL` follows it. Answer `r` at any port prompt for a random free port.
+- Choosing a port already used by the panel itself (80, or one given to another Tifusi service) is refused instead of failing at the last install step.
+- `tifusi panel` gains "Remove a node from this panel"; node servers get `tifusi node` (status, logs, restart, uninstall).
+
+### Fixes
+- Nodes stayed "pending" forever on the professional (MySQL) edition: the node's full Xray version banner overflowed its column and rolled back every sync.
+- A fresh local build crashed on startup with PyMySQL 1.2; it is now pinned below 1.2.
+- Uninstalling left the data, certificates and MySQL files behind, which broke the next install's database login.
+
 ## v1.2 — 2026-09-15
 
 ### Dashboard redesign

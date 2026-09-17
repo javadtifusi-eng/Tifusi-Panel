@@ -38,12 +38,13 @@ Tifusi Panel is a self-hosted control plane for proxy and VPN infrastructure. A 
   <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="Tifusi Panel cores and tunnels" />
 </p>
 
-## What's new in v1.2
+## What's new in v1.3
 
-- **Redesigned dashboard.** A new sign-in and setup screen, a live overview with a "needs attention" list and period-over-period traffic, and redesigned users, hosts, groups, nodes, cores, tunnels and settings pages.
-- **Access at a glance.** An interactive access map and a clickable matrix on the groups page; a traffic-flow view of every Xray core.
-- **Faster loading.** One JS and one CSS bundle, precompressed and served with `gzip_static`.
-- **Version status.** The header shows the running version and whether it is up to date.
+- **Real connection limits.** The device limit is enforced on the nodes for Xray, IKEv2 and L2TP: connected devices stay connected and one more waits for a free place.
+- **Own IKEv2/L2TP password.** An optional per-user login password, separate from the subscription secret.
+- **Any ports.** The dashboard's HTTPS port is configurable, and every port prompt offers a random free port.
+- **Node management.** `tifusi node` on node servers, and "Remove a node" in `tifusi panel`.
+- **Fixes.** Nodes stuck in "pending" on the MySQL edition, a crash on fresh local builds, and uninstall leaving data behind.
 
 Full notes: [CHANGELOG.md](CHANGELOG.md).
 
