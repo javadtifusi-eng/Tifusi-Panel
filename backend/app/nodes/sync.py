@@ -45,7 +45,9 @@ async def _build_xray_payload(core: Core | None, db: AsyncSession) -> dict:
 
 async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict:
     users = await _ipsec_allowed_users(core, db)
-    user_payload = [{"username": u.username, "password": u.ipsec_login_password} for u in users]
+    user_payload = [
+        {"username": u.username, "password": u.ipsec_login_password, "limit": u.hwid_limit or 0} for u in users
+    ]
     if core.core_type == CoreType.l2tp:
         return {
             "core_type": "l2tp",

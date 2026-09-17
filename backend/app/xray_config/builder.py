@@ -42,6 +42,7 @@ def build_xray_config(core: Core, inbounds: list[Inbound], users: list[ProxyUser
     inbounds_by_tag = {i.tag: i for i in inbounds}
 
     raw_inbounds = config.setdefault("inbounds", [])
+    limited: dict[str, int] = {}
     for raw_inbound in raw_inbounds:
         inbound = inbounds_by_tag.get(raw_inbound.get("tag"))
         if inbound is None:
@@ -49,6 +50,13 @@ def build_xray_config(core: Core, inbounds: list[Inbound], users: list[ProxyUser
         allowed_users = users_for_inbound(inbound, active_users)
         raw_inbound.setdefault("settings", {})
         raw_inbound["settings"]["clients"] = [_client_for_user(inbound, u) for u in allowed_users]
+        limited.update({u.username: u.hwid_limit for u in allowed_users if u.hwid_limit})
+
+    # Read and removed again by the node agent (node_agent/limits.py), which
+    # enforces them; a node agent too old to know the key leaves it in the
+    # file, and Xray ignores keys it doesn't recognise.
+    if limited:
+        config["tifusi_limits"] = limited
 
     # A loopback-only inbound exposing Xray's own StatsService — this is what
     # makes real traffic accounting possible. Always present regardless of

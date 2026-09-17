@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import ipsec, ipsec_stats
+from node_agent import ipsec, ipsec_stats, limits
 
 API_KEY = os.environ.get("TIFUSI_NODE_API_KEY", "")
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
@@ -51,6 +51,8 @@ _xray_version: str | None = None
 # configured rather than guessing at a mode.
 _ipsec_mode: str | None = None
 
+limits.start(XRAY_BIN, STATS_API_ADDR, lambda: _process is not None and _process.poll() is None)
+
 
 def _check_key(x_node_api_key: str | None) -> None:
     # hmac.compare_digest, not `!=`: a plain string compare short-circuits
@@ -81,6 +83,7 @@ async def apply_config(payload: dict, x_node_api_key: str | None = Header(defaul
     _check_key(x_node_api_key)
     global _process, _started_at
 
+    payload = limits.prepare_xray_config(payload)
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(payload))
 
@@ -90,6 +93,7 @@ async def apply_config(payload: dict, x_node_api_key: str | None = Header(defaul
             _process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             _process.kill()
+    limits.xray_restarted()
 
     try:
         _process = subprocess.Popen([XRAY_BIN, "run", "-config", str(CONFIG_PATH)])
@@ -113,6 +117,7 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
     # genuinely missing), /health should still judge the ipsec side using
     # this mode's checks rather than silently reporting it unconfigured.
     _ipsec_mode = core_type
+    limits.set_ipsec_limits(payload.get("users") or [])
     try:
         if core_type == "l2tp":
             ipsec.apply_l2tp(

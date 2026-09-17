@@ -62,8 +62,9 @@ class ProxyUser(Base):
     # means "no expiry once activated", same as expire=None normally does.
     on_hold_expire_days: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
-    # None/0 means unlimited devices — see app/models/user_device.py and
-    # the enforcement in app/routers/subscription.py.
+    # None/0 means unlimited devices. Enforced twice: which devices may fetch
+    # the subscription (app/routers/subscription.py), and how many may be
+    # connected at once on each node (node_agent/limits.py).
     hwid_limit: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     # None means uncapped. NOT YET ENFORCED — recorded and shown in the UI

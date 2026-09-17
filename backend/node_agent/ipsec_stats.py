@@ -30,17 +30,18 @@ _IP_DOWN_HOOK = Path("/etc/ppp/ip-down.d/tifusi-accounting")
 
 # pppd passes PEERNAME (the authenticated username), and at ip-down also
 # BYTES_RCVD/BYTES_SENT for the whole session. The token tells two sessions
-# apart that happen to reuse the same pppN name.
+# apart that happen to reuse the same pppN name, and orders them for
+# node_agent/limits.py, which hangs up the newest past a user's limit via PPPD_PID.
 _IP_UP_SCRIPT = f"""#!/bin/sh
 # Managed by the Tifusi node agent (node_agent/ipsec_stats.py).
 mkdir -p {PPP_STATE_DIR}
-printf '%s %s\\n' "$PEERNAME" "$(date +%s%N)" > "{PPP_STATE_DIR}/$PPP_IFACE"
+printf '%s %s %s\\n' "$PEERNAME" "$(date +%s%N)" "${{PPPD_PID:-}}" > "{PPP_STATE_DIR}/$PPP_IFACE"
 """
 
 _IP_DOWN_SCRIPT = f"""#!/bin/sh
 # Managed by the Tifusi node agent (node_agent/ipsec_stats.py).
 [ -f "{PPP_STATE_DIR}/$PPP_IFACE" ] || exit 0
-read -r user token < "{PPP_STATE_DIR}/$PPP_IFACE"
+read -r user token _pid < "{PPP_STATE_DIR}/$PPP_IFACE"
 printf '%s %s %s %s %s\\n' "$PPP_IFACE" "$user" "$token" "${{BYTES_RCVD:-0}}" "${{BYTES_SENT:-0}}" >> "{_CLOSED_LOG}"
 rm -f "{PPP_STATE_DIR}/$PPP_IFACE"
 """
@@ -95,7 +96,7 @@ def _ppp_counters() -> dict[str, tuple[str, int, int]]:
         if not state.name.startswith("ppp"):
             continue
         try:
-            username, token = state.read_text().split()
+            username, token = state.read_text().split()[:2]
             stats = Path("/sys/class/net") / state.name / "statistics"
             rx = int((stats / "rx_bytes").read_text())
             tx = int((stats / "tx_bytes").read_text())
