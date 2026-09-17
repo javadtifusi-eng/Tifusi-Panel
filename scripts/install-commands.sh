@@ -1,5 +1,6 @@
-# Installs the `tifusi-panel` command and the shared `tifusi` launcher (scripts/tifusi).
-# Sourced by install.sh and manage.sh from the install directory.
+# Installs the `tifusi-panel` / `tifusi-node` commands and the shared `tifusi`
+# launcher (scripts/tifusi). Sourced by install.sh and manage.sh from the
+# install directory, and by install-node.sh from its clone.
 
 # Copy then rename, so a tifusi-panel that is currently running is never overwritten mid-read.
 place_command() {
@@ -14,4 +15,12 @@ install_panel_commands() {
   fi
   place_command manage.sh "$bin/tifusi-panel"
   place_command scripts/tifusi "$bin/tifusi"
+}
+
+# A node server has no install directory of its own, so this takes the path to
+# a checkout (install-node.sh's clone) rather than running from one.
+install_node_commands() {
+  local src=$1 bin=/usr/local/bin
+  place_command "$src/scripts/manage-node.sh" "$bin/tifusi-node"
+  place_command "$src/scripts/tifusi" "$bin/tifusi"
 }

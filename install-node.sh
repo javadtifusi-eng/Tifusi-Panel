@@ -9,6 +9,7 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/javadtifusi-eng/Tifusi-Panel.git"
+RAW_BASE="https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main"
 CLONE_DIR="$(mktemp -d)"
 trap 'rm -rf "$CLONE_DIR"' EXIT
 
@@ -413,8 +414,27 @@ if ! run_spinner "Waiting for the agent on port $PORT..." wait_for_agent; then
   exit 1
 fi
 
+step "Management command"
+# The fast path pulls the prebuilt image and never clones, so fetch just the
+# three files the command is made of instead of cloning the whole repo for them.
+if [ ! -f "$CLONE_DIR/scripts/manage-node.sh" ]; then
+  mkdir -p "$CLONE_DIR/scripts"
+  for f in install-commands.sh manage-node.sh tifusi; do
+    curl -fsSL "$RAW_BASE/scripts/$f" -o "$CLONE_DIR/scripts/$f" || break
+  done
+fi
+if [ -f "$CLONE_DIR/scripts/install-commands.sh" ] && [ -f "$CLONE_DIR/scripts/manage-node.sh" ]; then
+  # shellcheck source=scripts/install-commands.sh
+  source "$CLONE_DIR/scripts/install-commands.sh"
+  install_node_commands "$CLONE_DIR"
+  done_line "Installed the 'tifusi node' command"
+else
+  warn "Couldn't install the 'tifusi node' command — to remove this node later: docker rm -f tifusi-node"
+fi
+
 print_box "Node Ready" "$C_GREEN" \
   "Agent port :  $PORT" \
   "Network    :  host" \
+  "Manage     :  tifusi node  (status, logs, restart, uninstall)" \
   "Next step  :  press Sync on this node in the panel"
 printf '\n%s%s%s Node is up.\n' "$C_GREEN" "$UI_OK" "$C_RESET"

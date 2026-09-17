@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tifusi launcher, written identically by the Tifusi Panel and Tifusi Bot installers.
 #   tifusi panel [action]   Tifusi Panel operations menu (/usr/local/bin/tifusi-panel)
+#   tifusi node [action]    Tifusi node agent menu (/usr/local/bin/tifusi-node)
 #   tifusi bot              Tifusi Bot installer menu (/usr/local/bin/tifusi-bot)
 #   tifusi app              Latest Tifusi VPN Android release
 # Without one of these, the only installed component opens directly, so `tifusi update` keeps working.
@@ -32,12 +33,12 @@ open_component() {
 }
 
 case "${1:-}" in
-  panel|bot) open_component "$@" ;;
+  panel|node|bot) open_component "$@" ;;
   app) app_info; exit $? ;;
 esac
 
 installed=()
-for name in panel bot; do
+for name in panel node bot; do
   [ -x "$BIN/tifusi-$name" ] && installed+=("$name")
 done
 
@@ -47,17 +48,19 @@ fi
 
 if [ -n "${1:-}" ]; then
   echo "Unknown command: $1"
-  echo "Usage: tifusi panel [action] | tifusi bot | tifusi app"
+  echo "Usage: tifusi panel [action] | tifusi node [action] | tifusi bot | tifusi app"
   exit 1
 fi
 
 echo "1) Tifusi Panel"
-echo "2) Tifusi Bot"
-echo "3) Tifusi VPN app"
+echo "2) Tifusi node"
+echo "3) Tifusi Bot"
+echo "4) Tifusi VPN app"
 read -r -p "Choose: " choice < /dev/tty
 case "$choice" in
   1) open_component panel ;;
-  2) open_component bot ;;
-  3) app_info ;;
+  2) open_component node ;;
+  3) open_component bot ;;
+  4) app_info ;;
   *) echo "Invalid choice."; exit 1 ;;
 esac
