@@ -32,7 +32,12 @@ services:
     restart: unless-stopped
     ports:
       - "${TIFUSI_DASHBOARD_PORT:-8080}:80"
-      - "443:443"
+      # 443 is what a browser assumes and what Let's Encrypt validates
+      # against, so it stays the default — but it's configurable for a server
+      # fronted by something that expects a different one (Cloudflare's 2053,
+      # 2083, 2087, 2096, 8443). Set TIFUSI_PUBLIC_URL to match, or
+      # subscription links will point at a port nothing is listening on.
+      - "${TIFUSI_DASHBOARD_HTTPS_PORT:-443}:443"
     volumes:
       # Always mounted, harmless if empty: drop fullchain.pem/privkey.pem in
       # here (install.sh's Let's Encrypt step does this for you) to serve

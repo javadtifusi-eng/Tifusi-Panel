@@ -447,7 +447,16 @@ next_free_port() {
 # one host port two bindings and the container can never start ("port is
 # already allocated"). Nothing is listening on them yet at this point in the
 # install, so port_in_use cannot catch this on its own.
-port_reserved() { [ "$1" = 80 ] || [ "$1" = 443 ]; }
+port_reserved() { [ "$1" = 80 ]; }
+
+# Ports already handed out earlier in this same run. Docker would only notice
+# the clash when the container fails to start, at the very end of the install.
+CHOSEN_PORTS=()
+port_taken_here() {
+  local p
+  for p in ${CHOSEN_PORTS[@]+"${CHOSEN_PORTS[@]}"}; do [ "$p" = "$1" ] && return 0; done
+  return 1
+}
 
 ask_port() {
   local label=$1 default=$2 target=$3 value
@@ -462,30 +471,37 @@ ask_port() {
     elif ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
       warn "'$value' isn't a valid port number."
     elif port_reserved "$value"; then
-      warn "Port $value is reserved by Tifusi Panel itself — pick a different one."
+      warn "Port $value is reserved — the panel answers Let's Encrypt on it."
+    elif port_taken_here "$value"; then
+      warn "Port $value is already going to another Tifusi service — pick a different one."
     elif port_in_use "$value"; then
       warn "Port $value is already in use on this server — pick a different one."
     else
       break
     fi
   done
+  CHOSEN_PORTS+=("$value")
   printf -v "$target" '%s' "$value"
 }
 
 ask_port "Panel API port" 8000 panel_port
-ask_port "Dashboard (web UI) port" 8080 dashboard_port
-awk -v p="$panel_port" -v d="$dashboard_port" '
-  /^TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
-  /^# TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
-  /^TIFUSI_DASHBOARD_PORT=/ { print "TIFUSI_DASHBOARD_PORT=" d; next }
-  /^# TIFUSI_DASHBOARD_PORT=/ { print "TIFUSI_DASHBOARD_PORT=" d; next }
+ask_port "Dashboard HTTP port" 8080 dashboard_port
+# Its own prompt because a server behind Cloudflare's proxy can only be
+# reached on 443/2053/2083/2087/2096/8443 — pinning HTTPS to 443 left those
+# installs with no way to serve the dashboard on a port Cloudflare would talk to.
+ask_port "Dashboard HTTPS port" 443 dashboard_https_port
+awk -v p="$panel_port" -v d="$dashboard_port" -v s="$dashboard_https_port" '
+  /^#? *TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
+  /^#? *TIFUSI_DASHBOARD_PORT=/ { print "TIFUSI_DASHBOARD_PORT=" d; next }
+  /^#? *TIFUSI_DASHBOARD_HTTPS_PORT=/ { print "TIFUSI_DASHBOARD_HTTPS_PORT=" s; next }
   { print }
 ' .env > .env.tmp
 grep -q '^TIFUSI_PANEL_PORT=' .env.tmp || echo "TIFUSI_PANEL_PORT=$panel_port" >> .env.tmp
 grep -q '^TIFUSI_DASHBOARD_PORT=' .env.tmp || echo "TIFUSI_DASHBOARD_PORT=$dashboard_port" >> .env.tmp
+grep -q '^TIFUSI_DASHBOARD_HTTPS_PORT=' .env.tmp || echo "TIFUSI_DASHBOARD_HTTPS_PORT=$dashboard_https_port" >> .env.tmp
 mv .env.tmp .env
 PANEL_URL="http://localhost:${panel_port}"
-info "Panel API on port $panel_port, dashboard on port $dashboard_port."
+info "Panel API on port $panel_port, dashboard on $dashboard_port (HTTP) and $dashboard_https_port (HTTPS)."
 
 step "SSL / domain"
 read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain
@@ -515,9 +531,15 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
         cat "$CERT_LOG"
         cp "letsencrypt-work/live/${domain}/fullchain.pem" certs/fullchain.pem
         cp "letsencrypt-work/live/${domain}/privkey.pem" certs/privkey.pem
-        echo "TIFUSI_PUBLIC_URL=https://${domain}" >> .env
-        PANEL_PUBLIC_URL="https://${domain}"
-        show_ssl_summary "$(pwd)/certs/fullchain.pem" "$(pwd)/certs/privkey.pem" "$PANEL_PUBLIC_URL" "$dashboard_port"
+        # Only 443 is implied by "https://host" — on any other port the
+        # subscription links the panel hands to clients have to name it.
+        if [ "$dashboard_https_port" = 443 ]; then
+          PANEL_PUBLIC_URL="https://${domain}"
+        else
+          PANEL_PUBLIC_URL="https://${domain}:${dashboard_https_port}"
+        fi
+        echo "TIFUSI_PUBLIC_URL=${PANEL_PUBLIC_URL}" >> .env
+        show_ssl_summary "$(pwd)/certs/fullchain.pem" "$(pwd)/certs/privkey.pem" "$PANEL_PUBLIC_URL" "$dashboard_https_port"
         warn "Let's Encrypt certificates expire every 90 days — this installer doesn't set up auto-renewal, so you'll need to repeat this (or set up certbot renew plus a container restart) before then."
       else
         warn "Certificate request failed — full output:"

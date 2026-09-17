@@ -88,43 +88,82 @@ action_update() {
 }
 
 action_change_port() {
-  local cur_panel cur_dash panel_port dashboard_port
+  local cur_panel cur_dash cur_https panel_port dashboard_port https_port
   cur_panel=$(grep '^TIFUSI_PANEL_PORT=' .env 2>/dev/null | cut -d= -f2 || true)
   cur_dash=$(grep '^TIFUSI_DASHBOARD_PORT=' .env 2>/dev/null | cut -d= -f2 || true)
-  info "Current ports — panel API: ${cur_panel:-8000}, dashboard: ${cur_dash:-8080}"
+  cur_https=$(grep '^TIFUSI_DASHBOARD_HTTPS_PORT=' .env 2>/dev/null | cut -d= -f2 || true)
+  cur_panel=${cur_panel:-8000}; cur_dash=${cur_dash:-8080}; cur_https=${cur_https:-443}
+  info "Current ports — panel API: $cur_panel, dashboard HTTP: $cur_dash, dashboard HTTPS: $cur_https"
 
-  read -r -p "New panel API port (Enter to keep ${cur_panel:-8000}): " panel_port
+  # Rejects a reserved port, one already listening (unless this install is
+  # what's listening on it), or one this same run already spent.
+  local -a picked=()
+  check_port() {
+    local value=$1 current=$2
+    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
+      err "'$value' isn't a valid port number."; return 1
+    fi
+    if port_reserved "$value"; then
+      err "Port $value is reserved — the panel answers Let's Encrypt on it."; return 1
+    fi
+    local p
+    for p in ${picked[@]+"${picked[@]}"}; do
+      [ "$p" = "$value" ] && { err "Port $value is already going to another Tifusi service."; return 1; }
+    done
+    if [ "$value" != "$current" ] && port_in_use "$value"; then
+      err "Port $value is already in use."; return 1
+    fi
+    picked+=("$value")
+  }
+
+  read -r -p "New panel API port (Enter to keep $cur_panel): " panel_port
   panel_port=${panel_port:-$cur_panel}
-  panel_port=${panel_port:-8000}
-  if port_reserved "$panel_port"; then
-    err "Port $panel_port is reserved by Tifusi Panel itself — pick a different one."; return
-  fi
-  if port_in_use "$panel_port" && [ "$panel_port" != "$cur_panel" ]; then
-    err "Port $panel_port is already in use."; return
-  fi
+  check_port "$panel_port" "$cur_panel" || return
 
-  read -r -p "New dashboard port (Enter to keep ${cur_dash:-8080}): " dashboard_port
+  read -r -p "New dashboard HTTP port (Enter to keep $cur_dash): " dashboard_port
   dashboard_port=${dashboard_port:-$cur_dash}
-  dashboard_port=${dashboard_port:-8080}
-  if port_reserved "$dashboard_port"; then
-    err "Port $dashboard_port is reserved by Tifusi Panel itself — pick a different one."; return
-  fi
-  if port_in_use "$dashboard_port" && [ "$dashboard_port" != "$cur_dash" ]; then
-    err "Port $dashboard_port is already in use."; return
+  check_port "$dashboard_port" "$cur_dash" || return
+
+  # Behind Cloudflare's proxy an origin is only reachable on 443, 2053, 2083,
+  # 2087, 2096 or 8443, so this has to be changeable after install too.
+  read -r -p "New dashboard HTTPS port (Enter to keep $cur_https): " https_port
+  https_port=${https_port:-$cur_https}
+  check_port "$https_port" "$cur_https" || return
+
+  # Moving the HTTPS port moves the URL clients fetch their subscription from,
+  # so carry TIFUSI_PUBLIC_URL along instead of leaving it pointing at the old
+  # port — "https://host" only ever implies 443.
+  local public_url new_public_url=""
+  public_url=$(grep '^TIFUSI_PUBLIC_URL=' .env 2>/dev/null | cut -d= -f2- || true)
+  if [ -n "$public_url" ] && [ "$https_port" != "$cur_https" ]; then
+    local host=${public_url#https://}; host=${host#http://}; host=${host%%/*}; host=${host%%:*}
+    if [ "$https_port" = 443 ]; then
+      new_public_url="https://${host}"
+    else
+      new_public_url="https://${host}:${https_port}"
+    fi
   fi
 
-  awk -v p="$panel_port" -v d="$dashboard_port" '
+  awk -v p="$panel_port" -v d="$dashboard_port" -v s="$https_port" -v u="$new_public_url" '
     /^TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
     /^TIFUSI_DASHBOARD_PORT=/ { print "TIFUSI_DASHBOARD_PORT=" d; next }
+    /^TIFUSI_DASHBOARD_HTTPS_PORT=/ { print "TIFUSI_DASHBOARD_HTTPS_PORT=" s; next }
+    /^TIFUSI_PUBLIC_URL=/ { if (u != "") print "TIFUSI_PUBLIC_URL=" u; else print; next }
     { print }
   ' .env > .env.tmp
   grep -q '^TIFUSI_PANEL_PORT=' .env.tmp || echo "TIFUSI_PANEL_PORT=$panel_port" >> .env.tmp
   grep -q '^TIFUSI_DASHBOARD_PORT=' .env.tmp || echo "TIFUSI_DASHBOARD_PORT=$dashboard_port" >> .env.tmp
+  grep -q '^TIFUSI_DASHBOARD_HTTPS_PORT=' .env.tmp || echo "TIFUSI_DASHBOARD_HTTPS_PORT=$https_port" >> .env.tmp
   mv .env.tmp .env
 
   info "Applying (recreating containers)..."
   docker compose up -d
-  info "Panel API now on $panel_port, dashboard on $dashboard_port."
+  info "Panel API now on $panel_port, dashboard on $dashboard_port (HTTP) and $https_port (HTTPS)."
+  [ -n "$new_public_url" ] && info "Public URL updated to $new_public_url."
+  if [ "$https_port" != 443 ]; then
+    warn "Let's Encrypt validates over port 80, which is untouched — but browsers only reach this dashboard at :$https_port now."
+  fi
+  return 0
 }
 
 action_get_ssl() {
