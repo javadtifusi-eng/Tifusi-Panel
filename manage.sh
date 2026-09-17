@@ -201,6 +201,46 @@ action_admin_key() {
   docker exec -it tifusi-panel tifusi-cli generate-admin-key
 }
 
+action_remove_node() {
+  local nodes
+  nodes=$(docker exec tifusi-panel tifusi-cli list-nodes 2>/dev/null | grep -E '^[0-9]+	') || true
+  if [ -z "$nodes" ]; then
+    info "This panel has no nodes registered."
+    return
+  fi
+
+  printf '\n%s  Nodes registered with this panel:%s\n\n' "$C_CYAN" "$C_RESET"
+  printf '%s\n' "$nodes" | while IFS=$'\t' read -r id name address status; do
+    printf '  %s%3s)%s %-24s %-24s %s\n' "$C_GREEN" "$id" "$C_RESET" "$name" "$address" "$status"
+  done
+  echo
+
+  local node_id
+  read -r -p "Node id to remove (Enter to cancel): " node_id
+  [ -n "$node_id" ] || { info "Cancelled."; return; }
+  if ! printf '%s\n' "$nodes" | cut -f1 | grep -qx "$node_id"; then
+    err "No node with id $node_id in the list above."; return
+  fi
+
+  warn "This removes the node from the panel. The agent on that server keeps running."
+  local confirm
+  read -r -p "Remove node $node_id? [y/N] " confirm
+  [[ "${confirm:-N}" =~ ^[Yy]$ ]] || { info "Cancelled."; return; }
+
+  docker exec tifusi-panel tifusi-cli remove-node "$node_id" || return
+
+  # Only offer this where the agent is actually reachable as a local
+  # container — a node on another server has its own `tifusi node uninstall`.
+  if docker ps -a --format '{{.Names}}' | grep -qx tifusi-node; then
+    read -r -p "The node agent container is on this server too — remove it as well? [y/N] " confirm
+    if [[ "${confirm:-N}" =~ ^[Yy]$ ]]; then
+      docker rm -f tifusi-node >/dev/null && info "Removed the tifusi-node container."
+    fi
+  else
+    info "To remove the agent itself, run 'tifusi node uninstall' on that server."
+  fi
+}
+
 action_restart() {
   info "Restarting panel and dashboard..."
   docker compose restart panel dashboard
@@ -319,7 +359,8 @@ menu() {
   printf '  %s 7)%s Backup panel\n' "$C_GREEN" "$C_RESET"
   printf '  %s 8)%s Restore from backup\n' "$C_GREEN" "$C_RESET"
   printf '  %s 9)%s Show service status\n' "$C_GREEN" "$C_RESET"
-  printf '  %s10)%s Uninstall panel completely\n' "$C_GREEN" "$C_RESET"
+  printf '  %s10)%s Remove a node from this panel\n' "$C_GREEN" "$C_RESET"
+  printf '  %s11)%s Uninstall panel completely\n' "$C_GREEN" "$C_RESET"
   printf '  %s 0)%s Exit\n\n' "$C_GRAY" "$C_RESET"
   read -r -p "$(printf '%sEnter your choice: %s' "$C_GREEN" "$C_RESET")" choice
   echo
@@ -333,7 +374,8 @@ menu() {
     7) action_backup ;;
     8) action_restore ;;
     9) action_status ;;
-    10) action_uninstall ;;
+    10) action_remove_node ;;
+    11) action_uninstall ;;
     0) exit 0 ;;
     *) warn "Invalid choice." ;;
   esac
@@ -351,6 +393,7 @@ case "${1:-}" in
   backup) action_backup ;;
   restore) action_restore ;;
   status) action_status ;;
+  remove-node) action_remove_node ;;
   uninstall) action_uninstall ;;
   "")
     while true; do

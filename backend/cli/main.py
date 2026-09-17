@@ -3,10 +3,13 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import typer
+from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session, init_db
+from app.models.node import Node
 from app.models.setup_key import SetupKey
+from app.models.tunnel import Tunnel
 from app.version import __version__
 
 # Typer collapses a Typer() app down to a single bare command (dropping the
@@ -77,6 +80,60 @@ async def _generate_admin_key() -> None:
     )
     typer.secho(f"    {key}\n", fg=typer.colors.GREEN, bold=True)
     typer.echo("  Paste it into the Tifusi Panel login page to create the admin account.\n")
+
+
+@cli.command("list-nodes")
+def list_nodes() -> None:
+    """List the nodes registered with this panel, as id/name/address/status."""
+    asyncio.run(_list_nodes())
+
+
+async def _list_nodes() -> None:
+    await init_db()
+    async with async_session() as db:
+        nodes = list((await db.execute(select(Node).order_by(Node.id))).scalars().all())
+    # Tab-separated and headerless on purpose: manage.sh parses this.
+    for node in nodes:
+        typer.echo(f"{node.id}\t{node.name}\t{node.address}:{node.port}\t{node.status.value}")
+
+
+@cli.command("remove-node")
+def remove_node(node_id: int = typer.Argument(..., help="Node id, as shown by list-nodes")) -> None:
+    """Remove a node from the panel.
+
+    This only forgets the node here — it does not reach out and stop the agent
+    running on that server. Use `tifusi node uninstall` there for that.
+    """
+    asyncio.run(_remove_node(node_id))
+
+
+async def _remove_node(node_id: int) -> None:
+    await init_db()
+    async with async_session() as db:
+        node = await db.get(Node, node_id)
+        if node is None:
+            typer.secho(f"No node with id {node_id}.", fg=typer.colors.RED)
+            raise typer.Exit(1)
+
+        # Same guard the DELETE /nodes/{id} route applies: SQLite doesn't
+        # enforce tunnels.foreign_node_id, so dropping the node would leave
+        # those tunnels pointing at an id that no longer resolves.
+        used_by = list(
+            (await db.execute(select(Tunnel.name).where(Tunnel.foreign_node_id == node_id))).scalars().all()
+        )
+        if used_by:
+            typer.secho(
+                f"Node '{node.name}' is still the foreign side of these tunnels: {', '.join(used_by)}",
+                fg=typer.colors.RED,
+            )
+            typer.echo("Repoint or delete those tunnels first.")
+            raise typer.Exit(1)
+
+        name = node.name
+        await db.delete(node)
+        await db.commit()
+
+    typer.secho(f"Removed node '{name}' (id {node_id}) from the panel.", fg=typer.colors.GREEN)
 
 
 if __name__ == "__main__":
