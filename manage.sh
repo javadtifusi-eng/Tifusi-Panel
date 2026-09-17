@@ -179,6 +179,29 @@ action_change_port() {
   info "Applying (recreating containers)..."
   docker compose up -d
   info "Panel API now on $panel_port, dashboard on $dashboard_port (HTTP) and $https_port (HTTPS)."
+
+  # .env alone isn't enough: the panel builds every subscription link from the
+  # URL in its own database, and TIFUSI_PUBLIC_URL only seeds that row on the
+  # very first run (backend/app/settings_store.py). Without this, moving the
+  # HTTPS port leaves every link and access code naming the old port, and the
+  # admin has no way to tell from the installer that anything is wrong.
+  if [ "$https_port" != "$cur_https" ]; then
+    local stored="" tries
+    for tries in $(seq 1 15); do
+      stored=$(docker exec tifusi-panel tifusi-cli show-public-url 2>/dev/null | tr -d '\r' | tail -n 1) && [ -n "$stored" ] && break
+      sleep 2
+    done
+    if [ -n "$stored" ]; then
+      local host=${stored#https://}; host=${host#http://}; host=${host%%/*}; host=${host%%:*}
+      local updated="https://${host}"
+      [ "$https_port" = 443 ] || updated="https://${host}:${https_port}"
+      if docker exec tifusi-panel tifusi-cli set-public-url "$updated" >/dev/null 2>&1; then
+        new_public_url="$updated"
+      else
+        warn "Couldn't update the panel's saved address — set it to $updated under Settings, or subscription links keep the old port."
+      fi
+    fi
+  fi
   [ -n "$new_public_url" ] && info "Public URL updated to $new_public_url."
   if [ "$https_port" != 443 ]; then
     warn "Let's Encrypt validates over port 80, which is untouched — but browsers only reach this dashboard at :$https_port now."

@@ -10,6 +10,7 @@ from app.database import async_session, init_db
 from app.models.node import Node
 from app.models.setup_key import SetupKey
 from app.models.tunnel import Tunnel
+from app.settings_store import get_public_url, get_settings_row
 from app.version import __version__
 
 # Typer collapses a Typer() app down to a single bare command (dropping the
@@ -80,6 +81,40 @@ async def _generate_admin_key() -> None:
     )
     typer.secho(f"    {key}\n", fg=typer.colors.GREEN, bold=True)
     typer.echo("  Paste it into the Tifusi Panel login page to create the admin account.\n")
+
+
+@cli.command("show-public-url")
+def show_public_url() -> None:
+    """Print the base URL the panel builds subscription links from."""
+    asyncio.run(_show_public_url())
+
+
+async def _show_public_url() -> None:
+    await init_db()
+    async with async_session() as db:
+        typer.echo(await get_public_url(db) or "")
+
+
+@cli.command("set-public-url")
+def set_public_url(url: str = typer.Argument(..., help="e.g. https://panel.example.com")) -> None:
+    """Set that base URL.
+
+    The panel keeps it in its own database — the TIFUSI_PUBLIC_URL env var only
+    seeds the row the first time (app/settings_store.py) — so changing the
+    dashboard's port has to come through here, or every subscription link keeps
+    naming the old one. `tifusi panel port` calls this for exactly that reason.
+    """
+    asyncio.run(_set_public_url(url))
+
+
+async def _set_public_url(url: str) -> None:
+    await init_db()
+    async with async_session() as db:
+        row = await get_settings_row(db)
+        row.public_url = url.rstrip("/")
+        db.add(row)
+        await db.commit()
+    typer.secho(f"Public URL set to {url.rstrip('/')}.", fg=typer.colors.GREEN)
 
 
 @cli.command("list-nodes")
