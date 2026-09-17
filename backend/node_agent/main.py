@@ -66,7 +66,11 @@ def _get_xray_version() -> str | None:
         return _xray_version
     try:
         result = subprocess.run([XRAY_BIN, "version"], capture_output=True, text=True, timeout=5)
-        _xray_version = result.stdout.splitlines()[0] if result.stdout else None
+        # Just the number out of "Xray 1.8.24 (Xray, Penetrates Everything.) ...":
+        # the full banner overflows the panel's nodes.xray_version column.
+        first_line = result.stdout.splitlines()[0] if result.stdout else ""
+        parts = first_line.split()
+        _xray_version = parts[1] if len(parts) > 1 and parts[0] == "Xray" else (first_line or None)
     except Exception:
         _xray_version = None
     return _xray_version

@@ -15,4 +15,6 @@ pyyaml>=6.0
 qrcode>=7.4
 certbot>=2.9
 aiomysql>=0.2
-PyMySQL>=1.1
+# <1.2: PyMySQL 1.2 dropped converters.escape_dict, which aiomysql imports at
+# module level — any fresh build otherwise crashes the panel on startup.
+PyMySQL>=1.1,<1.2

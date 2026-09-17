@@ -10,7 +10,7 @@ from app.groups.access import users_for_host
 from app.models.core import Core, CoreType
 from app.models.host import Host
 from app.models.inbound import Inbound
-from app.models.node import Node, NodeStatus
+from app.models.node import XRAY_VERSION_MAX_LENGTH, Node, NodeStatus
 from app.models.user import ProxyUser
 from app.notifications.discord import send_discord_message
 from app.notifications.telegram import send_telegram_message
@@ -83,6 +83,20 @@ async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict
     }
 
 
+def _normalize_xray_version(raw: str | None) -> str | None:
+    """A node running an older agent reports Xray's whole banner line
+    ("Xray 1.8.24 (Xray, Penetrates Everything.) ...") instead of the bare
+    version. That overflows nodes.xray_version, and on MySQL the resulting
+    DataError rolls back the entire sync — leaving the node stuck in
+    'pending' forever. SQLite ignores the column width, so this only ever
+    surfaced on the professional edition."""
+    if not raw:
+        return None
+    parts = raw.split()
+    version = parts[1] if len(parts) > 1 and parts[0] == "Xray" else raw
+    return version[:XRAY_VERSION_MAX_LENGTH]
+
+
 def _apply_health(node: Node, health: dict) -> None:
     """Shared by sync_node and check_node_health: a node counts as
     connected only if every service it's actually *assigned* reports
@@ -97,7 +111,7 @@ def _apply_health(node: Node, health: dict) -> None:
     ipsec_ok = node.ipsec_core_id is None or ipsec_health.get("running", False)
 
     node.status = NodeStatus.connected if (xray_ok and ipsec_ok) else NodeStatus.error
-    node.xray_version = xray_health.get("version")
+    node.xray_version = _normalize_xray_version(xray_health.get("version"))
 
     if xray_ok and ipsec_ok:
         node.last_error = None
