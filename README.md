@@ -249,6 +249,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 
 `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules and starts the `tifusi-node` container on the host network. Select **Sync** in the panel to push the initial configuration.
 
+It also installs `tifusi node`, the node server's own menu — `status`, `logs`, `restart` and `uninstall`, either interactively or as `tifusi node <action>`. Removing a node takes two steps, because the panel never reaches into a node server to stop anything: `tifusi node uninstall` on the node removes the agent, and **Remove a node from this panel** in `tifusi panel` (or the **Nodes** page) makes the panel forget it.
+
 ### First-run setup
 
 1. Open the dashboard. When no administrator exists, the sign-in screen offers the setup procedure.
@@ -289,6 +291,8 @@ docker compose up -d --build
 | --- | --- | --- |
 | Panel API | `tifusi-panel` | `8000` (API), `80` (ACME HTTP-01 challenge only) |
 | Dashboard | `tifusi-dashboard` | `8080` (HTTP), `443` (HTTPS) |
+
+Every port above is chosen during installation and changeable afterwards with `tifusi panel port` — answer `r` at any prompt for a random free one. The only exception is `80`, which is fixed because the panel answers Let's Encrypt's HTTP-01 challenge there. The HTTPS port is `TIFUSI_DASHBOARD_HTTPS_PORT` and defaults to `443`; set it to one of `2053`, `2083`, `2087`, `2096` or `8443` for an origin behind Cloudflare's proxy, and keep `TIFUSI_PUBLIC_URL` in step, since only `443` is implied by a bare `https://host`.
 
 SQLite data is stored in `./data`. `TIFUSI_PUBLIC_URL` defines the base URL used in subscription links; without it, links are derived from the request `Host` header, which is not reachable from clients when the panel runs behind a proxy. The value can later be changed from **Settings** at runtime.
 
