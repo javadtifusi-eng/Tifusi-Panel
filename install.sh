@@ -609,7 +609,11 @@ wait_for_panel() {
 run_spinner "Waiting for the panel to come up..." wait_for_panel \
   || fail "The panel didn't come up in time — check the logs: docker compose logs panel"
 
-HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+# `hostname -I` is a GNU extension: BusyBox rejects it outright, and under
+# `set -e` that killed the installer here — after everything was already
+# running, so the admin never saw the address or how to create their account.
+HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+[ -n "$HOST_IP" ] || HOST_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)"
 HOST_IP="${HOST_IP:-<server-ip>}"
 SUMMARY=()
 if [ "$EDITION" = "pro" ]; then
