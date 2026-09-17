@@ -425,13 +425,25 @@ step "Ports"
 # start later with a confusing Docker error — check now instead, and if
 # the caller just hits Enter (wants the default), pick the next free port
 # starting from it rather than blindly handing back something taken.
+# Whichever tool this host has, asked once — never both. Chained with `||`,
+# a port ss reports as free still got a second opinion from lsof, and
+# BusyBox's lsof (Alpine and other minimal images) ignores these flags and
+# exits 0 whatever it is asked, which reads back as "every port is taken".
 port_in_use() {
-  (command -v ss >/dev/null 2>&1 && ss -tlnH "( sport = :$1 )" 2>/dev/null | grep -q .) \
-    || (command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1)
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnH "( sport = :$1 )" 2>/dev/null | grep -q .
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+  else
+    return 1
+  fi
 }
 next_free_port() {
   local p="$1"
-  while port_in_use "$p"; do p=$((p + 1)); done
+  # Bounded: a broken port check used to walk ports forever here, with the
+  # installer sitting silent at the prompt and no way to tell what happened.
+  while [ "$p" -le 65535 ] && port_in_use "$p"; do p=$((p + 1)); done
+  [ "$p" -le 65535 ] || fail "Couldn't find a free port at or above $1."
   echo "$p"
 }
 # docker-compose.yml publishes 80 and 443 itself — certbot's HTTP-01 challenge
@@ -454,13 +466,14 @@ port_taken_here() {
 # same handful of well-known defaults. $RANDOM only reaches 32767, hence the
 # pair of draws to cover the whole range.
 random_free_port() {
-  local p
-  while true; do
+  local p tries
+  for tries in $(seq 1 200); do
     p=$(( (RANDOM * 32768 + RANDOM) % 45001 + 20000 ))
     port_reserved "$p" && continue
     port_taken_here "$p" && continue
     port_in_use "$p" || { echo "$p"; return; }
   done
+  fail "Couldn't find a free random port after 200 tries."
 }
 
 ask_port() {

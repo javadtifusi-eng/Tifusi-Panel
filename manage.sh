@@ -48,13 +48,22 @@ banner() {
   printf '%s  GitHub: https://github.com/javadtifusi-eng/Tifusi-Panel%s\n' "$C_GRAY" "$C_RESET"
 }
 
+# See install.sh: one tool or the other, never both — BusyBox's lsof exits 0
+# whatever it is asked, so asking it about a port ss already called free
+# makes every port look taken.
 port_in_use() {
-  (command -v ss >/dev/null 2>&1 && ss -tlnH "( sport = :$1 )" 2>/dev/null | grep -q .) \
-    || (command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1)
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnH "( sport = :$1 )" 2>/dev/null | grep -q .
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+  else
+    return 1
+  fi
 }
 next_free_port() {
   local p="$1"
-  while port_in_use "$p"; do p=$((p + 1)); done
+  while [ "$p" -le 65535 ] && port_in_use "$p"; do p=$((p + 1)); done
+  [ "$p" -le 65535 ] || { err "Couldn't find a free port at or above $1."; return 1; }
   echo "$p"
 }
 # See install.sh: docker-compose.yml already publishes 80 and 443, so handing
@@ -64,12 +73,14 @@ port_reserved() { [ "$1" = 80 ]; }
 # See install.sh: a free high port, so installs don't all sit on the same
 # well-known defaults. $RANDOM tops out at 32767, hence the pair of draws.
 random_free_port() {
-  local p
-  while true; do
+  local p tries
+  for tries in $(seq 1 200); do
     p=$(( (RANDOM * 32768 + RANDOM) % 45001 + 20000 ))
     port_reserved "$p" && continue
     port_in_use "$p" || { echo "$p"; return; }
   done
+  err "Couldn't find a free random port after 200 tries."
+  return 1
 }
 
 # The professional edition (install.sh --pro) keeps its data in the bundled MySQL.
