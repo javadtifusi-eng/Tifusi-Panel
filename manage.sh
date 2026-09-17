@@ -239,6 +239,12 @@ action_uninstall() {
   read -r -p "Type the word DELETE to continue: " confirm
   [ "$confirm" = "DELETE" ] || { info "Cancelled."; return; }
   docker compose down -v
+  # data/, certs/ and mysql-data/ are bind mounts, not named volumes, so
+  # `down -v` leaves every one of them behind. Reinstalling then starts MySQL
+  # on a datadir that still holds the *old* credentials while install.sh has
+  # just written freshly generated ones into .env — MySQL ignores MYSQL_*
+  # for an already-initialised datadir, so the panel could never authenticate.
+  rm -rf "$INSTALL_DIR/data" "$INSTALL_DIR/certs" "$INSTALL_DIR/mysql-data" "$INSTALL_DIR/letsencrypt-work"
   read -r -p "Also delete the install directory ($INSTALL_DIR)? [y/N] " del_dir
   cd /
   if [[ "${del_dir:-N}" =~ ^[Yy]$ ]]; then
