@@ -223,25 +223,39 @@ action_change_port() {
 action_get_ssl() {
   read -r -p "Domain (must already resolve to this server's IP): " domain
   [ -n "$domain" ] || { err "No domain entered."; return; }
-  info "Requesting a Let's Encrypt certificate for $domain (needs port 80 free)..."
-  mkdir -p certs letsencrypt-work
+  if ! docker ps --format '{{.Names}}' | grep -qx tifusi-panel; then
+    err "The panel container isn't running — start it first with 'tifusi panel restart'."
+    return
+  fi
+  info "Requesting a Let's Encrypt certificate for $domain (port 80 must reach this server)..."
+  mkdir -p certs
   CERT_LOG="$(mktemp)"
+  # Run inside the panel container, which is the one publishing host port 80.
+  # A separate certbot container asking Docker for that same port can never
+  # get it while the panel is up, so this used to fail on every running
+  # install. Same paths the panel's own Settings > SSL button uses.
+  local acme=/app/data/letsencrypt
   # --key-type rsa: see install.sh's own SSL step for why — a node's
   # strongSwan can't parse an ECDSA cert if this one later gets reused as
   # an IKEv2 Core's certificate.
-  if docker run --rm -p 80:80 -v "$(pwd)/letsencrypt-work:/etc/letsencrypt" \
-    certbot/certbot certonly --standalone --non-interactive --agree-tos \
+  if docker exec tifusi-panel certbot certonly --standalone --non-interactive --agree-tos \
     --key-type rsa --rsa-key-size 2048 \
+    --config-dir "$acme/config" --work-dir "$acme/work" --logs-dir "$acme/logs" \
     -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
     cat "$CERT_LOG"
-    cp "letsencrypt-work/live/${domain}/fullchain.pem" certs/fullchain.pem
-    cp "letsencrypt-work/live/${domain}/privkey.pem" certs/privkey.pem
+    # ./certs is mounted into both containers; the dashboard watches it and
+    # starts serving HTTPS without a restart.
+    docker exec tifusi-panel sh -c \
+      "cp $acme/config/live/$domain/fullchain.pem /app/certs/fullchain.pem && cp $acme/config/live/$domain/privkey.pem /app/certs/privkey.pem"
     if grep -q '^TIFUSI_PUBLIC_URL=' .env; then
       sed -i "s#^TIFUSI_PUBLIC_URL=.*#TIFUSI_PUBLIC_URL=https://${domain}#" .env
     else
       echo "TIFUSI_PUBLIC_URL=https://${domain}" >> .env
     fi
-    docker compose up -d
+    # .env alone doesn't move an already-running panel: the address it builds
+    # subscription links from lives in its database.
+    docker exec tifusi-panel tifusi-cli set-public-url "https://${domain}" >/dev/null 2>&1 \
+      || warn "Set the panel's address to https://${domain} under Settings — links still use the old one."
     info "Certificate installed — the dashboard now serves HTTPS on https://${domain}."
     warn "Let's Encrypt certs expire every 90 days — re-run this before then, or set up certbot renew yourself."
   else
