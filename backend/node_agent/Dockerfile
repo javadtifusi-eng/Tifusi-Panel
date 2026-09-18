@@ -50,11 +50,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=strongswan-builder /build/ /
 
-# The real Xray-core binary. This is the one piece of the node agent that
-# couldn't be verified inside the sandboxed session this project was built
-# in — outbound GitHub access was blocked there — but it's a standard
-# release download that works in any normal Docker build environment.
-ARG XRAY_VERSION=v1.8.24
+# The real Xray-core binary. Keep it current: REALITY servers on 1.8.x
+# reject the post-quantum key share that today's chrome, firefox and
+# safari fingerprints send, so those clients fail while ios/edge/qq connect.
+ARG XRAY_VERSION=v26.3.27
 RUN curl -fsSL -o /tmp/xray.zip \
       "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip" \
     && unzip -o /tmp/xray.zip -d /usr/local/bin xray \
