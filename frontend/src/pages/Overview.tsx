@@ -986,9 +986,9 @@ export default function OverviewPage({
         </Card>
       </section>
 
-      <NetworkHealth />
-
       <ServerGauges />
+
+      <NetworkHealth />
 
       <section className="row-c">
         <Card title={o.statusTitle} action={viewAll('users')}>

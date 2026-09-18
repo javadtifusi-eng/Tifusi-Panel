@@ -784,6 +784,7 @@ export interface OperatorHealth {
   previous_rate: number | null
   state: HealthState
   last_at: string | null
+  trend: (number | null)[]
 }
 
 export interface NetworkHealthReport {

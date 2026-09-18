@@ -6,6 +6,10 @@
 - QR codes are dark on white again. The light-on-dark codes couldn't be read by the iPhone camera and many scanner apps.
 - Redesigned in the panel's own look, with the Tifusi logo, a data-usage bar, a direct download of the Tifusi VPN Android app and a one-tap iPhone/Mac profile button.
 
+### Dashboard
+- Network health sits below the CPU, memory and disk gauges and spans the width: overall rate and alerts beside the operator cards, then the chart beside the protocol table.
+- Live: a "live" marker with the time since the last update, refreshes every 30 seconds, rates that count to their new value, a trend line and a change arrow on each operator's card, and a pulsing card for a disrupted operator.
+
 ## v1.4 — 2026-09-18
 
 ### Connection Shield

@@ -11,11 +11,55 @@ const RANGES = [
 const SERIES_COLORS = ['var(--cat1)', 'var(--cat2)', 'var(--cat3)']
 const STATE_PILL: Record<string, string> = { good: 'ok', warn: 'warn', bad: 'bad', unknown: 'idle' }
 const STATE_ICON: Record<string, string> = { good: '✓', warn: '▲', bad: '✕', unknown: '·' }
-const REFRESH_MS = 60_000
+const REFRESH_MS = 30_000
 
 const W = 720
 const H = 220
 const M = { t: 10, r: 14, b: 26, l: 42 }
+
+const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+// Counts from the previous value to the new one, so a refresh visibly moves the number.
+function AnimatedRate({ value, format }: { value: number | null; format: (v: number | null) => string }) {
+  const [shown, setShown] = useState<number | null>(value == null ? null : 0)
+  const from = useRef(0)
+  useEffect(() => {
+    if (value == null) return setShown(null)
+    if (reduceMotion()) return setShown(value)
+    const start = performance.now()
+    const a = from.current
+    let raf = 0
+    const step = (now: number) => {
+      const k = Math.min(1, (now - start) / 900)
+      const v = a + (value - a) * (1 - Math.pow(1 - k, 3))
+      setShown(v)
+      if (k < 1) raf = requestAnimationFrame(step)
+      else from.current = value
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [value])
+  return <>{format(shown)}</>
+}
+
+function Spark({ values, color }: { values: (number | null)[]; color: string }) {
+  const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] != null)
+  if (pts.length < 2) return <svg className="nh-spark" viewBox="0 0 100 28" aria-hidden="true" />
+  const n = Math.max(1, values.length - 1)
+  const lo = Math.min(...pts.map((p) => p[1]), 0.5)
+  const xy = pts.map(([i, v]) => [(i / n) * 100, 26 - ((v - lo) / Math.max(0.05, 1 - lo)) * 22] as const)
+  const d = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join('')
+  const last = xy[xy.length - 1]
+  return (
+    <svg className="nh-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+      <path d={`${d}L${last[0]},28L${xy[0][0]},28Z`} fill={color} fillOpacity={0.12} />
+      <path d={d} fill="none" stroke={color} strokeWidth={1.6} vectorEffect="non-scaling-stroke" pathLength={1} className="nh-draw" />
+      <circle cx={last[0]} cy={last[1]} r={2.2} fill={color} className="nh-dot" />
+    </svg>
+  )
+}
+
+const STATE_COLOR: Record<string, string> = { good: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)', unknown: 'var(--faint)' }
 
 export default function NetworkHealth() {
   const { t, lang } = useLang()
@@ -25,12 +69,25 @@ export default function NetworkHealth() {
   const [error, setError] = useState<string | null>(null)
   const [hover, setHover] = useState<number | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+  const [now, setNow] = useState(Date.now())
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(t)
+  }, [])
+  useEffect(() => {
+    if (!data || ready) return
+    const raf = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(raf)
+  }, [data])
 
   useEffect(() => {
     let alive = true
     const load = () =>
       getNetworkHealth(hours)
-        .then((d) => alive && (setData(d), setError(null)))
+        .then((d) => alive && (setData(d), setError(null), setUpdatedAt(Date.now())))
         .catch((err) => alive && setError(err instanceof ApiError ? err.message : nh.fetchError))
     load()
     const timer = window.setInterval(load, REFRESH_MS)
@@ -79,7 +136,15 @@ export default function NetworkHealth() {
   return (
     <section className="dcard nh">
       <div className="dcard-head">
-        <h2>{nh.title}</h2>
+        <h2 className="nh-title">
+          {nh.title}
+          {updatedAt != null && (
+            <span className="nh-live">
+              <i />
+              {nh.live} · {nh.updatedAgo(Math.max(0, Math.round((now - updatedAt) / 1000)))}
+            </span>
+          )}
+        </h2>
         <div className="dseg" role="group" aria-label={nh.title}>
           {RANGES.map((r) => (
             <button key={r.hours} type="button" aria-pressed={hours === r.hours} onClick={() => setHours(r.hours)}>
@@ -96,10 +161,13 @@ export default function NetworkHealth() {
 
       {data && hasData && (
         <div className="nh-body">
+          <div className="nh-row1">
           <div className="nh-top">
             <div className="nh-overall">
               <span className="lbl">{nh.overall}</span>
-              <b className="en">{fmtRate(data.rate)}</b>
+              <b className="en">
+                <AnimatedRate value={data.rate} format={fmtRate} />
+              </b>
               <small>
                 {nh.attempts(data.attempts)} · {nh.users(data.users)}
               </small>
@@ -126,7 +194,9 @@ export default function NetworkHealth() {
           </div>
 
           <div className="nh-ops">
-            {known.map((o) => (
+            {known.map((o) => {
+              const delta = o.recent_rate != null && o.previous_rate != null ? o.recent_rate - o.previous_rate : null
+              return (
               <article key={o.key} className={`nh-op ${o.state}`}>
                 <div className="nh-op-top">
                   <b>{opName(o)}</b>
@@ -134,9 +204,19 @@ export default function NetworkHealth() {
                     {STATE_ICON[o.state]} {nh.state[o.state]}
                   </span>
                 </div>
-                <div className="nh-rate en">{fmtRate(o.rate)}</div>
+                <div className="nh-rate-row">
+                  <div className="nh-rate en">
+                    <AnimatedRate value={o.rate} format={fmtRate} />
+                  </div>
+                  {delta != null && Math.abs(delta) >= 0.02 && (
+                    <span className={`nh-delta ${delta > 0 ? 'up' : 'down'}`} title={nh.vsBefore}>
+                      {delta > 0 ? '▲' : '▼'} {pct.format(Math.abs(delta))}
+                    </span>
+                  )}
+                </div>
+                <Spark values={o.trend ?? []} color={STATE_COLOR[o.state]} />
                 <div className="nh-bar" aria-hidden="true">
-                  <i className={o.state} style={{ width: `${Math.round((o.rate ?? 0) * 100)}%` }} />
+                  <i className={o.state} style={{ width: `${ready ? Math.round((o.rate ?? 0) * 100) : 0}%` }} />
                 </div>
                 <div className="nh-op-meta">
                   <span>{nh.attempts(o.attempts)}</span>
@@ -148,9 +228,12 @@ export default function NetworkHealth() {
                   )}
                 </div>
               </article>
-            ))}
+              )
+            })}
+          </div>
           </div>
 
+          <div className="nh-row2">
           {data.series.length > 0 && (
             <div className="nh-chart">
               <div className="nh-sub-head">
@@ -185,11 +268,11 @@ export default function NetworkHealth() {
                     ) : null,
                   )}
                   {data.series.map((s, i) => (
-                    <path key={s.key} d={path(s.rates)} fill="none" stroke={SERIES_COLORS[i]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                    <path key={s.key} d={path(s.rates)} fill="none" stroke={SERIES_COLORS[i]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" pathLength={1} className="nh-draw" />
                   ))}
                   {data.series.map((s, i) => {
                     const last = s.rates.map((r, j) => [r, j] as const).filter(([r]) => r != null).pop()
-                    return last ? <circle key={s.key} cx={x(last[1])} cy={y(last[0]!)} r={4} fill={SERIES_COLORS[i]} stroke="#141414" strokeWidth={2} /> : null
+                    return last ? <circle key={s.key} cx={x(last[1])} cy={y(last[0]!)} r={4} fill={SERIES_COLORS[i]} stroke="#141414" strokeWidth={2} className="nh-dot" /> : null
                   })}
                   {hover != null && (
                     <>
@@ -256,6 +339,7 @@ export default function NetworkHealth() {
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
     </section>

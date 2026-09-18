@@ -1015,6 +1015,9 @@ export const dict = {
         alertDrop: (op: string, from: string, to: string) => `${op}: اتصال موفق از ${from} به ${to} افت کرده`,
         alertSub: (op: string, rate: string) => `${op}: فقط ${rate} از درخواست‌های ساب موفق بوده — دامنه ساب احتمالاً روی این اپراتور فیلتر شده`,
         fetchError: 'خطا در دریافت سلامت شبکه',
+        live: 'زنده',
+        updatedAgo: (sec: number) => (sec < 5 ? 'همین الان' : `${sec.toLocaleString('fa-IR')} ثانیه پیش`),
+        vsBefore: 'نسبت به قبل',
       },
       tunnels: {
         iranEntry: 'iran entry',
@@ -2234,6 +2237,9 @@ export const dict = {
         alertDrop: (op: string, from: string, to: string) => `${op}: connection success fell from ${from} to ${to}`,
         alertSub: (op: string, rate: string) => `${op}: only ${rate} of subscription requests succeeded — the subscription domain is likely blocked on this operator`,
         fetchError: 'Failed to load network health',
+        live: 'Live',
+        updatedAgo: (sec: number) => (sec < 5 ? 'just now' : `${sec}s ago`),
+        vsBefore: 'vs before',
       },
       tunnels: {
         iranEntry: 'iran entry',

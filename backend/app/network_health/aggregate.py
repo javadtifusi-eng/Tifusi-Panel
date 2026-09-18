@@ -172,6 +172,7 @@ async def build_report(db: AsyncSession, hours: int) -> NetworkHealthReport:
                 previous_rate=previous_rate,
                 state=_state(t.attempts, rate),
                 last_at=t.last_at,
+                trend=[(ok / n if n >= 2 else None) for n, ok in series.get(key, [])],
             )
         )
         if key == UNKNOWN:

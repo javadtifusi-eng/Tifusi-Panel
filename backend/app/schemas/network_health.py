@@ -20,6 +20,9 @@ class OperatorHealth(BaseModel):
     previous_rate: float | None
     state: HealthState
     last_at: datetime | None
+    # Success rate per time bucket (None where there were too few attempts),
+    # for the small trend line on each operator's card.
+    trend: list[float | None] = []
 
 
 class SeriesLine(BaseModel):
