@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4 — 2026-09-18
+
+### Connection Shield
+- Groups of interchangeable Iran relays under **Settings → Connection Shield**. The panel checks every relay from abroad every 30 seconds; when the active one fails three checks in a row it is marked burnt and users move to the next healthy standby.
+- Two ways to move users: a Cloudflare DNS record (users' configs follow it on their own, no subscription update) or rewriting host addresses.
+- A burnt relay that answers again goes back to standby. Relays can also be moved to by hand.
+- Every move, burn, recovery and error is listed under the group and sent to Telegram, Discord and the webhook (`shield_*` events).
+
+### Network health
+- New dashboard card with connection success per operator (MCI, Irancell, TCI, RighTel and the main ISPs) and per protocol, over 6 hours, 24 hours or 7 days.
+- Alerts when an operator's success rate drops sharply, and when most subscription requests from one operator fail — a sign the subscription domain is blocked there.
+- Built from Tifusi VPN app reports. The operator is found from the reporting IP (address lists downloaded from RIPEstat once a day and matched locally) or, on mobile data, from the SIM operator.
+
 ## v1.3 — 2026-09-17
 
 ### Connection limits
