@@ -16,6 +16,17 @@ type Mode = 'neighbors' | 'list' | 'custom'
 const FPS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', '360', 'qq', 'random', 'randomized']
 const POLL_MS = 1500
 
+// Fastest/slowest are only called out when the gap is real; measured from
+// the node, working fingerprints are usually within a few ms of each other.
+function fpStats(r: RealityCandidate) {
+  const ok = Object.entries(r.fingerprints ?? {}).filter(([, v]) => v.ok && v.ms != null) as [string, { ok: boolean; ms: number }][]
+  if (!ok.length) return { ping: null as number | null, fastest: null as string | null, slowest: null as string | null, even: false }
+  const sorted = [...ok].sort((a, b) => a[1].ms - b[1].ms)
+  const lo = sorted[0], hi = sorted[sorted.length - 1]
+  const real = sorted.length > 1 && hi[1].ms - lo[1].ms >= 15 && hi[1].ms >= lo[1].ms * 1.25
+  return { ping: lo[1].ms, fastest: real ? lo[0] : null, slowest: real ? hi[0] : null, even: sorted.length > 1 && !real }
+}
+
 function IranPill({ check }: { check: IranCheck | null }) {
   const { t } = useLang()
   const rs = t.ui.realityScan
@@ -93,7 +104,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
     IRAN_RANK[r.iran?.verdict ?? 'unknown'],
     r.fingerprints?.chrome?.ok ? 0 : 1,
     -Object.values(r.fingerprints ?? {}).filter((v) => v.ok).length,
-    r.latency_ms ?? 1e6,
+    fpStats(r).ping ?? r.latency_ms ?? 1e6,
   ]
   const byScore = (a: RealityCandidate, b: RealityCandidate) => {
     const x = score(a), y = score(b)
@@ -177,6 +188,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
             <ul className="rsc-list">
               {shown.map((r, i) => {
                 const best = i === 0 && r.usable && !!r.fingerprints?.chrome?.ok && r.iran?.verdict !== 'blocked'
+                const st = fpStats(r)
                 return (
                   <li key={r.host} className={`rsc-row ${r.usable ? '' : 'bad'} ${best ? 'best' : ''}`}>
                     <div className="rsc-head">
@@ -185,7 +197,13 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                         <small>
                           <span className="chip">{rs.source[r.source]}</span>
                           {r.dest && <span className="mono">{r.dest}</span>}
-                          {r.latency_ms != null && <span className="en" dir="ltr">{r.latency_ms} ms</span>}
+                          {st.ping != null ? (
+                            <span className="en" dir="ltr">
+                              ping {st.ping} ms
+                            </span>
+                          ) : (
+                            r.latency_ms != null && <span className="en" dir="ltr">{r.latency_ms} ms</span>
+                          )}
                           {r.usable ? <span className="en">TLS 1.3 · h2</span> : <span className="err-text">{r.error}</span>}
                         </small>
                       </div>
@@ -205,9 +223,11 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                           {FPS.map((fp) => {
                             const v = r.fingerprints?.[fp]
                             const cls = v?.ok == null ? 'wait' : v.ok ? 'ok' : 'no'
+                            const tag = fp === st.fastest ? 'fast' : fp === st.slowest ? 'slow' : ''
                             return (
-                              <span key={fp} className={`fp ${cls}`}>
-                                {cls === 'wait' ? '…' : cls === 'ok' ? '✓' : '✕'} {fp}
+                              <span key={fp} className={`fp ${cls} ${tag}`} title={tag === 'fast' ? rs.fastest : tag === 'slow' ? rs.slowest : undefined}>
+                                {tag === 'fast' ? '⚡' : tag === 'slow' ? '🐢' : cls === 'wait' ? '…' : cls === 'ok' ? '✓' : '✕'} {fp}
+                                {cls === 'ok' && v?.ms != null && <em>{v.ms}ms</em>}
                               </span>
                             )
                           })}
@@ -215,6 +235,13 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                       ) : (
                         <div className="hint" style={{ margin: 0 }}>{rs.notTested}</div>
                       ))}
+                    {r.usable &&
+                      r.fingerprints &&
+                      (st.even || st.fastest) && (
+                        <div className="hint" style={{ margin: 0 }}>
+                          {st.even ? rs.fpEven : rs.fpSpread(st.fastest!, st.slowest!)}
+                        </div>
+                      )}
                   </li>
                 )
               })}

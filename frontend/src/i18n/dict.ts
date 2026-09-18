@@ -967,6 +967,10 @@ export const dict = {
         hideUnusable: 'پنهان کردن نامناسب‌ها',
         legend: 'هر خانه یک fingerprint است: ✓ یعنی با آن واقعاً وصل شد، ✕ یعنی نشد.',
         applied: (host: string) => `${host} به‌عنوان تارگت در JSON گذاشته شد`,
+        fastest: 'سریع‌ترین fingerprint',
+        slowest: 'کندترین fingerprint',
+        fpEven: 'پینگ fingerprintهای سبز تقریباً یکسان است؛ هر کدام که از ایران وصل شود خوب است.',
+        fpSpread: (fast: string, slow: string) => `⚡ ${fast} سریع‌ترین و 🐢 ${slow} کندترین است.`,
       },
       shield: {
         title: 'سپر اتصال',
@@ -2199,6 +2203,10 @@ export const dict = {
         hideUnusable: 'Hide unusable',
         legend: 'Each box is a fingerprint: ✓ means it really connected, ✕ means it didn’t.',
         applied: (host: string) => `${host} set as the target in the JSON`,
+        fastest: 'Fastest fingerprint',
+        slowest: 'Slowest fingerprint',
+        fpEven: 'The working fingerprints have about the same ping; any that connects from Iran is fine.',
+        fpSpread: (fast: string, slow: string) => `⚡ ${fast} is fastest and 🐢 ${slow} slowest.`,
       },
       shield: {
         title: 'Connection Shield',

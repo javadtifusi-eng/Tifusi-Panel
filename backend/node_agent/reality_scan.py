@@ -86,8 +86,8 @@ class Job:
 
 def _rank(c: Candidate) -> tuple:
     fps = c.fingerprints or {}
-    working = sum(1 for r in fps.values() if r.get("ok"))
-    return (not c.usable, -int(bool(fps.get("chrome", {}).get("ok"))), -working, c.latency_ms or 10**6)
+    working = [r["ms"] for r in fps.values() if r.get("ok") and r.get("ms") is not None]
+    return (not c.usable, not working, -len(working), min(working) if working else 10**6, c.latency_ms or 10**6)
 
 
 _job = Job()
@@ -262,15 +262,28 @@ async def _wait_port(port: int, timeout: float = 5.0) -> bool:
     return False
 
 
-async def _fetch_via(socks_port: int) -> tuple[bool, int]:
-    start = time.monotonic()
+async def _once(socks_port: int) -> float | None:
     proc = await asyncio.create_subprocess_exec(
-        "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", str(_FETCH_TIMEOUT),
+        "curl", "-s", "-o", "/dev/null", "-w", "%{http_code} %{time_total}", "-m", str(_FETCH_TIMEOUT),
         "--socks5-hostname", f"127.0.0.1:{socks_port}", PROBE_URL,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
     )
     out, _ = await proc.communicate()
-    return out.decode().strip() == "204", round((time.monotonic() - start) * 1000)
+    parts = out.decode().split()
+    if len(parts) == 2 and parts[0] == "204":
+        return float(parts[1]) * 1000
+    return None
+
+
+async def _fetch_via(socks_port: int) -> tuple[bool, int | None]:
+    """Three timed requests after the warm-up in prove(). A fingerprint
+    works if at least two load the page; its time is their median, the
+    round trip a user would actually see."""
+    times = [t for t in [await _once(socks_port) for _ in range(3)] if t is not None]
+    if len(times) < 2:
+        return False, None
+    times.sort()
+    return True, round(times[len(times) // 2])
 
 
 async def prove(host: str, fingerprints: list[str] | None = None, dest: str | None = None) -> dict[str, dict]:
@@ -317,7 +330,13 @@ async def prove(host: str, fingerprints: list[str] | None = None, dest: str | No
                     XRAY_BIN, "run", "-c", path, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL))
             if not await _wait_port(srv_port) or not await _wait_port(next(iter(ports.values()))):
                 return {fp: {"ok": False, "ms": None} for fp in fps}
-            results = await asyncio.gather(*(_fetch_via(p) for p in ports.values()))
+            # The first connection through a freshly started Xray pair stalls
+            # for about five seconds while nothing on the wire is slow, so
+            # every fingerprint is warmed up (together) and never timed on it.
+            # The timed runs go one fingerprint at a time so they don't skew
+            # each other.
+            await asyncio.gather(*(_once(p) for p in ports.values()))
+            results = [await _fetch_via(p) for p in ports.values()]
             return {fp: {"ok": ok, "ms": ms if ok else None} for fp, (ok, ms) in zip(ports, results)}
         finally:
             for p in procs:
