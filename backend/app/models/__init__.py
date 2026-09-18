@@ -9,6 +9,7 @@ from app.models.node import Node, NodeStatus
 from app.models.node_traffic_snapshot import NodeTrafficSnapshot
 from app.models.setting import PanelSetting
 from app.models.setup_key import SetupKey
+from app.models.shield import ShieldEvent, ShieldGroup, ShieldMember, ShieldMode
 from app.models.traffic_snapshot import TrafficSnapshot
 from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.models.user import ProxyUser, UserStatus
@@ -35,6 +36,10 @@ __all__ = [
     "Core",
     "Group",
     "PanelSetting",
+    "ShieldEvent",
+    "ShieldGroup",
+    "ShieldMember",
+    "ShieldMode",
     "Tunnel",
     "TunnelStatus",
     "TunnelTransport",

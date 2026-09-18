@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
 
 # Architecture
 
@@ -82,7 +82,7 @@ sequenceDiagram
 
 | Path | Contents |
 | --- | --- |
-| `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting |
+| `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, Connection Shield failover (`shield/`), network health (`network_health/`) |
 | `backend/alembic` | Database migrations |
 | `backend/cli` | `tifusi-cli`, including first-run admin key generation |
 | `backend/node_agent` | Node agent service, strongSwan/xl2tpd integration, node Dockerfile |

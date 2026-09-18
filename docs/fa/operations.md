@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📱 [اپ اندروید](android-app.md) · 🎛️ **مدیریت** · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📱 [اپ اندروید](android-app.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ **مدیریت** · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -30,7 +30,7 @@
 
 ## اعلان‌ها
 
-تغییر وضعیت کاربران و نودها را می‌توان به تلگرام، دیسکورد یا یک webhook عمومی ارسال کرد.
+تغییر وضعیت کاربران و نودها و رویدادهای [سپر اتصال](connection-shield.md) را می‌توان به تلگرام، دیسکورد یا یک webhook عمومی ارسال کرد. رویدادهای سپر در webhook با نام‌های `shield_burnt`، `shield_switched`، `shield_no_spare`، `shield_recovered` و `shield_error` می‌رسند.
 
 ## تنظیمات
 
@@ -40,4 +40,4 @@
 
 ---
 
-<div dir="rtl"><sub>[→ اپ اندروید](android-app.md) · [مرجع استقرار ←](deployment.md)</sub></div>
+<div dir="rtl"><sub>[→ سلامت شبکه](network-health.md) · [مرجع استقرار ←](deployment.md)</sub></div>

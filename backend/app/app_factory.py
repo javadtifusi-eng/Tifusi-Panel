@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,7 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import async_session, init_db
-from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, nodes, reality, resellers, settings as settings_router, setup, stats, subscription, system, tunnels, user_templates, users
+from app.network_health.operators import refresh_prefixes
+from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, network_health, nodes, reality, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
+from app.shield.engine import run_shield_cycle
 from app.traffic.sync import run_traffic_cycle
 
 
@@ -27,14 +30,39 @@ async def _traffic_loop() -> None:
                 continue
 
 
+async def _every(seconds: float, job: Callable[[], Awaitable[None]]) -> None:
+    while True:
+        await asyncio.sleep(seconds)
+        try:
+            await job()
+        except Exception:
+            continue
+
+
+async def _prefix_loop() -> None:
+    # Once shortly after startup, then hourly; refresh_prefixes itself
+    # only downloads when the saved copy is a day old.
+    await asyncio.sleep(30)
+    while True:
+        with contextlib.suppress(Exception):
+            await refresh_prefixes()
+        await asyncio.sleep(3600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    task = asyncio.create_task(_traffic_loop())
+    tasks = [
+        asyncio.create_task(_traffic_loop()),
+        asyncio.create_task(_every(settings.shield_check_interval_seconds, run_shield_cycle)),
+        asyncio.create_task(_prefix_loop()),
+    ]
     yield
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 # install.sh always generates a real TIFUSI_SECRET_KEY into .env — this
@@ -93,5 +121,7 @@ def create_app() -> FastAPI:
     app.include_router(system.router)
     app.include_router(stats.router)
     app.include_router(tunnels.router)
+    app.include_router(shield.router)
+    app.include_router(network_health.router)
 
     return app

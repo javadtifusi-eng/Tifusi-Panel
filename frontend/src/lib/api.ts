@@ -683,6 +683,129 @@ export async function spoofTestCommands(payload: {
   return res.json()
 }
 
+export type ShieldMode = 'dns' | 'hosts'
+export type ShieldMemberState = 'active' | 'standby' | 'burnt'
+
+export interface ShieldMember {
+  tunnel_id: number
+  name: string
+  iran_address: string
+  iran_port: number
+  position: number
+  state: ShieldMemberState
+  last_ok: boolean | null
+  last_latency_ms: number | null
+  fail_streak: number
+  last_checked_at: string | null
+  burnt_at: string | null
+}
+
+export interface ShieldEvent {
+  id: number
+  kind: string
+  data: { tunnel?: string; from?: string; to?: string; reason?: 'auto' | 'manual'; hosts?: number | null; error?: string }
+  created_at: string
+}
+
+export interface ShieldGroup {
+  id: number
+  name: string
+  enabled: boolean
+  mode: ShieldMode
+  dns_record: string | null
+  has_cloudflare_token: boolean
+  fail_threshold: number
+  active_tunnel_id: number | null
+  stranded: boolean
+  last_error: string | null
+  last_checked_at: string | null
+  members: ShieldMember[]
+  events: ShieldEvent[]
+}
+
+export interface ShieldGroupList {
+  check_interval_seconds: number
+  groups: ShieldGroup[]
+}
+
+export interface ShieldGroupPayload {
+  name: string
+  enabled: boolean
+  mode: ShieldMode
+  dns_record: string | null
+  /** Omit to keep the stored token when editing. */
+  cloudflare_token?: string
+  fail_threshold: number
+  tunnel_ids: number[]
+}
+
+export async function listShieldGroups(): Promise<ShieldGroupList> {
+  const res = await authorizedFetch('/shield')
+  return res.json()
+}
+
+export async function createShieldGroup(payload: ShieldGroupPayload): Promise<ShieldGroup> {
+  const res = await authorizedFetch('/shield', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function updateShieldGroup(id: number, payload: Partial<ShieldGroupPayload>): Promise<ShieldGroup> {
+  const res = await authorizedFetch(`/shield/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function deleteShieldGroup(id: number): Promise<void> {
+  await authorizedFetch(`/shield/${id}`, { method: 'DELETE' })
+}
+
+export async function checkShieldGroup(id: number): Promise<ShieldGroup> {
+  const res = await authorizedFetch(`/shield/${id}/check`, { method: 'POST' })
+  return res.json()
+}
+
+export async function switchShieldGroup(id: number, tunnelId: number): Promise<ShieldGroup> {
+  const res = await authorizedFetch(`/shield/${id}/switch`, { method: 'POST', body: JSON.stringify({ tunnel_id: tunnelId }) })
+  return res.json()
+}
+
+export type HealthState = 'good' | 'warn' | 'bad' | 'unknown'
+
+export interface OperatorHealth {
+  key: string
+  name_fa: string
+  name_en: string
+  attempts: number
+  successes: number
+  rate: number | null
+  users: number
+  sub_attempts: number
+  sub_successes: number
+  recent_rate: number | null
+  previous_rate: number | null
+  state: HealthState
+  last_at: string | null
+}
+
+export interface NetworkHealthReport {
+  hours: number
+  generated_at: string
+  bucket_minutes: number
+  buckets: string[]
+  attempts: number
+  successes: number
+  rate: number | null
+  users: number
+  operators: OperatorHealth[]
+  series: { key: string; rates: (number | null)[]; attempts: number[] }[]
+  protocols: { protocol: string; attempts: number; cells: { operator: string; attempts: number; successes: number }[] }[]
+  alerts: { kind: 'drop' | 'subscription'; operator: string; recent_rate: number; previous_rate: number | null; attempts: number }[]
+}
+
+export async function getNetworkHealth(hours: number): Promise<NetworkHealthReport> {
+  const res = await authorizedFetch(`/network-health?hours=${hours}`)
+  return res.json()
+}
+
 export async function syncNode(id: number): Promise<NodeSyncResult> {
   const res = await authorizedFetch(`/nodes/${id}/sync`, { method: 'POST' })
   return res.json()

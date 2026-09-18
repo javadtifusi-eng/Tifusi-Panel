@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # see app/traffic/sync.py.
     traffic_sync_interval_seconds: int = 30
 
+    # How often Connection Shield probes every relay in its groups. With the
+    # default fail threshold of 3, a dead relay is replaced in about 1.5–2
+    # minutes. See app/shield/engine.py.
+    shield_check_interval_seconds: int = 30
+
     # Only read by run.py, not by uvicorn's own CLI — if you start the panel
     # with `uvicorn app.main:app` directly, these are ignored and you pass
     # --host/--port/--ssl-certfile/--ssl-keyfile yourself instead. Setting

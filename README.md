@@ -48,6 +48,8 @@ Tifusi Panel manages users, access policy and server configuration from one dash
 | 🔒 **Device limits on the node** | Simultaneous connections are enforced by the node itself for Xray, IKEv2 and L2TP, not only counted by the panel. |
 | 💼 **Resellers** | Separate sign-ins with their own protocols, user limit and data quota, and no view of the servers. |
 | 🚇 **Tunnels** | Publish a server abroad through a relay inside a restricted network, with install commands generated for both sides. |
+| 🛡️ **Connection Shield** | When an Iran relay loses international access, users move to a standby relay within about two minutes — through a Cloudflare DNS record, with nothing to update on their side. |
+| 📶 **Network health** | The dashboard shows connection success per operator and protocol, and warns when one operator starts failing or blocks the subscription domain. |
 | ✈️ **Telegram bot and Android app** | Sell subscriptions automatically with Tifusi Bot and connect in one tap with Tifusi VPN. |
 
 ## 🚀 Quick start
@@ -76,8 +78,10 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 | 👤 [Users and subscriptions](docs/en/users-and-subscriptions.md) | Quotas, expiry, on-hold accounts, subscription links, access codes, client profiles |
 | 💼 [Resellers](docs/en/resellers.md) | Reseller accounts, allowed protocols, user limits and data quotas |
 | 🚇 [Tunnels](docs/en/tunnels.md) | Relaying a foreign server, transports, forwarded ports, testing and spoof test |
+| 🛡️ [Connection Shield](docs/en/connection-shield.md) | Standby Iran relays and automatic failover through Cloudflare DNS or host addresses when a relay loses international access |
 | ✈️ [Telegram bot](docs/en/telegram-bot.md) | Tifusi Bot: automatic sales, renewals and wallet through the panel API |
 | 📱 [Android app](docs/en/android-app.md) | Tifusi VPN: importing servers by access code, one-tap IKEv2, connection reports |
+| 📶 [Network health](docs/en/network-health.md) | Connection success per operator (MCI, Irancell, TCI…) and per protocol on the dashboard, with block alerts |
 | 🎛️ [Operations](docs/en/operations.md) | `tifusi panel` commands, administrators, API keys, notifications, settings |
 | 🚢 [Deployment reference](docs/en/deployment.md) | Docker Compose, ports, TLS, database migrations |
 | 📐 [Architecture](docs/en/architecture.md) | Components, data flow, node synchronisation, repository layout |

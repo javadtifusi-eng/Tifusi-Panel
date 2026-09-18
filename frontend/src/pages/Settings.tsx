@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import ShieldPanel, { type ShieldSummary } from '../components/ShieldPanel'
 import { StrengthBars, highlightJsonLines, passwordScore, toggleInSet, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
@@ -35,7 +36,7 @@ import {
 import { copyToClipboard } from '../lib/clipboard'
 import { initials, parseServerDate } from '../lib/format'
 
-type SectionId = 'url' | 'pass' | 'notify' | 'api' | 'tls' | 'admins' | 'backup' | 'danger'
+type SectionId = 'url' | 'pass' | 'notify' | 'api' | 'tls' | 'shield' | 'admins' | 'backup' | 'danger'
 type NotifyTab = 'telegram' | 'webhook' | 'discord'
 
 // The exact text the panel sends when a node drops (app/nodes/sync.py), so the
@@ -99,6 +100,8 @@ export default function SettingsPage() {
   const say = useToast()
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const canSettings = !profile || profile.is_owner || profile.permissions === null || profile.permissions.includes('settings')
+  const canTunnels = !!profile && !profile.is_reseller && (profile.is_owner || profile.permissions === null || profile.permissions.includes('tunnels'))
+  const [shieldSummary, setShieldSummary] = useState<ShieldSummary | null>(null)
 
   const [saved, setSaved] = useState<PanelSettings | null>(null)
   const [publicUrl, setPublicUrl] = useState('')
@@ -488,6 +491,7 @@ export default function SettingsPage() {
     notify: canSettings && matches('notify', s.notifyTitle),
     api: matches('api', sp.apiKeysTitle),
     tls: canSettings && matches('tls', sp.tlsTitle),
+    shield: canTunnels && matches('shield', t.ui.shield.title),
     admins: !!profile?.is_owner && matches('admins', sp.adminsTitle),
     backup: canSettings && matches('backup', sp.backupTitle),
     danger: canSettings && matches('danger', s.dangerTitle),
@@ -1017,6 +1021,19 @@ export default function SettingsPage() {
               </div>
             </form>
           )}
+        </Section>
+
+        <Section
+          id="shield"
+          mark="SH"
+          title={t.ui.shield.title}
+          sub={t.ui.shield.sub}
+          hidden={!visible.shield}
+          flash={flash === 'shield'}
+          className="sec-wide"
+          pill={shieldSummary ? <Pill tone={shieldSummary.tone}>{shieldSummary.text}</Pill> : undefined}
+        >
+          <ShieldPanel onSummary={setShieldSummary} />
         </Section>
 
         <Section

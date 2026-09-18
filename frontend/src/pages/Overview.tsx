@@ -37,6 +37,7 @@ import {
   type UserStatus,
 } from '../lib/api'
 import { avatarColor, initials, parseServerDate } from '../lib/format'
+import NetworkHealth from '../components/NetworkHealth'
 
 export type OverviewTab = 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'tunnels' | 'settings'
 
@@ -984,6 +985,8 @@ export default function OverviewPage({
           )}
         </Card>
       </section>
+
+      <NetworkHealth />
 
       <ServerGauges />
 

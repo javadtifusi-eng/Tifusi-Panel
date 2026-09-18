@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 🎛️ **Operations** · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 📶 [Network health](network-health.md) · 🎛️ **Operations** · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Operations
 
@@ -28,7 +28,7 @@ The panel has one owner account and any number of additional administrators with
 
 ## Notifications
 
-User and node state changes can be sent to Telegram, Discord or a generic webhook.
+User and node state changes, and [Connection Shield](connection-shield.md) events, can be sent to Telegram, Discord or a generic webhook. Shield events arrive at the webhook as `shield_burnt`, `shield_switched`, `shield_no_spare`, `shield_recovered` and `shield_error`.
 
 ## Settings
 
@@ -36,4 +36,4 @@ The public URL, administrator password, TLS certificate (upload or Let's Encrypt
 
 ---
 
-<sub>[← Android app](android-app.md) · [Deployment →](deployment.md)</sub>
+<sub>[← Network health](network-health.md) · [Deployment →](deployment.md)</sub>

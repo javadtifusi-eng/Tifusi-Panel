@@ -3,12 +3,13 @@ import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
+from app.models.shield import ShieldMember
 from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.schemas.tunnel import (
     SpoofTestCommands,
@@ -147,6 +148,11 @@ async def update_tunnel(tunnel_id: int, payload: TunnelUpdate, db: AsyncSession 
     if "foreign_node_id" in payload.model_fields_set:
         tunnel.foreign_node_id = await _resolve_foreign_node_id(payload.foreign_node_id, db)
 
+    if tunnel.transport is TunnelTransport.udp and await db.scalar(
+        select(ShieldMember.id).where(ShieldMember.tunnel_id == tunnel.id)
+    ):
+        raise HTTPException(status_code=400, detail="This tunnel is in a Connection Shield group, which can't health-check udp")
+
     _validate_foreign(tunnel.foreign_node_id, tunnel.foreign_address)
 
     db.add(tunnel)
@@ -158,6 +164,8 @@ async def update_tunnel(tunnel_id: int, payload: TunnelUpdate, db: AsyncSession 
 @router.delete("/{tunnel_id}", status_code=204)
 async def delete_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> None:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)
+    # SQLite doesn't enforce the ON DELETE CASCADE without a pragma.
+    await db.execute(delete(ShieldMember).where(ShieldMember.tunnel_id == tunnel.id))
     await db.delete(tunnel)
     await db.commit()
 
