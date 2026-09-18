@@ -36,6 +36,8 @@ Tifusi Panel manages users, access policy and server configuration from one dash
 
 <p align="center">
   <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="Tifusi Panel dashboard and hosts" />
+  <br /><br />
+  <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="Tifusi Panel cores and tunnels" />
 </p>
 
 ## Highlights

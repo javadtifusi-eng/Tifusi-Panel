@@ -6,7 +6,7 @@ Notes for anyone (human or AI coding assistant) working on this codebase.
 
 Tifusi Panel — a proxy/VPN management panel: FastAPI backend + React dashboard. Supported protocols: **VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP/IPsec, IKEv2/IPsec**. WireGuard was deliberately removed entirely (model, migrations, config, docs) and must not be reintroduced. Refer to this project as Tifusi Panel — don't describe it as based on or shaped like any other panel, in commits, docs, or chat.
 
-Full user-facing docs (install script, first-run flow, Docker deployment, HTTPS setup) are in `README.md` (`README.fa.md`/`README.ru.md` are translations — keep them in sync when the English one changes). `ROADMAP.md` tracks bigger unbuilt ideas.
+User-facing docs: `README.md` is a short front page (highlights, install commands, a table of links), and each feature has its own page under `docs/en/`. `README.fa.md` and `docs/fa/` are the Persian translations — keep them in sync when the English ones change. `README.ru.md` is the older single-page Russian README and is not maintained alongside them. `ROADMAP.md` tracks bigger unbuilt ideas.
 
 ## Commands
 
