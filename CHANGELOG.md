@@ -6,9 +6,16 @@
 - QR codes are dark on white again. The light-on-dark codes couldn't be read by the iPhone camera and many scanner apps.
 - Redesigned in the panel's own look, with the Tifusi logo, a data-usage bar, a direct download of the Tifusi VPN Android app and a one-tap iPhone/Mac profile button.
 
+### REALITY scanner
+- Runs on the node itself. It finds candidate sites in the node's own datacenter from their certificates (or uses the built-in list, or names you type), keeps those with TLS 1.3 and HTTP/2, and proves the best ones with a real REALITY connection per fingerprint: each of chrome, firefox, safari, ios, android, edge, 360, qq, random and randomized is marked by whether a page actually loaded through it.
+- Checks from probe servers inside Iran (check-host.net) whether each finalist and the node's own address are reachable there; filtered names are listed last.
+- Live progress and results; **Use** writes the name and `dest` into the core's JSON.
+
+### Nodes
+- Xray 26.3.27 instead of 1.8.24. REALITY on 1.8 rejected the post-quantum key share of current chrome, firefox and safari fingerprints, so those clients failed while ios, edge and qq connected. Re-run the node installer to update a node.
+
 ### Dashboard
-- Network health sits below the CPU, memory and disk gauges and spans the width: overall rate and alerts beside the operator cards, then the chart beside the protocol table.
-- Live: a "live" marker with the time since the last update, refreshes every 30 seconds, rates that count to their new value, a trend line and a change arrow on each operator's card, and a pulsing card for a disrupted operator.
+- The network health card is off the dashboard again; the dashboard is as it was in v1.3.
 
 ## v1.4 — 2026-09-18
 

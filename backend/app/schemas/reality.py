@@ -21,3 +21,15 @@ class RealityScanResponse(BaseModel):
     scanned: int
     usable: int
     results: list[RealityScanResult]
+
+
+class NodeScanRequest(BaseModel):
+    # neighbors: names found on the node's own /24; list: the built-in
+    # candidates; custom: only the names given in `hosts`.
+    mode: str = Field(default="neighbors", pattern="^(neighbors|list|custom)$")
+    hosts: list[str] = Field(default_factory=list, max_length=50)
+    test_top: int = Field(default=8, ge=1, le=20)
+
+
+class NodeCheckRequest(BaseModel):
+    host: str = Field(min_length=3, max_length=253, pattern=r"^[A-Za-z0-9.-]+$")

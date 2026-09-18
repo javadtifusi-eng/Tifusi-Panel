@@ -4,7 +4,7 @@
 
 - Setup flow: CLI-generated admin key entered straight into the login page (no docs/GitHub round-trip)
 - Users, Hosts (VLESS/Trojan/Hysteria2/L2TP/IKEv2), Nodes, Groups: full CRUD with a real access-control model
-- REALITY target scanner: latency-tests ~160 candidate SNIs and recommends the best one
+- REALITY target scanner: runs on the node, finds neighbour sites from their certificates, proves each fingerprint with a real REALITY connection, and checks from inside Iran whether each name is filtered
 - Per-user share links, subscription URL, and QR codes
 - Real Xray-core config generation, pushed to nodes through a small node agent
 - Real traffic accounting: the node agent reads Xray's own StatsService (`xray api statsquery`), the panel polls it on an interval and adds the deltas onto `used_traffic`

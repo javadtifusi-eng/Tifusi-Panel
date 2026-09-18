@@ -510,6 +510,49 @@ export interface NodeSyncResult {
   inbound_count: number
 }
 
+export type IranVerdict = 'open' | 'blocked' | 'partial' | 'unknown' | 'checking'
+
+export interface IranCheck {
+  verdict: IranVerdict
+  ok?: number
+  checked?: number
+  cities?: { node: string; ok: boolean | null; ms: number | null; error: string | null }[]
+  error?: string
+}
+
+export interface RealityCandidate {
+  host: string
+  ip: string | null
+  source: 'neighbor' | 'list' | 'custom'
+  tls: string | null
+  alpn: string | null
+  latency_ms: number | null
+  usable: boolean
+  error: string | null
+  dest: string | null
+  fingerprints: Record<string, { ok: boolean | null; ms: number | null }> | null
+  iran: IranCheck | null
+}
+
+export interface RealityNodeScan {
+  state: 'idle' | 'discovering' | 'validating' | 'testing' | 'done' | 'error'
+  phase_total: number
+  phase_done: number
+  error: string | null
+  results: RealityCandidate[]
+  node_iran: IranCheck
+}
+
+export async function startNodeRealityScan(nodeId: number, payload: { mode: 'neighbors' | 'list' | 'custom'; hosts?: string[] }): Promise<RealityNodeScan> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function getNodeRealityScan(nodeId: number): Promise<RealityNodeScan> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`)
+  return res.json()
+}
+
 export async function listNodes(): Promise<NodeList> {
   const res = await authorizedFetch('/nodes')
   return res.json()

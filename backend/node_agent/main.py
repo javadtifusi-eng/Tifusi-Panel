@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import ipsec, ipsec_stats, limits
+from node_agent import ipsec, ipsec_stats, limits, reality_scan
 
 API_KEY = os.environ.get("TIFUSI_NODE_API_KEY", "")
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
@@ -212,3 +212,36 @@ async def stats(x_node_api_key: str | None = Header(default=None)) -> dict:
             continue
 
     return {"users": users}
+
+
+@app.post("/reality/scan")
+async def reality_scan_start(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Starts a REALITY target scan in the background (node_agent/reality_scan.py);
+    the panel polls GET /reality/scan for progress. One scan at a time."""
+    _check_key(x_node_api_key)
+    if reality_scan.running():
+        raise HTTPException(status_code=409, detail="A scan is already running on this node")
+    hosts = [str(h).strip().lower() for h in payload.get("hosts") or [] if str(h).strip()][:300]
+    reality_scan.start(
+        public_ip=payload.get("public_ip"),
+        hosts=hosts,
+        neighbors=bool(payload.get("neighbors", True)),
+        test_top=max(1, min(int(payload.get("test_top", 8)), 20)),
+    )
+    return reality_scan.status()
+
+
+@app.get("/reality/scan")
+async def reality_scan_status(x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    return reality_scan.status()
+
+
+@app.post("/reality/check")
+async def reality_check(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Validates one name and runs the real per-fingerprint REALITY test on it."""
+    _check_key(x_node_api_key)
+    host = str(payload.get("host") or "").strip()
+    if not host or len(host) > 253 or any(ch.isspace() for ch in host):
+        raise HTTPException(status_code=400, detail="host is required")
+    return await reality_scan.check_single(host)

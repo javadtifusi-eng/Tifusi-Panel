@@ -49,7 +49,14 @@ A host is the public endpoint a client receives: address, port and display name,
 
 ### REALITY target scanner
 
-**Find Best Target (SNI)** in the host form measures latency to approximately 160 candidate SNI domains and proposes the fastest one as the REALITY target.
+**Find Best Target (SNI)** in the REALITY section of the Xray core form opens the scanner. It runs on a node you pick, because the node is what forwards handshakes to the target:
+
+1. **Find** — *Node neighbours* reads the names off the certificates of every address in the node's own /24, so it finds sites in the same datacenter (fast, and the approach Xray's authors recommend). *Well-known sites* uses a built-in list of about 160 large sites; *My own sites* tests the names you type.
+2. **Check** — each name must answer with TLS 1.3 and HTTP/2 and a certificate valid for that name. Neighbours are reached by their address, which becomes the `dest` (`IP:443`).
+3. **Prove** — for the best candidates the node starts a real REALITY server and client and loads a page through them once per fingerprint (chrome, firefox, safari, ios, android, edge, 360, qq, random, randomized). ✓ means that fingerprint really connected; ✕ means it didn't.
+4. **Iran** — the panel asks probe servers inside Iran (Tehran, Isfahan, Shiraz, Qom, via check-host.net) whether each finalist opens there, and whether the node's own address is reachable. Only the name or the node address is sent. Names that are filtered in Iran are listed last.
+
+**Use** writes the name into `serverNames` and the `dest` into the core's JSON. The scanner needs a node updated to v1.4.1 or later, which also runs Xray 26: on Xray 1.8 the chrome, firefox and safari fingerprints fail against REALITY.
 
 ## Groups
 

@@ -12,14 +12,14 @@ import {
   getRealityKeypair,
   listCores,
   listNodes,
-  scanReality,
   updateCore,
   updateNode,
   type Core,
   type CoreType,
   type Node,
-  type RealityScanResult,
+  type RealityCandidate,
 } from '../lib/api'
+import RealityScanner from '../components/RealityScanner'
 import { copyToClipboard } from '../lib/clipboard'
 
 const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'l2tp']
@@ -776,8 +776,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     (!isTransportProtocol ||
       (!!wizard.network && !!wizard.security && (wizard.security !== 'reality' || (!!wizard.sni && !!wizard.realityPrivateKey && !!wizard.realityShortId))))
 
-  const [scanning, setScanning] = useState(false)
-  const [scanResults, setScanResults] = useState<RealityScanResult[] | null>(null)
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [generatingKeys, setGeneratingKeys] = useState(false)
   const [generatedKey, setGeneratedKey] = useState<{ private_key: string; public_key: string; short_id: string } | null>(null)
   const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
@@ -840,7 +839,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     setEditingId(null)
     setForm({ ...emptyForm(), coreType: type })
     setWizard(emptyWizard())
-    setScanResults(null)
     setGeneratedKey(null)
     setLastWarnings([])
     setFormError(null)
@@ -851,7 +849,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     setEditingId(null)
     setForm(emptyForm())
     setWizard(emptyWizard())
-    setScanResults(null)
     setGeneratedKey(null)
     setShowForm(false)
     setLastWarnings([])
@@ -887,19 +884,14 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function runScan() {
-    setScanning(true)
-    setFormError(null)
-    setScanResults(null)
-    try {
-      const res = await scanReality()
-      setScanResults(res.results)
-      if (!res.results.some((r) => r.recommended)) setFormError(t.coresPage.noTargetFound)
-    } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : t.coresPage.scanFailed)
-    } finally {
-      setScanning(false)
-    }
+  function applyScannedTarget(c: RealityCandidate) {
+    updateWizard('sni', c.host)
+    const next = patchRealityInJson(form.configText, (reality) => {
+      reality.dest = c.dest ?? `${c.host}:443`
+      reality.serverNames = [c.host]
+    })
+    if (next !== null) setForm((f) => ({ ...f, configText: next }))
+    say(t.ui.realityScan.applied(c.host))
   }
 
   async function generateKeys() {
@@ -1361,8 +1353,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                     <button type="button" onClick={generateKeys} disabled={generatingKeys} className="btn">
                       {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
                     </button>
-                    <button type="button" onClick={runScan} disabled={scanning} className="btn">
-                      {scanning ? t.coresPage.scanning : t.coresPage.suggestTarget}
+                    <button type="button" onClick={() => setScannerOpen(true)} className="btn">
+                      {t.coresPage.suggestTarget}
                     </button>
                     <span className="hint mono" style={{ margin: 0 }}>
                       privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'} · shortId: {wizard.realityShortId || '—'}
@@ -1373,61 +1365,10 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                       ✓ {t.coresPage.realityKeysInfo} <span className="mono">publicKey: {generatedKey.public_key}</span>
                     </div>
                   )}
-                  {scanResults !== null && scanResults.length > 0 && (
-                    <div style={{ maxHeight: 260, overflow: 'auto' }}>
-                      <table className="scan-table">
-                        <thead>
-                          <tr>
-                            <th>{t.coresPage.scanColHost}</th>
-                            <th>{t.coresPage.scanColStatus}</th>
-                            <th>{t.coresPage.scanColTls}</th>
-                            <th>{t.coresPage.scanColLatency}</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {scanResults.map((r) => (
-                            <tr key={r.host}>
-                              <td className="mono" style={{ textAlign: 'left' }}>
-                                {r.host}
-                              </td>
-                              <td>
-                                {r.recommended ? (
-                                  <span className="pill accent">{t.coresPage.scanStatusRecommended}</span>
-                                ) : r.reachable ? (
-                                  <span className="pill ok">{t.coresPage.scanStatusUsable}</span>
-                                ) : (
-                                  <span className="pill bad">{t.coresPage.scanStatusUnreachable}</span>
-                                )}
-                              </td>
-                              <td className="mono">{r.tls_version ?? '—'}</td>
-                              <td className="mono">{r.latency_ms != null ? `${r.latency_ms}ms` : '—'}</td>
-                              <td>
-                                {r.reachable && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      updateWizard('sni', r.host)
-                                      const next = patchRealityInJson(form.configText, (reality) => {
-                                        reality.dest = `${r.host}:443`
-                                        reality.serverNames = [r.host]
-                                      })
-                                      if (next !== null) setForm((f) => ({ ...f, configText: next }))
-                                    }}
-                                    className={`btn ${wizard.sni === r.host ? 'on' : ''}`}
-                                  >
-                                    {wizard.sni === r.host ? t.coresPage.copied : t.coresPage.useAsTarget}
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
                 </div>
               )}
+
+              {scannerOpen && <RealityScanner onPick={applyScannedTarget} onClose={() => setScannerOpen(false)} picked={wizard.sni} />}
 
               <div>
                 <button type="button" onClick={addWizardToJson} disabled={!wizardCanAdd} className="btn solid">
