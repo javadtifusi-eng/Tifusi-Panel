@@ -16,6 +16,7 @@ import html
 import io
 import json
 import re
+from pathlib import Path
 
 import qrcode
 import qrcode.image.svg
@@ -38,7 +39,32 @@ def _is_self_signed(pem_block: str) -> bool:
         return False
     return cert.issuer == cert.subject
 
-_ACCENT = "#22d3ee"
+_ACCENT = "#f97316"
+
+# Tifusi VPN's own release, the build this panel's app code is made for.
+ANDROID_APP_URL = "https://github.com/javadtifusi-eng/Tifusi-VPN/releases/latest/download/tifusi-vpn.apk"
+
+_ASSETS = Path(__file__).resolve().parent / "assets"
+
+
+def _data_uri(name: str) -> str:
+    # Inlined rather than linked: the page is also reached on the panel's
+    # own port, where nginx (and the dashboard's static files) isn't in front.
+    return "data:image/png;base64," + base64.b64encode((_ASSETS / name).read_bytes()).decode()
+
+
+_MARK_URI = _data_uri("tifusi-mark.png")
+_APP_ICON_URI = _data_uri("app-icon.png")
+
+_APPLE_SVG = (
+    '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">'
+    '<path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 '
+    "1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 "
+    "1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 "
+    "2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 "
+    '1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/>'
+    "</svg>"
+)
 
 
 def _qr_svg(value: str) -> str:
@@ -46,14 +72,10 @@ def _qr_svg(value: str) -> str:
     buf = io.BytesIO()
     img.save(buf)
     svg = buf.getvalue().decode()
-    # SvgPathImage emits one <path> for every dark module with no fill set
-    # (SVG's own default fill, black, applies) and no width/height scaled to
-    # our fixed display box — this page is dark-themed end to end (see
-    # .qr-box below), so the modules go accent-cyan on that dark backdrop
-    # instead of the usual black-on-white, rather than punching a white
-    # rectangle into an otherwise all-dark page.
-    svg = svg.replace("<svg ", '<svg style="width:176px;height:176px" ', 1)
-    svg = svg.replace("<path ", f'<path fill="{_ACCENT}" ', 1)
+    # Dark modules on the white .qr-box, never light-on-dark: the iPhone
+    # camera and many scanner apps can't read an inverted code at all.
+    svg = svg.replace("<svg ", '<svg style="width:176px;height:176px;display:block" ', 1)
+    svg = svg.replace("<path ", '<path fill="#0b1120" ', 1)
     return svg
 
 
@@ -129,6 +151,12 @@ def _traffic_line(used: int, limit: int | None) -> str:
     return f"{_format_bytes(used)} / {_format_bytes(limit)}"
 
 
+def _used_percent(used: int, limit: int | None) -> int | None:
+    if not limit:
+        return None
+    return max(0, min(100, round(used * 100 / limit)))
+
+
 def _card(title: str, copy_value: str, body_html: str) -> str:
     return f"""
     <div class="card">
@@ -178,7 +206,7 @@ def build_info_page_html(
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(ike['username'])}</span></div>
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(ike['password'])}</span></div>
           {f'<div class="kv"><span>PSK</span><span class="mono">{_esc(ike["psk"])}</span></div>' if ike.get('psk') else ''}
-          {f'<a class="mobileconfig-btn" href="{_esc(ike["mobileconfig_url"])}">نصب مستقیم روی iOS/macOS</a>' if ike.get('mobileconfig_url') else ''}
+          {f'<a class="mobileconfig-btn" href="{_esc(ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>' if ike.get('mobileconfig_url') else ''}
         """
         remote_id_line = f"\nRemote ID: {ike['remote_id']}" if ike.get('remote_id') else ""
         copy_text = f"Server: {ike['server']}{remote_id_line}\nUsername: {ike['username']}\nPassword: {ike['password']}"
@@ -198,105 +226,136 @@ def build_info_page_html(
     if not sections:
         sections.append('<div class="empty">هیچ سرویسی برای این اکانت تعریف نشده.</div>')
 
+    percent = _used_percent(used_traffic, data_limit)
+    meter = (
+        f'<div class="meter" role="img" aria-label="{percent}٪ مصرف شده"><i style="width:{percent}%"></i></div>'
+        if percent is not None
+        else ""
+    )
+    apple_url = next((c["mobileconfig_url"] for c in ikev2_configs if c.get("mobileconfig_url")), None)
+    apple_tile = (
+        f"""
+        <a class="tile" href="{_esc(apple_url)}">
+          <span class="tile-ic apple">{_APPLE_SVG}</span>
+          <span class="tile-t"><b>آیفون، آیپد و مک</b><small>نصب پروفایل IKEv2 با یک لمس</small></span>
+          <span class="tile-go">نصب</span>
+        </a>"""
+        if apple_url
+        else ""
+    )
+
     return f"""<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0a0a">
 <title>Tifusi Panel</title>
 <style>
   :root {{ color-scheme: dark; }}
   * {{ box-sizing: border-box; }}
   body {{
-    margin: 0; padding: 24px 16px 48px; background: #0b1120; color: #e2e8f0;
-    font-family: 'Vazirmatn', Tahoma, system-ui, -apple-system, sans-serif;
+    margin: 0; padding: 20px 16px 48px; background: #0a0a0a; color: #e5e5e5;
+    font-family: 'Vazirmatn', Tahoma, system-ui, -apple-system, sans-serif; line-height: 1.6;
   }}
-  .wrap {{ max-width: 640px; margin: 0 auto; }}
-  .logo {{
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    margin-bottom: 4px;
+  .wrap {{ max-width: 560px; margin: 0 auto; }}
+  .logo {{ display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 18px; }}
+  .logo img {{ width: 74px; height: 40px; display: block; }}
+  .logo b {{ font-size: 17px; font-weight: 700; color: #f5f5f5; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }}
+  .logo small {{ font-size: 12px; color: #8b8b8b; }}
+  .userbar {{ background: #141414; border: 1px solid #232323; border-radius: 16px; padding: 16px; margin-bottom: 16px; }}
+  .userbar .top {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; }}
+  .userbar .name {{ font-weight: 700; color: #f5f5f5; font-size: 16px; direction: ltr; unicode-bidi: isolate; }}
+  .userbar .meta {{ display: flex; justify-content: space-between; gap: 10px; color: #8b8b8b; font-size: 12px; margin-top: 10px; }}
+  .userbar .meta b {{ color: #d4d4d4; font-weight: 500; direction: ltr; unicode-bidi: isolate; }}
+  .meter {{ height: 6px; background: #0e0e0e; border-radius: 4px; overflow: hidden; margin-top: 8px; }}
+  .meter i {{ display: block; height: 100%; background: {_ACCENT}; border-radius: 4px; }}
+  .status {{ font-size: 12px; padding: 2px 12px; border-radius: 999px; border: 1px solid rgba(249,115,22,0.35); color: {_ACCENT}; background: rgba(249,115,22,0.08); white-space: nowrap; }}
+  .section {{ margin-bottom: 16px; }}
+  .section-title {{ font-size: 13px; color: #bebebe; margin-bottom: 8px; font-weight: 500; }}
+  .tiles {{ display: flex; flex-direction: column; gap: 8px; }}
+  .tile {{
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-decoration: none; color: inherit;
+    background: #141414; border: 1px solid #232323; border-radius: 14px;
   }}
-  .logo-mark {{
-    width: 34px; height: 34px; border-radius: 9px;
-    background: linear-gradient(135deg, {_ACCENT}, #0891b2);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; color: #04212a; font-size: 16px;
-  }}
-  .logo-text {{ font-size: 20px; font-weight: 800; color: #f1f5f9; letter-spacing: 0.3px; }}
-  .sub {{ text-align: center; color: #64748b; font-size: 12px; margin-bottom: 22px; }}
-  .userbar {{
-    display: flex; justify-content: space-between; align-items: center;
-    background: #111827; border: 1px solid rgba(34,211,238,0.15); border-radius: 14px;
-    padding: 14px 16px; margin-bottom: 18px; font-size: 13px;
-  }}
-  .userbar .name {{ font-weight: 700; color: #f1f5f9; }}
-  .userbar .meta {{ color: #94a3b8; font-size: 11px; margin-top: 2px; }}
-  .status {{ font-size: 11px; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(34,211,238,0.3); color: {_ACCENT}; }}
-  .section {{ margin-bottom: 18px; }}
-  .section-title {{ font-size: 12px; color: #94a3b8; margin-bottom: 8px; }}
+  .tile:active {{ background: #1c1c1c; }}
+  .tile-ic {{ width: 44px; height: 44px; border-radius: 11px; flex: none; display: grid; place-items: center; overflow: hidden; }}
+  .tile-ic img {{ width: 44px; height: 44px; display: block; }}
+  .tile-ic.apple {{ background: #f5f5f5; color: #0a0a0a; }}
+  .tile-t {{ display: flex; flex-direction: column; flex: 1; min-width: 0; }}
+  .tile-t b {{ font-size: 14px; color: #f5f5f5; font-weight: 600; }}
+  .tile-t small {{ font-size: 12px; color: #8b8b8b; }}
+  .tile-go {{ font-size: 12px; font-weight: 700; color: #1a0d02; background: {_ACCENT}; border-radius: 9px; padding: 6px 14px; flex: none; }}
+  .code-row {{ display: flex; align-items: center; gap: 8px; margin-top: 8px; }}
+  .code-row small {{ font-size: 12px; color: #8b8b8b; flex: 1; }}
   .qr-wrap {{ display: flex; justify-content: center; margin-bottom: 10px; }}
-  .qr-box {{ background: #111827; border: 1px solid rgba(34,211,238,0.15); padding: 12px; border-radius: 12px; line-height: 0; }}
+  .qr-box {{ background: #ffffff; padding: 12px; border-radius: 12px; line-height: 0; }}
   .link-row {{
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    background: #111827; border: 1px solid #1e293b; border-radius: 10px;
+    background: #141414; border: 1px solid #232323; border-radius: 11px;
     padding: 8px 10px; margin-bottom: 6px;
   }}
-  .link-row .mono {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: ltr; text-align: left; flex: 1; }}
-  .card {{
-    background: #111827; border: 1px solid #1e293b; border-radius: 14px;
-    padding: 14px 16px; margin-bottom: 12px;
-  }}
-  .card-head {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }}
-  .badge {{
-    font-size: 11px; color: #94a3b8; border: 1px solid #334155; border-radius: 999px;
-    padding: 3px 10px;
-  }}
-  .kv {{ display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px dashed #1e293b; }}
+  .link-row .mono {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: 1; }}
+  .card {{ background: #141414; border: 1px solid #232323; border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; }}
+  .card-head {{ display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }}
+  .badge {{ font-size: 12px; color: #bebebe; border: 1px solid #2a2a2a; border-radius: 999px; padding: 2px 10px; }}
+  .kv {{ display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; border-bottom: 1px dashed #232323; }}
   .kv:last-of-type {{ border-bottom: none; }}
-  .kv span:first-child {{ color: #64748b; }}
-  .mono {{ font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; color: {_ACCENT}; direction: ltr; }}
+  .kv span:first-child {{ color: #8b8b8b; }}
+  .mono {{ font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; color: #f5f5f5; direction: ltr; unicode-bidi: isolate; font-size: 13px; }}
   .copy-btn {{
-    background: {_ACCENT}; color: #04212a; border: none; border-radius: 8px;
-    padding: 5px 12px; font-size: 11px; font-weight: 700; cursor: pointer;
-    flex-shrink: 0;
+    background: #1c1c1c; color: #f5f5f5; border: 1px solid #2d2d2d; border-radius: 8px;
+    padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: inherit;
   }}
-  .copy-btn.copied {{ background: #4ade80; }}
+  .copy-btn.copied {{ background: #15221a; border-color: #22c55e; color: #22c55e; }}
   .mobileconfig-btn {{
-    display: inline-block; margin-top: 8px; font-size: 11px; color: {_ACCENT};
-    text-decoration: none; border: 1px solid rgba(34,211,238,0.3); border-radius: 8px;
-    padding: 6px 12px;
+    display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600;
+    color: #0a0a0a; background: #f5f5f5; text-decoration: none; border-radius: 10px; padding: 9px 12px;
   }}
-  .empty {{ text-align: center; color: #64748b; font-size: 13px; padding: 20px 0; }}
+  .mobileconfig-btn svg {{ width: 18px; height: 18px; }}
+  .empty {{ text-align: center; color: #8b8b8b; font-size: 13px; padding: 20px 0; }}
   .reset-btn {{
-    display: block; width: 100%; background: #1e293b; color: #f87171; border: 1px solid rgba(248,113,113,0.3);
-    border-radius: 10px; padding: 10px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
-    font-family: inherit;
+    display: block; width: 100%; background: transparent; color: #f87171; border: 1px solid rgba(248,113,113,0.3);
+    border-radius: 11px; padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
   }}
-  .reset-btn.confirm {{ background: #7f1d1d; color: #fecaca; border-color: #f87171; }}
+  .reset-btn.confirm {{ background: #3a1616; color: #fecaca; border-color: #f87171; }}
   .reset-btn:disabled {{ opacity: 0.6; cursor: default; }}
-  .reset-hint {{ text-align: center; color: #64748b; font-size: 10px; margin-top: 6px; }}
-  .footer {{ text-align: center; color: #334155; font-size: 10px; margin-top: 28px; }}
+  .reset-hint {{ text-align: center; color: #6b6b6b; font-size: 11px; margin-top: 6px; }}
+  .footer {{ display: flex; justify-content: center; margin-top: 28px; opacity: 0.35; }}
+  .footer img {{ width: 44px; height: 24px; }}
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="logo">
-      <div class="logo-mark">T</div>
-      <div class="logo-text">Tifusi Panel</div>
+      <img src="{_MARK_URI}" width="74" height="40" alt="">
+      <b>Tifusi Panel</b>
+      <small>صفحه‌ی اطلاعات اشتراک</small>
     </div>
-    <div class="sub">صفحه‌ی اطلاعات اشتراک</div>
 
     <div class="userbar">
-      <div>
-        <div class="name">{_esc(username)}</div>
-        <div class="meta">{_esc(_traffic_line(used_traffic, data_limit))} · انقضا: {_esc(expire_text)}</div>
+      <div class="top">
+        <span class="name">{_esc(username)}</span>
+        <span class="status">{_esc(status)}</span>
       </div>
-      <div class="status">{_esc(status)}</div>
+      {meter}
+      <div class="meta">
+        <span>حجم: <b>{_esc(_traffic_line(used_traffic, data_limit))}</b></span>
+        <span>انقضا: <b>{_esc(expire_text)}</b></span>
+      </div>
     </div>
 
     <div class="section">
-      <div class="section-title">شناسه‌ی اپ Tifusi VPN (برای اندروید؛ حروف بزرگ و کوچک فرقی ندارد)</div>
-      <div class="link-row">
+      <div class="section-title">نصب برنامه</div>
+      <div class="tiles">
+        <a class="tile" href="{ANDROID_APP_URL}" download>
+          <span class="tile-ic"><img src="{_APP_ICON_URI}" alt=""></span>
+          <span class="tile-t"><b>Tifusi VPN برای اندروید</b><small>دانلود مستقیم برنامه</small></span>
+          <span class="tile-go">دانلود</span>
+        </a>{apple_tile}
+      </div>
+      <div class="code-row">
+        <small>کد ورود در برنامه‌ی Tifusi VPN:</small>
         <span class="mono">{_esc(app_code)}</span>
         <button class="copy-btn" data-copy="{_esc(app_code)}">کپی</button>
       </div>
@@ -317,7 +376,7 @@ def build_info_page_html(
       <div class="reset-hint">این کار همه‌ی لینک‌ها و رمزهای فعلیت رو باطل می‌کنه — باید تو همه‌ی دستگاه‌هات دوباره وصل بشی.</div>
     </div>
 
-    <div class="footer">Tifusi Panel</div>
+    <div class="footer"><img src="{_MARK_URI}" alt="Tifusi"></div>
   </div>
 
   <script>

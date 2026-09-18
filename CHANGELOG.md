@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.1 — 2026-09-18
+
+### Subscription page
+- QR codes are dark on white again. The light-on-dark codes couldn't be read by the iPhone camera and many scanner apps.
+- Redesigned in the panel's own look, with the Tifusi logo, a data-usage bar, a direct download of the Tifusi VPN Android app and a one-tap iPhone/Mac profile button.
+
 ## v1.4 — 2026-09-18
 
 ### Connection Shield
