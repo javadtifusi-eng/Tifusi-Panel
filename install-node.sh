@@ -337,6 +337,37 @@ else
     docker build -t tifusi-node-agent -f "$CLONE_DIR/backend/node_agent/Dockerfile" "$CLONE_DIR/backend" || exit 1
 fi
 
+step "Network tuning"
+# BBR instead of cubic, with fq pacing and larger socket buffers. Links from
+# Iran to a node abroad are long and lossy; cubic halves its rate on every
+# lost packet, BBR paces to the bandwidth it measures, which is where most
+# of the proxy's throughput is won or lost. Only new connections pick it
+# up, so nothing already connected is interrupted.
+modprobe tcp_bbr 2>/dev/null || true
+if grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+  echo tcp_bbr > /etc/modules-load.d/tifusi-bbr.conf 2>/dev/null || true
+  cat > /etc/sysctl.d/99-tifusi-network.conf <<'SYSCTL'
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.ipv4.tcp_rmem = 4096 131072 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.core.netdev_max_backlog = 16384
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_notsent_lowat = 131072
+SYSCTL
+  sysctl -q -p /etc/sysctl.d/99-tifusi-network.conf >/dev/null 2>&1 || true
+  # default_qdisc only applies to interfaces set up after it changes.
+  iface=$(ip -o route show default 2>/dev/null | awk '{print $5; exit}')
+  [ -n "$iface" ] && tc qdisc replace dev "$iface" root fq 2>/dev/null || true
+  done_line "BBR congestion control and larger network buffers"
+else
+  warn "This kernel has no BBR — keeping its default congestion control."
+fi
+
 step "L2TP / IKEv2 kernel support"
 # l2tp_ppp/ppp_generic: xl2tpd needs these loaded into the HOST kernel to
 # actually create L2TP/PPP sessions — a container can't load kernel

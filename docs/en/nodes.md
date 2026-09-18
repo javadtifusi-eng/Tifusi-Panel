@@ -22,7 +22,7 @@ One server therefore serves proxy clients and native-VPN clients together. Panel
    ```bash
    bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- <API_KEY> [PORT]
    ```
-   `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules and starts the `tifusi-node` container on the host network.
+   `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules, turns on BBR congestion control with larger network buffers (`/etc/sysctl.d/99-tifusi-network.conf`) for better throughput on long, lossy links, and starts the `tifusi-node` container on the host network.
 3. Select **Sync** in the panel to push the initial configuration. After the first successful sync, health checks and traffic collection run continuously.
 
 ## Managing a node server

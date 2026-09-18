@@ -13,6 +13,7 @@
 
 ### Nodes
 - Xray 26.3.27 instead of 1.8.24. REALITY on 1.8 rejected the post-quantum key share of current chrome, firefox and safari fingerprints, so those clients failed while ios, edge and qq connected. Re-run the node installer to update a node.
+- The node installer turns on BBR congestion control with fq pacing, larger socket buffers and MTU probing. On the long, lossy links from Iran to a node abroad, cubic halved its rate on every lost packet; BBR paces to the measured bandwidth. Only new connections are affected, so nothing drops while it applies.
 
 ### Dashboard
 - The network health card is off the dashboard again; the dashboard is as it was in v1.3.
