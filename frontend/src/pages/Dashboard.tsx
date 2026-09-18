@@ -86,7 +86,7 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
     // still shows up under the logo and in the notifications.
     const checkVersion = () => getVersion().then(setVersion).catch(() => undefined)
     checkVersion()
-    const timer = window.setInterval(checkVersion, 30 * 60 * 1000)
+    const timer = window.setInterval(checkVersion, 10 * 60 * 1000)
     return () => window.clearInterval(timer)
   }, [])
 

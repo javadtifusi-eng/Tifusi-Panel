@@ -24,7 +24,7 @@ _GITHUB_REFS_URL = "https://github.com/javadtifusi-eng/Tifusi-Panel.git/info/ref
 # Release tags only; the repo also carries others such as "tunnel-agent".
 # Peeled entries ("refs/tags/v1.2^{}") are skipped by requiring the newline.
 _RELEASE_TAG = re.compile(r"refs/tags/([vV]?\d+(?:\.\d+)*)\n")
-_LATEST_TTL_SECONDS = 3600
+_LATEST_TTL_SECONDS = 600
 _LATEST_RETRY_SECONDS = 300
 
 # (monotonic time of the last check, highest release tag found then)
@@ -41,7 +41,7 @@ def _parse_version(v: str) -> tuple[int, ...]:
 
 
 async def _latest_release() -> str | None:
-    """Highest release tag on GitHub, re-read at most hourly. When GitHub can't
+    """Highest release tag on GitHub, re-read at most every ten minutes. When GitHub can't
     be reached the last known answer is kept and retried after a few minutes."""
     global _latest_cache
     checked_at, latest = _latest_cache
