@@ -26,6 +26,9 @@
 
 ## Ideas worth building (bigger, riskier, not started)
 
+### REALITY guardian (next up)
+Every few hours the panel asks its Iran probes (the same check-host.net check the REALITY scanner uses) whether each REALITY inbound's current target, and each node's own address, still open from inside Iran. When a target turns filtered, it runs the scanner on that node, picks the best target that is open in Iran and works with chrome, writes it into the core, resyncs the node and sends a Telegram notice; users only need a subscription update. When a node's address turns filtered, it only alerts — there is nothing to switch to automatically. Off by default, with a per-core toggle.
+
 ### Live censorship radar (crowd-sourced)
 Right now the REALITY scanner only sees the internet from the panel's own vantage point. The idea: have connected clients themselves run a small, silent background probe and report back — anonymously — which SNI/protocol actually works *from their specific ISP, right now*. Aggregated across users, the panel could tell that, say, one carrier just blocked a given REALITY target while another hasn't, and reconfigure each user's subscription automatically, without them noticing anything beyond "it still works."
 
