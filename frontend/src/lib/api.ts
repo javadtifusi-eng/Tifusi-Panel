@@ -768,45 +768,6 @@ export async function switchShieldGroup(id: number, tunnelId: number): Promise<S
   return res.json()
 }
 
-export type HealthState = 'good' | 'warn' | 'bad' | 'unknown'
-
-export interface OperatorHealth {
-  key: string
-  name_fa: string
-  name_en: string
-  attempts: number
-  successes: number
-  rate: number | null
-  users: number
-  sub_attempts: number
-  sub_successes: number
-  recent_rate: number | null
-  previous_rate: number | null
-  state: HealthState
-  last_at: string | null
-  trend: (number | null)[]
-}
-
-export interface NetworkHealthReport {
-  hours: number
-  generated_at: string
-  bucket_minutes: number
-  buckets: string[]
-  attempts: number
-  successes: number
-  rate: number | null
-  users: number
-  operators: OperatorHealth[]
-  series: { key: string; rates: (number | null)[]; attempts: number[] }[]
-  protocols: { protocol: string; attempts: number; cells: { operator: string; attempts: number; successes: number }[] }[]
-  alerts: { kind: 'drop' | 'subscription'; operator: string; recent_rate: number; previous_rate: number | null; attempts: number }[]
-}
-
-export async function getNetworkHealth(hours: number): Promise<NetworkHealthReport> {
-  const res = await authorizedFetch(`/network-health?hours=${hours}`)
-  return res.json()
-}
-
 export async function syncNode(id: number): Promise<NodeSyncResult> {
   const res = await authorizedFetch(`/nodes/${id}/sync`, { method: 'POST' })
   return res.json()
