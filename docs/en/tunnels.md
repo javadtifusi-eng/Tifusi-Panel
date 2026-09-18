@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · [Installation](installation.md) · [Nodes](nodes.md) · [Cores & hosts](cores-and-hosts.md) · [Users](users-and-subscriptions.md) · [Resellers](resellers.md) · **Tunnels** · [Telegram bot](telegram-bot.md) · [Android app](android-app.md) · [Operations](operations.md) · [Deployment](deployment.md) · [Architecture](architecture.md) · [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 🚀 [Installation](installation.md) · 🖥️ [Nodes](nodes.md) · 🧩 [Cores & hosts](cores-and-hosts.md) · 👥 [Users](users-and-subscriptions.md) · 🤝 [Resellers](resellers.md) · 🌉 **Tunnels** · 🤖 [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · ⚙️ [Operations](operations.md) · 🐳 [Deployment](deployment.md) · 🏗️ [Architecture](architecture.md) · 🛠️ [Development](development.md)</sub>
 
 # Tunnels
 
