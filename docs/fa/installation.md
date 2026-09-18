@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 🚀 **نصب** · 🖥️ [نودها](nodes.md) · 🧩 [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👥 [کاربران](users-and-subscriptions.md) · 🤝 [نمایندگان](resellers.md) · 🌉 [تانل‌ها](tunnels.md) · 🤖 [ربات تلگرام](telegram-bot.md) · 📱 [اپ اندروید](android-app.md) · ⚙️ [مدیریت](operations.md) · 🐳 [مرجع استقرار](deployment.md) · 🏗️ [معماری](architecture.md) · 🛠️ [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 **نصب** · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📱 [اپ اندروید](android-app.md) · 🎛️ [مدیریت](operations.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 

@@ -46,9 +46,9 @@ Tifusi Panel manages users, access policy and server configuration from one dash
 | --- | --- |
 | ⚡ **Two cores on one node** | Each node runs an Xray core and an IPsec core (IKEv2 or L2TP) at the same time, so one server serves proxy and native-VPN clients together. |
 | 🔒 **Device limits on the node** | Simultaneous connections are enforced by the node itself for Xray, IKEv2 and L2TP, not only counted by the panel. |
-| 🤝 **Resellers** | Separate sign-ins with their own protocols, user limit and data quota, and no view of the servers. |
-| 🌉 **Tunnels** | Publish a server abroad through a relay inside a restricted network, with install commands generated for both sides. |
-| 🤖 **Telegram bot and Android app** | Sell subscriptions automatically with Tifusi Bot and connect in one tap with Tifusi VPN. |
+| 💼 **Resellers** | Separate sign-ins with their own protocols, user limit and data quota, and no view of the servers. |
+| 🚇 **Tunnels** | Publish a server abroad through a relay inside a restricted network, with install commands generated for both sides. |
+| ✈️ **Telegram bot and Android app** | Sell subscriptions automatically with Tifusi Bot and connect in one tap with Tifusi VPN. |
 
 ## 🚀 Quick start
 
@@ -70,18 +70,18 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 
 | Section | Contents |
 | --- | --- |
-| 🚀 [Installation](docs/en/installation.md) | Server requirements, standard and professional editions, first-run setup |
-| 🖥️ [Nodes](docs/en/nodes.md) | Two cores on one node, adding and removing nodes, synchronisation, device limits |
-| 🧩 [Cores, hosts and groups](docs/en/cores-and-hosts.md) | Xray, IKEv2 and L2TP cores, public endpoints, REALITY target scanner, access groups |
-| 👥 [Users and subscriptions](docs/en/users-and-subscriptions.md) | Quotas, expiry, on-hold accounts, subscription links, access codes, client profiles |
-| 🤝 [Resellers](docs/en/resellers.md) | Reseller accounts, allowed protocols, user limits and data quotas |
-| 🌉 [Tunnels](docs/en/tunnels.md) | Relaying a foreign server, transports, forwarded ports, testing and spoof test |
-| 🤖 [Telegram bot](docs/en/telegram-bot.md) | Tifusi Bot: automatic sales, renewals and wallet through the panel API |
+| 📦 [Installation](docs/en/installation.md) | Server requirements, standard and professional editions, first-run setup |
+| 🌐 [Nodes](docs/en/nodes.md) | Two cores on one node, adding and removing nodes, synchronisation, device limits |
+| ⚛️ [Cores, hosts and groups](docs/en/cores-and-hosts.md) | Xray, IKEv2 and L2TP cores, public endpoints, REALITY target scanner, access groups |
+| 👤 [Users and subscriptions](docs/en/users-and-subscriptions.md) | Quotas, expiry, on-hold accounts, subscription links, access codes, client profiles |
+| 💼 [Resellers](docs/en/resellers.md) | Reseller accounts, allowed protocols, user limits and data quotas |
+| 🚇 [Tunnels](docs/en/tunnels.md) | Relaying a foreign server, transports, forwarded ports, testing and spoof test |
+| ✈️ [Telegram bot](docs/en/telegram-bot.md) | Tifusi Bot: automatic sales, renewals and wallet through the panel API |
 | 📱 [Android app](docs/en/android-app.md) | Tifusi VPN: importing servers by access code, one-tap IKEv2, connection reports |
-| ⚙️ [Operations](docs/en/operations.md) | `tifusi panel` commands, administrators, API keys, notifications, settings |
-| 🐳 [Deployment reference](docs/en/deployment.md) | Docker Compose, ports, TLS, database migrations |
-| 🏗️ [Architecture](docs/en/architecture.md) | Components, data flow, node synchronisation, repository layout |
-| 🛠️ [Development](docs/en/development.md) | Running the backend, dashboard and node agent from source |
+| 🎛️ [Operations](docs/en/operations.md) | `tifusi panel` commands, administrators, API keys, notifications, settings |
+| 🚢 [Deployment reference](docs/en/deployment.md) | Docker Compose, ports, TLS, database migrations |
+| 📐 [Architecture](docs/en/architecture.md) | Components, data flow, node synchronisation, repository layout |
+| 💻 [Development](docs/en/development.md) | Running the backend, dashboard and node agent from source |
 
 Release notes are in [CHANGELOG.md](CHANGELOG.md) and planned work in [ROADMAP.md](ROADMAP.md).
 
