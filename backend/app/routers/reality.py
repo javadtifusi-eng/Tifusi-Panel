@@ -108,6 +108,11 @@ def _with_iran(scan: dict, node: Node | None = None, address: str | None = None)
     return scan
 
 
+# Per node: how far out the neighbour scan has walked and every name it has
+# already turned up, so "find more" only ever shows new ones.
+_rounds: dict[int, dict] = {}
+
+
 @router.post("/nodes/{node_id}/scan")
 async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSession = Depends(get_db)) -> dict:
     node = await _node_or_404(node_id, db)
@@ -116,11 +121,19 @@ async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSessi
         hosts = CANDIDATE_TARGETS
     elif payload.mode == "custom" and not hosts:
         raise HTTPException(status_code=400, detail="Enter at least one name to test")
+    rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
+    if payload.mode == "neighbors" and payload.more:
+        rounds["ring"] += 1
+    else:
+        rounds["ring"] = 0
+        rounds["seen"] = set()
     body = {
         "public_ip": await _public_ipv4(node.address),
         "hosts": hosts,
         "neighbors": payload.mode == "neighbors",
         "test_top": payload.test_top,
+        "ring": rounds["ring"],
+        "exclude": sorted(rounds["seen"]),
     }
     scan = await _node_call(node, "POST", "/reality/scan", json=body)
     # Whether the node itself is reachable from Iran is worth knowing
@@ -132,7 +145,11 @@ async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSessi
 @router.get("/nodes/{node_id}/scan")
 async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     node = await _node_or_404(node_id, db)
-    return _with_iran(await _node_call(node, "GET", "/reality/scan"), node)
+    scan = await _node_call(node, "GET", "/reality/scan")
+    rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
+    rounds["seen"].update(r["host"] for r in scan.get("results", []) if r.get("source") == "neighbor")
+    scan["seen_total"] = len(rounds["seen"])
+    return _with_iran(scan, node)
 
 
 @router.post("/nodes/{node_id}/check")

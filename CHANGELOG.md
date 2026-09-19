@@ -12,6 +12,7 @@
 - Each working fingerprint shows its real ping (median of three requests after a warm-up, timed one fingerprint at a time). The fastest and slowest are only called out when the gap is real — usually they are within a few milliseconds of each other.
 - Real ping to each target, measured from the node by IP after the scan's burst of checks: median of five TCP connects and three TLS handshakes. Targets are ranked by being open from Iran, working with chrome, then the shortest handshake — REALITY waits on it for every new connection.
 - **New server (before it's a node)** replaces *My own sites*: the panel gives a one-line command that runs the scanner on a server that isn't a node yet and reports back, so its targets are known before it's added.
+- **Find more sites**: each round of the neighbour scan walks out to the next /24s either side of the node (its own /24, then ±1, ±2…) and skips every name already found, so every round shows only new targets.
 - Live progress and results; **Use** writes the name and `dest` into the core's JSON.
 
 ### Nodes

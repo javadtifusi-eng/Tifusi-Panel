@@ -543,9 +543,14 @@ export interface RealityNodeScan {
   error: string | null
   results: RealityCandidate[]
   node_iran: IranCheck
+  /** Neighbour scans walk outward: ring 0 is the node's own /24, ring k the /24s k blocks away. */
+  ring?: number
+  blocks?: string[]
+  /** Names found on this node over all rings so far. */
+  seen_total?: number
 }
 
-export async function startNodeRealityScan(nodeId: number, payload: { mode: 'neighbors' | 'list' | 'custom'; hosts?: string[] }): Promise<RealityNodeScan> {
+export async function startNodeRealityScan(nodeId: number, payload: { mode: 'neighbors' | 'list' | 'custom'; hosts?: string[]; more?: boolean }): Promise<RealityNodeScan> {
   const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }

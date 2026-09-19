@@ -29,6 +29,9 @@ class NodeScanRequest(BaseModel):
     mode: str = Field(default="neighbors", pattern="^(neighbors|list|custom)$")
     hosts: list[str] = Field(default_factory=list, max_length=50)
     test_top: int = Field(default=8, ge=1, le=20)
+    # neighbors only: walk out to the next ring of /24s and skip every name
+    # already found on this node, instead of re-reading the same ones.
+    more: bool = False
 
 
 class NodeCheckRequest(BaseModel):

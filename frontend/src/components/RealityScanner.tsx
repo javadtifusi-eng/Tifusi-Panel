@@ -90,7 +90,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
     }, POLL_MS)
   }
 
-  async function start() {
+  async function start(more = false) {
     if (timer.current) window.clearTimeout(timer.current)
     setError(null)
     setShowAll(false)
@@ -105,7 +105,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
       }
       if (nodeId == null) return
       setRemote(null)
-      setScan(await startNodeRealityScan(nodeId, { mode }))
+      setScan(await startNodeRealityScan(nodeId, { mode, more }))
       poll(nodeId)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.common.genericError)
@@ -178,7 +178,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
             <button
               type="button"
               className="btn primary lg"
-              onClick={start}
+              onClick={() => start()}
               disabled={busy || (mode === 'server' ? !/^\d{1,3}(\.\d{1,3}){3}$/.test(serverIp.trim()) : nodeId == null)}
             >
               {busy ? rs.phase[scan!.state] : mode === 'server' ? rs.serverBtn : scan ? rs.again : rs.start}
@@ -233,6 +233,15 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                 {rs.found(usable.length, results.length)}
                 {checkingIran ? ` · ${rs.iran.checking}` : ''}
               </div>
+              {scan.blocks && scan.blocks.length > 0 && (
+                <div className="hint" style={{ margin: 0 }}>
+                  {rs.ring((scan.ring ?? 0) + 1)} ·{' '}
+                  <span className="en" dir="ltr">
+                    {scan.blocks.join(' , ')}
+                  </span>
+                  {scan.seen_total ? ` · ${rs.seenTotal(scan.seen_total)}` : ''}
+                </div>
+              )}
               {scan.state === 'error' && scan.error && <div className="tf-alert">{scan.error}</div>}
             </div>
 
@@ -298,6 +307,11 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                 )
               })}
             </ul>
+            {mode === 'neighbors' && !remote && scan.state === 'done' && (
+              <button type="button" className="btn solid" style={{ alignSelf: 'flex-start' }} onClick={() => start(true)}>
+                🔎 {rs.more}
+              </button>
+            )}
             {results.length > usable.length && (
               <button type="button" className="btn" onClick={() => setShowAll((v) => !v)}>
                 {showAll ? rs.hideUnusable : rs.showUnusable(results.length - usable.length)}

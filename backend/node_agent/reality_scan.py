@@ -74,6 +74,8 @@ class Job:
     started_at: float | None = None
     finished_at: float | None = None
     error: str | None = None
+    ring: int = 0
+    blocks: list[str] = field(default_factory=list)
     candidates: dict[str, Candidate] = field(default_factory=dict)
 
     def snapshot(self) -> dict:
@@ -85,6 +87,8 @@ class Job:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "error": self.error,
+            "ring": self.ring,
+            "blocks": self.blocks,
             "results": [asdict(c) for c in items],
         }
 
@@ -115,18 +119,20 @@ def running() -> bool:
     return _task is not None and not _task.done()
 
 
-def start(public_ip: str | None, hosts: list[str], neighbors: bool, test_top: int) -> None:
+def start(public_ip: str | None, hosts: list[str], neighbors: bool, test_top: int, ring: int = 0, exclude: list[str] | None = None) -> None:
     global _job, _task
-    _job = Job(state="discovering", started_at=time.time())
-    _task = asyncio.get_running_loop().create_task(_run(public_ip, hosts, neighbors, test_top))
+    _job = Job(state="discovering", started_at=time.time(), ring=ring)
+    if neighbors and public_ip:
+        _job.blocks = [str(n) for n in ring_blocks(public_ip, ring)]
+    _task = asyncio.get_running_loop().create_task(_run(public_ip, hosts, neighbors, test_top, ring, set(exclude or [])))
 
 
-async def _run(public_ip: str | None, hosts: list[str], neighbors: bool, test_top: int) -> None:
+async def _run(public_ip: str | None, hosts: list[str], neighbors: bool, test_top: int, ring: int = 0, exclude: set[str] | None = None) -> None:
     try:
         for h in hosts:
             _job.candidates.setdefault(h, Candidate(host=h, source="custom" if len(hosts) <= 3 else "list"))
         if neighbors and public_ip:
-            await _discover(public_ip)
+            await _discover(public_ip, ring, exclude)
         _job.state = "validating"
         await _validate(list(_job.candidates.values()))
         await _measure_all(list(_job.candidates.values()))
@@ -181,12 +187,28 @@ async def _peer_cert(ip: str) -> bytes | None:
                 await writer.wait_closed()
 
 
-async def _discover(public_ip: str) -> None:
+def ring_blocks(public_ip: str, ring: int) -> list[ipaddress.IPv4Network]:
+    """Ring 0 is the node's own /24; ring k the two /24s k blocks either
+    side of it — still the same provider's space almost always, so each
+    "find more" walks outward instead of re-reading the same neighbours."""
     try:
-        net = ipaddress.ip_network(f"{public_ip}/24", strict=False)
+        own = ipaddress.ip_network(f"{public_ip}/24", strict=False)
     except ValueError:
-        return
-    ips = [str(ip) for ip in net.hosts() if str(ip) != public_ip]
+        return []
+    if ring <= 0:
+        return [own]
+    out = []
+    for step in (-ring, ring):
+        start = int(own.network_address) + step * 256
+        if 0 < start < 2**32 - 256:
+            net = ipaddress.ip_network(f"{ipaddress.IPv4Address(start)}/24")
+            if net.is_global:
+                out.append(net)
+    return out
+
+
+async def _discover(public_ip: str, ring: int = 0, exclude: set[str] | None = None) -> None:
+    ips = [str(ip) for net in ring_blocks(public_ip, ring) for ip in net.hosts() if str(ip) != public_ip]
     _job.phase_total, _job.phase_done = len(ips), 0
     sem = asyncio.Semaphore(_DISCOVER_CONCURRENCY)
 
@@ -198,6 +220,8 @@ async def _discover(public_ip: str) -> None:
             return
         with suppress(Exception):
             for name in _cert_names(der)[:3]:
+                if exclude and name in exclude:
+                    continue
                 _job.candidates.setdefault(name, Candidate(host=name, ip=ip, source="neighbor"))
 
     await asyncio.gather(*(one(ip) for ip in ips))
@@ -448,7 +472,8 @@ def _http(url: str, body: dict | None = None) -> dict:
 
 async def _remote(job_url: str) -> None:
     job = await asyncio.to_thread(_http, job_url + "/job")
-    start(job.get("public_ip"), job.get("hosts") or [], bool(job.get("neighbors")), int(job.get("test_top") or 8))
+    start(job.get("public_ip"), job.get("hosts") or [], bool(job.get("neighbors")), int(job.get("test_top") or 8),
+          int(job.get("ring") or 0), job.get("exclude") or [])
     print(f"Tifusi REALITY scan of {job.get('public_ip')} — results appear in the panel.", flush=True)
     last = ""
     while True:

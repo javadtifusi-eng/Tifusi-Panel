@@ -232,6 +232,8 @@ async def reality_scan_start(payload: dict, x_node_api_key: str | None = Header(
         hosts=hosts,
         neighbors=bool(payload.get("neighbors", True)),
         test_top=max(1, min(int(payload.get("test_top", 8)), 20)),
+        ring=max(0, min(int(payload.get("ring", 0)), 64)),
+        exclude=[str(h) for h in payload.get("exclude") or []][:5000],
     )
     return reality_scan.status()
 
