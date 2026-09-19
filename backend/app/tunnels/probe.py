@@ -9,6 +9,9 @@ this port", nothing about whether the tunnel relay itself is healthy.
 """
 
 import asyncio
+import base64
+import os
+import ssl
 import time
 
 from app.models.tunnel import TunnelTransport
@@ -95,3 +98,42 @@ async def recommend_transports(
     link = "slow" if slow_or_unreachable else "fast"
     order = _SLOW_LINK_ORDER if slow_or_unreachable else _FAST_LINK_ORDER
     return iran_reachable, iran_latency, foreign_reachable, foreign_latency, link, order
+
+
+async def cdn_probe(host: str, port: int, path: str, timeout: float = 10.0) -> tuple[bool, float | None, str | None]:
+    """Sends a WebSocket upgrade to the CDN name, the way the foreign side
+    does, and reports whether the relay answered it. A CDN only returns
+    101 Switching Protocols after the relay behind it has; anything else
+    (the CDN's own error page, a TLS failure, a timeout) means the CDN
+    path is broken, even if the relay itself is up."""
+    start = time.monotonic()
+    writer = None
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port, ssl=ssl.create_default_context(), server_hostname=host), timeout=timeout
+        )
+        key = base64.b64encode(os.urandom(16)).decode()
+        writer.write(
+            (
+                f"GET {path or '/'} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Mozilla/5.0\r\n"
+                f"Connection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\n"
+                f"Sec-WebSocket-Key: {key}\r\n\r\n"
+            ).encode()
+        )
+        await writer.drain()
+        status = (await asyncio.wait_for(reader.readline(), timeout=timeout)).decode(errors="replace").strip()
+        elapsed = (time.monotonic() - start) * 1000
+        if " 101 " in f"{status} ":
+            return True, elapsed, None
+        return False, None, f"CDN answered: {status[:80] or 'nothing'}"
+    except ssl.SSLError as exc:
+        return False, None, f"TLS to the CDN failed: {exc.reason or exc.__class__.__name__}"
+    except Exception as exc:  # noqa: BLE001
+        return False, None, f"CDN not reachable: {exc.__class__.__name__}"
+    finally:
+        if writer is not None:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:  # noqa: BLE001
+                pass

@@ -72,6 +72,15 @@ class Tunnel(Base):
     # Only meaningful for ws/wss/wsmux/wssmux.
     path: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Set when the foreign side reaches the relay through a CDN. The foreign
+    # side then dials cdn_host:cdn_port instead of iran_address, which stays
+    # the address users connect to; the CDN forwards WebSocket traffic to
+    # the relay's own port. ArvanCloud's edges inside Iran mean the relay
+    # only ever talks to domestic addresses. See app/routers/tunnels.py.
+    cdn_provider: Mapped[str | None] = mapped_column(String(16), nullable=True)  # arvan | cloudflare
+    cdn_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cdn_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # "Pool" (plain transports) and "mux_con" (mux transports) are the same
     # underlying idea — how many physical connections the foreign side
     # keeps warm — so one field covers both rather than making the admin

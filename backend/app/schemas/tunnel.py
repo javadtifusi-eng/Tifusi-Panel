@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.tunnel import TunnelStatus, TunnelTransport
 
 ForwardNet = Literal["tcp", "udp"]
+CdnProvider = Literal["arvan", "cloudflare"]
 
 
 class TunnelForward(BaseModel):
@@ -28,6 +29,9 @@ class TunnelCreate(BaseModel):
     path: str | None = Field(default=None, max_length=255)
     connection_count: int = Field(default=8, ge=1, le=256)
     forwards: list[TunnelForward] = []
+    cdn_provider: CdnProvider | None = None
+    cdn_host: str | None = Field(default=None, max_length=255)
+    cdn_port: int | None = Field(default=None, ge=1, le=65535)
 
 
 class TunnelUpdate(BaseModel):
@@ -43,6 +47,9 @@ class TunnelUpdate(BaseModel):
     path: str | None = Field(default=None, max_length=255)
     connection_count: int | None = Field(default=None, ge=1, le=256)
     forwards: list[TunnelForward] | None = None
+    cdn_provider: CdnProvider | None = None
+    cdn_host: str | None = Field(default=None, max_length=255)
+    cdn_port: int | None = Field(default=None, ge=1, le=65535)
 
 
 class TunnelResponse(BaseModel):
@@ -62,6 +69,9 @@ class TunnelResponse(BaseModel):
     path: str | None
     connection_count: int
     forwards: list[TunnelForward]
+    cdn_provider: str | None = None
+    cdn_host: str | None = None
+    cdn_port: int | None = None
     status: TunnelStatus
     last_error: str | None
     last_checked_at: datetime | None
@@ -84,6 +94,10 @@ class TunnelTestResult(BaseModel):
     iran_latency_ms: float | None
     foreign_reachable: bool | None
     foreign_latency_ms: float | None
+    # Only for a tunnel through a CDN: did a WebSocket upgrade sent to the
+    # CDN hostname come back from the relay?
+    cdn_reachable: bool | None = None
+    cdn_latency_ms: float | None = None
     error: str | None
 
 

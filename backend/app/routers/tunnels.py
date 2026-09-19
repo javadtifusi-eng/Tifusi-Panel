@@ -1,5 +1,6 @@
 import ipaddress
 import re
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,7 +30,7 @@ from app.tunnels.config import (
     build_iran_config,
     build_spooftest_commands,
 )
-from app.tunnels.probe import recommend_transports, tcp_probe
+from app.tunnels.probe import cdn_probe, recommend_transports, tcp_probe
 
 router = APIRouter(prefix="/api/tunnels", tags=["tunnels"], dependencies=[Depends(require_permission("tunnels"))])
 
@@ -43,6 +44,42 @@ _DEFAULT_FOREIGN_PROBE_PORT = 22
 # builds (the admin runs that command themselves, but it should still never
 # carry injected syntax).
 _HOST_RE = re.compile(r"^[A-Za-z0-9.\-:]+$")
+
+
+# The HTTPS ports Cloudflare proxies. It connects to the origin on the same
+# port the client used, so the relay has to listen on one of these too.
+_CLOUDFLARE_PORTS = (443, 2053, 2083, 2087, 2096, 8443)
+_CDN_HOST_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
+
+
+def _apply_cdn(tunnel: Tunnel) -> None:
+    """Fills in everything a CDN tunnel needs from just the provider and
+    hostname, so the admin never sets SNI, Host or path by hand."""
+    if not tunnel.cdn_host:
+        tunnel.cdn_provider = tunnel.cdn_host = tunnel.cdn_port = None
+        return
+    host = tunnel.cdn_host.strip().lower().rstrip(".")
+    if not _CDN_HOST_RE.match(host):
+        raise HTTPException(status_code=400, detail="CDN domain must be a hostname such as tun.example.ir")
+    if tunnel.transport not in (TunnelTransport.wss, TunnelTransport.wssmux):
+        raise HTTPException(status_code=400, detail="A tunnel through a CDN needs the wss or wssmux transport")
+    tunnel.cdn_host = host
+    tunnel.cdn_provider = tunnel.cdn_provider or "arvan"
+    tunnel.sni = host
+    tunnel.domain = None
+    if not tunnel.path or tunnel.path == "/":
+        tunnel.path = "/" + secrets.token_hex(5)
+    if tunnel.cdn_provider == "cloudflare":
+        port = tunnel.cdn_port or (tunnel.iran_port if tunnel.iran_port in _CLOUDFLARE_PORTS else 443)
+        if port not in _CLOUDFLARE_PORTS:
+            raise HTTPException(
+                status_code=400,
+                detail="Cloudflare only proxies HTTPS on ports " + ", ".join(map(str, _CLOUDFLARE_PORTS)),
+            )
+        tunnel.cdn_port = port
+        tunnel.iran_port = port
+    else:
+        tunnel.cdn_port = tunnel.cdn_port or 443
 
 
 def _validate_host(host: str) -> str:
@@ -115,7 +152,11 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         path=payload.path,
         connection_count=payload.connection_count,
         forwards=[f.model_dump() for f in payload.forwards],
+        cdn_provider=payload.cdn_provider,
+        cdn_host=payload.cdn_host,
+        cdn_port=payload.cdn_port,
     )
+    _apply_cdn(tunnel)
     db.add(tunnel)
     await db.commit()
     await db.refresh(tunnel)
@@ -154,6 +195,7 @@ async def update_tunnel(tunnel_id: int, payload: TunnelUpdate, db: AsyncSession 
         raise HTTPException(status_code=400, detail="This tunnel is in a Connection Shield group, which can't health-check udp")
 
     _validate_foreign(tunnel.foreign_node_id, tunnel.foreign_address)
+    _apply_cdn(tunnel)
 
     db.add(tunnel)
     await db.commit()
@@ -273,15 +315,19 @@ async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> Tun
     target = await _foreign_probe_target(tunnel, db)
     foreign_reachable, foreign_latency = await tcp_probe(*target) if target else (False, None)
 
+    cdn_reachable = cdn_latency = cdn_error = None
+    if tunnel.cdn_host:
+        cdn_reachable, cdn_latency, cdn_error = await cdn_probe(tunnel.cdn_host, tunnel.cdn_port or 443, tunnel.path or "/")
+
     tunnel.last_checked_at = datetime.now(timezone.utc)
     unreachable = [
         side
-        for side, ok in (("Iran side", iran_reachable), ("foreign side", foreign_reachable))
+        for side, ok in (("Iran side", iran_reachable), ("foreign side", foreign_reachable), ("CDN path", cdn_reachable))
         if ok is False
     ]
     if unreachable:
         tunnel.status = TunnelStatus.error
-        tunnel.last_error = f"{' and '.join(unreachable)} not reachable"
+        tunnel.last_error = cdn_error if unreachable == ["CDN path"] and cdn_error else f"{' and '.join(unreachable)} not reachable"
     elif iran_reachable and foreign_reachable:
         tunnel.status = TunnelStatus.connected
         tunnel.last_error = None
@@ -299,5 +345,7 @@ async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> Tun
         iran_latency_ms=iran_latency,
         foreign_reachable=foreign_reachable,
         foreign_latency_ms=foreign_latency,
+        cdn_reachable=cdn_reachable,
+        cdn_latency_ms=cdn_latency,
         error=tunnel.last_error,
     )

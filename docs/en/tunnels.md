@@ -29,13 +29,26 @@ A token is generated automatically for each tunnel.
 
 ### Transports
 
-| Transport | Description |
+The form offers three:
+
+| Transport | Use |
 | --- | --- |
-| `tcp` | Plain TCP. |
-| `tls` | TCP inside TLS. |
-| `ws` / `wss` | WebSocket, plain or over TLS. Suitable behind a CDN. |
-| `tcpmux` / `wsmux` / `wssmux` | Multiplexed variants that carry many streams over fewer connections. |
-| `udp` | Plain UDP. |
+| **TCP Mux** (`tcpmux`) | Fastest; the foreign server connects straight to the relay. |
+| **WSS Mux** (`wssmux`) | WebSocket over TLS. The most filter-resistant, and the only one a CDN carries. |
+| **UDP (KCP)** (`udp`) | For links where TCP is disrupted. |
+
+Tunnels created earlier with `tcp`, `tls`, `ws`, `wss` or `wsmux` keep working; editing one shows its transport as a legacy card.
+
+## Through a CDN
+
+With **WSS Mux** selected, **Route through a CDN** makes the foreign server dial a CDN name instead of the relay's IP, so the tunnel survives if that IP is filtered. ArvanCloud is the recommended provider inside Iran; Cloudflare also works.
+
+1. Tick **Route through a CDN**, choose ArvanCloud or Cloudflare and enter the domain you will point at the relay.
+2. The panel sets the SNI to that domain, picks a random WebSocket path and fixes the port: ArvanCloud keeps the relay's port as the origin port; Cloudflare only proxies 443, 2053, 2083, 2087, 2096 and 8443, and reaches the relay on the same port, so the relay port follows your choice.
+3. Follow the checklist under the form: an A record to the relay with the CDN proxy on, HTTPS to the origin on the tunnel port (Full SSL on Cloudflare), and WebSocket on.
+4. **Test connection** adds a **CDN path** step: the panel opens a real WebSocket upgrade through the CDN to the relay and turns green only on a `101` answer.
+
+ArvanCloud bills traffic that passes through it, so everything the tunnel carries counts.
 
 ## Choosing a transport
 
@@ -49,7 +62,7 @@ Before the tunnel exists, **Recommend best transport** probes both servers and r
 
 ## Spoof test
 
-Some tunnel types depend on the relay's datacenter allowing packets with a forged source address to leave its network. **IP Spoofing test** generates two commands, one for each server, that check this before any such tunnel is built. Nothing runs on the servers until the commands are executed there.
+Some tunnel types depend on the relay's datacenter allowing packets with a forged source address to leave its network. The **IP Spoofing** card in the transport picker generates two commands, one for each server, that check this before any such tunnel is built. Nothing runs on the servers until the commands are executed there.
 
 ## Tunnels and IKEv2 or L2TP
 

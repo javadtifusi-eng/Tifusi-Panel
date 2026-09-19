@@ -16,6 +16,11 @@
 - Xray 26.3.27 instead of 1.8.24. REALITY on 1.8 rejected the post-quantum key share of current chrome, firefox and safari fingerprints, so those clients failed while ios, edge and qq connected. Re-run the node installer to update a node.
 - The node installer turns on BBR congestion control with fq pacing, larger socket buffers and MTU probing. On the long, lossy links from Iran to a node abroad, cubic halved its rate on every lost packet; BBR paces to the measured bandwidth. Only new connections are affected, so nothing drops while it applies.
 
+### Tunnels
+- **Route through a CDN** (ArvanCloud recommended, or Cloudflare): the foreign server dials a CDN name instead of the relay's IP, so the tunnel survives if that IP is filtered. The panel sets the SNI, a random WebSocket path and the port itself, and shows a checklist of what to set in the CDN panel.
+- **Test connection** on a CDN tunnel adds a CDN path step that opens a real WebSocket upgrade through the CDN and only passes on a `101` answer.
+- The transport picker is down to three cards — TCP Mux, WSS Mux and UDP (KCP) — plus IP Spoofing, which opens the spoof test. Tunnels on the other transports keep working.
+
 ### Dashboard
 - The network health card is off the dashboard again; the dashboard is as it was in v1.3.
 

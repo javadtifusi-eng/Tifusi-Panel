@@ -1132,3 +1132,17 @@ select.input { padding-block: 7px; }
 .rsc-fps .fp.wait { animation: tf-blink 1.2s ease-in-out infinite; }
 @keyframes tf-blink { 50% { opacity: 0.4; } }
 @media (prefers-reduced-motion: reduce) { .rsc-row, .rsc-steps li.now .d, .rsc-fps .fp.wait { animation: none; } }
+
+/* CDN tunnel checklist */
+.cdn-steps { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; color: var(--body); line-height: 1.7; }
+.cdn-steps li::marker { color: #f97316; font-weight: 600; }
+
+/* Tunnel transport picker */
+.tr-pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .tr-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tr-card { font: inherit; text-align: start; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--edge2); background: var(--well); color: var(--body); cursor: pointer; transition: border-color .15s, background .15s; }
+.tr-card b { font-size: 0.84rem; font-weight: 600; color: var(--text); }
+.tr-card small { font-size: 0.72rem; color: var(--muted); line-height: 1.6; }
+.tr-card:hover { border-color: rgb(249 115 22 / 0.45); }
+.tr-card[aria-pressed='true'] { border-color: #f97316; background: rgb(249 115 22 / 0.08); }
+.tr-card.spoof { border-style: dashed; }

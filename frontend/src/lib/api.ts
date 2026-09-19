@@ -593,6 +593,7 @@ export async function deleteNode(id: number): Promise<void> {
 
 export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp'
 export type TunnelStatus = 'pending' | 'connected' | 'error'
+export type CdnProvider = 'arvan' | 'cloudflare'
 
 export interface TunnelForward {
   name: string
@@ -616,6 +617,9 @@ export interface Tunnel {
   path: string | null
   connection_count: number
   forwards: TunnelForward[]
+  cdn_provider: CdnProvider | null
+  cdn_host: string | null
+  cdn_port: number | null
   status: TunnelStatus
   last_error: string | null
   last_checked_at: string | null
@@ -635,6 +639,8 @@ export interface TunnelTestResult {
   iran_latency_ms: number | null
   foreign_reachable: boolean | null
   foreign_latency_ms: number | null
+  cdn_reachable?: boolean | null
+  cdn_latency_ms?: number | null
   error: string | null
 }
 
@@ -669,6 +675,9 @@ export type TunnelPayload = {
   path?: string | null
   connection_count?: number
   forwards?: TunnelForward[]
+  cdn_provider?: CdnProvider | null
+  cdn_host?: string | null
+  cdn_port?: number | null
 }
 
 export async function listTunnels(): Promise<TunnelList> {

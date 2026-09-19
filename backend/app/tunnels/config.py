@@ -30,11 +30,15 @@ def build_iran_config(tunnel: Tunnel) -> dict:
         "transport": tunnel.transport.value,
         "token": tunnel.token,
     }
-    if tunnel.sni:
-        config["sni"] = tunnel.sni
+    sni = tunnel.cdn_host or tunnel.sni
+    if sni:
+        config["sni"] = sni
     if tunnel.path:
         config["path"] = tunnel.path
-    if tunnel.domain:
+    # Behind a CDN the relay keeps its self-signed certificate: the CDN, not
+    # a client, is what connects to it, and Let's Encrypt can't validate a
+    # name whose traffic the CDN answers.
+    if tunnel.domain and not tunnel.cdn_host:
         config["domain"] = tunnel.domain
     config["forwards"] = [
         {
@@ -49,14 +53,18 @@ def build_iran_config(tunnel: Tunnel) -> dict:
 
 
 def build_foreign_config(tunnel: Tunnel) -> dict:
+    # Through a CDN the foreign side dials the CDN's name; the CDN hands the
+    # WebSocket on to the relay. iran_address stays the address users use.
+    server = f"{tunnel.cdn_host}:{tunnel.cdn_port or 443}" if tunnel.cdn_host else f"{tunnel.iran_address}:{tunnel.iran_port}"
     config: dict = {
         "mode": "client",
-        "server": f"{tunnel.iran_address}:{tunnel.iran_port}",
+        "server": server,
         "transport": tunnel.transport.value,
         "token": tunnel.token,
     }
-    if tunnel.sni:
-        config["sni"] = tunnel.sni
+    sni = tunnel.cdn_host or tunnel.sni
+    if sni:
+        config["sni"] = sni
     if tunnel.path:
         config["path"] = tunnel.path
     if tunnel.transport in _MUX_TRANSPORTS:

@@ -22,12 +22,17 @@ import {
   type TunnelStatus,
   type TunnelTestResult,
   type TunnelTransport,
+  type CdnProvider,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import { parseServerDate } from '../lib/format'
 
-const TRANSPORTS: TunnelTransport[] = ['tcp', 'tls', 'ws', 'wss', 'tcpmux', 'wsmux', 'wssmux', 'udp']
+// The form offers only the three that earn their place; older tunnels on
+// another transport still show (and keep) theirs.
+const PICK: TunnelTransport[] = ['tcpmux', 'wssmux', 'udp']
 const PILL: Record<TunnelStatus, string> = { connected: 'ok live', pending: 'idle', error: 'bad' }
+// The HTTPS ports Cloudflare proxies; it reaches the relay on the same one.
+const CF_PORTS = [443, 2053, 2083, 2087, 2096, 8443]
 
 type ForeignSource = 'node' | 'address'
 
@@ -97,6 +102,10 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [path, setPath] = useState('')
   const [connectionCount, setConnectionCount] = useState('8')
   const [forwards, setForwards] = useState<TunnelForward[]>([])
+  const [useCdn, setUseCdn] = useState(false)
+  const [cdnProvider, setCdnProvider] = useState<CdnProvider>('arvan')
+  const [cdnHost, setCdnHost] = useState('')
+  const [cdnPort, setCdnPort] = useState('443')
 
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
@@ -140,6 +149,10 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setPath('')
     setConnectionCount('8')
     setForwards([])
+    setUseCdn(false)
+    setCdnProvider('arvan')
+    setCdnHost('')
+    setCdnPort('443')
     setShowForm(false)
     setRecommendResult(null)
     setFormError(null)
@@ -160,6 +173,10 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setPath(tunnel.path ?? '')
     setConnectionCount(String(tunnel.connection_count))
     setForwards(tunnel.forwards)
+    setUseCdn(!!tunnel.cdn_host)
+    setCdnProvider(tunnel.cdn_provider ?? 'arvan')
+    setCdnHost(tunnel.cdn_host ?? '')
+    setCdnPort(String(tunnel.cdn_port ?? 443))
     setRecommendResult(null)
     setFormError(null)
     setShowForm(true)
@@ -194,6 +211,9 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         path: path || null,
         connection_count: parseInt(connectionCount, 10) || 8,
         forwards,
+        cdn_provider: useCdn ? cdnProvider : null,
+        cdn_host: useCdn ? cdnHost.trim() || null : null,
+        cdn_port: useCdn && cdnProvider === 'cloudflare' ? parseInt(cdnPort, 10) || 443 : null,
       }
       if (editingId) await updateTunnel(editingId, payload)
       else await createTunnel(payload)
@@ -241,7 +261,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     if (testingId !== null) return
     setTestingId(tunnel.id)
     setError(null)
-    setSteps((s) => ({ ...s, [tunnel.id]: ['now', 'wait', 'wait'] }))
+    setSteps((s) => ({ ...s, [tunnel.id]: tunnel.cdn_host ? ['now', 'wait', 'wait', 'wait'] : ['now', 'wait', 'wait'] }))
     const started = performance.now()
     try {
       const result = await testTunnel(tunnel.id)
@@ -250,6 +270,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       const final: StepState[] = [
         stepFor(result.iran_reachable),
         stepFor(result.foreign_reachable),
+        ...(tunnel.cdn_host ? [stepFor(result.cdn_reachable ?? null)] : []),
         result.status === 'connected' ? 'done' : result.status === 'pending' ? 'skip' : 'fail',
       ]
       setSteps((s) => ({ ...s, [tunnel.id]: final }))
@@ -398,7 +419,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     return hours < 24 ? t.usersPage.hoursAgo(hours) : t.usersPage.daysAgo(Math.round(hours / 24))
   }
 
-  const stepLabels = [tn.stepIran, tn.stepForeign, tn.stepTunnel]
+  const stepLabelsFor = (tu: Tunnel) => (tu.cdn_host ? [tn.stepIran, tn.stepForeign, tn.cdnStep(tn.cdnName[tu.cdn_provider ?? 'arvan']), tn.stepTunnel] : [tn.stepIran, tn.stepForeign, tn.stepTunnel])
 
   return (
     <div className="pg-tunnels">
@@ -563,9 +584,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
           )}
         </h2>
         <div className="flex items-center gap-2">
-          <button type="button" className="btn" onClick={openSpoof}>
-            {tn.spoofTestBtn}
-          </button>
           <button type="button" className="btn solid" onClick={openNew}>
             <IconPlus size={14} />
             {t.tunnelsPage.newBtn.replace(/^\+\s*/, '')}
@@ -645,6 +663,11 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     <span>
                       {tn.latency} <b className="en">{latencyOf(tunnel)}</b>
                     </span>
+                    {tunnel.cdn_host && (
+                      <span>
+                        {tn.viaCdn} <b className="en">{tn.cdnName[tunnel.cdn_provider ?? 'arvan']} · {tunnel.cdn_host}</b>
+                      </span>
+                    )}
                     <span>
                       {tn.checked} <b>{checkedAgo(tunnel)}</b>
                     </span>
@@ -652,7 +675,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   {tunnel.last_error && tunnel.status === 'error' && <p className="alert">{tunnel.last_error}</p>}
                   {tunnelSteps && (
                     <ol className="steps">
-                      {stepLabels.map((label, i) => (
+                      {stepLabelsFor(tunnel).map((label, i) => (
                         <li key={label} className={tunnelSteps[i] === 'wait' ? '' : tunnelSteps[i]}>
                           <span className="ic">
                             {tunnelSteps[i] === 'done' ? '✓' : tunnelSteps[i] === 'fail' ? '✕' : tunnelSteps[i] === 'skip' ? '–' : tunnelSteps[i] === 'now' ? '' : i + 1}
@@ -795,18 +818,100 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                 </div>
               )}
               {recommendResult && <div className="hint" style={{ margin: 0 }}>{t.tunnelsPage.recommendReason[recommendResult.link]}</div>}
-              <div className="flex flex-wrap gap-1.5">
-                {(recommendResult ? recommendResult.ranked : TRANSPORTS).map((tr, i) => (
-                  <button key={tr} type="button" onClick={() => setTransport(tr)} title={t.tunnelsPage.transportHints[tr]} className={`btn ${transport === tr ? 'on' : ''}`}>
-                    {recommendResult && i === 0 ? '★ ' : ''}
-                    {t.tunnelsPage.transportLabels[tr]}
-                  </button>
-                ))}
+              <div className="tr-pick">
+                {(() => {
+                  const base = transport && !PICK.includes(transport) ? [...PICK, transport] : PICK
+                  const order = recommendResult ? recommendResult.ranked.filter((x) => base.includes(x)) : base
+                  return order.map((tr, i) => (
+                    <button key={tr} type="button" onClick={() => setTransport(tr)} aria-pressed={transport === tr} className="tr-card">
+                      <b>
+                        {recommendResult && i === 0 ? '★ ' : ''}
+                        {tn.pickName[tr] ?? t.tunnelsPage.transportLabels[tr]}
+                      </b>
+                      <small>{tn.pickTag[tr] ?? tn.pickLegacy}</small>
+                    </button>
+                  ))
+                })()}
+                <button
+                  type="button"
+                  className="tr-card spoof"
+                  onClick={() => {
+                    setShowForm(false)
+                    openSpoof()
+                  }}
+                >
+                  <b>IP Spoofing</b>
+                  <small>{tn.pickSpoof}</small>
+                </button>
               </div>
-              {transport && <div className="hint" style={{ margin: 0 }}>{t.tunnelsPage.transportHints[transport]}</div>}
             </div>
 
-            {transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
+            {(transport === 'wss' || transport === 'wssmux') && (
+            <div className="form-section">
+              <label className="sh-check">
+                <input
+                  id="tunnel-cdn"
+                  type="checkbox"
+                  checked={useCdn}
+                  onChange={(e) => {
+                    setUseCdn(e.target.checked)
+                    if (e.target.checked && transport !== 'wss' && transport !== 'wssmux') setTransport('wssmux')
+                  }}
+                />
+                <b>{tn.cdnToggle}</b>
+              </label>
+              <div className="hint" style={{ margin: 0 }}>
+                {tn.cdnIntro}
+              </div>
+              {useCdn && (
+                <>
+                  <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
+                    {(['arvan', 'cloudflare'] as CdnProvider[]).map((p) => (
+                      <button key={p} type="button" aria-pressed={cdnProvider === p} onClick={() => setCdnProvider(p)}>
+                        {tn.cdnName[p]}
+                        {p === 'arvan' ? ` · ${tn.cdnRecommended}` : ''}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="form-grid">
+                    <Field label={tn.cdnHostLabel} htmlFor="tunnel-cdn-host">
+                      <input id="tunnel-cdn-host" className="input ltr" value={cdnHost} onChange={(e) => setCdnHost(e.target.value)} placeholder={cdnProvider === 'arvan' ? 'tun.example.ir' : 'tun.example.com'} required />
+                    </Field>
+                    {cdnProvider === 'cloudflare' ? (
+                      <Field label={tn.cdnPortLabel} htmlFor="tunnel-cdn-port">
+                        <select
+                          id="tunnel-cdn-port"
+                          className="input"
+                          value={cdnPort}
+                          onChange={(e) => {
+                            setCdnPort(e.target.value)
+                            setIranPort(e.target.value)
+                          }}
+                        >
+                          {CF_PORTS.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    ) : null}
+                  </div>
+                  {(transport !== 'wss' && transport !== 'wssmux') && <div className="tf-alert">{tn.cdnNeedsWss}</div>}
+                  <ol className="cdn-steps">
+                    {(cdnProvider === 'arvan'
+                      ? tn.cdnStepsArvan(cdnHost.trim() || 'tun.example.ir', iranAddress || 'IP', iranPort || '8443')
+                      : tn.cdnStepsCloudflare(cdnHost.trim() || 'tun.example.com', iranAddress || 'IP', cdnPort)
+                    ).map((step: string, i: number) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                </>
+              )}
+            </div>
+            )}
+
+            {!useCdn && transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
               <div className="form-grid">
                 {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
                   <>
