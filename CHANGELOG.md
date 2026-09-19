@@ -13,6 +13,7 @@
 - Up to 20 finalists get the check-host.net Iran check instead of 8.
 - Shows only the five best sites instead of a long list: really working with chrome, open from every checked city in Iran, and on the node's own network first (no IP/SNI mismatch for the censor to throttle). The rest stay behind “show all”.
 - New “My SNIs” tab: type names you got elsewhere and each one gets the same on-node test, Iran check and test config.
+- New default “Critical services” tab: services Iran itself depends on (OS updates, developer registries, science publishers, CDNs), so blocking or throttling them is costly. Every name that works on the node is checked from inside Iran and the best five are shown; the built-in list keeps only the 62 that were open from every Iranian city in a live run.
 - The Iran check now shows up reliably: it used to start only after the first status poll, which was also the poll that stopped the dashboard from asking again.
 
 ### Node

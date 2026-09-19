@@ -552,7 +552,7 @@ export interface RealityNodeScan {
   seen_total?: number
 }
 
-export async function startNodeRealityScan(nodeId: number, payload: { mode: 'neighbors' | 'list' | 'custom'; hosts?: string[]; more?: boolean }): Promise<RealityNodeScan> {
+export async function startNodeRealityScan(nodeId: number, payload: { mode: 'critical' | 'neighbors' | 'list' | 'custom'; hosts?: string[]; more?: boolean }): Promise<RealityNodeScan> {
   const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
 }

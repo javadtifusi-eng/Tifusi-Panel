@@ -20,7 +20,7 @@ from app.dependencies import require_permission
 from app.models.node import Node
 from app.reality import iran_check
 from app.reality.scanner import is_reality_ready, scan_targets
-from app.reality.targets import CANDIDATE_TARGETS
+from app.reality.targets import CANDIDATE_TARGETS, CRITICAL_TARGETS
 from app.schemas.reality import NodeCheckRequest, NodeScanRequest, RemoteScanRequest, RealityScanRequest, RealityScanResponse, RealityScanResult
 
 router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
@@ -112,7 +112,7 @@ def _near(ip: str | None, own: str | None) -> bool:
         return False
 
 
-def _with_iran(scan: dict, node: Node | None = None, address: str | None = None) -> dict:
+def _with_iran(scan: dict, node: Node | None = None, address: str | None = None, check_all: bool = False) -> dict:
     own = address or (node.address if node else None)
     with suppress(OSError):
         own = socket.gethostbyname(own) if own else None
@@ -123,7 +123,11 @@ def _with_iran(scan: dict, node: Node | None = None, address: str | None = None)
         [r for r in scan.get("results", []) if r.get("fingerprints") and any((v or {}).get("ok") for v in r["fingerprints"].values())],
         key=lambda r: (not r["near"], r.get("latency_ms") or 10**6),
     )
-    for r in tested[:_IRAN_CHECKS_PER_SCAN]:
+    if check_all:
+        # A critical-services scan is only as good as its Iran verdicts: every
+        # name that works on the node is asked about, not just the finalists.
+        tested = [r for r in scan.get("results", []) if r.get("usable")]
+    for r in tested[: len(tested) if check_all else _IRAN_CHECKS_PER_SCAN]:
         iran_check.start_sni(r["host"])
     for r in scan.get("results", []):
         cached = iran_check.cached_only("http", f"https://{r['host']}")
@@ -157,6 +161,7 @@ def _save_rounds() -> None:
 
 
 _rounds: dict[int, dict] = _load_rounds()
+_last_mode: dict[int, str] = {}
 
 
 @router.post("/nodes/{node_id}/scan")
@@ -165,6 +170,8 @@ async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSessi
     hosts = [h.strip().lower() for h in payload.hosts if h.strip()]
     if payload.mode == "list":
         hosts = CANDIDATE_TARGETS
+    elif payload.mode == "critical":
+        hosts = CRITICAL_TARGETS
     elif payload.mode == "custom" and not hosts:
         raise HTTPException(status_code=400, detail="Enter at least one name to test")
     rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
@@ -184,7 +191,9 @@ async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSessi
         "public_ip": await _public_ipv4(node.address),
         "hosts": hosts,
         "neighbors": payload.mode == "neighbors",
-        "test_top": payload.test_top,
+        # Critical names are judged by the Iran check, not by the on-node
+        # fingerprint test, so only a handful get it and the scan stays quick.
+        "test_top": 5 if payload.mode == "critical" else payload.test_top,
         "ring": rounds["ring"],
         "exclude": sorted(rounds["seen"]),
     }
@@ -192,7 +201,8 @@ async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSessi
     # Whether the node itself is reachable from Iran is worth knowing
     # before any SNI is: a blocked address makes every SNI moot.
     asyncio.get_running_loop().create_task(iran_check.address(node.address, node.port))
-    return _with_iran(scan, node)
+    _last_mode[node.id] = payload.mode
+    return _with_iran(scan, node, check_all=payload.mode in ("critical", "custom"))
 
 
 @router.get("/nodes/{node_id}/scan")
@@ -205,7 +215,7 @@ async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> 
         rounds["seen"].update(fresh)
         _save_rounds()
     scan["seen_total"] = len(rounds["seen"])
-    return _with_iran(scan, node)
+    return _with_iran(scan, node, check_all=_last_mode.get(node.id) in ("critical", "custom"))
 
 
 @router.post("/nodes/{node_id}/check")

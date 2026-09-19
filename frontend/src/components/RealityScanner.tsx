@@ -21,7 +21,7 @@ import { Sheet } from './ui'
 
 // server: a machine that isn't a node yet — the scan runs there via a
 // one-line command, so the target is measured before the node is made.
-type Mode = 'neighbors' | 'list' | 'custom' | 'server'
+type Mode = 'critical' | 'neighbors' | 'list' | 'custom' | 'server'
 const FPS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', '360', 'qq', 'random', 'randomized']
 const POLL_MS = 1500
 
@@ -200,7 +200,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   const rs = t.ui.realityScan
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [nodeId, setNodeId] = useState<number | null>(null)
-  const [mode, setMode] = useState<Mode>('neighbors')
+  const [mode, setMode] = useState<Mode>('critical')
   const [serverIp, setServerIp] = useState('')
   const [custom, setCustom] = useState('')
   const customHosts = custom.split(/[\s,،]+/).map((h) => h.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean)
@@ -285,7 +285,9 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   // else stays behind "show all" — a long list of maybes helps no one.
   const TOP = 5
   const good = usable
-    .filter((r) => r.fingerprints?.chrome?.ok && r.iran?.verdict === 'open')
+    // A critical-services scan only proves a few on the node; there an
+    // untested name counts as long as Iran says it is open everywhere.
+    .filter((r) => (mode === 'critical' ? r.fingerprints?.chrome?.ok !== false : r.fingerprints?.chrome?.ok) && r.iran?.verdict === 'open')
     .sort((a, b) => Number(!a.near) - Number(!b.near) || byScore(a, b))
     .slice(0, TOP)
   const shown = showAll || mode === 'custom' ? [...results].sort(byScore) : good
@@ -323,7 +325,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
               </label>
               )}
               <div className="tf-seg" role="group" aria-label={rs.title}>
-                {(['neighbors', 'list', 'custom', 'server'] as Mode[]).map((m) => (
+                {(['critical', 'neighbors', 'list', 'custom', 'server'] as Mode[]).map((m) => (
                   <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} disabled={busy}>
                     {rs.mode[m]}
                   </button>

@@ -977,9 +977,10 @@ export const dict = {
         node: 'نود',
         pickNode: 'یک نود انتخاب کن',
         noNodes: 'اول یک نود اضافه کن؛ اسکن روی خود نود انجام می‌شود.',
-        mode: { neighbors: 'همسایه‌های نود', list: 'سایت‌های معروف', custom: 'SNI خودم', server: 'سرور جدید (قبل از نود)' } as Record<string, string>,
+        mode: { critical: 'سرویس‌های حیاتی', neighbors: 'همسایه‌های نود', list: 'سایت‌های معروف', custom: 'SNI خودم', server: 'سرور جدید (قبل از نود)' } as Record<string, string>,
         modeHint: {
           neighbors: 'سایت‌هایی که در همان دیتاسنتر نود هستند؛ سریع‌ترین و طبیعی‌ترین گزینه، همان روشی که سازندگان Xray پیشنهاد می‌کنند.',
+          critical: 'سرویس‌هایی که خود ایران به آن‌ها وابسته است: آپدیت ویندوز و اپل، مخزن‌های برنامه‌نویسی، آنتی‌ویروس‌ها، سایت‌های علمی، ایرلاین‌ها و شبکه‌های پرداخت. بستنشان برای بانک‌ها و دانشگاه‌ها و شرکت‌ها گران تمام می‌شود، پس معمولاً باز و بدون محدودیت سرعت می‌مانند. همه از داخل ایران چک می‌شوند و فقط ۵ تای بهتر نمایش داده می‌شود.',
           list: 'حدود ۱۶۰ سایت بزرگ و شناخته‌شده.',
           custom: 'SNIهایی که از دوستانت یا جای دیگر گرفتی را بنویس (با فاصله یا کاما جدا کن). همه روی همین نود تست می‌شوند، از ایران چک می‌شوند و برایشان کانفیگ تست ساخته می‌شود؛ SNIای که روی سرور دیگری عالی است، شاید روی این نود نباشد.',
           server: 'IP سروری که قراره نود بشه رو بده؛ یه دستور می‌گیری که روی همون سرور اجرا کنی. اسکن همسایه‌ها و تست واقعی REALITY روی خود اون سرور انجام می‌شه و نتیجه اینجا میاد — قبل از اینکه نودش کنی.',
@@ -2305,9 +2306,10 @@ export const dict = {
         node: 'Node',
         pickNode: 'Pick a node',
         noNodes: 'Add a node first — the scan runs on the node itself.',
-        mode: { neighbors: 'Node neighbours', list: 'Well-known sites', custom: 'My SNIs', server: 'New server (before it’s a node)' } as Record<string, string>,
+        mode: { critical: 'Critical services', neighbors: 'Node neighbours', list: 'Well-known sites', custom: 'My SNIs', server: 'New server (before it’s a node)' } as Record<string, string>,
         modeHint: {
           neighbors: 'Sites in the node’s own datacenter — the fastest and most natural choice, as Xray’s authors recommend.',
+          critical: 'Services Iran itself depends on: Windows and Apple updates, developer registries, antivirus updates, science publishers, airlines and payment networks. Blocking them costs banks, universities and companies, so they tend to stay open and unthrottled. Every one is checked from inside Iran and only the best 5 are shown.',
           list: 'About 160 large, well-known sites.',
           custom: 'Type SNIs you got from friends or elsewhere (separated by spaces or commas). Each is tested on this node, checked from Iran and given a test config — an SNI that is great on another server may not be on this one.',
           server: 'Give the IP of the server that will become a node and you get a command to run on it. The neighbour scan and the real REALITY test run on that server and the results appear here — before you make it a node.',

@@ -25,8 +25,9 @@ class RealityScanResponse(BaseModel):
 
 class NodeScanRequest(BaseModel):
     # neighbors: names found on the node's own /24; list: the built-in
-    # candidates; custom: only the names given in `hosts`.
-    mode: str = Field(default="neighbors", pattern="^(neighbors|list|custom)$")
+    # candidates; critical: services Iran itself depends on (targets.py);
+    # custom: only the names given in `hosts`.
+    mode: str = Field(default="neighbors", pattern="^(neighbors|list|critical|custom)$")
     hosts: list[str] = Field(default_factory=list, max_length=50)
     test_top: int = Field(default=20, ge=1, le=20)
     # neighbors only: walk out to the next ring of /24s and skip every name
