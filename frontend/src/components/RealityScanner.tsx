@@ -21,7 +21,7 @@ import { Sheet } from './ui'
 
 // server: a machine that isn't a node yet — the scan runs there via a
 // one-line command, so the target is measured before the node is made.
-type Mode = 'neighbors' | 'list' | 'server'
+type Mode = 'neighbors' | 'list' | 'custom' | 'server'
 const FPS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', '360', 'qq', 'random', 'randomized']
 const POLL_MS = 1500
 
@@ -202,6 +202,8 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   const [nodeId, setNodeId] = useState<number | null>(null)
   const [mode, setMode] = useState<Mode>('neighbors')
   const [serverIp, setServerIp] = useState('')
+  const [custom, setCustom] = useState('')
+  const customHosts = custom.split(/[\s,،]+/).map((h) => h.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean)
   const [remote, setRemote] = useState<{ token: string; command: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const [scan, setScan] = useState<RealityNodeScan | null>(null)
@@ -253,7 +255,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
       }
       if (nodeId == null) return
       setRemote(null)
-      setScan(await startNodeRealityScan(nodeId, { mode, more }))
+      setScan(await startNodeRealityScan(nodeId, mode === 'custom' ? { mode, hosts: customHosts } : { mode, more }))
       poll(nodeId)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.common.genericError)
@@ -286,7 +288,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
     .filter((r) => r.fingerprints?.chrome?.ok && r.iran?.verdict === 'open')
     .sort((a, b) => Number(!a.near) - Number(!b.near) || byScore(a, b))
     .slice(0, TOP)
-  const shown = showAll ? [...results].sort(byScore) : good
+  const shown = showAll || mode === 'custom' ? [...results].sort(byScore) : good
   const pct = scan && scan.phase_total ? Math.round((scan.phase_done / scan.phase_total) * 100) : busy ? 5 : 100
   const phaseIndex = scan?.state === 'done' ? 4 : ['discovering', 'validating', 'testing', 'done'].indexOf(scan?.state ?? '')
 
@@ -321,7 +323,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
               </label>
               )}
               <div className="tf-seg" role="group" aria-label={rs.title}>
-                {(['neighbors', 'list', 'server'] as Mode[]).map((m) => (
+                {(['neighbors', 'list', 'custom', 'server'] as Mode[]).map((m) => (
                   <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} disabled={busy}>
                     {rs.mode[m]}
                   </button>
@@ -331,11 +333,22 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
             <div className="hint" style={{ margin: 0 }}>
               {rs.modeHint[mode]}
             </div>
+            {mode === 'custom' && (
+              <textarea
+                id="rsc-custom"
+                className="input ltr"
+                rows={3}
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                placeholder={rs.customPlaceholder}
+                disabled={busy}
+              />
+            )}
             <button
               type="button"
               className="btn primary lg"
               onClick={() => start()}
-              disabled={busy || (mode === 'server' ? !/^\d{1,3}(\.\d{1,3}){3}$/.test(serverIp.trim()) : nodeId == null)}
+              disabled={busy || (mode === 'server' ? !/^\d{1,3}(\.\d{1,3}){3}$/.test(serverIp.trim()) : nodeId == null || (mode === 'custom' && !customHosts.length))}
             >
               {busy ? rs.phase[scan!.state] : mode === 'server' ? rs.serverBtn : scan ? rs.again : rs.start}
             </button>
@@ -472,13 +485,13 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
             {mode !== 'server' && nodeId != null && scan.state === 'done' && (
               <FieldTestPanel
                 nodeId={nodeId}
-                candidates={good}
+                candidates={mode === 'custom' ? usable.filter((r) => r.iran?.verdict !== 'blocked') : good}
                 onPick={onPick}
                 picked={picked}
               />
             )}
-            {scan.state === 'done' && !checkingIran && good.length === 0 && !showAll && <div className="tf-alert">{rs.noneGood}</div>}
-            {results.length > good.length && (
+            {scan.state === 'done' && !checkingIran && good.length === 0 && !showAll && mode !== 'custom' && <div className="tf-alert">{rs.noneGood}</div>}
+            {mode !== 'custom' && results.length > good.length && (
               <button type="button" className="btn" onClick={() => setShowAll((v) => !v)}>
                 {showAll ? rs.hideUnusable : rs.showUnusable(results.length - good.length)}
               </button>

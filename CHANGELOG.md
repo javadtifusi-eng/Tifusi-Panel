@@ -12,6 +12,7 @@
 - Real test from inside Iran: the node opens a temporary REALITY config per top site (30 minutes, its own Xray process, the live config untouched) and gives one subscription link. Import it on a phone on Iranian internet and run a real-delay test; each site that actually carried traffic through Iran's filtering to the node turns green. The on-server fingerprint test is now labelled as such.
 - Up to 20 finalists get the check-host.net Iran check instead of 8.
 - Shows only the five best sites instead of a long list: really working with chrome, open from every checked city in Iran, and on the node's own network first (no IP/SNI mismatch for the censor to throttle). The rest stay behind “show all”.
+- New “My SNIs” tab: type names you got elsewhere and each one gets the same on-node test, Iran check and test config.
 - The Iran check now shows up reliably: it used to start only after the first status poll, which was also the poll that stopped the dashboard from asking again.
 
 ### Node
