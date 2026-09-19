@@ -355,10 +355,15 @@ net.ipv4.tcp_rmem = 4096 131072 67108864
 net.ipv4.tcp_wmem = 4096 65536 67108864
 net.core.netdev_max_backlog = 16384
 net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_mtu_probe_floor = 1024
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_notsent_lowat = 131072
 SYSCTL
+  # tcp_mtu_probe_floor: on a lossy mobile path (seen live on MCI) the
+  # kernel takes throttling losses for an MTU black hole and shrinks the
+  # MSS down to 128 bytes, which leaves the connection crawling; the path
+  # really carries ~1400, so never probe below 1024.
   sysctl -q -p /etc/sysctl.d/99-tifusi-network.conf >/dev/null 2>&1 || true
   # default_qdisc only applies to interfaces set up after it changes.
   iface=$(ip -o route show default 2>/dev/null | awk '{print $5; exit}')
@@ -407,6 +412,9 @@ fi
 # and manage PPP interfaces. Harmless for a plain Xray node, so it's just
 # always granted rather than making this script guess in advance.
 EXTRA_DOCKER_ARGS=(--cap-add=NET_ADMIN --cap-add=NET_RAW)
+# Every proxied connection holds two sockets in Xray; Docker's default limit
+# of 1024 open files stalls a busy node once a few hundred are open.
+EXTRA_DOCKER_ARGS+=(--ulimit nofile=1048576:1048576)
 if [ -d /lib/modules ]; then
   EXTRA_DOCKER_ARGS+=(-v /lib/modules:/lib/modules:ro)
 fi
