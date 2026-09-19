@@ -51,6 +51,11 @@ function IranPill({ check }: { check: IranCheck | null }) {
   )
 }
 
+function speed(bps: number) {
+  const mbit = (bps * 8) / 1e6
+  return mbit >= 1 ? `${mbit.toFixed(1)} Mbps` : `${Math.round((bps * 8) / 1000)} Kbps`
+}
+
 function kb(n: number) {
   return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
 }
@@ -85,6 +90,22 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
   }, [nodeId])
 
   const top = candidates.slice(0, 10)
+  const topKey = top.map((c) => c.host).join(',')
+  const autoFor = useRef<string | null>(null)
+
+  // No button: as soon as a scan has finished, its best sites get test
+  // configs — unless the running test already covers exactly those sites.
+  useEffect(() => {
+    if (!topKey || autoFor.current === topKey) return
+    autoFor.current = topKey
+    getFieldTest(nodeId)
+      .then((cur) => {
+        const same = cur.active && cur.items.map((i) => i.host).sort().join(',') === topKey.split(',').sort().join(',')
+        if (!same) return run(() => startFieldTest(nodeId, top.map((c) => ({ host: c.host, dest: c.dest }))))
+      })
+      .catch(() => run(() => startFieldTest(nodeId, top.map((c) => ({ host: c.host, dest: c.dest })))))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeId, topKey])
 
   async function run(fn: () => Promise<FieldTest>) {
     setBusy(true)
@@ -103,7 +124,8 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
   }
 
   const left = test?.active && test.expires_at ? Math.max(0, Math.round((test.expires_at * 1000 - Date.now()) / 60000)) : null
-  const items = test ? [...test.items].sort((a, b) => Number(b.ok) - Number(a.ok) || b.down - a.down) : []
+  const items = test ? [...test.items].sort((a, b) => b.down_bps - a.down_bps || Number(b.ok) - Number(a.ok) || b.down - a.down) : []
+  const fastest = items[0]?.down_bps ? items[0].host : null
 
   return (
     <div className="form-section">
@@ -111,11 +133,6 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
       <div className="hint" style={{ margin: 0 }}>{ft.intro}</div>
       {top.length === 0 && !test && <div className="hint" style={{ margin: 0 }}>{ft.none}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {top.length > 0 && (
-          <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => startFieldTest(nodeId, top.map((c) => ({ host: c.host, dest: c.dest }))))}>
-            {test ? ft.again : ft.start(top.length)}
-          </button>
-        )}
         {test?.active && (
           <button type="button" className="btn" disabled={busy} onClick={() => run(() => stopFieldTest(nodeId))}>
             {ft.stop}
@@ -149,8 +166,11 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
                     </small>
                   </div>
                   <div className="rsc-side">
-                    {it.ok ? (
-                      <span className="pill ok"><i />{ft.ok(kb(it.down + it.up), it.clients)}</span>
+                    {it.host === fastest && <span className="pill accent">★ {ft.fastest}</span>}
+                    {it.down_bps > 0 ? (
+                      <span className="pill ok en" dir="ltr"><i />↓ {speed(it.down_bps)} · ↑ {speed(it.up_bps)}</span>
+                    ) : it.ok ? (
+                      <span className="pill warn"><i />{ft.ok(kb(it.down + it.up), it.clients)}</span>
                     ) : (
                       <span className={`pill ${test?.active ? 'info live' : 'bad'}`}><i />{test?.active ? ft.waiting : '✕'}</span>
                     )}

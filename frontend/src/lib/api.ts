@@ -580,6 +580,9 @@ export interface FieldTestItem {
   down: number
   up: number
   ok: boolean
+  /** Best download/upload rate seen through this config, bytes per second. */
+  down_bps: number
+  up_bps: number
   link: string
 }
 

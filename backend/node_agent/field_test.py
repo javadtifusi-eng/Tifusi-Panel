@@ -124,8 +124,32 @@ async def start(targets: list[dict], ttl: int, public_ip: str | None) -> dict:
         "started_at": now, "expires_at": now + ttl, "items": items,
         "local_ips": {"127.0.0.1", "::1", *([public_ip] if public_ip else [])},
     }
+    _state["rates"] = {}
     _stopper = asyncio.get_running_loop().create_task(_stop_later(ttl))
+    asyncio.get_running_loop().create_task(_sample())
     return await status()
+
+
+_SAMPLE_EVERY = 2.0
+
+
+async def _sample() -> None:
+    """Real speed as the phone sees it: the byte counters are read every two
+    seconds and each SNI keeps its best download/upload rate — a speed test
+    in v2rayNG or any download through that config shows up here."""
+    state, last = _state, None
+    while _state is state and _proc is not None and _proc.returncode is None:
+        now = time.monotonic()
+        stats = await _stats(state["api_port"])
+        if last is not None:
+            dt = now - last[0]
+            for tag, s in stats.items():
+                prev = last[1].get(tag, {})
+                r = state["rates"].setdefault(tag, {"down": 0, "up": 0})
+                for key, name in (("down", "downlink"), ("up", "uplink")):
+                    r[key] = max(r[key], int((s.get(name, 0) - prev.get(name, 0)) / dt))
+        last = (now, stats)
+        await asyncio.sleep(_SAMPLE_EVERY)
 
 
 async def _stop_later(ttl: int) -> None:
@@ -167,7 +191,9 @@ async def status() -> dict:
         # (an unauthenticated one is just relayed to dest and never logged as
         # accepted), and a client outside this server sent it.
         items.append({"host": it["host"], "dest": it["dest"], "port": it["port"], "clients": clients,
-                      "down": down, "up": up, "ok": clients > 0 and down > 0})
+                      "down": down, "up": up, "ok": clients > 0 and down > 0,
+                      "down_bps": _state["rates"].get(it["tag"], {}).get("down", 0),
+                      "up_bps": _state["rates"].get(it["tag"], {}).get("up", 0)})
     return {
         "active": active, "uuid": _state["uuid"], "public_key": _state["public_key"], "short_id": _state["short_id"],
         "started_at": _state["started_at"], "expires_at": _state["expires_at"], "items": items,
