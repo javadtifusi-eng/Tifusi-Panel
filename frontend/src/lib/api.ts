@@ -534,6 +534,8 @@ export interface RealityCandidate {
   dest: string | null
   fingerprints: Record<string, { ok: boolean | null; ms: number | null }> | null
   iran: IranCheck | null
+  /** In the node's own network (or a neighbour) — no IP/SNI mismatch for the censor to notice. */
+  near?: boolean
 }
 
 export interface RealityNodeScan {

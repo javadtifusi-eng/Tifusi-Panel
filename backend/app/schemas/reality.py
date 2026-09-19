@@ -28,7 +28,7 @@ class NodeScanRequest(BaseModel):
     # candidates; custom: only the names given in `hosts`.
     mode: str = Field(default="neighbors", pattern="^(neighbors|list|custom)$")
     hosts: list[str] = Field(default_factory=list, max_length=50)
-    test_top: int = Field(default=8, ge=1, le=20)
+    test_top: int = Field(default=20, ge=1, le=20)
     # neighbors only: walk out to the next ring of /24s and skip every name
     # already found on this node, instead of re-reading the same ones.
     more: bool = False
@@ -42,5 +42,5 @@ class RemoteScanRequest(BaseModel):
     # A server that isn't a node yet; neighbors or the built-in list.
     address: str = Field(min_length=7, max_length=64)
     mode: str = Field(default="neighbors", pattern="^(neighbors|list)$")
-    test_top: int = Field(default=8, ge=1, le=20)
+    test_top: int = Field(default=20, ge=1, le=20)
 

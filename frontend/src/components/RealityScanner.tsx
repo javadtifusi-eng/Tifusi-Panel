@@ -278,7 +278,15 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
     for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]
     return 0
   }
-  const shown = [...(showAll ? results : usable)].sort(byScore)
+  // The five worth using: really worked with chrome, open from every city
+  // checked in Iran, and on the node's own network where possible. Everything
+  // else stays behind "show all" — a long list of maybes helps no one.
+  const TOP = 5
+  const good = usable
+    .filter((r) => r.fingerprints?.chrome?.ok && r.iran?.verdict === 'open')
+    .sort((a, b) => Number(!a.near) - Number(!b.near) || byScore(a, b))
+    .slice(0, TOP)
+  const shown = showAll ? [...results].sort(byScore) : good
   const pct = scan && scan.phase_total ? Math.round((scan.phase_done / scan.phase_total) * 100) : busy ? 5 : 100
   const phaseIndex = scan?.state === 'done' ? 4 : ['discovering', 'validating', 'testing', 'done'].indexOf(scan?.state ?? '')
 
@@ -396,7 +404,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
             {shown.length > 0 && <div className="hint" style={{ margin: 0 }}>{rs.legend}</div>}
             <ul className="rsc-list">
               {shown.map((r, i) => {
-                const best = i === 0 && r.usable && !!r.fingerprints?.chrome?.ok && r.iran?.verdict !== 'blocked'
+                const best = !showAll && i === 0
                 const st = fpStats(r)
                 return (
                   <li key={r.host} className={`rsc-row ${r.usable ? '' : 'bad'} ${best ? 'best' : ''}`}>
@@ -405,6 +413,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                         <b className="mono">{r.host}</b>
                         <small>
                           <span className="chip">{rs.source[r.source]}</span>
+                          {r.near && <span className="chip" title={rs.nearTitle}>{rs.near}</span>}
                           {r.dest && <span className="mono">{r.dest}</span>}
                           {r.usable && r.rtt_ms != null ? (
                             <span className="en" dir="ltr" title={rs.pingTitle}>
@@ -463,14 +472,15 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
             {mode !== 'server' && nodeId != null && scan.state === 'done' && (
               <FieldTestPanel
                 nodeId={nodeId}
-                candidates={[...usable].sort(byScore).filter((r) => r.iran?.verdict !== 'blocked')}
+                candidates={good}
                 onPick={onPick}
                 picked={picked}
               />
             )}
-            {results.length > usable.length && (
+            {scan.state === 'done' && !checkingIran && good.length === 0 && !showAll && <div className="tf-alert">{rs.noneGood}</div>}
+            {results.length > good.length && (
               <button type="button" className="btn" onClick={() => setShowAll((v) => !v)}>
-                {showAll ? rs.hideUnusable : rs.showUnusable(results.length - usable.length)}
+                {showAll ? rs.hideUnusable : rs.showUnusable(results.length - good.length)}
               </button>
             )}
           </>

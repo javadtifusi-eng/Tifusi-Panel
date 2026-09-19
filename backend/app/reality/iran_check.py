@@ -116,7 +116,22 @@ async def address(host: str, port: int) -> dict:
 
 
 def start_sni(name: str) -> None:
-    """Fire-and-forget: the scanner's status poll picks the answer up from the cache."""
-    key = f"http:https://{name}"
-    if cached_only("http", f"https://{name}") is None and key not in _inflight:
-        asyncio.get_running_loop().create_task(sni(name))
+    """Fire-and-forget: the scanner's status poll picks the answer up from the cache.
+
+    The task is registered as in flight right away, so the very poll that
+    starts it already reports "checking" and the dashboard keeps polling."""
+    target = f"https://{name}"
+    key = f"http:{target}"
+    if cached_only("http", target) is not None or key in _inflight:
+        return
+    task = _inflight[key] = asyncio.get_running_loop().create_task(_run("http", target))
+
+    def _store(t: asyncio.Task) -> None:
+        _inflight.pop(key, None)
+        if t.cancelled() or t.exception() is not None:
+            return
+        result = t.result()
+        if result["verdict"] != "unknown":
+            _cache[key] = (time.time(), result)
+
+    task.add_done_callback(_store)

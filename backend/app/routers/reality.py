@@ -5,6 +5,7 @@ import json
 import secrets
 import socket
 import time
+from contextlib import suppress
 from urllib.parse import quote, urlencode
 from pathlib import Path
 
@@ -101,8 +102,27 @@ async def _public_ipv4(address: str) -> str | None:
     return infos[0][4][0] if infos else None
 
 
+def _near(ip: str | None, own: str | None) -> bool:
+    """Same /16 as the node: the censor sees packets go to an address that the
+    SNI's own DNS could plausibly point at. A famous site on a CDN far away
+    from the node is the classic IP/SNI mismatch that gets throttled."""
+    try:
+        return bool(ip and own) and ipaddress.ip_address(ip) in ipaddress.ip_network(f"{own}/16", strict=False)
+    except ValueError:
+        return False
+
+
 def _with_iran(scan: dict, node: Node | None = None, address: str | None = None) -> dict:
-    tested = [r for r in scan.get("results", []) if r.get("fingerprints") and any((v or {}).get("ok") for v in r["fingerprints"].values())]
+    own = address or (node.address if node else None)
+    with suppress(OSError):
+        own = socket.gethostbyname(own) if own else None
+    for r in scan.get("results", []):
+        r["near"] = r.get("source") == "neighbor" or _near(r.get("ip"), own)
+    # Near names first: they are the ones worth asking Iran about.
+    tested = sorted(
+        [r for r in scan.get("results", []) if r.get("fingerprints") and any((v or {}).get("ok") for v in r["fingerprints"].values())],
+        key=lambda r: (not r["near"], r.get("latency_ms") or 10**6),
+    )
     for r in tested[:_IRAN_CHECKS_PER_SCAN]:
         iran_check.start_sni(r["host"])
     for r in scan.get("results", []):
