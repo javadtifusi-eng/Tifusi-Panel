@@ -1,8 +1,10 @@
 import asyncio
 import ipaddress
+import json
 import secrets
 import socket
 import time
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -109,8 +111,29 @@ def _with_iran(scan: dict, node: Node | None = None, address: str | None = None)
 
 
 # Per node: how far out the neighbour scan has walked and every name it has
-# already turned up, so "find more" only ever shows new ones.
-_rounds: dict[int, dict] = {}
+# already turned up. Every search goes one ring further and skips what was
+# already shown, so a search never repeats the last one's sites. Kept on disk
+# so a panel restart doesn't send the next search back to the first /24.
+_ROUNDS_FILE = Path(__file__).resolve().parents[2] / "data" / "reality_rounds.json"
+
+
+def _load_rounds() -> dict[int, dict]:
+    try:
+        raw = json.loads(_ROUNDS_FILE.read_text())
+        return {int(k): {"ring": int(v["ring"]), "seen": set(v["seen"])} for k, v in raw.items()}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def _save_rounds() -> None:
+    try:
+        _ROUNDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _ROUNDS_FILE.write_text(json.dumps({k: {"ring": v["ring"], "seen": sorted(v["seen"])} for k, v in _rounds.items()}))
+    except OSError:
+        pass
+
+
+_rounds: dict[int, dict] = _load_rounds()
 
 
 @router.post("/nodes/{node_id}/scan")
@@ -122,11 +145,18 @@ async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSessi
     elif payload.mode == "custom" and not hosts:
         raise HTTPException(status_code=400, detail="Enter at least one name to test")
     rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    if payload.mode == "neighbors" and payload.more:
+    if payload.mode == "neighbors" and not rounds["seen"]:
+        # First search since this file existed: count whatever the node
+        # already found as seen, so this one still moves on.
+        try:
+            last = await _node_call(node, "GET", "/reality/scan")
+            rounds["seen"].update(r["host"] for r in last.get("results", []) if r.get("source") == "neighbor")
+            rounds["ring"] = int(last.get("ring") or 0)
+        except HTTPException:
+            pass
+    if payload.mode == "neighbors" and rounds["seen"]:
         rounds["ring"] += 1
-    else:
-        rounds["ring"] = 0
-        rounds["seen"] = set()
+    _save_rounds()
     body = {
         "public_ip": await _public_ipv4(node.address),
         "hosts": hosts,
@@ -147,7 +177,10 @@ async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> 
     node = await _node_or_404(node_id, db)
     scan = await _node_call(node, "GET", "/reality/scan")
     rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    rounds["seen"].update(r["host"] for r in scan.get("results", []) if r.get("source") == "neighbor")
+    fresh = {r["host"] for r in scan.get("results", []) if r.get("source") == "neighbor"} - rounds["seen"]
+    if fresh:
+        rounds["seen"].update(fresh)
+        _save_rounds()
     scan["seen_total"] = len(rounds["seen"])
     return _with_iran(scan, node)
 
