@@ -23,6 +23,8 @@ and what makes the sysctl/iptables calls below affect the real host
 network stack instead of an isolated container-only one.
 """
 
+import contextlib
+import os
 import ipaddress
 import subprocess
 import time
@@ -400,6 +402,12 @@ def _restart_charon() -> None:
             _charon_process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             _charon_process.kill()
+    # A container restart keeps /var/run, and charon refuses to start while
+    # the old pid file is there ("charon already running") even though no
+    # charon is — only ours is ever running, and it was stopped just above.
+    for stale in ("/var/run/charon.pid", "/var/run/charon.ctl", "/var/run/charon.vici"):
+        with contextlib.suppress(OSError):
+            os.remove(stale)
     _charon_process = subprocess.Popen([CHARON_BIN])
 
 
