@@ -159,12 +159,30 @@ def operator_for_carrier(*names: str | None) -> str | None:
     return None
 
 
+def _unusable(address: str | None) -> bool:
+    """An address that says nothing about the operator: absent, or private —
+    which is what a report reaches the panel with when it was sent straight to
+    the API port instead of through the dashboard's nginx, since Docker's port
+    proxy replaces the sender with its own gateway address."""
+    if not address:
+        return True
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return True
+    return not ip.is_global
+
+
 def classify(client_ip: str | None, network: str | None, carrier: str | None, sim_carrier: str | None) -> str:
     by_ip = operator_for_ip(client_ip)
     if by_ip:
         return by_ip
     net = (network or "").lower()
-    if net in ("", "mobile", "cellular"):
+    # The phone's own carrier normally means nothing over wifi — the SIM says
+    # MCI while the traffic goes out through a home connection. But with no
+    # usable address there is nothing else to go on, and "MCI, self-reported"
+    # beats throwing the report away.
+    if net in ("", "mobile", "cellular") or _unusable(client_ip):
         by_name = operator_for_carrier(carrier, sim_carrier)
         if by_name:
             return by_name

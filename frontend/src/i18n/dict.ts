@@ -1042,6 +1042,17 @@ export const dict = {
           left: (m: number) => `${m.toLocaleString('fa-IR')} دقیقه تا پایان`,
           ended: 'تست تمام شده؛ نتیجه‌ها همین‌جا می‌مانند.',
           none: 'اول اسکن را اجرا کن تا سایت‌های مناسب پیدا شوند.',
+          peak: 'اوج',
+          avgTitle: 'سرعت ممتد: کل چیزی که جابه‌جا شد تقسیم بر مدتش. «اوج» بهترین دو ثانیه است؛ اپراتور اول هر انتقال یک جهش می‌دهد و اسپیدتست بیشترش همان جهش است، پس عدد ممتد واقعی‌تر است.',
+          qr: {
+            title: 'با گوشی اسکن کن',
+            all: (n: number) => `همه‌ی ${n.toLocaleString('fa-IR')} کانفیگ`,
+            sub: 'لینک ساب',
+            one: 'QR',
+            allHint: 'همه‌ی کانفیگ‌ها در یک QR: در v2rayNG «اسکن QR» را بزن (یا در Hiddify «افزودن از QR»). گوشی برای وارد کردنش لازم نیست به پنل وصل شود، پس با VPN خاموش هم کار می‌کند. اگر برنامه‌ات فقط یکی را برداشت، از دکمه‌ی QR کنار هر کانفیگ استفاده کن.',
+            subHint: 'لینک ساب به‌صورت QR: گوشی باید بتواند بدون VPN به پنل وصل شود تا کانفیگ‌ها را بگیرد.',
+            oneHint: (host: string, port: number) => `فقط کانفیگ ${host} روی پورت ${port}`,
+          },
           pattern: {
             start: 'پیدا کردن الگوی اپراتور',
             howto:
@@ -2398,6 +2409,17 @@ export const dict = {
           left: (m: number) => `${m} min left`,
           ended: 'The test has ended; results stay here.',
           none: 'Run the scan first to find usable sites.',
+          peak: 'peak',
+          avgTitle: 'Sustained rate: everything that moved, over the time it took. “Peak” is the best two seconds — operators hand out a burst at the start of a transfer and a speed test is mostly that burst, so the sustained number is the honest one.',
+          qr: {
+            title: 'Scan it with the phone',
+            all: (n: number) => `All ${n} configs`,
+            sub: 'Subscription link',
+            one: 'QR',
+            allHint: 'Every config in one QR: tap “Scan QR” in v2rayNG (or “Add from QR” in Hiddify). The phone doesn’t need to reach the panel to import it, so it works with the VPN off. If your app only takes one, use the QR button next to each config.',
+            subHint: 'The subscription link as a QR: the phone has to reach the panel without a VPN to fetch the configs.',
+            oneHint: (host: string, port: number) => `Only the ${host} config on port ${port}`,
+          },
           pattern: {
             start: 'Find the operator’s pattern',
             howto:

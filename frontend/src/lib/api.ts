@@ -570,9 +570,15 @@ export interface FieldTestItem {
   down: number
   up: number
   ok: boolean
-  /** Best download/upload rate seen through this config, bytes per second. */
+  /** Best two-second rate seen through this config, bytes per second — an
+   *  operator's opening burst lands here, so it flatters a config. */
   down_bps: number
   up_bps: number
+  /** Everything that moved over the time it took: what a user lives with. */
+  down_avg_bps?: number
+  up_avg_bps?: number
+  /** Seconds the transfer covered, for the sustained rate above. */
+  seconds?: number
   link: string
   /** Set by the operator-pattern test: "<neighbor|own>:<random|std>". */
   label?: string | null

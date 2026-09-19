@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
@@ -154,8 +155,11 @@ function kb(n: number) {
 
 type Finding = 'port' | 'own' | 'route' | 'none' | 'unclear'
 
-// Speed if the phone ran a speed test through it, 1 if it only connected.
-const worth = (i: FieldTestItem) => (i.down_bps > 0 ? i.down_bps : i.ok ? 1 : 0)
+// The sustained rate where there is one, since an operator's opening burst
+// makes the peak flatter every config alike; the peak only stands in when the
+// transfer was too short to average. 1 means it connected but carried nothing.
+const rate = (i: FieldTestItem) => i.down_avg_bps || i.down_bps
+const worth = (i: FieldTestItem) => (rate(i) > 0 ? rate(i) : i.ok ? 1 : 0)
 
 function patternVerdict(items: FieldTestItem[]): Finding[] | null {
   if (!items.some((i) => i.clients > 0)) return null
@@ -168,7 +172,7 @@ function patternVerdict(items: FieldTestItem[]): Finding[] | null {
   const found: Finding[] = []
   if (beats(ns, nr) || beats(os, orr)) found.push('port')
   if (beats(os, ns) || beats(orr, nr)) found.push('own')
-  const speeds = items.filter((i) => i.down_bps > 0).map((i) => i.down_bps)
+  const speeds = items.filter((i) => rate(i) > 0).map(rate)
   // Everything connects, nothing is faster than about 1 Mbps: neither lever
   // mattered, the address or the route to it did.
   if (!found.length && speeds.length >= 2 && Math.max(...speeds) < 125000) found.push('route')
@@ -242,6 +246,11 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
   }
 
   const [own, setOwn] = useState<{ host: string; dest: string } | null>(null)
+  // What the QR shows. Sending the link to the phone over Telegram means
+  // turning a VPN on, which spoils a test that must run without one — so
+  // the phone scans it off this screen instead. 'all' packs every config
+  // into one code, which also imports without the phone reaching the panel.
+  const [qr, setQr] = useState<'all' | 'sub' | string>('all')
 
   async function startPattern() {
     const [a, b] = candidates
@@ -263,14 +272,21 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
     await run(() => startFieldTest(nodeId, targets))
   }
 
+  // A QR code tops out near 2.9 KB and grows too dense to scan off a screen
+  // well before that; ten configs in one code can pass it, so past this the
+  // "all" option is withdrawn and the subscription link is offered instead.
+  const allValue = (test?.items ?? []).map((i) => i.link).join('\n')
+  const allFits = new TextEncoder().encode(allValue).length <= 2000
+  const qrShown = qr === 'all' && !allFits ? (test?.sub_url ? 'sub' : test?.items[0]?.link ?? '') : qr
+
   const pattern = !!test?.items.some((i) => i.label)
   const findings = pattern && test ? patternVerdict(test.items) : null
   const operatorsSeen = [...new Set((test?.items ?? []).flatMap((i) => i.operators ?? []))]
   const opName = (op: string) => t.ui.realityScan.device.ops[op] ?? op
 
   const left = test?.active && test.expires_at ? Math.max(0, Math.round((test.expires_at * 1000 - Date.now()) / 60000)) : null
-  const items = test ? [...test.items].sort((a, b) => b.down_bps - a.down_bps || Number(b.ok) - Number(a.ok) || b.down - a.down) : []
-  const fastest = items[0]?.down_bps ? items[0].host : null
+  const items = test ? [...test.items].sort((a, b) => rate(b) - rate(a) || Number(b.ok) - Number(a.ok) || b.down - a.down) : []
+  const fastest = rate(items[0] ?? ({} as FieldTestItem)) ? items[0].host : null
 
   return (
     <div className="form-section">
@@ -291,6 +307,33 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
       </div>
       {pattern && <div className="hint" style={{ margin: 0 }}>{ft.pattern.howto}</div>}
       {error && <div className="tf-alert">{error}</div>}
+      {test?.active && test.items.length > 0 && (
+        <div className="form-section" style={{ alignItems: 'center' }}>
+          <b style={{ fontSize: '0.88rem' }}>{ft.qr.title}</b>
+          <div className="tf-seg" role="group" aria-label={ft.qr.title}>
+            {allFits && (
+              <button type="button" aria-pressed={qrShown === 'all'} onClick={() => setQr('all')}>
+                {ft.qr.all(test.items.length)}
+              </button>
+            )}
+            {test.sub_url && (
+              <button type="button" aria-pressed={qrShown === 'sub'} onClick={() => setQr('sub')}>
+                {ft.qr.sub}
+              </button>
+            )}
+          </div>
+          <div className="tf-qr">
+            <QRCodeSVG
+              value={qrShown === 'all' ? allValue : qrShown === 'sub' ? test.sub_url ?? '' : qrShown}
+              size={qrShown === 'all' ? 340 : 240}
+              level="L"
+            />
+          </div>
+          <div className="hint" style={{ margin: 0, textAlign: 'center' }}>
+            {qrShown === 'all' ? ft.qr.allHint : qrShown === 'sub' ? ft.qr.subHint : ft.qr.oneHint(test.items.find((i) => i.link === qrShown)?.host ?? '', test.items.find((i) => i.link === qrShown)?.port ?? 0)}
+          </div>
+        </div>
+      )}
       {test?.active && test.sub_url && (
         <>
           <span className="hint" style={{ margin: 0 }}>
@@ -320,17 +363,25 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
                       </small>
                     </div>
                     <div className="rsc-side">
-                      {it.down_bps > 0 ? (
-                        <span className="pill ok en" dir="ltr"><i />↓ {speed(it.down_bps)}</span>
+                      {rate(it) > 0 ? (
+                        <span className="pill ok en" dir="ltr" title={ft.avgTitle}>
+                          <i />↓ {speed(rate(it))}
+                          {it.down_avg_bps ? ` · ${ft.peak} ${speed(it.down_bps)}` : ''}
+                        </span>
                       ) : it.ok ? (
                         <span className="pill warn"><i />{ft.pattern.connected}</span>
                       ) : (
                         <span className={`pill ${test?.active ? 'info live' : 'bad'}`}><i />{test?.active ? ft.waiting : '✕'}</span>
                       )}
                       {test?.active && (
-                        <button type="button" className="btn" onClick={() => copy(`${it.host}:${it.port}`, it.link)}>
-                          {copied === `${it.host}:${it.port}` ? t.common.copiedCheck : ft.copyOne}
-                        </button>
+                        <>
+                          <button type="button" className={`btn ${qrShown === it.link ? 'on' : ''}`} onClick={() => setQr(it.link)}>
+                            {ft.qr.one}
+                          </button>
+                          <button type="button" className="btn" onClick={() => copy(`${it.host}:${it.port}`, it.link)}>
+                            {copied === `${it.host}:${it.port}` ? t.common.copiedCheck : ft.copyOne}
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -384,17 +435,25 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
                   </div>
                   <div className="rsc-side">
                     {it.host === fastest && <span className="pill accent">★ {ft.fastest}</span>}
-                    {it.down_bps > 0 ? (
-                      <span className="pill ok en" dir="ltr"><i />↓ {speed(it.down_bps)} · ↑ {speed(it.up_bps)}</span>
+                    {rate(it) > 0 ? (
+                      <span className="pill ok en" dir="ltr" title={ft.avgTitle}>
+                        <i />↓ {speed(rate(it))}
+                        {it.down_avg_bps ? ` · ${ft.peak} ${speed(it.down_bps)}` : ''}
+                      </span>
                     ) : it.ok ? (
                       <span className="pill warn"><i />{ft.ok(kb(it.down + it.up), it.clients)}</span>
                     ) : (
                       <span className={`pill ${test?.active ? 'info live' : 'bad'}`}><i />{test?.active ? ft.waiting : '✕'}</span>
                     )}
                     {test?.active && (
-                      <button type="button" className="btn" onClick={() => copy(it.host, it.link)}>
-                        {copied === it.host ? t.common.copiedCheck : ft.copyOne}
-                      </button>
+                      <>
+                        <button type="button" className={`btn ${qrShown === it.link ? 'on' : ''}`} onClick={() => setQr(it.link)}>
+                          {ft.qr.one}
+                        </button>
+                        <button type="button" className="btn" onClick={() => copy(it.host, it.link)}>
+                          {copied === it.host ? t.common.copiedCheck : ft.copyOne}
+                        </button>
+                      </>
                     )}
                     {it.ok && cand && (
                       <button type="button" className={`btn ${picked === it.host ? 'on' : 'solid'}`} onClick={() => onPick(cand)}>
@@ -438,6 +497,28 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
       if (timer.current) window.clearTimeout(timer.current)
     }
   }, [])
+
+  // Pick up where the node is: a refresh, a closed tab or another device used
+  // to lose a finished (or half-finished) scan and cost fifteen minutes to
+  // redo. Only when this page hasn't started one of its own.
+  const restored = useRef<number | null>(null)
+  const scanRef = useRef<RealityNodeScan | null>(null)
+  scanRef.current = scan
+  useEffect(() => {
+    if (nodeId == null || restored.current === nodeId) return
+    restored.current = nodeId
+    getNodeRealityScan(nodeId)
+      .then((s) => {
+        if (s.state === 'idle' || !s.results.length || scanRef.current) return
+        setScan(s)
+        const stillIran = s.node_iran?.verdict === 'checking' || s.results.some((r) => r.iran?.verdict === 'checking')
+        if (!['done', 'error'].includes(s.state) || stillIran) poll(nodeId)
+      })
+      .catch(() => {
+        /* an older agent or an unreachable node: the start button reports it */
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeId])
 
   const busy = !!scan && !['done', 'error', 'idle'].includes(scan.state)
 
@@ -529,7 +610,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   const phaseIndex = scan?.state === 'done' ? PHASES.length : PHASES.indexOf(scan?.state as (typeof PHASES)[number])
 
   return (
-    <Sheet title={rs.title} sub={rs.sub} onClose={onClose} full footer={<button type="button" className="btn lg" onClick={onClose}>{t.usersPage.cancelAction}</button>}>
+    <Sheet title={rs.title} sub={rs.sub} onClose={onClose} width={760} footer={<button type="button" className="btn lg" onClick={onClose}>{t.usersPage.cancelAction}</button>}>
       <div className="rsc">
         {nodes !== null && nodes.length === 0 ? (
           <div className="tf-note">{rs.noNodes}</div>

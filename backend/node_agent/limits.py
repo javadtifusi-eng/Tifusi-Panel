@@ -36,6 +36,7 @@ ENFORCE_INTERVAL_SECONDS = 3
 XRAY_IDLE_SECONDS = 90
 XRAY_BLOCK_OUTBOUND = "tifusi-limit-block"
 XRAY_ACCESS_LOG = Path(os.environ.get("XRAY_ACCESS_LOG", "./data/xray-access.log")).resolve()
+XRAY_ERROR_LOG = Path(os.environ.get("XRAY_ERROR_LOG", "./data/xray-error.log")).resolve()
 _ACCESS_LOG_ROTATE_BYTES = 8 * 1024 * 1024
 
 _IKE_CONN = re.compile(r"^list-sa event \{(ikev2[^ {]*) \{")
@@ -87,6 +88,11 @@ def prepare_xray_config(payload: dict) -> dict:
     limits = payload.pop("tifusi_limits", None) or {}
 
     payload.setdefault("log", {})["access"] = str(XRAY_ACCESS_LOG)
+    # Without this, Xray's own errors go to stdout and are kept nowhere: a
+    # REALITY handshake a censor broke, or a client rejected, leaves no trace
+    # at all, which is exactly what is needed to tell filtering from a bad
+    # config. The access log alone only ever shows connections that worked.
+    payload["log"].setdefault("error", str(XRAY_ERROR_LOG))
     api = payload.get("api")
     if isinstance(api, dict):
         services = api.setdefault("services", [])

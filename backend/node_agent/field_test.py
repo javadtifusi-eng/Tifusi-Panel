@@ -157,6 +157,7 @@ async def start(targets: list[dict], ttl: int, public_ip: str | None) -> dict:
         "local_ips": {"127.0.0.1", "::1", *([public_ip] if public_ip else [])},
     }
     _state["rates"] = {}
+    _state["spans"] = {}
     _stopper = asyncio.get_running_loop().create_task(_stop_later(ttl))
     asyncio.get_running_loop().create_task(_sample())
     return await status()
@@ -166,9 +167,12 @@ _SAMPLE_EVERY = 2.0
 
 
 async def _sample() -> None:
-    """Real speed as the phone sees it: the byte counters are read every two
-    seconds and each SNI keeps its best download/upload rate — a speed test
-    in v2rayNG or any download through that config shows up here."""
+    """Real speed as the phone sees it, kept two ways. The peak is the best
+    two-second rate, which flatters a config: operators hand out a burst at
+    the start of a transfer and a speed test is mostly that burst. The
+    sustained rate — everything that moved, over the time it took — is what a
+    user actually lives with, so both are reported and the UI leads with the
+    sustained one."""
     state, last = _state, None
     while _state is state and _proc is not None and _proc.returncode is None:
         now = time.monotonic()
@@ -178,8 +182,17 @@ async def _sample() -> None:
             for tag, s in stats.items():
                 prev = last[1].get(tag, {})
                 r = state["rates"].setdefault(tag, {"down": 0, "up": 0})
+                moved = False
                 for key, name in (("down", "downlink"), ("up", "uplink")):
-                    r[key] = max(r[key], int((s.get(name, 0) - prev.get(name, 0)) / dt))
+                    delta = s.get(name, 0) - prev.get(name, 0)
+                    moved = moved or delta > 0
+                    r[key] = max(r[key], int(delta / dt))
+                if moved:
+                    # First and last moment this config carried anything, with
+                    # the counters at each, so the sustained rate covers the
+                    # transfer itself and not the idle minutes around it.
+                    span = state["spans"].setdefault(tag, {"t0": now, "d0": prev.get("downlink", 0), "u0": prev.get("uplink", 0)})
+                    span["t1"], span["d1"], span["u1"] = now, s.get("downlink", 0), s.get("uplink", 0)
         last = (now, stats)
         await asyncio.sleep(_SAMPLE_EVERY)
 
@@ -224,11 +237,17 @@ async def status() -> dict:
         # accepted), and a client outside this server sent it.
         # Which addresses connected, so the panel can say which operator each
         # result came from (a test run on MCI and then Irancell shows both).
+        span = _state.get("spans", {}).get(it["tag"])
+        seconds = (span["t1"] - span["t0"]) if span else 0
         items.append({"host": it["host"], "dest": it["dest"], "port": it["port"], "label": it.get("label"),
                       "ips": sorted(hits.get(it["tag"], ()))[:10], "clients": clients,
                       "down": down, "up": up, "ok": clients > 0 and down > 0,
                       "down_bps": _state["rates"].get(it["tag"], {}).get("down", 0),
-                      "up_bps": _state["rates"].get(it["tag"], {}).get("up", 0)})
+                      "up_bps": _state["rates"].get(it["tag"], {}).get("up", 0),
+                      # Over the whole transfer, not its best two seconds.
+                      "down_avg_bps": int((span["d1"] - span["d0"]) / seconds) if span and seconds >= 2 else 0,
+                      "up_avg_bps": int((span["u1"] - span["u0"]) / seconds) if span and seconds >= 2 else 0,
+                      "seconds": round(seconds) if span else 0})
     return {
         "active": active, "uuid": _state["uuid"], "public_key": _state["public_key"], "short_id": _state["short_id"],
         "started_at": _state["started_at"], "expires_at": _state["expires_at"], "items": items,
