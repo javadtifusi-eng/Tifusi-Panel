@@ -354,7 +354,9 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   // a device test never swaps its configs out from under a phone mid-test.
   const blockedHere = (r: RealityCandidate) => Object.values(device).some((byHost) => byHost[r.host]?.ok === false)
   const ranked = [...good].sort((a, b) => Number(blockedHere(a)) - Number(blockedHere(b)))
-  const shown = showAll ? [...results].sort((a, b) => Number(!a.usable) - Number(!b.usable) || iranMs(a) - iranMs(b)) : ranked
+  // Ten on screen: past that a list of maybes buries the tests below it.
+  const TOP = 10
+  const shown = showAll ? [...results].sort((a, b) => Number(!a.usable) - Number(!b.usable) || iranMs(a) - iranMs(b)) : ranked.slice(0, TOP)
 
   async function whoami() {
     try {
@@ -456,6 +458,43 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
               {scan.state === 'error' && scan.error && <div className="tf-alert">{scan.error}</div>}
             </div>
 
+            {good.length > 0 && (
+              <div className="form-section">
+                <b style={{ fontSize: '0.9rem' }}>📱 {rs.device.title}</b>
+                <div className="hint" style={{ margin: 0 }}>{rs.device.intro}</div>
+                {deviceNet &&
+                  (deviceNet.operator ? (
+                    <div className="hint" style={{ margin: 0 }}>{rs.device.net(rs.device.ops[deviceNet.operator] ?? deviceNet.operator, deviceNet.ip)}</div>
+                  ) : (
+                    <div className="tf-alert">{rs.device.notIran(deviceNet.ip)}</div>
+                  ))}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {!deviceNet ? (
+                    <button type="button" className="btn solid" onClick={whoami}>
+                      {rs.device.check}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn solid"
+                        disabled={!!deviceBusy}
+                        onClick={() => testDevice(deviceNet.operator ?? 'unknown')}
+                      >
+                        {deviceBusy
+                          ? rs.device.running(deviceBusy.done, deviceBusy.total)
+                          : deviceNet.operator
+                            ? rs.device.run(good.slice(0, 20).length)
+                            : rs.device.runAnyway}
+                      </button>
+                      <button type="button" className="btn" disabled={!!deviceBusy} onClick={whoami}>
+                        {rs.device.recheck}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
             {shown.length > 0 && <div className="hint" style={{ margin: 0 }}>{rs.legend}</div>}
             <ul className="rsc-list">
               {shown.map((r, i) => {
@@ -531,50 +570,17 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                 )
               })}
             </ul>
-            {good.length > 0 && (
-              <div className="form-section">
-                <b style={{ fontSize: '0.9rem' }}>📱 {rs.device.title}</b>
-                <div className="hint" style={{ margin: 0 }}>{rs.device.intro}</div>
-                {deviceNet &&
-                  (deviceNet.operator ? (
-                    <div className="hint" style={{ margin: 0 }}>{rs.device.net(rs.device.ops[deviceNet.operator] ?? deviceNet.operator, deviceNet.ip)}</div>
-                  ) : (
-                    <div className="tf-alert">{rs.device.notIran(deviceNet.ip)}</div>
-                  ))}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {!deviceNet ? (
-                    <button type="button" className="btn solid" onClick={whoami}>
-                      {rs.device.check}
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="btn solid"
-                        disabled={!!deviceBusy}
-                        onClick={() => testDevice(deviceNet.operator ?? 'unknown')}
-                      >
-                        {deviceBusy
-                          ? rs.device.running(deviceBusy.done, deviceBusy.total)
-                          : deviceNet.operator
-                            ? rs.device.run(good.slice(0, 20).length)
-                            : rs.device.runAnyway}
-                      </button>
-                      <button type="button" className="btn" disabled={!!deviceBusy} onClick={whoami}>
-                        {rs.device.recheck}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
             {nodeId != null && scan.state === 'done' && (
               <FieldTestPanel nodeId={nodeId} candidates={good} onPick={onPick} picked={picked} />
             )}
             {scan.state === 'done' && !checkingIran && good.length === 0 && !showAll && <div className="tf-alert">{rs.noneGood}</div>}
-            {results.length > good.length && (
-              <button type="button" className="btn" onClick={() => setShowAll((v) => !v)}>
-                {showAll ? rs.hideUnusable : rs.showUnusable(results.length - good.length)}
+            {results.length > shown.length && !showAll ? (
+              <button type="button" className="btn" onClick={() => setShowAll(true)}>
+                {rs.showUnusable(results.length - shown.length)}
+              </button>
+            ) : showAll && (
+              <button type="button" className="btn" onClick={() => setShowAll(false)}>
+                {rs.hideUnusable}
               </button>
             )}
           </>
