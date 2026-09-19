@@ -25,6 +25,7 @@ import {
   type CdnProvider,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
+import CdnTuner from '../components/CdnTuner'
 import { parseServerDate } from '../lib/format'
 
 // The form offers only the three that earn their place; older tunnels on
@@ -102,6 +103,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [path, setPath] = useState('')
   const [connectionCount, setConnectionCount] = useState('8')
   const [forwards, setForwards] = useState<TunnelForward[]>([])
+  const [tunerFor, setTunerFor] = useState<Tunnel | null>(null)
   const [useCdn, setUseCdn] = useState(false)
   const [cdnProvider, setCdnProvider] = useState<CdnProvider>('arvan')
   const [cdnHost, setCdnHost] = useState('')
@@ -707,6 +709,11 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     <button type="button" className="btn solid" onClick={() => handleTest(tunnel)} disabled={testingId !== null}>
                       {isTesting ? t.tunnelsPage.testing : t.tunnelsPage.test}
                     </button>
+                    {tunnel.cdn_host && (
+                      <button type="button" className="btn" onClick={() => setTunerFor(tunnel)}>
+                        ⚡ {t.ui.cdnTune.openBtn(tn.cdnName[tunnel.cdn_provider ?? 'arvan'])}
+                      </button>
+                    )}
                     <button type="button" className={`btn ${configId === tunnel.id ? 'on' : ''}`} onClick={() => toggleConfig(tunnel)}>
                       {tn.installCmd}
                     </button>
@@ -856,6 +863,9 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   onChange={(e) => {
                     setUseCdn(e.target.checked)
                     if (e.target.checked && transport !== 'wss' && transport !== 'wssmux') setTransport('wssmux')
+                    // A CDN caps each connection's speed, so more of them carry more.
+                    if (e.target.checked && connectionCount === '8') setConnectionCount('16')
+                    if (!e.target.checked && connectionCount === '16') setConnectionCount('8')
                   }}
                 />
                 <b>{tn.cdnToggle}</b>
@@ -1061,6 +1071,13 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
             </div>
           )}
         </Sheet>
+      )}
+      {tunerFor && (
+        <CdnTuner
+          tunnel={tunerFor}
+          onClose={() => setTunerFor(null)}
+          onSaved={(next) => setTunnels((list) => (list ? list.map((x) => (x.id === next.id ? next : x)) : list))}
+        />
       )}
     </div>
   )

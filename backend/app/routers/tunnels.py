@@ -3,6 +3,7 @@ import re
 import secrets
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,9 @@ from app.models.node import Node
 from app.models.shield import ShieldMember
 from app.models.tunnel import Tunnel, TunnelStatus, TunnelTransport
 from app.schemas.tunnel import (
+    CdnEdgeScan,
+    CdnFrontScan,
+    CdnSpeed,
     SpoofTestCommands,
     SpoofTestRequest,
     TunnelConfig,
@@ -30,6 +34,7 @@ from app.tunnels.config import (
     build_iran_config,
     build_spooftest_commands,
 )
+from app.tunnels import cdn_scan
 from app.tunnels.probe import cdn_probe, recommend_transports, tcp_probe
 
 router = APIRouter(prefix="/api/tunnels", tags=["tunnels"], dependencies=[Depends(require_permission("tunnels"))])
@@ -56,7 +61,8 @@ def _apply_cdn(tunnel: Tunnel) -> None:
     """Fills in everything a CDN tunnel needs from just the provider and
     hostname, so the admin never sets SNI, Host or path by hand."""
     if not tunnel.cdn_host:
-        tunnel.cdn_provider = tunnel.cdn_host = tunnel.cdn_port = None
+        tunnel.cdn_provider = tunnel.cdn_host = tunnel.cdn_port = tunnel.cdn_front = None
+        tunnel.cdn_ips = None
         return
     host = tunnel.cdn_host.strip().lower().rstrip(".")
     if not _CDN_HOST_RE.match(host):
@@ -80,6 +86,24 @@ def _apply_cdn(tunnel: Tunnel) -> None:
         tunnel.iran_port = port
     else:
         tunnel.cdn_port = tunnel.cdn_port or 443
+    ips = []
+    for ip in tunnel.cdn_ips or []:
+        try:
+            addr = ipaddress.IPv4Address(str(ip).strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"{ip} is not an IPv4 address") from None
+        if not addr.is_global:
+            raise HTTPException(status_code=400, detail=f"{ip} is not a public address")
+        if str(addr) not in ips:
+            ips.append(str(addr))
+    tunnel.cdn_ips = ips[:5] or None
+    if tunnel.cdn_front:
+        front = tunnel.cdn_front.strip().lower().rstrip(".")
+        if not _CDN_HOST_RE.match(front):
+            raise HTTPException(status_code=400, detail="Front SNI must be a hostname")
+        tunnel.cdn_front = None if front == host else front
+    else:
+        tunnel.cdn_front = None
 
 
 def _validate_host(host: str) -> str:
@@ -155,6 +179,8 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         cdn_provider=payload.cdn_provider,
         cdn_host=payload.cdn_host,
         cdn_port=payload.cdn_port,
+        cdn_ips=payload.cdn_ips,
+        cdn_front=payload.cdn_front,
     )
     _apply_cdn(tunnel)
     db.add(tunnel)
@@ -317,7 +343,19 @@ async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> Tun
 
     cdn_reachable = cdn_latency = cdn_error = None
     if tunnel.cdn_host:
-        cdn_reachable, cdn_latency, cdn_error = await cdn_probe(tunnel.cdn_host, tunnel.cdn_port or 443, tunnel.path or "/")
+        if tunnel.cdn_ips or tunnel.cdn_front:
+            # The same edge and SNI the foreign side uses.
+            cdn_reachable, cdn_latency, cdn_error = await cdn_scan.handshake(
+                tunnel.cdn_ips[0] if tunnel.cdn_ips else tunnel.cdn_host,
+                tunnel.cdn_port or 443,
+                tunnel.cdn_front or tunnel.cdn_host,
+                tunnel.cdn_host,
+                tunnel.path or "/",
+                timeout=10.0,
+            )
+            cdn_error = f"CDN path: {cdn_error}" if cdn_error else None
+        else:
+            cdn_reachable, cdn_latency, cdn_error = await cdn_probe(tunnel.cdn_host, tunnel.cdn_port or 443, tunnel.path or "/")
 
     tunnel.last_checked_at = datetime.now(timezone.utc)
     unreachable = [
@@ -349,3 +387,57 @@ async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> Tun
         cdn_latency_ms=cdn_latency,
         error=tunnel.last_error,
     )
+
+
+# --- CDN quality (app/tunnels/cdn_scan.py) ---------------------------------
+
+async def _cdn_run(tunnel: Tunnel, db: AsyncSession, kind: str, params: dict) -> dict:
+    """Runs a CDN check from the tunnel's foreign server when that is a
+    panel node (its agent has the same code), otherwise from the panel —
+    and says which, since the edge that is best depends on where you are."""
+    if not tunnel.cdn_host:
+        raise HTTPException(status_code=400, detail="This tunnel doesn't go through a CDN")
+    base = {"provider": tunnel.cdn_provider or "arvan", "host": tunnel.cdn_host, "path": tunnel.path or "/", "port": tunnel.cdn_port or 443}
+    node = await db.get(Node, tunnel.foreign_node_id) if tunnel.foreign_node_id else None
+    if node is not None:
+        try:
+            # verify=False: the node's certificate is self-signed (node_agent/tls.py).
+            async with httpx.AsyncClient(timeout=120, verify=False) as client:
+                resp = await client.post(
+                    f"https://{node.address}:{node.port}/cdn/check",
+                    json={"kind": kind, **base, **params},
+                    headers={"X-Node-Api-Key": node.api_key},
+                )
+            if resp.status_code == 200:
+                return {**resp.json(), "ran_on": "node", "ran_on_name": node.name}
+        except httpx.HTTPError:
+            pass  # an old or unreachable agent: measure from the panel instead
+    if kind == "edges":
+        out = await cdn_scan.scan_edges(base["provider"], base["host"], base["path"], base["port"], sni=params.get("sni"))
+    elif kind == "fronts":
+        out = await cdn_scan.scan_fronts(base["provider"], base["host"], base["path"], base["port"], edge=params.get("edge"))
+    else:
+        out = await cdn_scan.speed_test(params["addr"], base["port"], params["sni"], base["host"], base["path"], tunnel.token)
+    return {**out, "ran_on": "panel", "ran_on_name": "panel"}
+
+
+@router.post("/{tunnel_id}/cdn/edges", response_model=CdnEdgeScan)
+async def cdn_edges(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    tunnel = await _get_tunnel_or_404(tunnel_id, db)
+    # Scan with the SNI the tunnel will use, so fronting and edge agree.
+    return await _cdn_run(tunnel, db, "edges", {"sni": tunnel.cdn_front})
+
+
+@router.post("/{tunnel_id}/cdn/fronts", response_model=CdnFrontScan)
+async def cdn_fronts(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    tunnel = await _get_tunnel_or_404(tunnel_id, db)
+    return await _cdn_run(tunnel, db, "fronts", {"edge": (tunnel.cdn_ips or [None])[0]})
+
+
+@router.post("/{tunnel_id}/cdn/speed", response_model=CdnSpeed)
+async def cdn_speed(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    """Downloads through the CDN with exactly the saved edge and SNI."""
+    tunnel = await _get_tunnel_or_404(tunnel_id, db)
+    addr = (tunnel.cdn_ips or [tunnel.cdn_host])[0] if tunnel.cdn_host else ""
+    return await _cdn_run(tunnel, db, "speed", {"addr": addr, "sni": tunnel.cdn_front or tunnel.cdn_host, "token": tunnel.token})
+

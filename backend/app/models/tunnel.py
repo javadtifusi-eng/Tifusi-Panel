@@ -80,6 +80,11 @@ class Tunnel(Base):
     cdn_provider: Mapped[str | None] = mapped_column(String(16), nullable=True)  # arvan | cloudflare
     cdn_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
     cdn_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Clean edge IPs the foreign side dials instead of resolving cdn_host
+    # (best first; connections are spread across them), and an optional
+    # front SNI — another site on the same CDN — for domain fronting.
+    cdn_ips: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    cdn_front: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # "Pool" (plain transports) and "mux_con" (mux transports) are the same
     # underlying idea — how many physical connections the foreign side

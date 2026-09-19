@@ -38,6 +38,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -111,6 +112,12 @@ type Config struct {
 	Mode      string       `json:"mode"`      // server | client
 	Listen    string       `json:"listen"`    // server only: tunnel listen address
 	Server    string       `json:"server"`    // client only: iran_ip:tunnel_port
+	// client only: CDN edge addresses (ip:port) tried in turn instead of
+	// Server; connections are spread across them and a dead one is skipped.
+	Servers []string `json:"servers,omitempty"`
+	// client only: WebSocket Host header when it differs from SNI (domain
+	// fronting through a CDN: SNI names another site, Host names ours).
+	Host string `json:"host,omitempty"`
 	Transport string       `json:"transport"` // tcp | tls | ws | wss | tcpmux | wsmux | wssmux | udp
 	Token     string       `json:"token"`
 	SNI       string       `json:"sni"`     // TLS server name / certificate CN
@@ -142,6 +149,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.MuxCon <= 0 {
 		c.MuxCon = 8
+	}
+	if c.Server == "" && len(c.Servers) > 0 {
+		c.Server = c.Servers[0]
 	}
 	for i := range c.Forwards {
 		if c.Forwards[i].Net == "" {
@@ -265,7 +275,9 @@ type dialReq struct {
 type hello struct {
 	Ver   string `json:"ver"`
 	Token string `json:"token"`
-	Role  string `json:"role"` // control | data
+	Role  string `json:"role"` // control | data | mux | speed
+	// speed only: how many bytes the relay should send back
+	Bytes int `json:"bytes,omitempty"`
 }
 
 type helloReply struct {
@@ -856,8 +868,37 @@ func (s *Server) acceptTunnel(raw net.Conn) {
 		s.parkData(f)
 	case "mux":
 		s.handleMux(f)
+	case "speed":
+		s.serveSpeed(f, h.Bytes)
 	default:
 		raw.Close()
+	}
+}
+
+// serveSpeed answers the panel's speed test: it streams n bytes back over
+// the same path real traffic takes (through the CDN, when there is one) and
+// closes. Random bytes so nothing on the way can compress them.
+func (s *Server) serveSpeed(f *fconn, n int) {
+	defer f.Close()
+	const maxBytes = 64 << 20
+	if n <= 0 {
+		n = 8 << 20
+	}
+	if n > maxBytes {
+		n = maxBytes
+	}
+	buf := make([]byte, 32*1024)
+	rand.Read(buf)
+	f.SetWriteDeadline(time.Now().Add(90 * time.Second))
+	for n > 0 {
+		chunk := buf
+		if n < len(chunk) {
+			chunk = chunk[:n]
+		}
+		if _, err := f.Write(chunk); err != nil {
+			return
+		}
+		n -= len(chunk)
 	}
 }
 
@@ -1133,6 +1174,7 @@ func label(fw Forward) string {
 // ---------------------------------------------------------------- client
 
 type Client struct {
+	next uint32 // round-robin index into cfg.Servers
 	cfg *Config
 }
 
@@ -1140,14 +1182,14 @@ func (c *Client) log(format string, v ...interface{}) { log.Printf(format, v...)
 
 func (c *Client) Run() error {
 	if isMuxTransport(c.cfg.Transport) {
-		c.log("connecting to %s (%s), mux_con=%d", c.cfg.Server, c.cfg.Transport, c.cfg.MuxCon)
+		c.log("connecting to %s (%s), mux_con=%d", c.target(), c.cfg.Transport, c.cfg.MuxCon)
 		for i := 0; i < c.cfg.MuxCon; i++ {
 			go c.muxWorker()
 			time.Sleep(50 * time.Millisecond)
 		}
 		select {} // run until the service is stopped
 	}
-	c.log("connecting to %s (%s), pool=%d", c.cfg.Server, c.cfg.Transport, c.cfg.Pool)
+	c.log("connecting to %s (%s), pool=%d", c.target(), c.cfg.Transport, c.cfg.Pool)
 	go c.controlLoop()
 	for i := 0; i < c.cfg.Pool; i++ {
 		go c.dataWorker()
@@ -1156,17 +1198,47 @@ func (c *Client) Run() error {
 	select {} // run until the service is stopped
 }
 
+func (c *Client) target() string {
+	if len(c.cfg.Servers) > 0 {
+		return strings.Join(c.cfg.Servers, ", ")
+	}
+	return c.cfg.Server
+}
+
+// connect opens one tunnel connection. With several CDN edges configured,
+// each call starts at the next edge (spreading connections across them)
+// and falls through to the others if that one fails.
 func (c *Client) connect(role string) (*fconn, error) {
+	if len(c.cfg.Servers) == 0 {
+		return c.connectTo(c.cfg.Server, role)
+	}
+	start := atomic.AddUint32(&c.next, 1)
+	var lastErr error
+	for i := 0; i < len(c.cfg.Servers); i++ {
+		addr := c.cfg.Servers[(int(start)+i)%len(c.cfg.Servers)]
+		f, err := c.connectTo(addr, role)
+		if err == nil {
+			return f, nil
+		}
+		if c.cfg.Verbose {
+			c.log("%s: %v", addr, err)
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func (c *Client) connectTo(addr, role string) (*fconn, error) {
 	var raw net.Conn
 	if c.cfg.Transport == "udp" {
-		sess, err := kcp.DialWithOptions(c.cfg.Server, nil, 0, 0)
+		sess, err := kcp.DialWithOptions(addr, nil, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		tuneKCP(sess)
 		raw = sess
 	} else {
-		tconn, err := net.DialTimeout("tcp", c.cfg.Server, 15*time.Second)
+		tconn, err := net.DialTimeout("tcp", addr, 15*time.Second)
 		if err != nil {
 			return nil, err
 		}
@@ -1198,7 +1270,11 @@ func (c *Client) connect(role string) (*fconn, error) {
 	var conn net.Conn = raw
 
 	if c.cfg.Transport == "ws" || c.cfg.Transport == "wss" || c.cfg.Transport == "wsmux" || c.cfg.Transport == "wssmux" {
-		if err := clientUpgrade(raw, br, c.cfg.SNI, c.cfg.Path); err != nil {
+		host := c.cfg.Host
+		if host == "" {
+			host = c.cfg.SNI
+		}
+		if err := clientUpgrade(raw, br, host, c.cfg.Path); err != nil {
 			raw.Close()
 			return nil, err
 		}
@@ -1243,7 +1319,7 @@ func (c *Client) controlLoop() {
 			}
 			continue
 		}
-		c.log("control link established with %s", c.cfg.Server)
+		c.log("control link established with %s", c.target())
 		backoff = time.Second
 		for {
 			f.SetReadDeadline(time.Now().Add(60 * time.Second))

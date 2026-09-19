@@ -553,7 +553,7 @@ func (c *Client) muxWorker() {
 			}
 			continue
 		}
-		c.log("mux link established with %s", c.cfg.Server)
+		c.log("mux link established with %s", c.target())
 		backoff = time.Second
 
 		ms := newMuxSession(f)

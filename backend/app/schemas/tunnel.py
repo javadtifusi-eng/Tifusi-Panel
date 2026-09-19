@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.tunnel import TunnelStatus, TunnelTransport
 
@@ -32,6 +32,8 @@ class TunnelCreate(BaseModel):
     cdn_provider: CdnProvider | None = None
     cdn_host: str | None = Field(default=None, max_length=255)
     cdn_port: int | None = Field(default=None, ge=1, le=65535)
+    cdn_ips: list[str] = Field(default=[], max_length=5)
+    cdn_front: str | None = Field(default=None, max_length=255)
 
 
 class TunnelUpdate(BaseModel):
@@ -50,6 +52,8 @@ class TunnelUpdate(BaseModel):
     cdn_provider: CdnProvider | None = None
     cdn_host: str | None = Field(default=None, max_length=255)
     cdn_port: int | None = Field(default=None, ge=1, le=65535)
+    cdn_ips: list[str] | None = Field(default=None, max_length=5)
+    cdn_front: str | None = Field(default=None, max_length=255)
 
 
 class TunnelResponse(BaseModel):
@@ -72,10 +76,17 @@ class TunnelResponse(BaseModel):
     cdn_provider: str | None = None
     cdn_host: str | None = None
     cdn_port: int | None = None
+    cdn_ips: list[str] = []
+    cdn_front: str | None = None
     status: TunnelStatus
     last_error: str | None
     last_checked_at: datetime | None
     created_at: datetime
+
+    @field_validator("cdn_ips", mode="before")
+    @classmethod
+    def _none_is_empty(cls, v):
+        return v or []
 
 
 class TunnelList(BaseModel):
@@ -151,3 +162,47 @@ class TunnelRecommendResult(BaseModel):
     foreign_latency_ms: float | None
     link: Literal["fast", "slow"]
     ranked: list[TunnelTransport]
+
+
+class CdnEdge(BaseModel):
+    ip: str
+    ms: int | None
+    jitter: int | None
+    ok: int
+    tries: int
+
+
+class CdnRanOn(BaseModel):
+    ran_on: Literal["node", "panel"]
+    ran_on_name: str
+
+
+class CdnEdgeScan(CdnRanOn):
+    ranges: int
+    tested: int
+    answered: int
+    edges: list[CdnEdge]
+
+
+class CdnFront(BaseModel):
+    domain: str
+    works: bool
+    ms: int | None
+    error: str | None
+
+
+class CdnFrontScan(CdnRanOn):
+    checked: int
+    on_cdn: int
+    fronts: list[CdnFront]
+
+
+class CdnSpeed(CdnRanOn):
+    ok: bool
+    mbps: float | None
+    ping_ms: int | None
+    bytes: int
+    seconds: float | None
+    via: str
+    error: str | None
+

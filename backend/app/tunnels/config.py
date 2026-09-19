@@ -62,7 +62,17 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
         "transport": tunnel.transport.value,
         "token": tunnel.token,
     }
+    if tunnel.cdn_host and tunnel.cdn_ips:
+        # Pinned clean edges: connections are spread across them and a dead
+        # one is skipped, instead of whatever edge DNS hands out.
+        config["servers"] = [f"{ip}:{tunnel.cdn_port or 443}" for ip in tunnel.cdn_ips]
+        config["server"] = config["servers"][0]
     sni = tunnel.cdn_host or tunnel.sni
+    if tunnel.cdn_host and tunnel.cdn_front:
+        # Domain fronting: TLS names another site on the same CDN, the
+        # WebSocket Host still names ours, and the CDN routes on the Host.
+        sni = tunnel.cdn_front
+        config["host"] = tunnel.cdn_host
     if sni:
         config["sni"] = sni
     if tunnel.path:

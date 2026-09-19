@@ -19,6 +19,9 @@
 ### Tunnels
 - **Route through a CDN** (ArvanCloud recommended, or Cloudflare): the foreign server dials a CDN name instead of the relay's IP, so the tunnel survives if that IP is filtered. The panel sets the SNI, a random WebSocket path and the port itself, and shows a checklist of what to set in the CDN panel.
 - **Test connection** on a CDN tunnel adds a CDN path step that opens a real WebSocket upgrade through the CDN and only passes on a `101` answer.
+- **ArvanCloud quality** sheet on CDN tunnels, measured from the foreign node (or the panel): **clean IPs** — edge addresses from the provider's ranges tried with a real WebSocket through to the relay, the best pinned into the foreign config and connections spread across them; **front SNI** — Iranian sites really on the same CDN, offered only if they carry the tunnel (domain fronting); and a **real speed test** that downloads 8 MB from the relay through the CDN with the saved edge and SNI.
+- The tunnel program spreads connections over several CDN edges, skips a dead one, sends a separate WebSocket `Host` for fronting and answers the panel's speed test. Re-run the install command on both servers to get it.
+- The CDN checklist adds turning off caching and the security challenge / WAF for the tunnel's subdomain; a CDN tunnel starts with 16 connections instead of 8.
 - The transport picker is down to three cards — TCP Mux, WSS Mux and UDP (KCP) — plus IP Spoofing, which opens the spoof test. Tunnels on the other transports keep working.
 
 ### Dashboard

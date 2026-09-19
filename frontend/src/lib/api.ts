@@ -620,6 +620,10 @@ export interface Tunnel {
   cdn_provider: CdnProvider | null
   cdn_host: string | null
   cdn_port: number | null
+  /** CDN edge IPs the foreign side dials, best first; empty = let DNS pick. */
+  cdn_ips: string[]
+  /** Domain-fronting SNI (another site on the same CDN); null = the CDN domain. */
+  cdn_front: string | null
   status: TunnelStatus
   last_error: string | null
   last_checked_at: string | null
@@ -678,6 +682,8 @@ export type TunnelPayload = {
   cdn_provider?: CdnProvider | null
   cdn_host?: string | null
   cdn_port?: number | null
+  cdn_ips?: string[]
+  cdn_front?: string | null
 }
 
 export async function listTunnels(): Promise<TunnelList> {
@@ -717,6 +723,66 @@ export async function recommendTunnelTransport(payload: {
   foreign_port?: number | null
 }): Promise<TunnelRecommendResult> {
   const res = await authorizedFetch('/tunnels/recommend', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+/** Where a CDN check actually ran: the tunnel's foreign node, or the panel
+ *  server when the foreign side isn't a node (or its agent is too old). */
+export interface CdnRanOn {
+  ran_on: 'node' | 'panel'
+  ran_on_name: string
+}
+
+export interface CdnEdge {
+  ip: string
+  ms: number | null
+  jitter: number | null
+  ok: number
+  tries: number
+}
+
+export interface CdnEdgeScan extends CdnRanOn {
+  ranges: number
+  tested: number
+  answered: number
+  edges: CdnEdge[]
+}
+
+export interface CdnFront {
+  domain: string
+  works: boolean
+  ms: number | null
+  error: string | null
+}
+
+export interface CdnFrontScan extends CdnRanOn {
+  checked: number
+  on_cdn: number
+  fronts: CdnFront[]
+}
+
+export interface CdnSpeed extends CdnRanOn {
+  ok: boolean
+  mbps: number | null
+  ping_ms: number | null
+  bytes: number
+  seconds: number | null
+  via: string
+  error: string | null
+}
+
+export async function scanCdnEdges(id: number): Promise<CdnEdgeScan> {
+  const res = await authorizedFetch(`/tunnels/${id}/cdn/edges`, { method: 'POST' })
+  return res.json()
+}
+
+export async function scanCdnFronts(id: number): Promise<CdnFrontScan> {
+  const res = await authorizedFetch(`/tunnels/${id}/cdn/fronts`, { method: 'POST' })
+  return res.json()
+}
+
+export async function cdnSpeedTest(id: number): Promise<CdnSpeed> {
+  const res = await authorizedFetch(`/tunnels/${id}/cdn/speed`, { method: 'POST' })
   return res.json()
 }
 

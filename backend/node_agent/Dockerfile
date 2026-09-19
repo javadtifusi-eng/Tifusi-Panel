@@ -65,6 +65,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY node_agent ./node_agent
+# The tunnel CDN checks run here too, from the tunnel's foreign side.
+COPY app/tunnels/cdn_scan.py ./node_agent/cdn_scan.py
 # Charon tuning (fragment size, per-IP half-open limit); see the file.
 COPY node_agent/strongswan-tifusi.conf /etc/strongswan.d/tifusi.conf
 

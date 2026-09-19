@@ -20,6 +20,11 @@ from fastapi import FastAPI, Header, HTTPException
 
 from node_agent import ipsec, ipsec_stats, limits, reality_scan
 
+try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
+    from node_agent import cdn_scan
+except ImportError:  # running from the source tree
+    from app.tunnels import cdn_scan
+
 API_KEY = os.environ.get("TIFUSI_NODE_API_KEY", "")
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
 CONFIG_PATH = Path(os.environ.get("XRAY_CONFIG_PATH", "./data/xray-config.json"))
@@ -245,3 +250,27 @@ async def reality_check(payload: dict, x_node_api_key: str | None = Header(defau
     if not host or len(host) > 253 or any(ch.isspace() for ch in host):
         raise HTTPException(status_code=400, detail="host is required")
     return await reality_scan.check_single(host)
+
+
+@app.post("/cdn/check")
+async def cdn_check(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Runs one of the tunnel CDN checks (app/tunnels/cdn_scan.py) from this
+    server, which is the tunnel's foreign side — the one that dials the CDN."""
+    _check_key(x_node_api_key)
+    kind = payload.get("kind")
+    provider = payload.get("provider") if payload.get("provider") in cdn_scan.RANGE_URLS else "arvan"
+    host = str(payload.get("host") or "")
+    path = str(payload.get("path") or "/")
+    port = int(payload.get("port") or 443)
+    if not host or len(host) > 253 or any(ch.isspace() for ch in host):
+        raise HTTPException(status_code=400, detail="host is required")
+    if kind == "edges":
+        return await cdn_scan.scan_edges(provider, host, path, port, sni=payload.get("sni") or None)
+    if kind == "fronts":
+        return await cdn_scan.scan_fronts(provider, host, path, port, edge=payload.get("edge") or None)
+    if kind == "speed":
+        return await cdn_scan.speed_test(
+            str(payload.get("addr") or host), port, str(payload.get("sni") or host), host, path, str(payload.get("token") or "")
+        )
+    raise HTTPException(status_code=400, detail="unknown check")
+
