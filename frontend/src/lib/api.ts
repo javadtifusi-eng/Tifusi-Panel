@@ -340,30 +340,6 @@ export async function getUserLinks(id: number): Promise<UserLinks> {
   return res.json()
 }
 
-export interface RealityScanResult {
-  host: string
-  reachable: boolean
-  tls_version: string | null
-  alpn: string | null
-  latency_ms: number | null
-  error: string | null
-  recommended: boolean
-}
-
-export interface RealityScanResponse {
-  scanned: number
-  usable: number
-  results: RealityScanResult[]
-}
-
-export async function scanReality(sampleSize?: number): Promise<RealityScanResponse> {
-  const res = await authorizedFetch('/reality/scan', {
-    method: 'POST',
-    body: JSON.stringify(sampleSize ? { sample_size: sampleSize } : {}),
-  })
-  return res.json()
-}
-
 export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'hysteria2' | 'ikev2' | 'l2tp'
 export type HostSecurity = 'none' | 'tls' | 'reality'
 
@@ -516,6 +492,9 @@ export interface IranCheck {
   verdict: IranVerdict
   ok?: number
   checked?: number
+  /** Median time the Iranian probes took to reach it — the speed signal a
+   *  scan has before a real phone measures throughput. */
+  ms?: number | null
   cities?: { node: string; ok: boolean | null; ms: number | null; error: string | null }[]
   error?: string
 }
@@ -523,7 +502,7 @@ export interface IranCheck {
 export interface RealityCandidate {
   host: string
   ip: string | null
-  source: 'neighbor' | 'list' | 'custom'
+  source: 'neighbor'
   tls: string | null
   alpn: string | null
   /** Warm, from the node, by IP: median TCP connect and median TLS handshake to the target. */
@@ -534,38 +513,26 @@ export interface RealityCandidate {
   dest: string | null
   fingerprints: Record<string, { ok: boolean | null; ms: number | null }> | null
   iran: IranCheck | null
-  /** In the node's own network (or a neighbour) — no IP/SNI mismatch for the censor to notice. */
-  near?: boolean
 }
 
 export interface RealityNodeScan {
-  state: 'idle' | 'waiting' | 'discovering' | 'validating' | 'testing' | 'done' | 'error'
+  /** checking: validated and timed on the node, waiting for Iran's verdicts
+   *  before the per-fingerprint test runs on the names that are open there. */
+  state: 'idle' | 'discovering' | 'validating' | 'checking' | 'testing' | 'done' | 'error'
   phase_total: number
   phase_done: number
   error: string | null
   results: RealityCandidate[]
   node_iran: IranCheck
-  /** Neighbour scans walk outward: ring 0 is the node's own /24, ring k the /24s k blocks away. */
+  /** Scans walk outward: ring 0 is the node's own /24, ring k the /24s k blocks away. */
   ring?: number
   blocks?: string[]
   /** Names found on this node over all rings so far. */
   seen_total?: number
 }
 
-export async function startNodeRealityScan(nodeId: number, payload: { mode: 'critical' | 'neighbors' | 'list' | 'custom'; hosts?: string[]; more?: boolean }): Promise<RealityNodeScan> {
-  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST', body: JSON.stringify(payload) })
-  return res.json()
-}
-
-/** A server that isn't a node yet: the panel returns a one-line command
- *  that runs the node's scanner there and reports back. */
-export async function startRemoteRealityScan(address: string): Promise<{ token: string; command: string }> {
-  const res = await authorizedFetch('/reality/remote', { method: 'POST', body: JSON.stringify({ address, mode: 'neighbors' }) })
-  return res.json()
-}
-
-export async function getRemoteRealityScan(token: string): Promise<RealityNodeScan> {
-  const res = await authorizedFetch(`/reality/remote/${token}`)
+export async function startNodeRealityScan(nodeId: number): Promise<RealityNodeScan> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST' })
   return res.json()
 }
 

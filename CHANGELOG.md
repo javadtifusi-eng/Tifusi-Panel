@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.2 — 2026-09-19
+
+### REALITY scanner
+- **No built-in list of target names, anywhere.** The "Critical services" and "Well-known sites" lists are gone from the source. A name published in a panel's code is the first one a censor blocks, and a name that is excellent on one server's network is ordinary on another's — so every scan now discovers its own targets live, from the TLS certificates of the node's own datacenter neighbours.
+- **One flow instead of five tabs.** "Critical services", "Well-known sites", "My SNIs" and "New server (before it's a node)" are removed, along with the endpoints behind them. There is one button: each press walks one ring further out from the node's /24 and skips every name found before, so a scan never repeats the last one's sites.
+- **Open from Iran is now a gate, not a label.** Every name that passes TLS 1.3 and HTTP/2 is checked from probe servers inside Iran (check-host.net) *before* anything else happens to it. A name that isn't open from every city that answered is dropped — it could not be used whatever else it scored — and only the survivors go back to the node for the per-fingerprint REALITY test. The test used to run on the fastest names first and learn about Iran afterwards, which spent minutes proving names that were blocked.
+- **Ranked by speed, not by working.** Plenty of SNIs are open from Iran and still slow, and a slow target makes a slow tunnel. Each Iranian probe now reports how long it took to reach the name, and the median of those is shown per target and decides the order: working with chrome and sitting on the node's own network first, then how fast Iran answers, then the node→target handshake. Fingerprints are listed fastest first too, each with its measured time, instead of in a fixed order.
+- The real test from inside Iran, which measures actual throughput per SNI from a phone, is unchanged and remains the last word on speed.
+
 ## v1.4.1 — 2026-09-18
 
 ### Subscription page

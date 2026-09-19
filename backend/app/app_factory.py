@@ -110,7 +110,6 @@ def create_app() -> FastAPI:
     app.include_router(resellers.router)
     app.include_router(user_templates.router)
     app.include_router(reality.router)
-    app.include_router(reality.public_router)
     app.include_router(reality.field_public_router)
     app.include_router(hosts.router)
     app.include_router(subscription.router)

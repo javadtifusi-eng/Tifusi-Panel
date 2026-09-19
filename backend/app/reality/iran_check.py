@@ -1,4 +1,4 @@
-"""Is a name (or the node's own address) reachable from inside Iran?
+"""Is a name (or the node's own address) reachable from inside Iran, and how fast?
 
 The panel and the nodes both sit outside Iran, so neither can see Iranian
 filtering. check-host.net runs probe servers inside Iran (Tehran, Isfahan,
@@ -6,6 +6,13 @@ Shiraz, Qom); asking a few of them to open https://NAME tells us whether
 the name is filtered there, and a TCP check against the node's address
 tells us whether the node itself is reachable. Only the name or the node
 address is sent — never anything about users.
+
+Each city also reports how long its request took, and the median of those
+(`ms`) is the one speed signal available before anyone tests from a real
+phone: plenty of names are open from Iran yet answer slowly there, and a
+slow target makes a slow tunnel. It is a proxy, not the last word — the
+field test (node_agent/field_test.py) measures real throughput — but it
+is what lets a scan rank targets by speed instead of by mere reachability.
 
 Results are cached: the same name is checked at most once per _TTL.
 """
@@ -76,7 +83,17 @@ async def _run(kind: str, target: str) -> dict:
         verdict = "blocked"
     else:
         verdict = "partial"
-    return {"verdict": verdict, "ok": ok, "checked": len(answered), "cities": per_city, "checked_at": time.time()}
+    # Median over the cities that got through — one slow city shouldn't
+    # condemn a name, and one fast city shouldn't sell it.
+    times = sorted(c["ms"] for c in answered if c["ok"] and c["ms"] is not None)
+    return {
+        "verdict": verdict,
+        "ok": ok,
+        "checked": len(answered),
+        "ms": times[len(times) // 2] if times else None,
+        "cities": per_city,
+        "checked_at": time.time(),
+    }
 
 
 async def _cached(kind: str, target: str) -> dict:

@@ -235,12 +235,8 @@ async def reality_scan_start(payload: dict, x_node_api_key: str | None = Header(
     _check_key(x_node_api_key)
     if reality_scan.running():
         raise HTTPException(status_code=409, detail="A scan is already running on this node")
-    hosts = [str(h).strip().lower() for h in payload.get("hosts") or [] if str(h).strip()][:300]
     reality_scan.start(
         public_ip=payload.get("public_ip"),
-        hosts=hosts,
-        neighbors=bool(payload.get("neighbors", True)),
-        test_top=max(1, min(int(payload.get("test_top", 8)), 20)),
         ring=max(0, min(int(payload.get("ring", 0)), 64)),
         exclude=[str(h) for h in payload.get("exclude") or []][:5000],
     )
@@ -253,14 +249,16 @@ async def reality_scan_status(x_node_api_key: str | None = Header(default=None))
     return reality_scan.status()
 
 
-@app.post("/reality/check")
-async def reality_check(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
-    """Validates one name and runs the real per-fingerprint REALITY test on it."""
+@app.post("/reality/prove")
+async def reality_scan_prove(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """The scan's second half: run the per-fingerprint REALITY test on the
+    names the panel found to be really open from inside Iran."""
     _check_key(x_node_api_key)
-    host = str(payload.get("host") or "").strip()
-    if not host or len(host) > 253 or any(ch.isspace() for ch in host):
-        raise HTTPException(status_code=400, detail="host is required")
-    return await reality_scan.check_single(host)
+    if reality_scan.running():
+        raise HTTPException(status_code=409, detail="A scan is already running on this node")
+    hosts = [str(h).strip().lower() for h in payload.get("hosts") or [] if str(h).strip()][:12]
+    reality_scan.prove_hosts(hosts)
+    return reality_scan.status()
 
 
 @app.post("/reality/field-test")

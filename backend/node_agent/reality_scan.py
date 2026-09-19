@@ -2,17 +2,28 @@
 
 A REALITY dest has to work *from the node*: the node is the one that
 forwards unauthenticated handshakes to it, so latency and reachability are
-measured here, not on the panel. The scan has three steps:
+measured here, not on the panel. Every scan finds its own targets live —
+there is no built-in list of names anywhere in this project, because a
+name that is published as a good REALITY target is exactly the name a
+censor gets to block first.
+
+The scan runs in two halves, with the panel's Iran check in between:
 
 1. discover: TLS-connect to every address in the node's own /24 and read
    the names off each certificate — neighbours in the same datacenter are
-   the targets Xray's authors recommend, and they are found live rather
-   than picked from a fixed list;
+   the targets Xray's authors recommend;
 2. validate: connect to each name with SNI and a verified certificate,
-   keeping those that speak TLS 1.3 and HTTP/2;
-3. prove: for the best candidates, start a real REALITY server and client
-   on this node and fetch a page through it once per uTLS fingerprint. A
-   fingerprint is marked working only if that page actually loaded.
+   keeping those that speak TLS 1.3 and HTTP/2, and time them.
+
+The job then parks in `checking` while the panel asks probes inside Iran
+which of the survivors are really open there (app/reality/iran_check.py).
+Only the ones that are get the last step, because it costs about a minute
+each and a name Iran blocks is worthless however well it tests here:
+
+3. prove: start a real REALITY server and client on this node and fetch a
+   page through it once per uTLS fingerprint. A fingerprint is marked
+   working only if that page actually loaded, and is timed so the panel
+   can rank fingerprints by speed rather than by merely working.
 """
 
 import asyncio
@@ -48,7 +59,7 @@ _FETCH_TIMEOUT = 10
 class Candidate:
     host: str
     ip: str | None = None
-    source: str = "list"
+    source: str = "neighbor"
     tls: str | None = None
     alpn: str | None = None
     # REALITY hands every unauthenticated handshake to dest, and a client's
@@ -68,7 +79,9 @@ class Candidate:
 
 @dataclass
 class Job:
-    state: str = "idle"  # idle | discovering | validating | testing | done | error
+    # checking: validated and timed, waiting for the panel's Iran verdicts
+    # before the expensive per-fingerprint test runs on the survivors.
+    state: str = "idle"  # idle | discovering | validating | checking | testing | done | error
     phase_total: int = 0
     phase_done: int = 0
     started_at: float | None = None
@@ -94,6 +107,10 @@ class Job:
 
 
 def _rank(c: Candidate) -> tuple:
+    """Speed first among the names that actually work. The panel re-sorts
+    with the Iran verdicts it alone has, so this only has to put a sane
+    order on the snapshot: proven-working, then chrome, then how long the
+    handshake REALITY waits on for every new connection takes."""
     fps = c.fingerprints or {}
     tested = c.fingerprints is not None and any(r.get("ok") is not None for r in fps.values())
     working = [r for r in fps.values() if r.get("ok")]
@@ -102,6 +119,7 @@ def _rank(c: Candidate) -> tuple:
         not c.usable,
         tested and not working,
         not chrome if tested else False,
+        min([r["ms"] for r in working if r.get("ms")] or [10**6]),
         c.latency_ms or 10**6,
         -len(working),
     )
@@ -119,25 +137,40 @@ def running() -> bool:
     return _task is not None and not _task.done()
 
 
-def start(public_ip: str | None, hosts: list[str], neighbors: bool, test_top: int, ring: int = 0, exclude: list[str] | None = None) -> None:
+def start(public_ip: str | None, ring: int = 0, exclude: list[str] | None = None) -> None:
     global _job, _task
     _job = Job(state="discovering", started_at=time.time(), ring=ring)
-    if neighbors and public_ip:
+    if public_ip:
         _job.blocks = [str(n) for n in ring_blocks(public_ip, ring)]
-    _task = asyncio.get_running_loop().create_task(_run(public_ip, hosts, neighbors, test_top, ring, set(exclude or [])))
+    _task = asyncio.get_running_loop().create_task(_run(public_ip, ring, set(exclude or [])))
 
 
-async def _run(public_ip: str | None, hosts: list[str], neighbors: bool, test_top: int, ring: int = 0, exclude: set[str] | None = None) -> None:
+async def _run(public_ip: str | None, ring: int = 0, exclude: set[str] | None = None) -> None:
     try:
-        for h in hosts:
-            _job.candidates.setdefault(h, Candidate(host=h, source="custom" if len(hosts) <= 3 else "list"))
-        if neighbors and public_ip:
+        if public_ip:
             await _discover(public_ip, ring, exclude)
         _job.state = "validating"
         await _validate(list(_job.candidates.values()))
         await _measure_all(list(_job.candidates.values()))
+        # Parked: the panel asks Iran about these and calls prove() back with
+        # the ones that are open there. Nothing else is worth a minute of
+        # REALITY testing.
+        _job.state = "checking"
+    except Exception as exc:  # noqa: BLE001 - reported to the panel, not raised
+        _job.state, _job.error = "error", str(exc)[:300]
+        _job.finished_at = time.time()
+
+
+def prove_hosts(hosts: list[str]) -> None:
+    """Second half, started by the panel once Iran has answered."""
+    global _task
+    _task = asyncio.get_running_loop().create_task(_prove_run(hosts))
+
+
+async def _prove_run(hosts: list[str]) -> None:
+    try:
+        best = [c for c in (_job.candidates.get(h) for h in hosts) if c is not None and c.usable]
         _job.state = "testing"
-        best = sorted((c for c in _job.candidates.values() if c.usable), key=lambda c: c.latency_ms or 10**6)[:test_top]
         _job.phase_total, _job.phase_done = len(best), 0
         for c in best:
             c.fingerprints = {fp: {"ok": None, "ms": None} for fp in FINGERPRINTS}
@@ -457,60 +490,4 @@ async def prove(host: str, fingerprints: list[str] | None = None, dest: str | No
                     await asyncio.wait_for(p.wait(), timeout=3)
 
 
-async def check_single(host: str) -> dict:
-    """Validation plus the real test for one name the admin typed in."""
-    c = Candidate(host=host.lower().strip().strip("."), source="custom")
-    await _validate_one(c)
-    if c.usable:
-        await _measure(c, c.ip or c.host)
-        c.fingerprints = await prove(c.host, dest=c.dest)
-    return asdict(c)
-
-
-# --- a server that isn't a node yet ---------------------------------------
-#
-#   docker run --rm --network host <node-agent image> \
-#       python -m node_agent.reality_scan --job https://<panel>/api/reality/remote/<token>
-#
-# Fetches the job (the server's public IP, names to try) from the panel,
-# runs the same scan a node would, and posts its progress back until done.
-
-def _http(url: str, body: dict | None = None) -> dict:
-    import urllib.request
-
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST" if data else "GET")
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE  # panels often run on a self-signed or IP certificate
-    with urllib.request.urlopen(req, timeout=20, context=ctx) as r:  # noqa: S310
-        return json.loads(r.read() or b"{}")
-
-
-async def _remote(job_url: str) -> None:
-    job = await asyncio.to_thread(_http, job_url + "/job")
-    start(job.get("public_ip"), job.get("hosts") or [], bool(job.get("neighbors")), int(job.get("test_top") or 8),
-          int(job.get("ring") or 0), job.get("exclude") or [])
-    print(f"Tifusi REALITY scan of {job.get('public_ip')} — results appear in the panel.", flush=True)
-    last = ""
-    while True:
-        await asyncio.sleep(2)
-        snap = status()
-        line = f"{snap['state']} {snap['phase_done']}/{snap['phase_total']}"
-        if line != last:
-            print(line, flush=True)
-            last = line
-        with suppress(Exception):
-            await asyncio.to_thread(_http, job_url + "/report", snap)
-        if not running():
-            break
-    print("done" if status()["state"] == "done" else f"failed: {status()['error']}", flush=True)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    ap = argparse.ArgumentParser(description="REALITY target scan for a server that isn't a Tifusi node yet")
-    ap.add_argument("--job", required=True, help="the job URL the panel printed")
-    asyncio.run(_remote(ap.parse_args().job.rstrip("/")))
 

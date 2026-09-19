@@ -1,11 +1,25 @@
+"""Finding a REALITY camouflage target for a node.
+
+One flow, and it is live every time: the node reads the names off the
+certificates of its own datacenter neighbours (node_agent/reality_scan.py),
+this router asks probes inside Iran which of those are really open there
+and how fast they answer, and only those go back to the node for the
+per-fingerprint REALITY test. There is deliberately no built-in list of
+names anywhere — a published target is the first one a censor blocks, and
+a name that is excellent on one server's network is ordinary on another's.
+
+Ranking is by speed, not by reachability: connecting at all is the minimum
+bar, and the order is decided by how fast Iran reaches the name and then by
+the node->target handshake REALITY waits on for every new connection. The
+last word belongs to the field test at the bottom of this file, where a
+real phone on Iranian internet measures actual throughput per SNI.
+"""
+
 import asyncio
 import base64
-import ipaddress
 import json
 import secrets
 import socket
-import time
-from contextlib import suppress
 from urllib.parse import quote, urlencode
 from pathlib import Path
 
@@ -19,53 +33,19 @@ from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
 from app.reality import iran_check
-from app.reality.scanner import is_reality_ready, scan_targets
-from app.reality.targets import CANDIDATE_TARGETS, CRITICAL_TARGETS
-from app.schemas.reality import NodeCheckRequest, NodeScanRequest, RemoteScanRequest, RealityScanRequest, RealityScanResponse, RealityScanResult
 
 router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
 
 
-@router.get("/targets")
-async def list_candidate_targets() -> dict:
-    return {"targets": CANDIDATE_TARGETS, "count": len(CANDIDATE_TARGETS)}
+# How many names get an Iran check per scan: check-host.net is a shared free
+# service, so the nearest survivors are asked about and the rest wait for the
+# next round rather than queueing behind them.
+_IRAN_CHECKS_PER_SCAN = 30
 
-
-@router.post("/scan", response_model=RealityScanResponse)
-async def scan(payload: RealityScanRequest) -> RealityScanResponse:
-    hosts = payload.targets if payload.targets else CANDIDATE_TARGETS
-    if payload.sample_size:
-        hosts = hosts[: payload.sample_size]
-
-    raw_results = await scan_targets(hosts)
-
-    usable = [r for r in raw_results if is_reality_ready(r)]
-    usable.sort(key=lambda r: r.latency_ms or float("inf"))
-    best_host = usable[0].host if usable else None
-
-    results = [
-        RealityScanResult(
-            host=r.host,
-            reachable=r.reachable,
-            tls_version=r.tls_version,
-            alpn=r.alpn,
-            latency_ms=r.latency_ms,
-            error=r.error,
-            recommended=(r.host == best_host),
-        )
-        for r in raw_results
-    ]
-    # Surface usable targets first, fastest first; unusable ones trail at the end.
-    results.sort(key=lambda r: (not r.recommended, r.latency_ms is None, r.latency_ms or 0))
-
-    return RealityScanResponse(scanned=len(raw_results), usable=len(usable), results=results)
-
-
-# --- scanning on a node (node_agent/reality_scan.py) -----------------------
-
-# How many of the best names get an Iran check per scan: check-host.net is a
-# shared free service, so the panel asks about the finalists only.
-_IRAN_CHECKS_PER_SCAN = 20
+# How many Iran-open names get the per-fingerprint REALITY test. Each costs
+# the node about a minute (ten fingerprints, four fetches each), so it is the
+# fastest handful rather than everything that passed.
+_PROVE_TOP = 8
 
 
 async def _node_or_404(node_id: int, db: AsyncSession) -> Node:
@@ -102,45 +82,66 @@ async def _public_ipv4(address: str) -> str | None:
     return infos[0][4][0] if infos else None
 
 
-def _near(ip: str | None, own: str | None) -> bool:
-    """Same /16 as the node: the censor sees packets go to an address that the
-    SNI's own DNS could plausibly point at. A famous site on a CDN far away
-    from the node is the classic IP/SNI mismatch that gets throttled."""
-    try:
-        return bool(ip and own) and ipaddress.ip_address(ip) in ipaddress.ip_network(f"{own}/16", strict=False)
-    except ValueError:
-        return False
+def _iran_ms(r: dict) -> int:
+    """How long Iran took to reach the name — the speed signal a scan has
+    before any phone is involved. Unknown sorts last, never first."""
+    ms = (r.get("iran") or {}).get("ms")
+    return ms if ms is not None else 10**6
 
 
-def _with_iran(scan: dict, node: Node | None = None, address: str | None = None, check_all: bool = False) -> dict:
-    own = address or (node.address if node else None)
-    with suppress(OSError):
-        own = socket.gethostbyname(own) if own else None
-    for r in scan.get("results", []):
-        r["near"] = r.get("source") == "neighbor" or _near(r.get("ip"), own)
-    # Near names first: they are the ones worth asking Iran about.
-    tested = sorted(
-        [r for r in scan.get("results", []) if r.get("fingerprints") and any((v or {}).get("ok") for v in r["fingerprints"].values())],
-        key=lambda r: (not r["near"], r.get("latency_ms") or 10**6),
+def _with_iran(scan: dict, node: Node) -> dict:
+    # Every name that survived validation is asked about, because being open
+    # in Iran is the one condition that cannot be traded away: it decides
+    # which names are worth testing, rather than being a label added to the
+    # results afterwards. The quickest from the node go first, so the cap
+    # below falls on the names least likely to be wanted anyway.
+    survivors = sorted(
+        [r for r in scan.get("results", []) if r.get("usable")],
+        key=lambda r: r.get("latency_ms") or 10**6,
     )
-    if check_all:
-        # A critical-services scan is only as good as its Iran verdicts: every
-        # name that works on the node is asked about, not just the finalists.
-        tested = [r for r in scan.get("results", []) if r.get("usable")]
-    for r in tested[: len(tested) if check_all else _IRAN_CHECKS_PER_SCAN]:
+    for r in survivors[:_IRAN_CHECKS_PER_SCAN]:
         iran_check.start_sni(r["host"])
     for r in scan.get("results", []):
         cached = iran_check.cached_only("http", f"https://{r['host']}")
         r["iran"] = cached or ({"verdict": "checking"} if iran_check.pending("http", f"https://{r['host']}") else None)
-    target = f"{node.address}:{node.port}" if node else f"{address}:22"
-    scan["node_iran"] = iran_check.cached_only("tcp", target) or {"verdict": "checking"}
+    scan["node_iran"] = iran_check.cached_only("tcp", f"{node.address}:{node.port}") or {"verdict": "checking"}
     return scan
 
 
-# Per node: how far out the neighbour scan has walked and every name it has
-# already turned up. Every search goes one ring further and skips what was
-# already shown, so a search never repeats the last one's sites. Kept on disk
-# so a panel restart doesn't send the next search back to the first /24.
+# One handover per scan, keyed by the node's own start time for it: a re-scan
+# gets a fresh key, a repeated poll does not.
+_proved: dict[int, str] = {}
+
+
+async def _maybe_prove(node: Node, scan: dict) -> dict:
+    """The node parks in `checking` once it has validated and timed its
+    finds. When Iran has answered for all of them, hand the open ones back —
+    fastest from Iran first — for the per-fingerprint test. A name Iran
+    blocks is never tested: it could not be used whatever the result."""
+    if scan.get("state") != "checking":
+        return scan
+    survivors = [r for r in scan.get("results", []) if r.get("usable")]
+    if any((r.get("iran") or {}).get("verdict") == "checking" for r in survivors):
+        return scan
+    key = str(scan.get("started_at"))
+    if _proved.get(node.id) == key:
+        return scan
+    _proved[node.id] = key
+    ready = sorted(
+        [r for r in survivors if (r.get("iran") or {}).get("verdict") == "open"],
+        key=lambda r: (_iran_ms(r), r.get("latency_ms") or 10**6),
+    )[:_PROVE_TOP]
+    try:
+        return await _node_call(node, "POST", "/reality/prove", json={"hosts": [r["host"] for r in ready]})
+    except HTTPException as exc:
+        scan["error"] = str(exc.detail)
+        return scan
+
+
+# Per node: how far out the scan has walked and every name it has already
+# turned up. Every search goes one ring further and skips what was already
+# shown, so a search never repeats the last one's sites. Kept on disk so a
+# panel restart doesn't send the next search back to the first /24.
 _ROUNDS_FILE = Path(__file__).resolve().parents[2] / "data" / "reality_rounds.json"
 
 
@@ -161,48 +162,33 @@ def _save_rounds() -> None:
 
 
 _rounds: dict[int, dict] = _load_rounds()
-_last_mode: dict[int, str] = {}
 
 
 @router.post("/nodes/{node_id}/scan")
-async def start_node_scan(node_id: int, payload: NodeScanRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def start_node_scan(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     node = await _node_or_404(node_id, db)
-    hosts = [h.strip().lower() for h in payload.hosts if h.strip()]
-    if payload.mode == "list":
-        hosts = CANDIDATE_TARGETS
-    elif payload.mode == "critical":
-        hosts = CRITICAL_TARGETS
-    elif payload.mode == "custom" and not hosts:
-        raise HTTPException(status_code=400, detail="Enter at least one name to test")
     rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    if payload.mode == "neighbors" and not rounds["seen"]:
+    if not rounds["seen"]:
         # First search since this file existed: count whatever the node
         # already found as seen, so this one still moves on.
         try:
             last = await _node_call(node, "GET", "/reality/scan")
-            rounds["seen"].update(r["host"] for r in last.get("results", []) if r.get("source") == "neighbor")
+            rounds["seen"].update(r["host"] for r in last.get("results", []))
             rounds["ring"] = int(last.get("ring") or 0)
         except HTTPException:
             pass
-    if payload.mode == "neighbors" and rounds["seen"]:
+    if rounds["seen"]:
         rounds["ring"] += 1
     _save_rounds()
-    body = {
+    scan = await _node_call(node, "POST", "/reality/scan", json={
         "public_ip": await _public_ipv4(node.address),
-        "hosts": hosts,
-        "neighbors": payload.mode == "neighbors",
-        # Critical names are judged by the Iran check, not by the on-node
-        # fingerprint test, so only a handful get it and the scan stays quick.
-        "test_top": 5 if payload.mode == "critical" else payload.test_top,
         "ring": rounds["ring"],
         "exclude": sorted(rounds["seen"]),
-    }
-    scan = await _node_call(node, "POST", "/reality/scan", json=body)
+    })
     # Whether the node itself is reachable from Iran is worth knowing
     # before any SNI is: a blocked address makes every SNI moot.
     asyncio.get_running_loop().create_task(iran_check.address(node.address, node.port))
-    _last_mode[node.id] = payload.mode
-    return _with_iran(scan, node, check_all=payload.mode in ("critical", "custom"))
+    return _with_iran(scan, node)
 
 
 @router.get("/nodes/{node_id}/scan")
@@ -210,118 +196,26 @@ async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> 
     node = await _node_or_404(node_id, db)
     scan = await _node_call(node, "GET", "/reality/scan")
     rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    fresh = {r["host"] for r in scan.get("results", []) if r.get("source") == "neighbor"} - rounds["seen"]
+    fresh = {r["host"] for r in scan.get("results", [])} - rounds["seen"]
     if fresh:
         rounds["seen"].update(fresh)
         _save_rounds()
+    # The verdicts have to be on the results before _maybe_prove can read
+    # them; when it does hand over, it returns the node's fresh status, which
+    # needs them again. The second pass is free — the answers are cached.
+    scan = await _maybe_prove(node, _with_iran(scan, node))
+    scan = _with_iran(scan, node)
     scan["seen_total"] = len(rounds["seen"])
-    return _with_iran(scan, node, check_all=_last_mode.get(node.id) in ("critical", "custom"))
-
-
-@router.post("/nodes/{node_id}/check")
-async def check_one(node_id: int, payload: NodeCheckRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    node = await _node_or_404(node_id, db)
-    host = payload.host.strip().lower()
-    result, iran = await asyncio.gather(
-        _node_call(node, "POST", "/reality/check", json={"host": host}, timeout=60.0),
-        iran_check.sni(host),
-    )
-    result["iran"] = iran
-    return result
-
-
-# --- a server that isn't a node yet ---------------------------------------
-#
-# The admin gets a one-line command for the new server; it runs the node
-# agent's own scanner there (node_agent/reality_scan.py) and reports back
-# with a one-time token, so targets are measured from the machine that will
-# actually be the node — before it is one.
-
-_REMOTE_TTL = 3600
-_remote: dict[str, dict] = {}
-_NODE_IMAGE = "ghcr.io/javadtifusi-eng/tifusi-node-agent:latest"
-
-# The job/report endpoints are called by the new server, which has no panel
-# login — the unguessable token in the path is the credential.
-public_router = APIRouter(prefix="/api/reality/remote", tags=["reality"])
-
-
-def _remote_or_404(token: str) -> dict:
-    job = _remote.get(token)
-    if job is None or time.time() - job["created"] > _REMOTE_TTL:
-        _remote.pop(token, None)
-        raise HTTPException(status_code=404, detail="This scan has expired — start a new one")
-    return job
-
-
-@router.post("/remote")
-async def start_remote_scan(payload: RemoteScanRequest, request: Request) -> dict:
-    try:
-        ip = ipaddress.IPv4Address(payload.address.strip())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Enter the server's public IPv4 address") from None
-    if not ip.is_global:
-        raise HTTPException(status_code=400, detail="That is not a public address")
-    for t in [t for t, j in _remote.items() if time.time() - j["created"] > _REMOTE_TTL]:
-        _remote.pop(t, None)
-    token = secrets.token_urlsafe(24)
-    _remote[token] = {
-        "created": time.time(),
-        "address": str(ip),
-        "spec": {
-            "public_ip": str(ip),
-            "hosts": CANDIDATE_TARGETS if payload.mode == "list" else [],
-            "neighbors": payload.mode == "neighbors",
-            "test_top": payload.test_top,
-        },
-        "scan": {"state": "waiting", "phase_total": 0, "phase_done": 0, "results": [], "error": None},
-    }
-    base = (settings.public_url or str(request.base_url)).rstrip("/")
-    url = f"{base}/api/reality/remote/{token}"
-    command = (
-        "command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh; "
-        f"docker run --rm --network host {_NODE_IMAGE} python -m node_agent.reality_scan --job {url}"
-    )
-    asyncio.get_running_loop().create_task(iran_check.address(str(ip), 22))
-    return {"token": token, "command": command}
-
-
-@router.get("/remote/{token}")
-async def remote_scan_status(token: str) -> dict:
-    job = _remote_or_404(token)
-    scan = dict(job["scan"])
-    scan["results"] = [dict(r) for r in scan.get("results", [])]
-    return _with_iran(scan, address=job["address"])
-
-
-@public_router.get("/{token}/job")
-async def remote_scan_job(token: str) -> dict:
-    return _remote_or_404(token)["spec"]
-
-
-@public_router.post("/{token}/report")
-async def remote_scan_report(token: str, body: dict = Body(...)) -> dict:
-    job = _remote_or_404(token)
-    results = body.get("results")
-    if not isinstance(results, list) or len(results) > 600:
-        raise HTTPException(status_code=400, detail="bad report")
-    job["scan"] = {
-        "state": str(body.get("state") or "")[:20],
-        "phase_total": int(body.get("phase_total") or 0),
-        "phase_done": int(body.get("phase_done") or 0),
-        "error": (str(body["error"])[:300] if body.get("error") else None),
-        "results": [r for r in results if isinstance(r, dict)],
-    }
-    return {"ok": True}
-
+    return scan
 
 
 # --- real test from inside Iran (node_agent/field_test.py) ----------------
 #
-# Only a client on Iranian internet can tell whether DPI lets an SNI through
-# to this node's address. The node opens one throwaway inbound per SNI; the
-# admin imports the subscription below on a phone in Iran and runs a
-# real-delay test, and the node reports which ones carried traffic.
+# Only a client on Iranian internet can measure what an SNI is actually
+# worth: DPI throttles names it does not block, so a target can pass every
+# check here and still crawl. The node opens one throwaway inbound per SNI;
+# the admin imports the subscription below on a phone in Iran and runs a
+# speed test, and the node reports the real rate each one carried.
 
 _FIELD_TTL = 1800
 _field: dict[int, str] = {}  # node id -> subscription token
