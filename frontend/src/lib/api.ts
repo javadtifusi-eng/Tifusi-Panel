@@ -549,6 +549,14 @@ export async function startNodeRealityScan(nodeId: number): Promise<RealityNodeS
   return res.json()
 }
 
+/** The network the admin's own browser is on: its IP as the panel sees it,
+ *  and the Iranian operator that IP belongs to (null: not a known Iranian
+ *  operator — usually a VPN, which would make a from-this-device test lie). */
+export async function getRealityWhoami(): Promise<{ ip: string; operator: string | null }> {
+  const res = await authorizedFetch('/reality/whoami')
+  return res.json()
+}
+
 export async function getNodeRealityScan(nodeId: number): Promise<RealityNodeScan> {
   const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`)
   return res.json()

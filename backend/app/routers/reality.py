@@ -34,7 +34,9 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
+from app.network_health.operators import operator_for_ip
 from app.reality import iran_check
+from app.subscription.lookup import client_ip
 
 router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
 
@@ -210,6 +212,23 @@ async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> 
     scan = _with_iran(scan, node)
     scan["seen_total"] = len(rounds["seen"])
     return scan
+
+
+# --- test from the admin's own device ------------------------------------
+#
+# check-host.net's Iranian probes all sit in datacenters, so a name they find
+# open can still be filtered or throttled on a mobile operator — the gap
+# between "works on TCI" and "not on MCI". The admin's own browser, on
+# whatever network the laptop is on, is the vantage point that closes it:
+# the dashboard fetches each finalist from there (RealityScanner.tsx) and
+# this says which operator that is, so each result is labelled with it —
+# and so a browser that is really going out through a VPN is caught rather
+# than reported as Iran.
+
+@router.get("/whoami")
+async def whoami(request: Request) -> dict:
+    ip = client_ip(request)
+    return {"ip": ip, "operator": operator_for_ip(ip)}
 
 
 # --- real test from inside Iran (node_agent/field_test.py) ----------------

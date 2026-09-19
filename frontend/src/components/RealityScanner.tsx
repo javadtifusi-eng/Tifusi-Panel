@@ -4,6 +4,7 @@ import {
   ApiError,
   getFieldTest,
   getNodeRealityScan,
+  getRealityWhoami,
   startFieldTest,
   stopFieldTest,
   type FieldTest,
@@ -81,6 +82,50 @@ function StressPill({ s }: { s?: RealityStress | null }) {
       {grade === 3 ? rs.stressBanned : rs.stress(pct)}
     </span>
   )
+}
+
+// --- test from this device -------------------------------------------------
+//
+// check-host's Iranian probes all sit in datacenters, so a name they find open
+// can still be filtered on a mobile operator. The admin's browser, on whatever
+// network the laptop is on, is the vantage point that closes that gap. A
+// browser can only reach the site itself — it can't send a chosen SNI to the
+// node's IP — so this answers "does my operator let this name through, and
+// how quickly", not "how fast is the tunnel"; the field test below does that.
+//
+// no-cors: the response is opaque, but the fetch resolves on any HTTP answer
+// (even a 404) and rejects on a reset, a failed handshake or a timeout —
+// exactly the ways SNI filtering shows. no-referrer, so the sites tested never
+// learn the panel's address.
+
+type DeviceResult = { ok: boolean; ms: number | null }
+
+async function probeOnce(host: string, timeoutMs: number): Promise<number | null> {
+  const ctl = new AbortController()
+  const timer = window.setTimeout(() => ctl.abort(), timeoutMs)
+  const t0 = performance.now()
+  try {
+    await fetch(`https://${host}/favicon.ico?tifusi=${Math.random().toString(36).slice(2)}`, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      signal: ctl.signal,
+    })
+    return Math.round(performance.now() - t0)
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
+/** The first request carries the TLS handshake with the SNI — where filtering
+ *  acts — so it is the one timed. A second try before calling a name blocked,
+ *  so one lost packet on a mobile link doesn't read as filtering. */
+async function probeHost(host: string): Promise<DeviceResult> {
+  const first = (await probeOnce(host, 8000)) ?? (await probeOnce(host, 8000))
+  return { ok: first != null, ms: first }
 }
 
 function speed(bps: number) {
@@ -237,6 +282,11 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   const [error, setError] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
   const timer = useRef<number | null>(null)
+  // operator -> host -> result: kept per operator, so testing on MCI and then
+  // on Irancell shows both side by side instead of the second replacing the first.
+  const [device, setDevice] = useState<Record<string, Record<string, DeviceResult>>>({})
+  const [deviceNet, setDeviceNet] = useState<{ ip: string; operator: string | null } | null>(null)
+  const [deviceBusy, setDeviceBusy] = useState<{ done: number; total: number } | null>(null)
 
   useEffect(() => {
     listNodes()
@@ -299,7 +349,40 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
         iranMs(a) - iranMs(b) ||
         (a.latency_ms ?? UNKNOWN) - (b.latency_ms ?? UNKNOWN),
     )
-  const shown = showAll ? [...results].sort((a, b) => Number(!a.usable) - Number(!b.usable) || iranMs(a) - iranMs(b)) : good
+  // A name the admin's own operator blocks sinks below the rest on screen.
+  // Only the display order: the field test keeps getting `good` as it is, so
+  // a device test never swaps its configs out from under a phone mid-test.
+  const blockedHere = (r: RealityCandidate) => Object.values(device).some((byHost) => byHost[r.host]?.ok === false)
+  const ranked = [...good].sort((a, b) => Number(blockedHere(a)) - Number(blockedHere(b)))
+  const shown = showAll ? [...results].sort((a, b) => Number(!a.usable) - Number(!b.usable) || iranMs(a) - iranMs(b)) : ranked
+
+  async function whoami() {
+    try {
+      setDeviceNet(await getRealityWhoami())
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
+    }
+  }
+
+  async function testDevice(operator: string) {
+    const hosts = good.slice(0, 20).map((r) => r.host)
+    setDeviceBusy({ done: 0, total: hosts.length })
+    const out: Record<string, DeviceResult> = {}
+    let next = 0
+    // Four at a time: quick, and too few to skew each other on a phone link.
+    await Promise.all(
+      Array.from({ length: 4 }, async () => {
+        while (next < hosts.length) {
+          const host = hosts[next++]
+          out[host] = await probeHost(host)
+          setDeviceBusy((b) => (b ? { ...b, done: b.done + 1 } : b))
+        }
+      }),
+    )
+    setDevice((d) => ({ ...d, [operator]: out }))
+    setDeviceBusy(null)
+  }
+
   const pct = scan && scan.phase_total ? Math.round((scan.phase_done / scan.phase_total) * 100) : busy ? 5 : 100
   const PHASES = ['discovering', 'validating', 'checking', 'testing', 'done'] as const
   const phaseIndex = scan?.state === 'done' ? PHASES.length : PHASES.indexOf(scan?.state as (typeof PHASES)[number])
@@ -402,6 +485,17 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                       </div>
                       <div className="rsc-side">
                         {best && <span className="pill accent">★ {rs.best}</span>}
+                        {Object.entries(device).map(([op, byHost]) => {
+                          const d = byHost[r.host]
+                          if (!d) return null
+                          const name = rs.device.ops[op] ?? rs.device.unknown
+                          return (
+                            <span key={op} className={`pill ${d.ok ? 'ok' : 'bad'}`} title={rs.device.pillTitle}>
+                              <i />
+                              {d.ok ? rs.device.ok(name, d.ms!) : rs.device.blocked(name)}
+                            </span>
+                          )
+                        })}
                         {r.usable && <StressPill s={r.stress} />}
                         {r.usable && <IranPill check={r.iran} />}
                         {r.usable && (
@@ -437,6 +531,43 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                 )
               })}
             </ul>
+            {good.length > 0 && (
+              <div className="form-section">
+                <b style={{ fontSize: '0.9rem' }}>📱 {rs.device.title}</b>
+                <div className="hint" style={{ margin: 0 }}>{rs.device.intro}</div>
+                {deviceNet &&
+                  (deviceNet.operator ? (
+                    <div className="hint" style={{ margin: 0 }}>{rs.device.net(rs.device.ops[deviceNet.operator] ?? deviceNet.operator, deviceNet.ip)}</div>
+                  ) : (
+                    <div className="tf-alert">{rs.device.notIran(deviceNet.ip)}</div>
+                  ))}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {!deviceNet ? (
+                    <button type="button" className="btn solid" onClick={whoami}>
+                      {rs.device.check}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn solid"
+                        disabled={!!deviceBusy}
+                        onClick={() => testDevice(deviceNet.operator ?? 'unknown')}
+                      >
+                        {deviceBusy
+                          ? rs.device.running(deviceBusy.done, deviceBusy.total)
+                          : deviceNet.operator
+                            ? rs.device.run(good.slice(0, 20).length)
+                            : rs.device.runAnyway}
+                      </button>
+                      <button type="button" className="btn" disabled={!!deviceBusy} onClick={whoami}>
+                        {rs.device.recheck}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
             {nodeId != null && scan.state === 'done' && (
               <FieldTestPanel nodeId={nodeId} candidates={good} onPick={onPick} picked={picked} />
             )}
