@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import ipsec, ipsec_stats, limits, reality_scan
+from node_agent import field_test, ipsec, ipsec_stats, limits, reality_scan
 
 try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
     from node_agent import cdn_scan
@@ -55,6 +55,15 @@ _xray_version: str | None = None
 # never gets a /ipsec-config push, so /health reports ipsec as not
 # configured rather than guessing at a mode.
 _ipsec_mode: str | None = None
+
+# A container restart would otherwise leave every user offline until the
+# panel's next push: start Xray again from the last config it was given.
+if CONFIG_PATH.exists():
+    try:
+        _process = subprocess.Popen([XRAY_BIN, "run", "-config", str(CONFIG_PATH)])
+        _started_at = time.monotonic()
+    except OSError:
+        _process = None
 
 limits.start(XRAY_BIN, STATS_API_ADDR, lambda: _process is not None and _process.poll() is None)
 
@@ -252,6 +261,38 @@ async def reality_check(payload: dict, x_node_api_key: str | None = Header(defau
     if not host or len(host) > 253 or any(ch.isspace() for ch in host):
         raise HTTPException(status_code=400, detail="host is required")
     return await reality_scan.check_single(host)
+
+
+@app.post("/reality/field-test")
+async def reality_field_test_start(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Opens throwaway REALITY inbounds, one per SNI, to be tested from a phone
+    in Iran (node_agent/field_test.py). Replaces any test already running."""
+    _check_key(x_node_api_key)
+    targets = [
+        {"host": str(t.get("host") or "").strip().lower(), "dest": str(t.get("dest") or "").strip() or None}
+        for t in payload.get("targets") or [] if isinstance(t, dict)
+    ]
+    targets = [t for t in targets if t["host"] and len(t["host"]) <= 253 and not any(ch.isspace() for ch in t["host"])]
+    if not targets:
+        raise HTTPException(status_code=400, detail="targets are required")
+    ttl = max(300, min(int(payload.get("ttl") or 1800), 7200))
+    try:
+        return await field_test.start(targets, ttl, payload.get("public_ip"))
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/reality/field-test")
+async def reality_field_test_status(x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    return await field_test.status()
+
+
+@app.delete("/reality/field-test")
+async def reality_field_test_stop(x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    await field_test.stop()
+    return await field_test.status()
 
 
 @app.post("/cdn/check")

@@ -1,13 +1,16 @@
 import asyncio
+import base64
 import ipaddress
 import json
 import secrets
 import socket
 import time
+from urllib.parse import quote, urlencode
 from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -61,7 +64,7 @@ async def scan(payload: RealityScanRequest) -> RealityScanResponse:
 
 # How many of the best names get an Iran check per scan: check-host.net is a
 # shared free service, so the panel asks about the finalists only.
-_IRAN_CHECKS_PER_SCAN = 8
+_IRAN_CHECKS_PER_SCAN = 20
 
 
 async def _node_or_404(node_id: int, db: AsyncSession) -> Node:
@@ -281,3 +284,89 @@ async def remote_scan_report(token: str, body: dict = Body(...)) -> dict:
     }
     return {"ok": True}
 
+
+
+# --- real test from inside Iran (node_agent/field_test.py) ----------------
+#
+# Only a client on Iranian internet can tell whether DPI lets an SNI through
+# to this node's address. The node opens one throwaway inbound per SNI; the
+# admin imports the subscription below on a phone in Iran and runs a
+# real-delay test, and the node reports which ones carried traffic.
+
+_FIELD_TTL = 1800
+_field: dict[int, str] = {}  # node id -> subscription token
+_field_tokens: dict[str, int] = {}
+
+
+def _field_links(node: Node, test: dict) -> list[dict]:
+    items = []
+    for it in test.get("items", []):
+        params = {
+            "type": "tcp", "security": "reality", "encryption": "none", "flow": "xtls-rprx-vision",
+            "sni": it["host"], "fp": "chrome", "pbk": test.get("public_key", ""), "sid": test.get("short_id", ""),
+        }
+        link = f"vless://{test.get('uuid')}@{node.address}:{it['port']}?{urlencode(params)}#{quote('TEST ' + it['host'])}"
+        items.append({**it, "link": link})
+    return items
+
+
+def _field_view(node: Node, test: dict, request: Request) -> dict:
+    token = _field.get(node.id)
+    base = (settings.public_url or str(request.base_url)).rstrip("/")
+    return {
+        **{k: test.get(k) for k in ("active", "started_at", "expires_at")},
+        "items": _field_links(node, test) if test.get("uuid") else [],
+        "sub_url": f"{base}/api/reality/field/{token}" if token and test.get("active") else None,
+    }
+
+
+@router.post("/nodes/{node_id}/field-test")
+async def start_field_test(node_id: int, request: Request, body: dict = Body(...), db: AsyncSession = Depends(get_db)) -> dict:
+    node = await _node_or_404(node_id, db)
+    targets = [
+        {"host": str(t.get("host") or "").strip().lower(), "dest": t.get("dest")}
+        for t in (body.get("targets") or []) if isinstance(t, dict) and t.get("host")
+    ][:12]
+    if not targets:
+        raise HTTPException(status_code=400, detail="Pick at least one site to test")
+    test = await _node_call(node, "POST", "/reality/field-test", timeout=20.0, json={
+        "targets": targets, "ttl": _FIELD_TTL, "public_ip": await _public_ipv4(node.address),
+    })
+    old = _field.pop(node.id, None)
+    if old:
+        _field_tokens.pop(old, None)
+    token = secrets.token_urlsafe(18)
+    _field[node.id], _field_tokens[token] = token, node.id
+    return _field_view(node, test, request)
+
+
+@router.get("/nodes/{node_id}/field-test")
+async def field_test_status(node_id: int, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    node = await _node_or_404(node_id, db)
+    return _field_view(node, await _node_call(node, "GET", "/reality/field-test"), request)
+
+
+@router.delete("/nodes/{node_id}/field-test")
+async def stop_field_test(node_id: int, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    node = await _node_or_404(node_id, db)
+    test = await _node_call(node, "DELETE", "/reality/field-test")
+    _field_tokens.pop(_field.pop(node.id, ""), None)
+    return _field_view(node, test, request)
+
+
+# Imported by v2rayNG/Hiddify on the admin's phone, which has no panel
+# login: the unguessable token is the credential, and it dies with the test.
+field_public_router = APIRouter(prefix="/api/reality/field", tags=["reality"])
+
+
+@field_public_router.get("/{token}", response_class=PlainTextResponse)
+async def field_test_subscription(token: str, db: AsyncSession = Depends(get_db)) -> str:
+    node_id = _field_tokens.get(token)
+    node = await db.get(Node, node_id) if node_id else None
+    if node is None:
+        raise HTTPException(status_code=404, detail="expired")
+    test = await _node_call(node, "GET", "/reality/field-test")
+    if not test.get("active"):
+        raise HTTPException(status_code=404, detail="expired")
+    links = "\n".join(i["link"] for i in _field_links(node, test))
+    return base64.b64encode(links.encode()).decode()

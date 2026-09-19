@@ -572,6 +572,41 @@ export async function getNodeRealityScan(nodeId: number): Promise<RealityNodeSca
   return res.json()
 }
 
+export interface FieldTestItem {
+  host: string
+  dest: string
+  port: number
+  clients: number
+  down: number
+  up: number
+  ok: boolean
+  link: string
+}
+
+export interface FieldTest {
+  active: boolean
+  started_at: number | null
+  expires_at: number | null
+  items: FieldTestItem[]
+  sub_url: string | null
+}
+
+/** Throwaway inbounds on the node, one per SNI, tested from a phone in Iran. */
+export async function startFieldTest(nodeId: number, targets: { host: string; dest: string | null }[]): Promise<FieldTest> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/field-test`, { method: 'POST', body: JSON.stringify({ targets }) })
+  return res.json()
+}
+
+export async function getFieldTest(nodeId: number): Promise<FieldTest> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/field-test`)
+  return res.json()
+}
+
+export async function stopFieldTest(nodeId: number): Promise<FieldTest> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/field-test`, { method: 'DELETE' })
+  return res.json()
+}
+
 export async function listNodes(): Promise<NodeList> {
   const res = await authorizedFetch('/nodes')
   return res.json()

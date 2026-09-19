@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
+  getFieldTest,
   getNodeRealityScan,
+  startFieldTest,
+  stopFieldTest,
+  type FieldTest,
   getRemoteRealityScan,
   listNodes,
   startNodeRealityScan,
@@ -44,6 +48,130 @@ function IranPill({ check }: { check: IranCheck | null }) {
       🇮🇷 {rs.iran[check.verdict]}
       {cities}
     </span>
+  )
+}
+
+function kb(n: number) {
+  return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
+}
+
+// Throwaway inbounds on the node, one per SNI; only a phone on Iranian
+// internet can say whether DPI lets each one through to this node.
+function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number; candidates: RealityCandidate[]; onPick: (c: RealityCandidate) => void; picked?: string }) {
+  const { t } = useLang()
+  const ft = t.ui.realityScan.field
+  const [test, setTest] = useState<FieldTest | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+  const timer = useRef<number | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const tick = async () => {
+      try {
+        const next = await getFieldTest(nodeId)
+        if (alive) setTest(next.items.length ? next : null)
+      } catch {
+        /* the node may run an older agent; the start button reports it */
+      }
+      if (alive) timer.current = window.setTimeout(tick, 3000)
+    }
+    tick()
+    return () => {
+      alive = false
+      if (timer.current) window.clearTimeout(timer.current)
+    }
+  }, [nodeId])
+
+  const top = candidates.slice(0, 10)
+
+  async function run(fn: () => Promise<FieldTest>) {
+    setBusy(true)
+    setError(null)
+    try {
+      setTest(await fn())
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copy(key: string, text: string) {
+    if (await copyToClipboard(text)) setCopied(key)
+  }
+
+  const left = test?.active && test.expires_at ? Math.max(0, Math.round((test.expires_at * 1000 - Date.now()) / 60000)) : null
+  const items = test ? [...test.items].sort((a, b) => Number(b.ok) - Number(a.ok) || b.down - a.down) : []
+
+  return (
+    <div className="form-section">
+      <b style={{ fontSize: '0.9rem' }}>🇮🇷 {ft.title}</b>
+      <div className="hint" style={{ margin: 0 }}>{ft.intro}</div>
+      {top.length === 0 && !test && <div className="hint" style={{ margin: 0 }}>{ft.none}</div>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {top.length > 0 && (
+          <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => startFieldTest(nodeId, top.map((c) => ({ host: c.host, dest: c.dest }))))}>
+            {test ? ft.again : ft.start(top.length)}
+          </button>
+        )}
+        {test?.active && (
+          <button type="button" className="btn" disabled={busy} onClick={() => run(() => stopFieldTest(nodeId))}>
+            {ft.stop}
+          </button>
+        )}
+      </div>
+      {error && <div className="tf-alert">{error}</div>}
+      {test?.active && test.sub_url && (
+        <>
+          <span className="hint" style={{ margin: 0 }}>
+            {ft.sub} {left != null && `(${ft.left(left)})`}
+          </span>
+          <code className="cdt-cmd" dir="ltr">{test.sub_url}</code>
+          <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => copy('sub', test.sub_url!)}>
+            {copied === 'sub' ? t.common.copiedCheck : ft.copy}
+          </button>
+        </>
+      )}
+      {test && !test.active && <div className="hint" style={{ margin: 0 }}>{ft.ended}</div>}
+      {items.length > 0 && (
+        <ul className="rsc-list">
+          {items.map((it) => {
+            const cand = candidates.find((c) => c.host === it.host)
+            return (
+              <li key={it.host} className={`rsc-row ${it.ok ? 'best' : ''}`}>
+                <div className="rsc-head">
+                  <div className="rsc-name">
+                    <b className="mono">{it.host}</b>
+                    <small>
+                      <span className="mono">:{it.port}</span>
+                    </small>
+                  </div>
+                  <div className="rsc-side">
+                    {it.ok ? (
+                      <span className="pill ok"><i />{ft.ok(kb(it.down + it.up), it.clients)}</span>
+                    ) : (
+                      <span className={`pill ${test?.active ? 'info live' : 'bad'}`}><i />{test?.active ? ft.waiting : '✕'}</span>
+                    )}
+                    {test?.active && (
+                      <button type="button" className="btn" onClick={() => copy(it.host, it.link)}>
+                        {copied === it.host ? t.common.copiedCheck : ft.copyOne}
+                      </button>
+                    )}
+                    {it.ok && cand && (
+                      <button type="button" className={`btn ${picked === it.host ? 'on' : 'solid'}`} onClick={() => onPick(cand)}>
+                        {picked === it.host ? t.ui.realityScan.used : t.ui.realityScan.use}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -311,6 +439,14 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
               <button type="button" className="btn solid" style={{ alignSelf: 'flex-start' }} onClick={() => start(true)}>
                 🔎 {rs.more}
               </button>
+            )}
+            {mode !== 'server' && nodeId != null && scan.state === 'done' && (
+              <FieldTestPanel
+                nodeId={nodeId}
+                candidates={[...usable].sort(byScore).filter((r) => r.iran?.verdict !== 'blocked')}
+                onPick={onPick}
+                picked={picked}
+              />
             )}
             {results.length > usable.length && (
               <button type="button" className="btn" onClick={() => setShowAll((v) => !v)}>

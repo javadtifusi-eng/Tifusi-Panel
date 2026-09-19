@@ -9,6 +9,11 @@
 ### REALITY scanner
 - Runs on the node itself. It finds candidate sites in the node's own datacenter from their certificates (or uses the built-in list, or names you type), keeps those with TLS 1.3 and HTTP/2, and proves the best ones with a real REALITY connection per fingerprint: each of chrome, firefox, safari, ios, android, edge, 360, qq, random and randomized is marked by whether a page actually loaded through it.
 - Checks from probe servers inside Iran (check-host.net) whether each finalist and the node's own address are reachable there; filtered names are listed last.
+- Real test from inside Iran: the node opens a temporary REALITY config per top site (30 minutes, its own Xray process, the live config untouched) and gives one subscription link. Import it on a phone on Iranian internet and run a real-delay test; each site that actually carried traffic through Iran's filtering to the node turns green. The on-server fingerprint test is now labelled as such.
+- Up to 20 finalists get the check-host.net Iran check instead of 8.
+
+### Node
+- The node agent starts Xray again from its last config after a container restart, instead of leaving users offline until the panel's next push.
 - Each working fingerprint shows its real ping (median of three requests after a warm-up, timed one fingerprint at a time). The fastest and slowest are only called out when the gap is real — usually they are within a few milliseconds of each other.
 - Real ping to each target, measured from the node by IP after the scan's burst of checks: median of five TCP connects and three TLS handshakes. Targets are ranked by being open from Iran, working with chrome, then the shortest handshake — REALITY waits on it for every new connection.
 - **New server (before it's a node)** replaces *My own sites*: the panel gives a one-line command that runs the scanner on a server that isn't a node yet and reports back, so its targets are known before it's added.
