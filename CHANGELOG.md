@@ -26,6 +26,9 @@
 - The CDN checklist adds turning off caching and the security challenge / WAF for the tunnel's subdomain; a CDN tunnel starts with 16 connections instead of 8.
 - The transport picker is down to three cards — TCP Mux, WSS Mux and UDP (KCP) — plus IP Spoofing, which opens the spoof test. Tunnels on the other transports keep working.
 
+### Config lock
+- **Settings → Config lock**, and per user in the user form: subscriptions only work in the Tifusi VPN app. The app gets the VLESS links sealed (AES-256-GCM, keyed from the secret or app code it used) and shows only server names; other clients get a placeholder "🔒 Install the Tifusi VPN app to connect"; the subscription page hides links and QR codes. IKEv2 and L2TP are unaffected.
+
 ### Dashboard
 - The network health card is off the dashboard again; the dashboard is as it was in v1.3.
 

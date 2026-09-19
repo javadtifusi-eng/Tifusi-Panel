@@ -110,6 +110,7 @@ async def create_user(
         on_hold_expire_days=payload.on_hold_expire_days if payload.status == UserStatus.on_hold else None,
         hwid_limit=payload.hwid_limit,
         speed_limit_mbps=payload.speed_limit_mbps,
+        config_lock=payload.config_lock,
         note=payload.note,
         protocols=protocols,
         ipsec_password=payload.ipsec_password,

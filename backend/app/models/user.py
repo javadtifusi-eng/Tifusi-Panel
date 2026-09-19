@@ -2,7 +2,7 @@ import enum
 import uuid as uuid_lib
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -76,6 +76,9 @@ class ProxyUser(Base):
     # that per-connection tagging built first — see node_agent/main.py's
     # /config, which would need to pass this through once it exists.
     speed_limit_mbps: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    # None follows the panel's config lock (PanelSetting.config_lock).
+    config_lock: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Bumped in app/traffic/sync.py::collect_traffic whenever a poll cycle
     # (every app.config.settings.traffic_sync_interval_seconds, 30s by

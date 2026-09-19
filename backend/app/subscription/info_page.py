@@ -180,8 +180,18 @@ def build_info_page_html(
     links: list[str],
     ikev2_configs: list[dict],
     l2tp_configs: list[dict],
+    locked: bool = False,
 ) -> str:
     sections: list[str] = []
+
+    if locked:
+        sections.append(
+            """
+        <div class="section">
+          <div class="section-title">🔒 کانفیگ‌ها قفل‌اند</div>
+          <div class="kv"><span>اتصال فقط از داخل اپ Tifusi VPN امکان‌پذیره؛ اپ رو نصب کن و کد اتصال رو واردش کن.</span></div>
+        </div>"""
+        )
 
     if links:
         rows = "".join(
