@@ -28,6 +28,12 @@ from node_agent.reality_scan import XRAY_BIN, _keypair
 
 _PORT_RANGE = (20000, 60000)
 _MAX_TARGETS = 12
+# Ports a real HTTPS server could plausibly sit on: Cloudflare's alternates
+# and 8443. The operator-pattern test puts the same SNI on one of these and
+# on a random high port, because a TLS stream to a foreign address on a port
+# no web server uses is a cheap thing for a mobile operator to throttle on —
+# and every test before it used random high ports, so it could never tell.
+STANDARD_PORTS = (2053, 2083, 2087, 2096, 8443)
 _state: dict | None = None
 _proc: asyncio.subprocess.Process | None = None
 _stopper: asyncio.Task | None = None
@@ -46,6 +52,30 @@ def _free_public_port(taken: set[int]) -> int:
                 continue
         return port
     raise RuntimeError("no free port")
+
+
+def _port_free(port: int, taken: set[int]) -> bool:
+    if port in taken:
+        return False
+    with socket.socket() as s:
+        try:
+            s.bind(("0.0.0.0", port))
+        except OSError:
+            return False
+    return True
+
+
+def _pick_port(want: int | None, taken: set[int]) -> int:
+    """The port asked for if it is free; a standard port that is taken falls
+    back to another standard one, so the test still compares like with like."""
+    if want:
+        if _port_free(want, taken):
+            return want
+        if want in STANDARD_PORTS:
+            for port in STANDARD_PORTS:
+                if _port_free(port, taken):
+                    return port
+    return _free_public_port(taken)
 
 
 async def _stats(api_port: int) -> dict[str, dict[str, int]]:
@@ -75,7 +105,8 @@ def _log_hits(path: str, local_ips: set[str]) -> dict[str, set[str]]:
 
 
 async def start(targets: list[dict], ttl: int, public_ip: str | None) -> dict:
-    """targets: [{"host": sni, "dest": "ip:443"}]."""
+    """targets: [{"host": sni, "dest": "ip:443", "port": optional, "label": optional}].
+    The same SNI may appear more than once, on different ports."""
     await stop()
     global _state, _proc, _stopper
     targets = [t for t in targets if t.get("host")][:_MAX_TARGETS]
@@ -86,9 +117,10 @@ async def start(targets: list[dict], ttl: int, public_ip: str | None) -> dict:
     taken: set[int] = set()
     items = []
     for i, t in enumerate(targets):
-        port = _free_public_port(taken)
+        port = _pick_port(t.get("port"), taken)
         taken.add(port)
-        items.append({"tag": f"probe-{i}", "host": t["host"], "dest": t.get("dest") or f"{t['host']}:443", "port": port})
+        items.append({"tag": f"probe-{i}", "host": t["host"], "dest": t.get("dest") or f"{t['host']}:443", "port": port,
+                      "label": t.get("label")})
     api_port = _free_public_port(taken)
     tmp = tempfile.mkdtemp(prefix="tifusi-field-")
     log_path = os.path.join(tmp, "access.log")
@@ -190,7 +222,10 @@ async def status() -> dict:
         # Accepted in the access log means the REALITY handshake authenticated
         # (an unauthenticated one is just relayed to dest and never logged as
         # accepted), and a client outside this server sent it.
-        items.append({"host": it["host"], "dest": it["dest"], "port": it["port"], "clients": clients,
+        # Which addresses connected, so the panel can say which operator each
+        # result came from (a test run on MCI and then Irancell shows both).
+        items.append({"host": it["host"], "dest": it["dest"], "port": it["port"], "label": it.get("label"),
+                      "ips": sorted(hits.get(it["tag"], ()))[:10], "clients": clients,
                       "down": down, "up": up, "ok": clients > 0 and down > 0,
                       "down_bps": _state["rates"].get(it["tag"], {}).get("down", 0),
                       "up_bps": _state["rates"].get(it["tag"], {}).get("up", 0)})

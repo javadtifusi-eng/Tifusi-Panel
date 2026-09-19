@@ -19,20 +19,26 @@ this file, where a real phone on Iranian internet measures real throughput.
 
 import asyncio
 import base64
+import ipaddress
 import json
 import secrets
 import socket
-from urllib.parse import quote, urlencode
+import ssl
+from contextlib import suppress
+from urllib.parse import quote, urlencode, urlparse
 from pathlib import Path
 
+import certifi
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies import require_permission
+from app.models.host import Host
 from app.models.node import Node
 from app.network_health.operators import operator_for_ip
 from app.reality import iran_check
@@ -231,6 +237,48 @@ async def whoami(request: Request) -> dict:
     return {"ip": ip, "operator": operator_for_ip(ip)}
 
 
+# --- the node's own names (for the operator-pattern test) ----------------
+#
+# Every neighbour SNI shares one weakness: the client connects to the node's
+# address while the SNI's own DNS points somewhere else. A censor that
+# resolves the SNI and compares sees that mismatch on all of them alike, so no
+# neighbour can show whether it matters. A name of the admin's own that
+# resolves to the node — and is served with a real certificate there — is the
+# one SNI without it, which makes it the control in that test.
+
+async def _serves_tls13(ip: str, name: str) -> bool:
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    ctx.set_alpn_protocols(["h2", "http/1.1"])
+    writer = None
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(ip, 443, ssl=ctx, server_hostname=name), timeout=6)
+        return writer.get_extra_info("ssl_object").version() == "TLSv1.3"
+    except (OSError, asyncio.TimeoutError, ssl.SSLError):
+        return False
+    finally:
+        if writer is not None:
+            writer.close()
+            with suppress(Exception):
+                await writer.wait_closed()
+
+
+@router.get("/nodes/{node_id}/own-names")
+async def own_names(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    node = await _node_or_404(node_id, db)
+    node_ip = await _public_ipv4(node.address)
+    names = {node.address, *(await db.execute(select(Host.address))).scalars().all()}
+    if settings.public_url:
+        names.add(urlparse(settings.public_url).hostname)
+    out = []
+    for name in sorted(n.strip().lower() for n in names if n):
+        with suppress(ValueError):
+            ipaddress.ip_address(name)
+            continue
+        if node_ip and await _public_ipv4(name) == node_ip and await _serves_tls13(node_ip, name):
+            out.append({"host": name, "dest": f"{node_ip}:443"})
+    return {"names": out}
+
+
 # --- real test from inside Iran (node_agent/field_test.py) ----------------
 #
 # Only a client on Iranian internet can measure what an SNI is actually
@@ -259,9 +307,14 @@ def _field_links(node: Node, test: dict) -> list[dict]:
 def _field_view(node: Node, test: dict, request: Request) -> dict:
     token = _field.get(node.id)
     base = (settings.public_url or str(request.base_url)).rstrip("/")
+    items = _field_links(node, test) if test.get("uuid") else []
+    for it in items:
+        # Which operator each connection came from, not the addresses
+        # themselves: that is all the dashboard needs to label a result.
+        it["operators"] = sorted({operator_for_ip(ip) or "unknown" for ip in it.pop("ips", None) or []})
     return {
         **{k: test.get(k) for k in ("active", "started_at", "expires_at")},
-        "items": _field_links(node, test) if test.get("uuid") else [],
+        "items": items,
         "sub_url": f"{base}/api/reality/field/{token}" if token and test.get("active") else None,
     }
 
@@ -270,7 +323,8 @@ def _field_view(node: Node, test: dict, request: Request) -> dict:
 async def start_field_test(node_id: int, request: Request, body: dict = Body(...), db: AsyncSession = Depends(get_db)) -> dict:
     node = await _node_or_404(node_id, db)
     targets = [
-        {"host": str(t.get("host") or "").strip().lower(), "dest": t.get("dest")}
+        {"host": str(t.get("host") or "").strip().lower(), "dest": t.get("dest"),
+         "port": t.get("port") if isinstance(t.get("port"), int) else None, "label": t.get("label")}
         for t in (body.get("targets") or []) if isinstance(t, dict) and t.get("host")
     ][:12]
     if not targets:

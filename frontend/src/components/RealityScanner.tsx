@@ -8,6 +8,9 @@ import {
   startFieldTest,
   stopFieldTest,
   type FieldTest,
+  type FieldTestItem,
+  type FieldTarget,
+  getOwnNames,
   listNodes,
   startNodeRealityScan,
   type IranCheck,
@@ -137,6 +140,41 @@ function kb(n: number) {
   return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
 }
 
+// --- operator pattern -------------------------------------------------------
+//
+// "Fine on TCI, poor on MCI" while MCI leaves most of the SNIs open says the
+// SNI is not what MCI is judging. Every earlier test held two other things
+// fixed, so it could never say what is: the port (always a random high one,
+// where no real HTTPS server lives) and the IP/SNI mismatch every neighbour
+// SNI has (the client dials the node while the name's DNS points elsewhere).
+// This test puts the same SNI on a random port and on standard ones, and adds
+// the admin's own domain — which does resolve to the node — as the one SNI
+// without the mismatch. Each config differs from another in one thing only,
+// so comparing their results on the phone names the pattern.
+
+type Finding = 'port' | 'own' | 'route' | 'none' | 'unclear'
+
+// Speed if the phone ran a speed test through it, 1 if it only connected.
+const worth = (i: FieldTestItem) => (i.down_bps > 0 ? i.down_bps : i.ok ? 1 : 0)
+
+function patternVerdict(items: FieldTestItem[]): Finding[] | null {
+  if (!items.some((i) => i.clients > 0)) return null
+  const best = (label: string) => Math.max(-1, ...items.filter((i) => i.label === label).map(worth))
+  // x clearly better than y: works where y doesn't, or at least twice as fast.
+  // -1 means that config wasn't in the test, so there is nothing to compare.
+  const beats = (x: number, y: number) => y >= 0 && x > 0 && (y === 0 || (x > 1 && y > 1 && x >= 2 * y))
+  const nr = best('neighbor:random'), ns = best('neighbor:std'), orr = best('own:random'), os = best('own:std')
+  if (Math.max(...items.map(worth)) === 0) return ['none']
+  const found: Finding[] = []
+  if (beats(ns, nr) || beats(os, orr)) found.push('port')
+  if (beats(os, ns) || beats(orr, nr)) found.push('own')
+  const speeds = items.filter((i) => i.down_bps > 0).map((i) => i.down_bps)
+  // Everything connects, nothing is faster than about 1 Mbps: neither lever
+  // mattered, the address or the route to it did.
+  if (!found.length && speeds.length >= 2 && Math.max(...speeds) < 125000) found.push('route')
+  return found.length ? found : ['unclear']
+}
+
 // Throwaway inbounds on the node, one per SNI. Iranian DPI throttles names
 // it doesn't block, so this is the only place a target's real speed is
 // measured rather than inferred.
@@ -178,6 +216,8 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
     autoFor.current = topKey
     getFieldTest(nodeId)
       .then((cur) => {
+        // Never replace a running operator-pattern test: the phone is using it.
+        if (cur.active && cur.items.some((i) => i.label)) return
         const same = cur.active && cur.items.map((i) => i.host).sort().join(',') === topKey.split(',').sort().join(',')
         if (!same) return run(() => startFieldTest(nodeId, top.map((c) => ({ host: c.host, dest: c.dest }))))
       })
@@ -201,6 +241,33 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
     if (await copyToClipboard(text)) setCopied(key)
   }
 
+  const [own, setOwn] = useState<{ host: string; dest: string } | null>(null)
+
+  async function startPattern() {
+    const [a, b] = candidates
+    if (!a) return
+    let o: { host: string; dest: string } | undefined
+    try {
+      o = (await getOwnNames(nodeId))[0]
+    } catch {
+      /* no own domain: the test still separates port from route */
+    }
+    setOwn(o ?? null)
+    const targets: FieldTarget[] = [
+      { host: a.host, dest: a.dest, port: null, label: 'neighbor:random' },
+      { host: a.host, dest: a.dest, port: 2053, label: 'neighbor:std' },
+      { host: a.host, dest: a.dest, port: 8443, label: 'neighbor:std' },
+    ]
+    if (o) targets.push({ host: o.host, dest: o.dest, port: null, label: 'own:random' }, { host: o.host, dest: o.dest, port: 2083, label: 'own:std' })
+    if (b) targets.push({ host: b.host, dest: b.dest, port: 2087, label: 'neighbor:std' })
+    await run(() => startFieldTest(nodeId, targets))
+  }
+
+  const pattern = !!test?.items.some((i) => i.label)
+  const findings = pattern && test ? patternVerdict(test.items) : null
+  const operatorsSeen = [...new Set((test?.items ?? []).flatMap((i) => i.operators ?? []))]
+  const opName = (op: string) => t.ui.realityScan.device.ops[op] ?? op
+
   const left = test?.active && test.expires_at ? Math.max(0, Math.round((test.expires_at * 1000 - Date.now()) / 60000)) : null
   const items = test ? [...test.items].sort((a, b) => b.down_bps - a.down_bps || Number(b.ok) - Number(a.ok) || b.down - a.down) : []
   const fastest = items[0]?.down_bps ? items[0].host : null
@@ -211,12 +278,18 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
       <div className="hint" style={{ margin: 0 }}>{ft.intro}</div>
       {top.length === 0 && !test && <div className="hint" style={{ margin: 0 }}>{ft.none}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {candidates.length > 0 && (
+          <button type="button" className="btn solid" disabled={busy} onClick={startPattern}>
+            🧪 {ft.pattern.start}
+          </button>
+        )}
         {test?.active && (
           <button type="button" className="btn" disabled={busy} onClick={() => run(() => stopFieldTest(nodeId))}>
             {ft.stop}
           </button>
         )}
       </div>
+      {pattern && <div className="hint" style={{ margin: 0 }}>{ft.pattern.howto}</div>}
       {error && <div className="tf-alert">{error}</div>}
       {test?.active && test.sub_url && (
         <>
@@ -230,7 +303,72 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
         </>
       )}
       {test && !test.active && <div className="hint" style={{ margin: 0 }}>{ft.ended}</div>}
-      {items.length > 0 && (
+      {pattern && (
+        <>
+          <ul className="rsc-list">
+            {[...(test?.items ?? [])].sort((a, b) => worth(b) - worth(a)).map((it) => {
+              const [sni, port] = (it.label ?? ':').split(':')
+              return (
+                <li key={`${it.host}:${it.port}`} className={`rsc-row ${it.ok ? 'best' : ''}`}>
+                  <div className="rsc-head">
+                    <div className="rsc-name">
+                      <b className="mono">{it.host}</b>
+                      <small>
+                        <span className="chip">{sni === 'own' ? ft.pattern.own : ft.pattern.neighbor}</span>
+                        <span className="chip">{port === 'std' ? ft.pattern.std(it.port) : ft.pattern.random(it.port)}</span>
+                        {!!it.operators?.length && <span>{it.operators.map(opName).join('، ')}</span>}
+                      </small>
+                    </div>
+                    <div className="rsc-side">
+                      {it.down_bps > 0 ? (
+                        <span className="pill ok en" dir="ltr"><i />↓ {speed(it.down_bps)}</span>
+                      ) : it.ok ? (
+                        <span className="pill warn"><i />{ft.pattern.connected}</span>
+                      ) : (
+                        <span className={`pill ${test?.active ? 'info live' : 'bad'}`}><i />{test?.active ? ft.waiting : '✕'}</span>
+                      )}
+                      {test?.active && (
+                        <button type="button" className="btn" onClick={() => copy(`${it.host}:${it.port}`, it.link)}>
+                          {copied === `${it.host}:${it.port}` ? t.common.copiedCheck : ft.copyOne}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="form-section">
+            <b style={{ fontSize: '0.88rem' }}>
+              {ft.pattern.verdictTitle}
+              {operatorsSeen.length > 0 && ` — ${operatorsSeen.map(opName).join('، ')}`}
+            </b>
+            {!findings ? (
+              <div className="hint" style={{ margin: 0 }}>{ft.pattern.waitingVerdict}</div>
+            ) : (
+              findings.map((f) => (
+                <div key={f} className={f === 'unclear' ? 'hint' : 'tf-note'} style={{ margin: 0 }}>
+                  {ft.pattern.finding[f]}
+                  {f === 'own' && own && (
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className={`btn ${picked === own.host ? 'on' : 'solid'}`}
+                        onClick={() =>
+                          onPick({ host: own.host, dest: own.dest, ip: null, source: 'neighbor', tls: 'TLSv1.3', alpn: null, latency_ms: null, usable: true, error: null, fingerprints: null, iran: null })
+                        }
+                      >
+                        {picked === own.host ? t.ui.realityScan.used : ft.pattern.useOwn(own.host)}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+      {!pattern && items.length > 0 && (
         <ul className="rsc-list">
           {items.map((it) => {
             const cand = candidates.find((c) => c.host === it.host)
@@ -241,6 +379,7 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
                     <b className="mono">{it.host}</b>
                     <small>
                       <span className="mono">:{it.port}</span>
+                      {!!it.operators?.length && <span>{it.operators.map(opName).join('، ')}</span>}
                     </small>
                   </div>
                   <div className="rsc-side">

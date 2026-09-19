@@ -267,7 +267,9 @@ async def reality_field_test_start(payload: dict, x_node_api_key: str | None = H
     in Iran (node_agent/field_test.py). Replaces any test already running."""
     _check_key(x_node_api_key)
     targets = [
-        {"host": str(t.get("host") or "").strip().lower(), "dest": str(t.get("dest") or "").strip() or None}
+        {"host": str(t.get("host") or "").strip().lower(), "dest": str(t.get("dest") or "").strip() or None,
+         "port": t["port"] if isinstance(t.get("port"), int) and 1024 <= t["port"] <= 65535 else None,
+         "label": str(t.get("label") or "")[:40] or None}
         for t in payload.get("targets") or [] if isinstance(t, dict)
     ]
     targets = [t for t in targets if t["host"] and len(t["host"]) <= 253 and not any(ch.isspace() for ch in t["host"])]

@@ -574,6 +574,10 @@ export interface FieldTestItem {
   down_bps: number
   up_bps: number
   link: string
+  /** Set by the operator-pattern test: "<neighbor|own>:<random|std>". */
+  label?: string | null
+  /** Iranian operators the connections through this config came from. */
+  operators?: string[]
 }
 
 export interface FieldTest {
@@ -585,7 +589,16 @@ export interface FieldTest {
 }
 
 /** Throwaway inbounds on the node, one per SNI, tested from a phone in Iran. */
-export async function startFieldTest(nodeId: number, targets: { host: string; dest: string | null }[]): Promise<FieldTest> {
+export type FieldTarget = { host: string; dest: string | null; port?: number | null; label?: string }
+
+/** Names of the admin's own that resolve to this node and are served there
+ *  with a real certificate — the one SNI with no IP/SNI mismatch. */
+export async function getOwnNames(nodeId: number): Promise<{ host: string; dest: string }[]> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/own-names`)
+  return (await res.json()).names
+}
+
+export async function startFieldTest(nodeId: number, targets: FieldTarget[]): Promise<FieldTest> {
   const res = await authorizedFetch(`/reality/nodes/${nodeId}/field-test`, { method: 'POST', body: JSON.stringify({ targets }) })
   return res.json()
 }
