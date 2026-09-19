@@ -529,7 +529,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   const phaseIndex = scan?.state === 'done' ? PHASES.length : PHASES.indexOf(scan?.state as (typeof PHASES)[number])
 
   return (
-    <Sheet title={rs.title} sub={rs.sub} onClose={onClose} width={760} footer={<button type="button" className="btn lg" onClick={onClose}>{t.usersPage.cancelAction}</button>}>
+    <Sheet title={rs.title} sub={rs.sub} onClose={onClose} full footer={<button type="button" className="btn lg" onClick={onClose}>{t.usersPage.cancelAction}</button>}>
       <div className="rsc">
         {nodes !== null && nodes.length === 0 ? (
           <div className="tf-note">{rs.noNodes}</div>

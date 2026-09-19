@@ -69,6 +69,7 @@ export function Sheet({
   children,
   footer,
   width = 460,
+  full = false,
   className = '',
 }: {
   title: ReactNode
@@ -77,6 +78,9 @@ export function Sheet({
   children: ReactNode
   footer?: ReactNode
   width?: number
+  /** The whole screen instead of a side panel — for forms long and wide
+   *  enough (the core editor, the REALITY scanner) that a side panel buries them. */
+  full?: boolean
   className?: string
 }) {
   const { dir } = useLang()
@@ -88,7 +92,7 @@ export function Sheet({
         dir={dir}
         role="dialog"
         aria-modal="true"
-        className={`tf-sheet ${className}`}
+        className={`tf-sheet ${full ? 'full' : ''} ${className}`}
         style={{ ['--w' as string]: `${width}px` }}
       >
         <div className="tf-sheet-head">

@@ -1220,7 +1220,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
           title={editingId ? c.formEdit(form.name) : c.formNew}
           sub={form.coreType ? t.coresPage.coreTypeLabels[form.coreType] : t.coresPage.coreTypeLabel}
           onClose={resetForm}
-          width={760}
+          full
           footer={
             form.coreType ? (
               <>
