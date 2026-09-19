@@ -51,6 +51,11 @@ class Candidate:
     source: str = "list"
     tls: str | None = None
     alpn: str | None = None
+    # REALITY hands every unauthenticated handshake to dest, and a client's
+    # first packets wait on that round trip — so the node->dest times are
+    # the ones that rank targets. rtt_ms: median TCP connect; latency_ms:
+    # median full TLS handshake, both measured warm, by IP, from the node.
+    rtt_ms: int | None = None
     latency_ms: int | None = None
     usable: bool = False
     error: str | None = None
@@ -86,8 +91,16 @@ class Job:
 
 def _rank(c: Candidate) -> tuple:
     fps = c.fingerprints or {}
-    working = [r["ms"] for r in fps.values() if r.get("ok") and r.get("ms") is not None]
-    return (not c.usable, not working, -len(working), min(working) if working else 10**6, c.latency_ms or 10**6)
+    tested = c.fingerprints is not None and any(r.get("ok") is not None for r in fps.values())
+    working = [r for r in fps.values() if r.get("ok")]
+    chrome = bool((fps.get("chrome") or {}).get("ok"))
+    return (
+        not c.usable,
+        tested and not working,
+        not chrome if tested else False,
+        c.latency_ms or 10**6,
+        -len(working),
+    )
 
 
 _job = Job()
@@ -116,6 +129,7 @@ async def _run(public_ip: str | None, hosts: list[str], neighbors: bool, test_to
             await _discover(public_ip)
         _job.state = "validating"
         await _validate(list(_job.candidates.values()))
+        await _measure_all(list(_job.candidates.values()))
         _job.state = "testing"
         best = sorted((c for c in _job.candidates.values() if c.usable), key=lambda c: c.latency_ms or 10**6)[:test_top]
         _job.phase_total, _job.phase_done = len(best), 0
@@ -201,7 +215,7 @@ async def _validate_one(c: Candidate) -> None:
         _, writer = await asyncio.wait_for(
             asyncio.open_connection(target, 443, ssl=ctx, server_hostname=c.host), timeout=_VALIDATE_TIMEOUT
         )
-        c.latency_ms = round((time.monotonic() - start) * 1000)
+        first_ms = round((time.monotonic() - start) * 1000)
         obj = writer.get_extra_info("ssl_object")
         c.tls, c.alpn = obj.version(), obj.selected_alpn_protocol()
         c.ip = c.ip or writer.get_extra_info("peername")[0]
@@ -209,6 +223,9 @@ async def _validate_one(c: Candidate) -> None:
         c.dest = f"{target}:443" if ":" not in target else f"[{target}]:443"
         if not c.usable:
             c.error = "needs TLS 1.3 and HTTP/2"
+        # timed separately in _measure_all(), once the burst of validations
+        # is over — timings taken during it are skewed by the load
+        c.latency_ms = first_ms
     except ssl.SSLCertVerificationError:
         c.error = "certificate does not match the name"
     except Exception as exc:  # noqa: BLE001
@@ -218,6 +235,58 @@ async def _validate_one(c: Candidate) -> None:
             writer.close()
             with suppress(Exception):
                 await writer.wait_closed()
+
+
+async def _tcp_ms(ip: str) -> float | None:
+    start = time.monotonic()
+    try:
+        _, w = await asyncio.wait_for(asyncio.open_connection(ip, 443), timeout=3)
+    except Exception:  # noqa: BLE001
+        return None
+    ms = (time.monotonic() - start) * 1000
+    w.close()
+    with suppress(Exception):
+        await w.wait_closed()
+    return ms
+
+
+async def _tls_ms(ip: str, host: str) -> float | None:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    ctx.set_alpn_protocols(["h2"])
+    start = time.monotonic()
+    try:
+        _, w = await asyncio.wait_for(asyncio.open_connection(ip, 443, ssl=ctx, server_hostname=host), timeout=4)
+    except Exception:  # noqa: BLE001
+        return None
+    ms = (time.monotonic() - start) * 1000
+    w.close()
+    with suppress(Exception):
+        await w.wait_closed()
+    return ms
+
+
+def _median(xs: list[float]) -> int | None:
+    xs = sorted(x for x in xs if x is not None)
+    return round(xs[len(xs) // 2]) if xs else None
+
+
+async def _measure_all(items: list[Candidate]) -> None:
+    usable = [c for c in items if c.usable]
+    _job.phase_total, _job.phase_done = len(usable), 0
+    for c in usable:
+        await _measure(c, c.ip or c.host)
+        _job.phase_done += 1
+
+
+async def _measure(c: Candidate, target: str) -> None:
+    """Warm, repeated, by IP (no DNS in the timing): 5 TCP connects and 3
+    TLS handshakes, one at a time, medians kept."""
+    ip = c.ip or target
+    await _tls_ms(ip, c.host)  # warm-up, not counted
+    c.rtt_ms = _median([await _tcp_ms(ip) for _ in range(5)])
+    c.latency_ms = _median([await _tls_ms(ip, c.host) for _ in range(3)])
 
 
 async def _validate(items: list[Candidate]) -> None:
@@ -352,5 +421,54 @@ async def check_single(host: str) -> dict:
     c = Candidate(host=host.lower().strip().strip("."), source="custom")
     await _validate_one(c)
     if c.usable:
+        await _measure(c, c.ip or c.host)
         c.fingerprints = await prove(c.host, dest=c.dest)
     return asdict(c)
+
+
+# --- a server that isn't a node yet ---------------------------------------
+#
+#   docker run --rm --network host <node-agent image> \
+#       python -m node_agent.reality_scan --job https://<panel>/api/reality/remote/<token>
+#
+# Fetches the job (the server's public IP, names to try) from the panel,
+# runs the same scan a node would, and posts its progress back until done.
+
+def _http(url: str, body: dict | None = None) -> dict:
+    import urllib.request
+
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST" if data else "GET")
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE  # panels often run on a self-signed or IP certificate
+    with urllib.request.urlopen(req, timeout=20, context=ctx) as r:  # noqa: S310
+        return json.loads(r.read() or b"{}")
+
+
+async def _remote(job_url: str) -> None:
+    job = await asyncio.to_thread(_http, job_url + "/job")
+    start(job.get("public_ip"), job.get("hosts") or [], bool(job.get("neighbors")), int(job.get("test_top") or 8))
+    print(f"Tifusi REALITY scan of {job.get('public_ip')} — results appear in the panel.", flush=True)
+    last = ""
+    while True:
+        await asyncio.sleep(2)
+        snap = status()
+        line = f"{snap['state']} {snap['phase_done']}/{snap['phase_total']}"
+        if line != last:
+            print(line, flush=True)
+            last = line
+        with suppress(Exception):
+            await asyncio.to_thread(_http, job_url + "/report", snap)
+        if not running():
+            break
+    print("done" if status()["state"] == "done" else f"failed: {status()['error']}", flush=True)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    ap = argparse.ArgumentParser(description="REALITY target scan for a server that isn't a Tifusi node yet")
+    ap.add_argument("--job", required=True, help="the job URL the panel printed")
+    asyncio.run(_remote(ap.parse_args().job.rstrip("/")))
+

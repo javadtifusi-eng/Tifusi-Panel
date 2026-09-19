@@ -1,17 +1,21 @@
 import asyncio
+import ipaddress
+import secrets
 import socket
+import time
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
 from app.reality import iran_check
 from app.reality.scanner import is_reality_ready, scan_targets
 from app.reality.targets import CANDIDATE_TARGETS
-from app.schemas.reality import NodeCheckRequest, NodeScanRequest, RealityScanRequest, RealityScanResponse, RealityScanResult
+from app.schemas.reality import NodeCheckRequest, NodeScanRequest, RemoteScanRequest, RealityScanRequest, RealityScanResponse, RealityScanResult
 
 router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
 
@@ -92,14 +96,15 @@ async def _public_ipv4(address: str) -> str | None:
     return infos[0][4][0] if infos else None
 
 
-def _with_iran(scan: dict, node: Node) -> dict:
+def _with_iran(scan: dict, node: Node | None = None, address: str | None = None) -> dict:
     tested = [r for r in scan.get("results", []) if r.get("fingerprints") and any((v or {}).get("ok") for v in r["fingerprints"].values())]
     for r in tested[:_IRAN_CHECKS_PER_SCAN]:
         iran_check.start_sni(r["host"])
     for r in scan.get("results", []):
         cached = iran_check.cached_only("http", f"https://{r['host']}")
         r["iran"] = cached or ({"verdict": "checking"} if iran_check.pending("http", f"https://{r['host']}") else None)
-    scan["node_iran"] = iran_check.cached_only("tcp", f"{node.address}:{node.port}") or {"verdict": "checking"}
+    target = f"{node.address}:{node.port}" if node else f"{address}:22"
+    scan["node_iran"] = iran_check.cached_only("tcp", target) or {"verdict": "checking"}
     return scan
 
 
@@ -140,3 +145,89 @@ async def check_one(node_id: int, payload: NodeCheckRequest, db: AsyncSession = 
     )
     result["iran"] = iran
     return result
+
+
+# --- a server that isn't a node yet ---------------------------------------
+#
+# The admin gets a one-line command for the new server; it runs the node
+# agent's own scanner there (node_agent/reality_scan.py) and reports back
+# with a one-time token, so targets are measured from the machine that will
+# actually be the node — before it is one.
+
+_REMOTE_TTL = 3600
+_remote: dict[str, dict] = {}
+_NODE_IMAGE = "ghcr.io/javadtifusi-eng/tifusi-node-agent:latest"
+
+# The job/report endpoints are called by the new server, which has no panel
+# login — the unguessable token in the path is the credential.
+public_router = APIRouter(prefix="/api/reality/remote", tags=["reality"])
+
+
+def _remote_or_404(token: str) -> dict:
+    job = _remote.get(token)
+    if job is None or time.time() - job["created"] > _REMOTE_TTL:
+        _remote.pop(token, None)
+        raise HTTPException(status_code=404, detail="This scan has expired — start a new one")
+    return job
+
+
+@router.post("/remote")
+async def start_remote_scan(payload: RemoteScanRequest, request: Request) -> dict:
+    try:
+        ip = ipaddress.IPv4Address(payload.address.strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Enter the server's public IPv4 address") from None
+    if not ip.is_global:
+        raise HTTPException(status_code=400, detail="That is not a public address")
+    for t in [t for t, j in _remote.items() if time.time() - j["created"] > _REMOTE_TTL]:
+        _remote.pop(t, None)
+    token = secrets.token_urlsafe(24)
+    _remote[token] = {
+        "created": time.time(),
+        "address": str(ip),
+        "spec": {
+            "public_ip": str(ip),
+            "hosts": CANDIDATE_TARGETS if payload.mode == "list" else [],
+            "neighbors": payload.mode == "neighbors",
+            "test_top": payload.test_top,
+        },
+        "scan": {"state": "waiting", "phase_total": 0, "phase_done": 0, "results": [], "error": None},
+    }
+    base = (settings.public_url or str(request.base_url)).rstrip("/")
+    url = f"{base}/api/reality/remote/{token}"
+    command = (
+        "command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh; "
+        f"docker run --rm --network host {_NODE_IMAGE} python -m node_agent.reality_scan --job {url}"
+    )
+    asyncio.get_running_loop().create_task(iran_check.address(str(ip), 22))
+    return {"token": token, "command": command}
+
+
+@router.get("/remote/{token}")
+async def remote_scan_status(token: str) -> dict:
+    job = _remote_or_404(token)
+    scan = dict(job["scan"])
+    scan["results"] = [dict(r) for r in scan.get("results", [])]
+    return _with_iran(scan, address=job["address"])
+
+
+@public_router.get("/{token}/job")
+async def remote_scan_job(token: str) -> dict:
+    return _remote_or_404(token)["spec"]
+
+
+@public_router.post("/{token}/report")
+async def remote_scan_report(token: str, body: dict = Body(...)) -> dict:
+    job = _remote_or_404(token)
+    results = body.get("results")
+    if not isinstance(results, list) or len(results) > 600:
+        raise HTTPException(status_code=400, detail="bad report")
+    job["scan"] = {
+        "state": str(body.get("state") or "")[:20],
+        "phase_total": int(body.get("phase_total") or 0),
+        "phase_done": int(body.get("phase_done") or 0),
+        "error": (str(body["error"])[:300] if body.get("error") else None),
+        "results": [r for r in results if isinstance(r, dict)],
+    }
+    return {"ok": True}
+

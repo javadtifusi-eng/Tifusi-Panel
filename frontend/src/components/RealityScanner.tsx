@@ -3,16 +3,21 @@ import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
   getNodeRealityScan,
+  getRemoteRealityScan,
   listNodes,
   startNodeRealityScan,
+  startRemoteRealityScan,
   type IranCheck,
   type Node,
   type RealityCandidate,
   type RealityNodeScan,
 } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 import { Sheet } from './ui'
 
-type Mode = 'neighbors' | 'list' | 'custom'
+// server: a machine that isn't a node yet — the scan runs there via a
+// one-line command, so the target is measured before the node is made.
+type Mode = 'neighbors' | 'list' | 'server'
 const FPS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', '360', 'qq', 'random', 'randomized']
 const POLL_MS = 1500
 
@@ -48,7 +53,9 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [nodeId, setNodeId] = useState<number | null>(null)
   const [mode, setMode] = useState<Mode>('neighbors')
-  const [custom, setCustom] = useState('')
+  const [serverIp, setServerIp] = useState('')
+  const [remote, setRemote] = useState<{ token: string; command: string } | null>(null)
+  const [copied, setCopied] = useState(false)
   const [scan, setScan] = useState<RealityNodeScan | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
@@ -66,13 +73,14 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
     }
   }, [])
 
-  const busy = !!scan && !['done', 'error', 'idle'].includes(scan.state)
+  const busy = !!scan && !['done', 'error', 'idle', 'waiting'].includes(scan.state)
+  const waiting = scan?.state === 'waiting'
   const checkingIran = !!scan && (scan.node_iran?.verdict === 'checking' || scan.results.some((r) => r.iran?.verdict === 'checking'))
 
-  function poll(id: number) {
+  function poll(id: number | string) {
     timer.current = window.setTimeout(async () => {
       try {
-        const next = await getNodeRealityScan(id)
+        const next = typeof id === 'string' ? await getRemoteRealityScan(id) : await getNodeRealityScan(id)
         setScan(next)
         const stillIran = next.node_iran?.verdict === 'checking' || next.results.some((r) => r.iran?.verdict === 'checking')
         if (!['done', 'error'].includes(next.state) || stillIran) poll(id)
@@ -83,13 +91,21 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   }
 
   async function start() {
-    if (nodeId == null) return
     if (timer.current) window.clearTimeout(timer.current)
     setError(null)
     setShowAll(false)
+    setCopied(false)
     try {
-      const hosts = mode === 'custom' ? custom.split(/[\s,،]+/).map((h) => h.trim()).filter(Boolean) : []
-      setScan(await startNodeRealityScan(nodeId, { mode, hosts }))
+      if (mode === 'server') {
+        const r = await startRemoteRealityScan(serverIp.trim())
+        setRemote(r)
+        setScan(await getRemoteRealityScan(r.token))
+        poll(r.token)
+        return
+      }
+      if (nodeId == null) return
+      setRemote(null)
+      setScan(await startNodeRealityScan(nodeId, { mode }))
       poll(nodeId)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.common.genericError)
@@ -99,12 +115,15 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   const results = scan?.results ?? []
   const usable = results.filter((r) => r.usable)
   const IRAN_RANK: Record<string, number> = { open: 0, partial: 1, checking: 2, unknown: 2, blocked: 3 }
+  // What makes a target best: open from Iran, works with chrome, and the
+  // shortest node->target handshake (REALITY waits on it for every new
+  // connection); fingerprint count only breaks ties.
   const score = (r: RealityCandidate) => [
     r.usable ? 0 : 1,
     IRAN_RANK[r.iran?.verdict ?? 'unknown'],
-    r.fingerprints?.chrome?.ok ? 0 : 1,
+    r.fingerprints && r.fingerprints.chrome?.ok === false ? 1 : 0,
+    r.latency_ms ?? 1e6,
     -Object.values(r.fingerprints ?? {}).filter((v) => v.ok).length,
-    fpStats(r).ping ?? r.latency_ms ?? 1e6,
   ]
   const byScore = (a: RealityCandidate, b: RealityCandidate) => {
     const x = score(a), y = score(b)
@@ -118,11 +137,22 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   return (
     <Sheet title={rs.title} sub={rs.sub} onClose={onClose} width={760} footer={<button type="button" className="btn lg" onClick={onClose}>{t.usersPage.cancelAction}</button>}>
       <div className="rsc">
-        {nodes !== null && nodes.length === 0 ? (
-          <div className="tf-note">{rs.noNodes}</div>
+        {nodes !== null && nodes.length === 0 && mode !== 'server' ? (
+          <>
+            <div className="tf-note">{rs.noNodes}</div>
+            <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setMode('server')}>
+              {rs.mode.server}
+            </button>
+          </>
         ) : (
           <>
             <div className="rsc-controls">
+              {mode === 'server' ? (
+                <label className="rsc-node">
+                  <span>{rs.serverIp}</span>
+                  <input id="rsc-server" className="input ltr" value={serverIp} onChange={(e) => setServerIp(e.target.value)} placeholder="203.0.113.10" disabled={busy} />
+                </label>
+              ) : (
               <label className="rsc-node">
                 <span>{rs.node}</span>
                 <select id="rsc-node" className="input" value={nodeId ?? ''} onChange={(e) => setNodeId(Number(e.target.value))} disabled={busy}>
@@ -133,8 +163,9 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                   ))}
                 </select>
               </label>
+              )}
               <div className="tf-seg" role="group" aria-label={rs.title}>
-                {(['neighbors', 'list', 'custom'] as Mode[]).map((m) => (
+                {(['neighbors', 'list', 'server'] as Mode[]).map((m) => (
                   <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} disabled={busy}>
                     {rs.mode[m]}
                   </button>
@@ -144,12 +175,33 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
             <div className="hint" style={{ margin: 0 }}>
               {rs.modeHint[mode]}
             </div>
-            {mode === 'custom' && (
-              <input id="rsc-custom" className="input ltr" value={custom} onChange={(e) => setCustom(e.target.value)} placeholder={rs.customPlaceholder} disabled={busy} />
-            )}
-            <button type="button" className="btn primary lg" onClick={start} disabled={busy || nodeId == null || (mode === 'custom' && !custom.trim())}>
-              {busy ? rs.phase[scan!.state] : scan ? rs.again : rs.start}
+            <button
+              type="button"
+              className="btn primary lg"
+              onClick={start}
+              disabled={busy || (mode === 'server' ? !/^\d{1,3}(\.\d{1,3}){3}$/.test(serverIp.trim()) : nodeId == null)}
+            >
+              {busy ? rs.phase[scan!.state] : mode === 'server' ? rs.serverBtn : scan ? rs.again : rs.start}
             </button>
+            {mode === 'server' && remote && (
+              <div className="form-section">
+                <b style={{ fontSize: '0.82rem' }}>{rs.serverRun}</b>
+                <code className="cdt-cmd" dir="ltr">
+                  {remote.command}
+                </code>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ alignSelf: 'flex-start' }}
+                  onClick={async () => {
+                    if (await copyToClipboard(remote.command)) setCopied(true)
+                  }}
+                >
+                  {copied ? t.common.copiedCheck : rs.copyCmd}
+                </button>
+                {waiting && <div className="hint" style={{ margin: 0 }}>⏳ {rs.serverWaiting}</div>}
+              </div>
+            )}
           </>
         )}
 
@@ -158,7 +210,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
         {scan && (
           <>
             <div className="rsc-node-iran">
-              <span>{rs.nodeIran}</span>
+              <span>{mode === 'server' && remote ? rs.serverIran : rs.nodeIran}</span>
               <IranPill check={scan.node_iran} />
             </div>
             {scan.node_iran?.verdict === 'blocked' && <div className="tf-alert">{rs.nodeBlockedWarn}</div>}
@@ -197,9 +249,9 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                         <small>
                           <span className="chip">{rs.source[r.source]}</span>
                           {r.dest && <span className="mono">{r.dest}</span>}
-                          {st.ping != null ? (
-                            <span className="en" dir="ltr">
-                              ping {st.ping} ms
+                          {r.usable && r.rtt_ms != null ? (
+                            <span className="en" dir="ltr" title={rs.pingTitle}>
+                              ping {r.rtt_ms} ms · TLS {r.latency_ms} ms
                             </span>
                           ) : (
                             r.latency_ms != null && <span className="en" dir="ltr">{r.latency_ms} ms</span>

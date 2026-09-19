@@ -526,6 +526,8 @@ export interface RealityCandidate {
   source: 'neighbor' | 'list' | 'custom'
   tls: string | null
   alpn: string | null
+  /** Warm, from the node, by IP: median TCP connect and median TLS handshake to the target. */
+  rtt_ms?: number | null
   latency_ms: number | null
   usable: boolean
   error: string | null
@@ -535,7 +537,7 @@ export interface RealityCandidate {
 }
 
 export interface RealityNodeScan {
-  state: 'idle' | 'discovering' | 'validating' | 'testing' | 'done' | 'error'
+  state: 'idle' | 'waiting' | 'discovering' | 'validating' | 'testing' | 'done' | 'error'
   phase_total: number
   phase_done: number
   error: string | null
@@ -545,6 +547,18 @@ export interface RealityNodeScan {
 
 export async function startNodeRealityScan(nodeId: number, payload: { mode: 'neighbors' | 'list' | 'custom'; hosts?: string[] }): Promise<RealityNodeScan> {
   const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+/** A server that isn't a node yet: the panel returns a one-line command
+ *  that runs the node's scanner there and reports back. */
+export async function startRemoteRealityScan(address: string): Promise<{ token: string; command: string }> {
+  const res = await authorizedFetch('/reality/remote', { method: 'POST', body: JSON.stringify({ address, mode: 'neighbors' }) })
+  return res.json()
+}
+
+export async function getRemoteRealityScan(token: string): Promise<RealityNodeScan> {
+  const res = await authorizedFetch(`/reality/remote/${token}`)
   return res.json()
 }
 

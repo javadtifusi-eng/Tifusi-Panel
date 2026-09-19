@@ -33,3 +33,11 @@ class NodeScanRequest(BaseModel):
 
 class NodeCheckRequest(BaseModel):
     host: str = Field(min_length=3, max_length=253, pattern=r"^[A-Za-z0-9.-]+$")
+
+
+class RemoteScanRequest(BaseModel):
+    # A server that isn't a node yet; neighbors or the built-in list.
+    address: str = Field(min_length=7, max_length=64)
+    mode: str = Field(default="neighbors", pattern="^(neighbors|list)$")
+    test_top: int = Field(default=8, ge=1, le=20)
+
