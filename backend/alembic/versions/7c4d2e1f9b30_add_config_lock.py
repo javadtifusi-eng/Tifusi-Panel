@@ -1,4 +1,4 @@
-"""add panel_settings.config_lock and proxy_users.config_lock
+"""add panel_settings.lock_app/lock_other/lock_page and proxy_users.config_lock
 
 Config lock: subscriptions that only the Tifusi VPN app can use, see
 app/subscription/lock.py.
@@ -23,7 +23,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     with op.batch_alter_table('panel_settings') as batch_op:
-        batch_op.add_column(sa.Column('config_lock', sa.Boolean(), server_default=sa.false(), nullable=False))
+        for name in ('lock_app', 'lock_other', 'lock_page'):
+            batch_op.add_column(sa.Column(name, sa.Boolean(), server_default=sa.false(), nullable=False))
     with op.batch_alter_table('proxy_users') as batch_op:
         batch_op.add_column(sa.Column('config_lock', sa.Boolean(), nullable=True))
 
@@ -32,4 +33,5 @@ def downgrade() -> None:
     with op.batch_alter_table('proxy_users') as batch_op:
         batch_op.drop_column('config_lock')
     with op.batch_alter_table('panel_settings') as batch_op:
-        batch_op.drop_column('config_lock')
+        for name in ('lock_page', 'lock_other', 'lock_app'):
+            batch_op.drop_column(name)

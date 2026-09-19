@@ -1,12 +1,12 @@
 """Config lock: subscriptions that only the Tifusi VPN app can use.
 
-When a user's configs are locked (their own config_lock, else the panel's),
-- app.json carries the share links sealed with AES-256-GCM instead of in
+Three separate switches (their own config_lock, else the panel's):
+- app: app.json carries the share links sealed with AES-256-GCM instead of in
   the clear; the app opens them in memory and shows only server names;
-- every other client (v2rayNG, V2Box, Clash, sing-box…) gets a placeholder
+- other: every other client (v2rayNG, V2Box, Clash, sing-box…) gets a placeholder
   config that points nowhere and whose name tells the user to install the
   app;
-- the subscription web page hides links and QR codes.
+- page: the subscription web page hides links and QR codes.
 
 The key is derived from the credential the app fetched with (the
 subscription secret or the app code), so it is never sent alongside the
@@ -32,10 +32,14 @@ PLACEHOLDER_NAMES = (
 )
 
 
-def is_locked(user: ProxyUser, settings_row: PanelSetting | None) -> bool:
+def lock_parts(user: ProxyUser, settings_row: PanelSetting | None) -> tuple[bool, bool, bool]:
+    """(app, other clients, subscription page). A user's own config_lock
+    turns all three on or off; otherwise each follows the panel's switch."""
     if user.config_lock is not None:
-        return user.config_lock
-    return bool(settings_row and settings_row.config_lock)
+        return (user.config_lock,) * 3
+    if settings_row is None:
+        return (False, False, False)
+    return (settings_row.lock_app, settings_row.lock_other, settings_row.lock_page)
 
 
 def placeholder_links() -> list[str]:

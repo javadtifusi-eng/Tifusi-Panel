@@ -48,7 +48,7 @@ async def get_settings(db: AsyncSession = Depends(get_db)) -> PanelSettingsRespo
 async def update_settings(payload: PanelSettingsUpdate, db: AsyncSession = Depends(get_db)) -> PanelSettingsResponse:
     row = await get_settings_row(db)
     for field, value in payload.model_dump(exclude_unset=True).items():
-        if field == "config_lock" and value is None:
+        if field.startswith("lock_") and value is None:
             continue
         setattr(row, field, value)
     db.add(row)

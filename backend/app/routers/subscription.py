@@ -17,7 +17,7 @@ from app.subscription.app_code import app_code_for
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.info_page import build_info_page_html
-from app.subscription.lock import is_locked, placeholder_links, seal
+from app.subscription.lock import lock_parts, placeholder_links, seal
 from app.subscription.lookup import client_ip, user_by_app_code_or_404, user_or_404
 from app.subscription.singbox import build_singbox_config
 
@@ -103,7 +103,7 @@ async def _enforce_device_limit(user: ProxyUser, identifier: str, db: AsyncSessi
 
 
 async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession) -> str:
-    locked = is_locked(user, await get_settings_row(db))
+    locked = lock_parts(user, await get_settings_row(db))[2]
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
     public_url = await get_public_url(db)
@@ -151,7 +151,7 @@ async def get_subscription(
         html = await _render_info_page(user, request, db)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
-    if is_locked(user, await get_settings_row(db)):
+    if lock_parts(user, await get_settings_row(db))[1]:
         # Every non-app client gets the same placeholder, whatever format
         # it asked for — a Clash or sing-box client failing to parse it is
         # as good as it connecting nowhere.
@@ -234,7 +234,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
         cfg.pop("mobileconfig_url", None)
 
     vless = [link for link in build_links_for_user(user, allowed_hosts) if link.startswith("vless://")]
-    locked = is_locked(user, await get_settings_row(db))
+    locked = lock_parts(user, await get_settings_row(db))[0]
     return {
         "v": 1,
         "username": user.username,

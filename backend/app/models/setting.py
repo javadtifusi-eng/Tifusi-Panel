@@ -33,9 +33,11 @@ class PanelSetting(Base):
     # webhook, see app/notifications/discord.py.
     discord_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # Config lock: subscriptions only work in the Tifusi VPN app, which gets
-    # them encrypted and never shows server details; every other client gets
-    # a placeholder config instead (app/subscription/lock.py). A user's own
-    # config_lock, when set, overrides this.
-    config_lock: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Config lock, one switch per place a config can be seen
+    # (app/subscription/lock.py): the Tifusi VPN app gets it sealed and shows
+    # no details; other clients get a placeholder; the subscription page
+    # hides links and QR codes. A user's own config_lock overrides all three.
+    lock_app: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    lock_other: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    lock_page: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
 

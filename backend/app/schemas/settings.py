@@ -10,7 +10,9 @@ class PanelSettingsResponse(BaseModel):
     webhook_url: str | None
     webhook_secret: str | None
     discord_webhook_url: str | None
-    config_lock: bool = False
+    lock_app: bool = False
+    lock_other: bool = False
+    lock_page: bool = False
 
 
 class PanelSettingsUpdate(BaseModel):
@@ -20,4 +22,6 @@ class PanelSettingsUpdate(BaseModel):
     webhook_url: str | None = None
     webhook_secret: str | None = None
     discord_webhook_url: str | None = None
-    config_lock: bool | None = None
+    lock_app: bool | None = None
+    lock_other: bool | None = None
+    lock_page: bool | None = None

@@ -109,10 +109,10 @@ export default function SettingsPage() {
   const [urlError, setUrlError] = useState<string | null>(null)
   const [lockSaving, setLockSaving] = useState(false)
 
-  async function toggleLock(on: boolean) {
+  async function toggleLock(part: 'lock_app' | 'lock_other' | 'lock_page', on: boolean) {
     setLockSaving(true)
     try {
-      setSaved(await updateSettings({ config_lock: on }))
+      setSaved(await updateSettings({ [part]: on }))
       say(on ? t.ui.lock.onToast : t.ui.lock.offToast)
     } catch (err) {
       say(err instanceof ApiError ? err.message : t.common.genericError)
@@ -626,25 +626,29 @@ export default function SettingsPage() {
           sub={t.ui.lock.sub}
           hidden={!visible.lock}
           flash={flash === 'lock'}
-          pill={saved?.config_lock ? <Pill tone="ok">{t.ui.lock.pillOn}</Pill> : <Pill tone="idle">{t.ui.lock.pillOff}</Pill>}
+          pill={(() => {
+            const n = [saved?.lock_app, saved?.lock_other, saved?.lock_page].filter(Boolean).length
+            return n ? <Pill tone="ok">{t.ui.lock.pillCount(n)}</Pill> : <Pill tone="idle">{t.ui.lock.pillOff}</Pill>
+          })()}
         >
-          <label className="tf-switch">
-            <input id="set-lock-on" type="checkbox" checked={!!saved?.config_lock} disabled={!saved || lockSaving} onChange={(e) => toggleLock(e.target.checked)} />
-            {t.ui.lock.toggle}
-          </label>
           <ul className="lock-what">
-            <li>
-              <b>📱 {t.ui.lock.appT}</b>
-              <span>{t.ui.lock.appD}</span>
-            </li>
-            <li>
-              <b>🧩 {t.ui.lock.otherT}</b>
-              <span>{t.ui.lock.otherD}</span>
-            </li>
-            <li>
-              <b>🌐 {t.ui.lock.pageT}</b>
-              <span>{t.ui.lock.pageD}</span>
-            </li>
+            {(
+              [
+                ['lock_app', '📱', t.ui.lock.appT, t.ui.lock.appD],
+                ['lock_other', '🧩', t.ui.lock.otherT, t.ui.lock.otherD],
+                ['lock_page', '🌐', t.ui.lock.pageT, t.ui.lock.pageD],
+              ] as const
+            ).map(([part, icon, title, desc]) => (
+              <li key={part} className={saved?.[part] ? 'on' : ''}>
+                <label className="tf-switch">
+                  <input id={`set-${part}`} type="checkbox" checked={!!saved?.[part]} disabled={!saved || lockSaving} onChange={(e) => toggleLock(part, e.target.checked)} />
+                  <b>
+                    {icon} {title}
+                  </b>
+                </label>
+                <span>{desc}</span>
+              </li>
+            ))}
           </ul>
           <div className="hint" style={{ margin: 0 }}>{t.ui.lock.note}</div>
         </Section>

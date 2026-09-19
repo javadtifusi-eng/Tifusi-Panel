@@ -1083,8 +1083,11 @@ export interface PanelSettings {
   webhook_url: string | null
   webhook_secret: string | null
   discord_webhook_url: string | null
-  /** Subscriptions only work in the Tifusi VPN app, with no server details shown. */
-  config_lock: boolean
+  /** Config lock, one switch per place a config shows: the Tifusi VPN app (sealed, no
+   *  details), other clients (placeholder only) and the subscription page (no links/QR). */
+  lock_app: boolean
+  lock_other: boolean
+  lock_page: boolean
 }
 
 export async function getSettings(): Promise<PanelSettings> {

@@ -1182,3 +1182,5 @@ select.input { padding-block: 7px; }
 .lock-what li { display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border-radius: 11px; border: 1px solid var(--edge); background: var(--card); }
 .lock-what b { font-size: 0.8rem; font-weight: 600; color: var(--text); }
 .lock-what span { font-size: 0.76rem; color: var(--muted); line-height: 1.7; }
+.lock-what li.on { border-color: rgb(249 115 22 / 0.5); background: rgb(249 115 22 / 0.05); }
+.lock-what li .tf-switch b { font-size: 0.82rem; }
