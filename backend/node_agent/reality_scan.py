@@ -229,7 +229,24 @@ async def _discover(public_ip: str, ring: int = 0, exclude: set[str] | None = No
 
 # --- 2. validate -----------------------------------------------------------
 
+async def _resolves_to(host: str, ip: str) -> bool:
+    """A neighbour only makes a good SNI when the name's own DNS points at the
+    address it was found on: a censor can resolve the SNI and compare it with
+    where the packets actually go, and a name that lives elsewhere (on a CDN,
+    or nowhere, like an internal cert name) gets the connection throttled."""
+    try:
+        infos = await asyncio.wait_for(
+            asyncio.get_running_loop().getaddrinfo(host, 443, family=socket.AF_INET, type=socket.SOCK_STREAM), timeout=5
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    return ip in {i[4][0] for i in infos}
+
+
 async def _validate_one(c: Candidate) -> None:
+    if c.source == "neighbor" and c.ip and not await _resolves_to(c.host, c.ip):
+        c.error = "the name's DNS points somewhere else"
+        return
     ctx = ssl.create_default_context()
     ctx.set_alpn_protocols(["h2", "http/1.1"])
     writer = None
