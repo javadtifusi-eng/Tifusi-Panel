@@ -13,6 +13,7 @@ import {
   type Node,
   type RealityCandidate,
   type RealityNodeScan,
+  type RealityStress,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import { Sheet } from './ui'
@@ -50,6 +51,34 @@ function IranPill({ check }: { check: IranCheck | null }) {
       <i />
       🇮🇷 {rs.iran[check.verdict]}
       {cities}
+    </span>
+  )
+}
+
+/** Same buckets as node_agent reality_scan.reliability(): 0 held up
+ *  completely, 1 dropped a few, 2 dropped many, 3 shut the node out
+ *  afterwards, 4 not tested. A bucket, so one lost handshake in eighty
+ *  doesn't outrank a real speed difference. */
+function reliability(s?: RealityStress | null) {
+  if (!s) return 4
+  if (s.after_ok === 0) return 3
+  const total = s.burst_total + s.steady_total + s.after_total
+  const rate = total ? (s.burst_ok + s.steady_ok + s.after_ok) / total : 0
+  return rate >= 0.99 ? 0 : rate >= 0.95 ? 1 : 2
+}
+
+function StressPill({ s }: { s?: RealityStress | null }) {
+  const { t } = useLang()
+  const rs = t.ui.realityScan
+  if (!s) return null
+  const grade = reliability(s)
+  const total = s.burst_total + s.steady_total + s.after_total
+  const pct = Math.round(((s.burst_ok + s.steady_ok + s.after_ok) / Math.max(1, total)) * 100)
+  const tone = ['ok', 'warn', 'bad', 'bad'][grade]
+  return (
+    <span className={`pill ${tone}`} title={rs.stressTitle(s.burst_ok, s.burst_total, s.steady_ok, s.steady_total, s.after_ok, s.after_total)}>
+      <i />
+      {grade === 3 ? rs.stressBanned : rs.stress(pct)}
     </span>
   )
 }
@@ -258,11 +287,15 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
   // those, speed decides — how fast Iran reaches the name first, then the
   // node->target handshake REALITY waits on for every new connection.
   const iranMs = (r: RealityCandidate) => r.iran?.ms ?? UNKNOWN
+  // "Works well while it's open" comes before "fast": a target that drops
+  // handshakes under load, or shuts the node out once it has seen enough of
+  // them, breaks users' connections however quick it is when idle.
   const good = usable
     .filter((r) => r.iran?.verdict === 'open')
     .sort(
       (a, b) =>
         Number(b.fingerprints?.chrome?.ok ?? 0) - Number(a.fingerprints?.chrome?.ok ?? 0) ||
+        reliability(a.stress) - reliability(b.stress) ||
         iranMs(a) - iranMs(b) ||
         (a.latency_ms ?? UNKNOWN) - (b.latency_ms ?? UNKNOWN),
     )
@@ -369,6 +402,7 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                       </div>
                       <div className="rsc-side">
                         {best && <span className="pill accent">★ {rs.best}</span>}
+                        {r.usable && <StressPill s={r.stress} />}
                         {r.usable && <IranPill check={r.iran} />}
                         {r.usable && (
                           <button type="button" className={`btn ${picked === r.host ? 'on' : 'solid'}`} onClick={() => onPick(r)}>

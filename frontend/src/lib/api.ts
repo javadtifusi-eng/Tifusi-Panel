@@ -513,6 +513,19 @@ export interface RealityCandidate {
   dest: string | null
   fingerprints: Record<string, { ok: boolean | null; ms: number | null }> | null
   iran: IranCheck | null
+  /** What the dest did under the load REALITY really puts on it: a burst,
+   *  a steady trickle, then a few handshakes after a pause (node_agent
+   *  reality_scan.stress). after_ok 0 means it shut the node out. */
+  stress?: RealityStress | null
+}
+
+export interface RealityStress {
+  burst_ok: number
+  burst_total: number
+  steady_ok: number
+  steady_total: number
+  after_ok: number
+  after_total: number
 }
 
 export interface RealityNodeScan {

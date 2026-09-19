@@ -8,11 +8,13 @@ per-fingerprint REALITY test. There is deliberately no built-in list of
 names anywhere — a published target is the first one a censor blocks, and
 a name that is excellent on one server's network is ordinary on another's.
 
-Ranking is by speed, not by reachability: connecting at all is the minimum
-bar, and the order is decided by how fast Iran reaches the name and then by
-the node->target handshake REALITY waits on for every new connection. The
-last word belongs to the field test at the bottom of this file, where a
-real phone on Iranian internet measures actual throughput per SNI.
+Ranking is by working well, not by reachability: connecting at all is the
+minimum bar. The node load-tests each finalist the way REALITY will really
+use it — a handshake per user connection, all day — because a target that
+drops handshakes under load or shuts the node out breaks users however fast
+it is idle. After that come how fast Iran reaches the name and the node->
+target handshake. The last word belongs to the field test at the bottom of
+this file, where a real phone on Iranian internet measures real throughput.
 """
 
 import asyncio
@@ -42,9 +44,10 @@ router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depend
 # next round rather than queueing behind them.
 _IRAN_CHECKS_PER_SCAN = 30
 
-# How many Iran-open names get the per-fingerprint REALITY test. Each costs
-# the node about a minute (ten fingerprints, four fetches each), so it is the
-# fastest handful rather than everything that passed.
+# How many Iran-open names get the per-fingerprint REALITY test and the load
+# test. Each costs the node a little over a minute (ten fingerprints, four
+# fetches each, then about twenty seconds of load), so it is the fastest
+# handful rather than everything that passed.
 _PROVE_TOP = 8
 
 

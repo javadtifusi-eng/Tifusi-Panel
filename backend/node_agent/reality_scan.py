@@ -23,7 +23,9 @@ each and a name Iran blocks is worthless however well it tests here:
 3. prove: start a real REALITY server and client on this node and fetch a
    page through it once per uTLS fingerprint. A fingerprint is marked
    working only if that page actually loaded, and is timed so the panel
-   can rank fingerprints by speed rather than by merely working.
+   can rank fingerprints by speed rather than by merely working;
+4. stress: put the dest under the kind of load REALITY really puts on it
+   and see whether it keeps answering the node (see stress()).
 """
 
 import asyncio
@@ -75,6 +77,9 @@ class Candidate:
     dest: str | None = None
     # None until the real REALITY test has run for this host.
     fingerprints: dict[str, dict] | None = None
+    # None until the load test has run: what the dest does when it is asked
+    # for handshakes the way REALITY will actually ask (see stress()).
+    stress: dict | None = None
 
 
 @dataclass
@@ -106,11 +111,25 @@ class Job:
         }
 
 
+def reliability(s: dict | None) -> int:
+    """Bucket for the load test: 0 held up completely, 1 dropped a few,
+    2 dropped many, 3 shut the node out afterwards, 4 not tested yet. A
+    bucket, not a ratio, so that a single lost handshake out of eighty does
+    not outrank a real speed difference."""
+    if not s:
+        return 4
+    if s["after_ok"] == 0:
+        return 3
+    total = s["burst_total"] + s["steady_total"] + s["after_total"]
+    rate = (s["burst_ok"] + s["steady_ok"] + s["after_ok"]) / total if total else 0
+    return 0 if rate >= 0.99 else 1 if rate >= 0.95 else 2
+
+
 def _rank(c: Candidate) -> tuple:
-    """Speed first among the names that actually work. The panel re-sorts
-    with the Iran verdicts it alone has, so this only has to put a sane
-    order on the snapshot: proven-working, then chrome, then how long the
-    handshake REALITY waits on for every new connection takes."""
+    """Works well first, then fast. The panel re-sorts with the Iran verdicts
+    it alone has, so this only has to put a sane order on the snapshot:
+    proven-working, then chrome, then how the dest holds up under load, then
+    how long the handshake REALITY waits on for every new connection takes."""
     fps = c.fingerprints or {}
     tested = c.fingerprints is not None and any(r.get("ok") is not None for r in fps.values())
     working = [r for r in fps.values() if r.get("ok")]
@@ -119,8 +138,9 @@ def _rank(c: Candidate) -> tuple:
         not c.usable,
         tested and not working,
         not chrome if tested else False,
-        min([r["ms"] for r in working if r.get("ms")] or [10**6]),
+        reliability(c.stress),
         c.latency_ms or 10**6,
+        min([r["ms"] for r in working if r.get("ms")] or [10**6]),
         -len(working),
     )
 
@@ -171,11 +191,14 @@ async def _prove_run(hosts: list[str]) -> None:
     try:
         best = [c for c in (_job.candidates.get(h) for h in hosts) if c is not None and c.usable]
         _job.state = "testing"
-        _job.phase_total, _job.phase_done = len(best), 0
+        # Two steps per host, so the progress bar tracks the real work.
+        _job.phase_total, _job.phase_done = len(best) * 2, 0
         for c in best:
             c.fingerprints = {fp: {"ok": None, "ms": None} for fp in FINGERPRINTS}
         for c in best:
             c.fingerprints = await prove(c.host, dest=c.dest)
+            _job.phase_done += 1
+            c.stress = await stress(c.host, c.ip or c.host)
             _job.phase_done += 1
         _job.state = "done"
     except Exception as exc:  # noqa: BLE001 - reported to the panel, not raised
@@ -375,7 +398,62 @@ async def _validate(items: list[Candidate]) -> None:
     await asyncio.gather(*(one(c) for c in items))
 
 
-# --- 3. prove --------------------------------------------------------------
+# --- 3. stress -------------------------------------------------------------
+#
+# A dest that answers one handshake in 6 ms can still be a bad target, and the
+# timings above are measured one connection at a time on purpose, so they say
+# nothing about this. REALITY relays a full handshake to dest for *every new
+# connection a user opens*, which means the node knocks on that door all day.
+# Most of what a neighbour scan turns up is a small box — a 3CX phone system,
+# a company ERP — sitting behind fail2ban or nginx's limit_conn. Such a host
+# starts refusing the node long before Iran blocks anything, and when it does,
+# every new connection breaks while the panel still shows the name wide open
+# and every fingerprint green. That silent failure is what this catches.
+#
+# Three parts: a burst, to see whether latency survives concurrency; a steady
+# trickle, which is what wakes a rate limiter (plenty of hosts take twenty at
+# once yet ban you after a hundred in a minute); and a few plain handshakes
+# after a pause, which is the one that matters — if those fail, the dest has
+# shut the node out. The rates are deliberately modest, far below what real
+# use would send: enough to expose a limiter, not to be one.
+#
+# Only whether each handshake succeeded is kept, not how long it took. Timed
+# from this one Python thread, concurrent handshakes queue behind each other's
+# key exchange on our own CPU: www.cloudflare.com, which has capacity to
+# spare, goes from 19 ms alone to 209 ms in a burst of twenty, the same as a
+# small neighbour does. Those numbers would rank targets by our client, so
+# speed stays with the one-at-a-time timings above.
+
+_STRESS_BURST = 20
+_STRESS_RATE = 3
+_STRESS_SECONDS = 15
+_STRESS_COOLDOWN = 3.0
+_STRESS_AFTER = 3
+
+
+async def stress(host: str, ip: str) -> dict:
+    burst = list(await asyncio.gather(*(_tls_ms(ip, host) for _ in range(_STRESS_BURST))))
+
+    steady: list[float | None] = []
+    end = time.monotonic() + _STRESS_SECONDS
+    while time.monotonic() < end:
+        tick = time.monotonic()
+        steady += list(await asyncio.gather(*(_tls_ms(ip, host) for _ in range(_STRESS_RATE))))
+        await asyncio.sleep(max(0.0, 1.0 - (time.monotonic() - tick)))
+
+    await asyncio.sleep(_STRESS_COOLDOWN)
+    after = [await _tls_ms(ip, host) for _ in range(_STRESS_AFTER)]
+
+    return {
+        "burst_ok": sum(1 for t in burst if t is not None), "burst_total": len(burst),
+        "steady_ok": sum(1 for t in steady if t is not None), "steady_total": len(steady),
+        # 0 here means the dest stopped answering the node once the load
+        # stopped — a rate limiter that has taken the node's address out.
+        "after_ok": sum(1 for t in after if t is not None), "after_total": len(after),
+    }
+
+
+# --- 4. prove --------------------------------------------------------------
 
 def _b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
