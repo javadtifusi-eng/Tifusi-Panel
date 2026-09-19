@@ -591,7 +591,8 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
                   </Field>
                   <Field label={t.hostsPage.fingerprintOverride}>
                     <select className="input ltr" value={form.fingerprint_override} onChange={(e) => update('fingerprint_override', e.target.value)}>
-                      <option value="">{t.coresPage.selectPlaceholder}</option>
+                      {/* Empty follows the core's JSON; say what that is, so an override isn't set by mistake. */}
+                      <option value="">{t.hostsPage.fpFromCore(cores.flatMap((c) => c.inbounds).find((i) => i.id === form.inbound_id)?.fingerprint ?? null)}</option>
                       {FINGERPRINTS.map((fp) => (
                         <option key={fp} value={fp}>
                           {fp}

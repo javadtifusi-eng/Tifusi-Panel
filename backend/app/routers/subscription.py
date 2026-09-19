@@ -12,12 +12,11 @@ from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
-from app.settings_store import get_public_url, get_settings_row
+from app.settings_store import get_public_url
 from app.subscription.app_code import app_code_for
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.info_page import build_info_page_html
-from app.subscription.lock import lock_parts, placeholder_links, seal
 from app.subscription.lookup import client_ip, user_by_app_code_or_404, user_or_404
 from app.subscription.singbox import build_singbox_config
 
@@ -103,7 +102,6 @@ async def _enforce_device_limit(user: ProxyUser, identifier: str, db: AsyncSessi
 
 
 async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession) -> str:
-    locked = lock_parts(user, await get_settings_row(db))[2]
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
     public_url = await get_public_url(db)
@@ -117,8 +115,7 @@ async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession)
         expire_text=user.expire.strftime("%Y-%m-%d") if user.expire else "بدون انقضا",
         subscription_url=f"{base}sub/{user.secret}",
         app_code=app_code_for(user),
-        links=[] if locked else build_links_for_user(user, allowed_hosts),
-        locked=locked,
+        links=build_links_for_user(user, allowed_hosts),
         ikev2_configs=ikev2_configs,
         l2tp_configs=l2tp_configs,
     )
@@ -151,13 +148,7 @@ async def get_subscription(
         html = await _render_info_page(user, request, db)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
-    if lock_parts(user, await get_settings_row(db))[1]:
-        # Every non-app client gets the same placeholder, whatever format
-        # it asked for — a Clash or sing-box client failing to parse it is
-        # as good as it connecting nowhere.
-        content = build_subscription_content(placeholder_links())
-        media_type = "text/plain; charset=utf-8"
-    elif _wants(user_agent, _CLASH_USER_AGENTS):
+    if _wants(user_agent, _CLASH_USER_AGENTS):
         content = build_clash_config(user, allowed_hosts)
         media_type = "text/yaml; charset=utf-8"
     elif _wants(user_agent, _SINGBOX_USER_AGENTS):
@@ -217,7 +208,7 @@ async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> 
     )
 
 
-async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: AsyncSession, credential: str) -> dict:
+async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: AsyncSession) -> dict:
     """What the Tifusi VPN Android app imports: the same IKEv2/L2TP fields the
     info page's cards show, as JSON, so the app can fetch and refresh them.
     Same device limit and on_hold activation as the main subscription link,
@@ -233,8 +224,6 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     for cfg in ikev2_configs:
         cfg.pop("mobileconfig_url", None)
 
-    vless = [link for link in build_links_for_user(user, allowed_hosts) if link.startswith("vless://")]
-    locked = lock_parts(user, await get_settings_row(db))[0]
     return {
         "v": 1,
         "username": user.username,
@@ -247,11 +236,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
         # The same share links the plain subscription serves, kept to the
         # VLESS ones the app's built-in Xray core connects to. Additive under
         # "v": 1, so older app builds simply ignore the key.
-        "vless": [] if locked else vless,
-        # Config lock (app/subscription/lock.py): the links sealed with a key
-        # from the credential the app fetched with; the app hides details.
-        "locked": locked,
-        **({"sealed": seal({"vless": vless}, credential)} if locked else {}),
+        "vless": [link for link in build_links_for_user(user, allowed_hosts) if link.startswith("vless://")],
     }
 
 
@@ -263,7 +248,7 @@ async def get_app_config(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     user = await user_or_404(secret, db)
-    return await _app_config(user, request, hwid, db, secret)
+    return await _app_config(user, request, hwid, db)
 
 
 @router.get("/code/{code}/app.json")
@@ -274,4 +259,4 @@ async def get_app_config_by_code(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     user = await user_by_app_code_or_404(code, db)
-    return await _app_config(user, request, hwid, db, code)
+    return await _app_config(user, request, hwid, db)

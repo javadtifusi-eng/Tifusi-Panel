@@ -36,7 +36,7 @@ import {
 import { copyToClipboard } from '../lib/clipboard'
 import { initials, parseServerDate } from '../lib/format'
 
-type SectionId = 'url' | 'lock' | 'pass' | 'notify' | 'api' | 'tls' | 'shield' | 'admins' | 'backup' | 'danger'
+type SectionId = 'url' | 'pass' | 'notify' | 'api' | 'tls' | 'shield' | 'admins' | 'backup' | 'danger'
 type NotifyTab = 'telegram' | 'webhook' | 'discord'
 
 // The exact text the panel sends when a node drops (app/nodes/sync.py), so the
@@ -107,19 +107,6 @@ export default function SettingsPage() {
   const [publicUrl, setPublicUrl] = useState('')
   const [urlSaving, setUrlSaving] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
-  const [lockSaving, setLockSaving] = useState(false)
-
-  async function toggleLock(part: 'lock_app' | 'lock_other' | 'lock_page', on: boolean) {
-    setLockSaving(true)
-    try {
-      setSaved(await updateSettings({ [part]: on }))
-      say(on ? t.ui.lock.onToast : t.ui.lock.offToast)
-    } catch (err) {
-      say(err instanceof ApiError ? err.message : t.common.genericError)
-    } finally {
-      setLockSaving(false)
-    }
-  }
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -500,7 +487,6 @@ export default function SettingsPage() {
   const matches = (id: SectionId, ...texts: string[]) => !q || [s.kw[id], ...texts].join(' ').toLowerCase().includes(q)
   const visible: Record<SectionId, boolean> = {
     url: canSettings && matches('url', sp.publicUrlTitle),
-    lock: canSettings && matches('lock', t.ui.lock.title),
     pass: matches('pass', sp.changePasswordTitle),
     notify: canSettings && matches('notify', s.notifyTitle),
     api: matches('api', sp.apiKeysTitle),
@@ -617,40 +603,6 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
-        </Section>
-
-        <Section
-          id="lock"
-          mark="🔒"
-          title={t.ui.lock.title}
-          sub={t.ui.lock.sub}
-          hidden={!visible.lock}
-          flash={flash === 'lock'}
-          pill={(() => {
-            const n = [saved?.lock_app, saved?.lock_other, saved?.lock_page].filter(Boolean).length
-            return n ? <Pill tone="ok">{t.ui.lock.pillCount(n)}</Pill> : <Pill tone="idle">{t.ui.lock.pillOff}</Pill>
-          })()}
-        >
-          <ul className="lock-what">
-            {(
-              [
-                ['lock_app', '📱', t.ui.lock.appT, t.ui.lock.appD],
-                ['lock_other', '🧩', t.ui.lock.otherT, t.ui.lock.otherD],
-                ['lock_page', '🌐', t.ui.lock.pageT, t.ui.lock.pageD],
-              ] as const
-            ).map(([part, icon, title, desc]) => (
-              <li key={part} className={saved?.[part] ? 'on' : ''}>
-                <label className="tf-switch">
-                  <input id={`set-${part}`} type="checkbox" checked={!!saved?.[part]} disabled={!saved || lockSaving} onChange={(e) => toggleLock(part, e.target.checked)} />
-                  <b>
-                    {icon} {title}
-                  </b>
-                </label>
-                <span>{desc}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="hint" style={{ margin: 0 }}>{t.ui.lock.note}</div>
         </Section>
 
         <Section

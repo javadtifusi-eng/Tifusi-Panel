@@ -98,8 +98,6 @@ export interface ProxyUser {
   on_hold_expire_days: number | null
   hwid_limit: number | null
   speed_limit_mbps: number | null
-  /** null = follow the panel-wide setting. */
-  config_lock: boolean | null
   last_seen: string | null
   note: string | null
   created_at: string
@@ -141,7 +139,6 @@ export async function createUser(payload: {
   on_hold_expire_days?: number | null
   hwid_limit?: number | null
   speed_limit_mbps?: number | null
-  config_lock?: boolean | null
   note?: string | null
   group_ids?: number[]
   protocols?: string[]
@@ -299,7 +296,6 @@ export async function updateUser(
       | 'expire'
       | 'hwid_limit'
       | 'speed_limit_mbps'
-      | 'config_lock'
       | 'note'
       | 'group_ids'
       | 'protocols'
@@ -1083,11 +1079,6 @@ export interface PanelSettings {
   webhook_url: string | null
   webhook_secret: string | null
   discord_webhook_url: string | null
-  /** Config lock, one switch per place a config shows: the Tifusi VPN app (sealed, no
-   *  details), other clients (placeholder only) and the subscription page (no links/QR). */
-  lock_app: boolean
-  lock_other: boolean
-  lock_page: boolean
 }
 
 export async function getSettings(): Promise<PanelSettings> {

@@ -99,7 +99,6 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
   const [onHoldDays, setOnHoldDays] = useState('30')
   const [hwidLimit, setHwidLimit] = useState('')
   const [speedLimitMbps, setSpeedLimitMbps] = useState('')
-  const [configLock, setConfigLock] = useState<'panel' | 'on' | 'off'>('panel')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [linksUser, setLinksUser] = useState<ProxyUser | null>(null)
@@ -296,7 +295,6 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     setOnHoldDays('30')
     setHwidLimit('')
     setSpeedLimitMbps('')
-    setConfigLock('panel')
     setDataLimitResetDays('')
     setFormError(null)
     setShowForm(false)
@@ -314,7 +312,6 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     setOnHold(false)
     setHwidLimit(user.hwid_limit ? String(user.hwid_limit) : '')
     setSpeedLimitMbps(user.speed_limit_mbps ? String(user.speed_limit_mbps) : '')
-    setConfigLock(user.config_lock == null ? 'panel' : user.config_lock ? 'on' : 'off')
     setFormError(null)
     setOpenUserId(null)
     setShowForm(true)
@@ -336,10 +333,9 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     }
     const hwid_limit = hwidLimit ? parseInt(hwidLimit, 10) : null
     const speed_limit_mbps = speedLimitMbps ? parseInt(speedLimitMbps, 10) : null
-    const config_lock = configLock === 'panel' ? null : configLock === 'on'
     try {
       if (editingId) {
-        await updateUser(editingId, { data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, config_lock, note: note || null, group_ids, protocols: protocolsPayload })
+        await updateUser(editingId, { data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, note: note || null, group_ids, protocols: protocolsPayload })
       } else if (onHold) {
         await createUser({
           username,
@@ -349,13 +345,12 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
           on_hold_expire_days: onHoldDays ? parseInt(onHoldDays, 10) : null,
           hwid_limit,
           speed_limit_mbps,
-          config_lock,
           note: note || null,
           group_ids,
           protocols: protocolsPayload,
         })
       } else {
-        await createUser({ username, data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, config_lock, note: note || null, group_ids, protocols: protocolsPayload })
+        await createUser({ username, data_limit, data_limit_reset_days, expire: expireIso, hwid_limit, speed_limit_mbps, note: note || null, group_ids, protocols: protocolsPayload })
       }
       const wasEdit = !!editingId
       resetForm()
@@ -937,15 +932,6 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
                 min="1"
                 placeholder={t.usersPage.speedLimitPlaceholder}
               />
-            </Field>
-            <Field label={t.ui.lock.userLabel} wide>
-              <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
-                {(['panel', 'on', 'off'] as const).map((v) => (
-                  <button key={v} type="button" aria-pressed={configLock === v} onClick={() => setConfigLock(v)}>
-                    {t.ui.lock.userOpt[v]}
-                  </button>
-                ))}
-              </div>
             </Field>
             <Field label={t.usersPage.note} wide>
               <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />

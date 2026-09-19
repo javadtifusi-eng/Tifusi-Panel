@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, String
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -32,12 +32,3 @@ class PanelSetting(Base):
     # A Discord incoming-webhook URL — same events as Telegram/the generic
     # webhook, see app/notifications/discord.py.
     discord_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-    # Config lock, one switch per place a config can be seen
-    # (app/subscription/lock.py): the Tifusi VPN app gets it sealed and shows
-    # no details; other clients get a placeholder; the subscription page
-    # hides links and QR codes. A user's own config_lock overrides all three.
-    lock_app: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
-    lock_other: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
-    lock_page: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
-

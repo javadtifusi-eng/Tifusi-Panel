@@ -23,7 +23,6 @@ class ProxyUserCreate(BaseModel):
     on_hold_expire_days: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
     speed_limit_mbps: int | None = Field(default=None, ge=1)
-    config_lock: bool | None = None
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] = Field(default_factory=list)
     # None = every protocol; a reseller's user gets the reseller's own when left out.
@@ -49,7 +48,6 @@ class ProxyUserUpdate(BaseModel):
     on_hold_expire_days: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
     speed_limit_mbps: int | None = Field(default=None, ge=1)
-    config_lock: bool | None = None
     note: str | None = Field(default=None, max_length=500)
     group_ids: list[int] | None = None
     protocols: list[str] | None = None
@@ -80,7 +78,6 @@ class ProxyUserResponse(BaseModel):
     protocols: list[str] | None
     admin_id: int | None
     speed_limit_mbps: int | None
-    config_lock: bool | None = None
     last_seen: datetime | None
 
 
