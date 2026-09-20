@@ -1,7 +1,9 @@
 import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -101,6 +103,36 @@ async def _enforce_device_limit(user: ProxyUser, identifier: str, db: AsyncSessi
     await db.commit()
 
 
+async def _moved_to_subscription_host(request: Request, db: AsyncSession) -> RedirectResponse | None:
+    """Sends a subscription fetch that arrived on the panel's own address over to
+    the customer-facing one, when the two differ.
+
+    Every app that was handed a link before the split still polls the old
+    address. Nothing in any subscription format can rewrite the URL an app has
+    saved — there is no header for it — so a permanent redirect is the only lever
+    there is: clients follow it, several remember the final address, and the
+    panel's own domain stops being the one customers talk to.
+
+    Returned rather than raised so the caller can send it *before* the device
+    limit and on-hold activation run, since those have side effects that must not
+    happen twice for one fetch.
+
+    Doing nothing is the default: with no separate subscription address
+    configured, or when the fetch already arrived on it, this returns None.
+    """
+    configured = await get_subscription_url(db)
+    if not configured:
+        return None
+    target_host = urlsplit(configured).hostname
+    # nginx passes the real Host through (frontend/nginx.conf), so this is the
+    # name the client actually asked for rather than a container hostname.
+    if not target_host or request.url.hostname == target_host:
+        return None
+    moved = urlsplit(configured)
+    url = urlunsplit((moved.scheme or "https", moved.netloc, request.url.path, request.url.query, ""))
+    return RedirectResponse(url, status_code=301)
+
+
 async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession) -> str:
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
@@ -131,6 +163,13 @@ async def get_subscription(
     user_agent: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
+    # Ahead of user lookup and of anything with a side effect: a fetch that is
+    # about to be sent elsewhere must not spend a device slot or activate an
+    # on-hold account here and then again at the destination.
+    moved = await _moved_to_subscription_host(request, db)
+    if moved is not None:
+        return moved
+
     user = await user_or_404(secret, db)
 
     await _enforce_device_limit(user, hwid or client_ip(request), db)
@@ -231,6 +270,12 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     return {
         "v": 1,
         "username": user.username,
+        # The address this account should be fetched from, which is not
+        # necessarily the one this request arrived on. An app that stores it can
+        # follow the panel onto a new customer-facing domain by itself, instead of
+        # every user having to be sent a new link by hand. Additive under "v": 1,
+        # so an older build simply ignores it.
+        "subscription_url": f"{base}sub/{user.secret}",
         "status": user.status.value,
         "expire": int(user.expire.timestamp()) if user.expire else None,
         "used_traffic": user.used_traffic,
@@ -244,23 +289,29 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     }
 
 
-@router.get("/sub/{secret}/app.json")
+@router.get("/sub/{secret}/app.json", response_model=None)
 async def get_app_config(
     secret: str,
     request: Request,
     hwid: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict | RedirectResponse:
+    moved = await _moved_to_subscription_host(request, db)
+    if moved is not None:
+        return moved
     user = await user_or_404(secret, db)
     return await _app_config(user, request, hwid, db)
 
 
-@router.get("/code/{code}/app.json")
+@router.get("/code/{code}/app.json", response_model=None)
 async def get_app_config_by_code(
     code: str,
     request: Request,
     hwid: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict | RedirectResponse:
+    moved = await _moved_to_subscription_host(request, db)
+    if moved is not None:
+        return moved
     user = await user_by_app_code_or_404(code, db)
     return await _app_config(user, request, hwid, db)
