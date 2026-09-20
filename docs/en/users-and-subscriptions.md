@@ -31,13 +31,9 @@ Resetting a user's secret invalidates both the old link and the old access code.
 
 ### The address customers are given
 
-Settings holds two addresses, and they are allowed to differ. **Panel address** (`public_url`) is where the admin reaches the dashboard and the one the node agent is told to call back on. **Subscription address** (`subscription_url`) is the one every customer-facing link is built from: the subscription URL, the access-code URL, the `.mobileconfig` URL, and the address the Tifusi app is told to poll. Leaving it empty falls back to the panel address, which is how this behaved before the two were separable.
+Settings holds two addresses. **Panel address** is where the admin reaches the dashboard and what the node agent calls back on; **Subscription address** is what every customer-facing link is built from, so a domain that gets shared around and filtered can be replaced without moving the dashboard. Empty falls back to the panel address. Both names must be on the TLS certificate — request one for both at once, since the panel's own SSL button takes a single domain and drops the other.
 
-The reason to split them is that a link handed to customers gets forwarded and eventually filtered, and burning it should not take the dashboard with it. Both names have to be on the TLS certificate — request one for both at once (`certbot ... -d panel-domain -d subscription-domain`), because the panel's own SSL button takes a single domain and would drop the other from the certificate.
-
-**Links already saved in customers' apps keep working, and move themselves.** Nothing in any subscription format can rewrite the URL an app has stored — no header exists for it — so a fetch that arrives on the panel address is answered with a permanent redirect (301) to the subscription address instead. Clients follow it, several remember the new address, and `app.json` additionally carries `subscription_url` so the Tifusi app can store it and follow on its own. The redirect is sent before the device limit and on-hold activation run, so one fetch never spends two device slots, and the query string is preserved so `hwid` survives.
-
-What this does *not* move is IKEv2. Its Remote ID and certificate are pinned in each user's imported profile, so changing the address there forces every one of them to re-import — see [Cores & hosts](cores-and-hosts.md). Leave the panel domain resolving and on the certificate for as long as IKEv2 users exist.
+Links already saved in customers' apps keep working: a fetch on the panel address is answered with a 301 to the subscription address, and `app.json` carries `subscription_url` so the Tifusi app can follow by itself. IKEv2 does not move — its Remote ID is pinned in every imported profile — so keep the panel domain resolving and on the certificate while IKEv2 users exist.
 
 ## Tifusi VPN profile
 
