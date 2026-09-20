@@ -12,7 +12,7 @@ from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
-from app.settings_store import get_public_url
+from app.settings_store import get_subscription_url
 from app.subscription.app_code import app_code_for
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
@@ -104,8 +104,10 @@ async def _enforce_device_limit(user: ProxyUser, identifier: str, db: AsyncSessi
 async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession) -> str:
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
-    public_url = await get_public_url(db)
-    base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
+    # The customer-facing base, which can be a different domain from the one the
+    # admin reaches the panel on — see PanelSetting.subscription_url.
+    sub_url = await get_subscription_url(db)
+    base = sub_url.rstrip("/") + "/" if sub_url else str(request.base_url)
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
     return build_info_page_html(
         username=user.username,
@@ -218,8 +220,10 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
 
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
-    public_url = await get_public_url(db)
-    base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
+    # The customer-facing base, which can be a different domain from the one the
+    # admin reaches the panel on — see PanelSetting.subscription_url.
+    sub_url = await get_subscription_url(db)
+    base = sub_url.rstrip("/") + "/" if sub_url else str(request.base_url)
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
     for cfg in ikev2_configs:
         cfg.pop("mobileconfig_url", None)

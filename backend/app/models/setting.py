@@ -15,6 +15,16 @@ class PanelSetting(Base):
     id: Mapped[int] = mapped_column(primary_key=True, default=1)
     public_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # The address handed to *customers*, which is deliberately allowed to differ
+    # from public_url above. public_url is where the admin reaches this panel and
+    # what it builds its own links from; a subscription link built on it tells
+    # every customer the panel's real address, and burning that address burns the
+    # dashboard along with it. Set this to a second domain pointing at the same
+    # server and subscriptions go out on that one instead, so a domain that ends
+    # up filtered or shared around can be swapped without moving the panel.
+    # Empty falls back to public_url, which is how this behaved before.
+    subscription_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     # Both required together for notifications to actually send — see
     # app/notifications/telegram.py. The chat ID is whatever Telegram gives
     # your bot for the target chat (a user, group, or channel it's in).

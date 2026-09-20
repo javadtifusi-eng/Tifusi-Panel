@@ -31,7 +31,7 @@ from app.schemas.user import (
 )
 from app.schemas.app_report import AppReportResponse
 from app.schemas.user_device import UserDeviceResponse
-from app.settings_store import get_public_url
+from app.settings_store import get_subscription_url
 from app.subscription.app_code import app_code_for
 
 router = APIRouter(
@@ -399,8 +399,10 @@ async def get_user_links(
     user = await _get_user_or_404(user_id, admin, db)
     hosts = list((await db.execute(select(Host))).scalars().all())
     allowed_hosts = hosts_for_user(user, hosts)
-    public_url = await get_public_url(db)
-    base = public_url.rstrip("/") + "/" if public_url else str(request.base_url)
+    # The customer-facing base, which can be a different domain from the one the
+    # admin reaches the panel on — see PanelSetting.subscription_url.
+    sub_url = await get_subscription_url(db)
+    base = sub_url.rstrip("/") + "/" if sub_url else str(request.base_url)
 
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
 

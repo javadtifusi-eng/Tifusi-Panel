@@ -23,3 +23,13 @@ async def get_settings_row(db: AsyncSession) -> PanelSetting:
 async def get_public_url(db: AsyncSession) -> str | None:
     row = await get_settings_row(db)
     return row.public_url
+
+
+async def get_subscription_url(db: AsyncSession) -> str | None:
+    """The base a customer's subscription link is built on.
+
+    Falls back to public_url when unset, which is how this worked before the two
+    were separable — so an install that never sets it behaves exactly as before.
+    """
+    row = await get_settings_row(db)
+    return row.subscription_url or row.public_url

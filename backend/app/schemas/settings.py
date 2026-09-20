@@ -5,6 +5,7 @@ class PanelSettingsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     public_url: str | None
+    subscription_url: str | None
     telegram_bot_token: str | None
     telegram_chat_id: str | None
     webhook_url: str | None
@@ -14,6 +15,10 @@ class PanelSettingsResponse(BaseModel):
 
 class PanelSettingsUpdate(BaseModel):
     public_url: str | None = None
+    # A second domain pointing at the same server, handed to customers instead of
+    # public_url so the panel's own address is not in every subscription link.
+    # Empty falls back to public_url.
+    subscription_url: str | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     webhook_url: str | None = None
