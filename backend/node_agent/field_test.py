@@ -18,6 +18,7 @@ import json
 import os
 import random
 import re
+import secrets
 import socket
 import tempfile
 import time
@@ -104,9 +105,34 @@ def _log_hits(path: str, local_ips: set[str]) -> dict[str, set[str]]:
     return hits
 
 
+def _inbound(it: dict, uid: str, priv: str, sid: str) -> dict:
+    reality = {"dest": it["dest"], "serverNames": [it["host"]], "privateKey": priv, "shortIds": [sid]}
+    if it["transport"] == "xhttp":
+        # No vision flow here: xtls-rprx-vision is a raw-TCP thing, and Xray
+        # refuses the pair.
+        return {
+            "tag": it["tag"], "listen": "0.0.0.0", "port": it["port"], "protocol": "vless",
+            "settings": {"clients": [{"id": uid}], "decryption": "none"},
+            "streamSettings": {"network": "xhttp", "security": "reality", "realitySettings": reality,
+                               "xhttpSettings": {"path": it["path"], "mode": "auto"}},
+        }
+    return {
+        "tag": it["tag"], "listen": "0.0.0.0", "port": it["port"], "protocol": "vless",
+        "settings": {"clients": [{"id": uid, "flow": "xtls-rprx-vision"}], "decryption": "none"},
+        "streamSettings": {"network": "tcp", "security": "reality", "realitySettings": reality},
+    }
+
+
 async def start(targets: list[dict], ttl: int, public_ip: str | None) -> dict:
-    """targets: [{"host": sni, "dest": "ip:443", "port": optional, "label": optional}].
-    The same SNI may appear more than once, on different ports."""
+    """targets: [{"host": sni, "dest": "ip:443", "port": optional,
+    "transport": "tcp"|"xhttp", "label": optional}].
+
+    The same SNI may appear more than once, on different ports and
+    transports: what an operator is judging can only be found by changing
+    one thing at a time. "tcp" is REALITY as the panel normally runs it,
+    vision flow and all; "xhttp" carries the same REALITY handshake inside
+    plain HTTP requests, which is the transport Xray now points people at
+    and which does not carry WebSocket's ALPN giveaway."""
     await stop()
     global _state, _proc, _stopper
     targets = [t for t in targets if t.get("host")][:_MAX_TARGETS]
@@ -119,8 +145,12 @@ async def start(targets: list[dict], ttl: int, public_ip: str | None) -> dict:
     for i, t in enumerate(targets):
         port = _pick_port(t.get("port"), taken)
         taken.add(port)
+        transport = "xhttp" if t.get("transport") == "xhttp" else "tcp"
         items.append({"tag": f"probe-{i}", "host": t["host"], "dest": t.get("dest") or f"{t['host']}:443", "port": port,
-                      "label": t.get("label")})
+                      "label": t.get("label"), "transport": transport,
+                      # xhttp needs a path on both ends; it is generated here
+                      # so the panel can put the same one in the link.
+                      "path": ("/" + secrets.token_urlsafe(8)) if transport == "xhttp" else None})
     api_port = _free_public_port(taken)
     tmp = tempfile.mkdtemp(prefix="tifusi-field-")
     log_path = os.path.join(tmp, "access.log")
@@ -131,12 +161,7 @@ async def start(targets: list[dict], ttl: int, public_ip: str | None) -> dict:
         "policy": {"system": {"statsInboundUplink": True, "statsInboundDownlink": True}},
         "inbounds": [
             {"tag": "api", "listen": "127.0.0.1", "port": api_port, "protocol": "dokodemo-door", "settings": {"address": "127.0.0.1"}},
-            *[{
-                "tag": it["tag"], "listen": "0.0.0.0", "port": it["port"], "protocol": "vless",
-                "settings": {"clients": [{"id": uid, "flow": "xtls-rprx-vision"}], "decryption": "none"},
-                "streamSettings": {"network": "tcp", "security": "reality", "realitySettings": {
-                    "dest": it["dest"], "serverNames": [it["host"]], "privateKey": priv, "shortIds": [sid]}},
-            } for it in items],
+            *[_inbound(it, uid, priv, sid) for it in items],
         ],
         "outbounds": [{"protocol": "freedom", "tag": "direct"}, {"protocol": "freedom", "tag": "api"}],
         "routing": {"rules": [{"type": "field", "inboundTag": ["api"], "outboundTag": "api"}]},
@@ -240,6 +265,7 @@ async def status() -> dict:
         span = _state.get("spans", {}).get(it["tag"])
         seconds = (span["t1"] - span["t0"]) if span else 0
         items.append({"host": it["host"], "dest": it["dest"], "port": it["port"], "label": it.get("label"),
+                      "transport": it.get("transport", "tcp"), "path": it.get("path"),
                       "ips": sorted(hits.get(it["tag"], ()))[:10], "clients": clients,
                       "down": down, "up": up, "ok": clients > 0 and down > 0,
                       "down_bps": _state["rates"].get(it["tag"], {}).get("down", 0),

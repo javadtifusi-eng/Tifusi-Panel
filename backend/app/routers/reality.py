@@ -247,11 +247,18 @@ _field_tokens: dict[str, int] = {}
 def _field_links(node: Node, test: dict) -> list[dict]:
     items = []
     for it in test.get("items", []):
-        params = {
-            "type": "tcp", "security": "reality", "encryption": "none", "flow": "xtls-rprx-vision",
+        common = {
+            "security": "reality", "encryption": "none",
             "sni": it["host"], "fp": "chrome", "pbk": test.get("public_key", ""), "sid": test.get("short_id", ""),
         }
-        link = f"vless://{test.get('uuid')}@{node.address}:{it['port']}?{urlencode(params)}#{quote('TEST ' + it['host'])}"
+        if it.get("transport") == "xhttp":
+            # No flow: vision is raw-TCP only. mode=auto matches the inbound.
+            params = {"type": "xhttp", "path": it.get("path") or "/", "mode": "auto", **common}
+            label = f"TEST {it['host']} xhttp :{it['port']}"
+        else:
+            params = {"type": "tcp", "flow": "xtls-rprx-vision", **common}
+            label = f"TEST {it['host']} :{it['port']}"
+        link = f"vless://{test.get('uuid')}@{node.address}:{it['port']}?{urlencode(params)}#{quote(label)}"
         items.append({**it, "link": link})
     return items
 
@@ -276,7 +283,8 @@ async def start_field_test(node_id: int, request: Request, body: dict = Body(...
     node = await _node_or_404(node_id, db)
     targets = [
         {"host": str(t.get("host") or "").strip().lower(), "dest": t.get("dest"),
-         "port": t.get("port") if isinstance(t.get("port"), int) else None, "label": t.get("label")}
+         "port": t.get("port") if isinstance(t.get("port"), int) else None, "label": t.get("label"),
+         "transport": "xhttp" if t.get("transport") == "xhttp" else "tcp"}
         for t in (body.get("targets") or []) if isinstance(t, dict) and t.get("host")
     ][:12]
     if not targets:

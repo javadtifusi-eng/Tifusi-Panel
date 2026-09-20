@@ -160,7 +160,7 @@ function kb(n: number) {
 // name to carry, and announcing your own is also the opposite of what REALITY
 // is for — so borrowed SNIs only.
 
-type Finding = 'port' | 'upload' | 'route' | 'none' | 'unclear'
+type Finding = 'port' | 'xhttp' | 'upload' | 'route' | 'none' | 'unclear'
 
 const upRate = (i: FieldTestItem) => i.up_avg_bps || i.up_bps
 
@@ -176,10 +176,14 @@ function patternVerdict(items: FieldTestItem[]): Finding[] | null {
   // x clearly better than y: works where y doesn't, or at least twice as fast.
   // -1 means that config wasn't in the test, so there is nothing to compare.
   const beats = (x: number, y: number) => y >= 0 && x > 0 && (y === 0 || (x > 1 && y > 1 && x >= 2 * y))
-  const nr = best('neighbor:random'), ns = best('neighbor:std')
+  const nr = best('a:random:tcp'), ns = best('a:std:tcp')
+  const xr = best('a:random:xhttp'), xs = best('a:std:xhttp')
   if (Math.max(...items.map(worth)) === 0) return ['none']
   const found: Finding[] = []
-  if (beats(ns, nr)) found.push('port')
+  if (beats(ns, nr) || beats(xs, xr)) found.push('port')
+  // Same name, same kind of port, different transport: anything left is the
+  // transport itself — which is the one lever nobody has pulled here yet.
+  if (beats(xs, ns) || beats(xr, nr)) found.push('xhttp')
   // A download worth having beside an upload stuck under 1 Mbps is the shape
   // MCI's documented throttle leaves. Only judged where both were measured.
   const measured = items.filter((i) => rate(i) >= 250000 && upRate(i) > 0)
@@ -271,12 +275,15 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
     // there is the name. A port already in use (the live inbound, say) falls
     // back to another standard one on the node.
     const targets: FieldTarget[] = [
-      { host: a.host, dest: a.dest, port: null, label: 'neighbor:random' },
-      { host: a.host, dest: a.dest, port: 2083, label: 'neighbor:std' },
-      { host: a.host, dest: a.dest, port: 2087, label: 'neighbor:std' },
-      { host: a.host, dest: a.dest, port: 8443, label: 'neighbor:std' },
+      { host: a.host, dest: a.dest, port: null, label: 'a:random:tcp' },
+      { host: a.host, dest: a.dest, port: 2083, label: 'a:std:tcp' },
+      { host: a.host, dest: a.dest, port: 8443, label: 'a:std:tcp' },
+      // The same name and the same kinds of port again, carried by XHTTP
+      // instead of raw TCP, so the transport can be read on its own.
+      { host: a.host, dest: a.dest, port: null, label: 'a:random:xhttp', transport: 'xhttp' },
+      { host: a.host, dest: a.dest, port: 2087, label: 'a:std:xhttp', transport: 'xhttp' },
     ]
-    if (b) targets.push({ host: b.host, dest: b.dest, port: 2096, label: 'neighbor:std' }, { host: b.host, dest: b.dest, port: null, label: 'neighbor:random' })
+    if (b) targets.push({ host: b.host, dest: b.dest, port: 2096, label: 'b:std:tcp' }, { host: b.host, dest: b.dest, port: null, label: 'b:random:tcp' })
     await run(() => startFieldTest(nodeId, targets))
   }
 
@@ -358,15 +365,15 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
         <>
           <ul className="rsc-list">
             {[...(test?.items ?? [])].sort((a, b) => worth(b) - worth(a)).map((it) => {
-              const [sni, port] = (it.label ?? ':').split(':')
+              const [, port] = (it.label ?? '::').split(':')
               return (
                 <li key={`${it.host}:${it.port}`} className={`rsc-row ${it.ok ? 'best' : ''}`}>
                   <div className="rsc-head">
                     <div className="rsc-name">
                       <b className="mono">{it.host}</b>
                       <small>
-                        <span className="chip">{sni === 'own' ? ft.pattern.own : ft.pattern.neighbor}</span>
                         <span className="chip">{port === 'std' ? ft.pattern.std(it.port) : ft.pattern.random(it.port)}</span>
+                        <span className="chip">{it.transport === 'xhttp' ? 'XHTTP' : 'TCP + Vision'}</span>
                         {!!it.operators?.length && <span>{it.operators.map(opName).join('، ')}</span>}
                       </small>
                     </div>

@@ -580,8 +580,10 @@ export interface FieldTestItem {
   /** Seconds the transfer covered, for the sustained rate above. */
   seconds?: number
   link: string
-  /** Set by the operator-pattern test: "<neighbor|own>:<random|std>". */
+  /** Set by the operator-pattern test: "<sni>:<random|std>:<tcp|xhttp>". */
   label?: string | null
+  /** How this config carries REALITY: raw TCP with vision, or XHTTP. */
+  transport?: 'tcp' | 'xhttp'
   /** Iranian operators the connections through this config came from. */
   operators?: string[]
 }
@@ -595,7 +597,7 @@ export interface FieldTest {
 }
 
 /** Throwaway inbounds on the node, one per SNI, tested from a phone in Iran. */
-export type FieldTarget = { host: string; dest: string | null; port?: number | null; label?: string }
+export type FieldTarget = { host: string; dest: string | null; port?: number | null; label?: string; transport?: 'tcp' | 'xhttp' }
 
 /** Names of the admin's own that resolve to this node and are served there
  *  with a real certificate — the one SNI with no IP/SNI mismatch. */
