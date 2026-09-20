@@ -104,6 +104,12 @@ class Host(Base):
     # --- hysteria2 only ---
     hysteria2_sni: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hysteria2_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Salamander password. Without it the first packet on the wire is a QUIC
+    # handshake, which Iranian networks drop wholesale — a hysteria2 server that
+    # works from anywhere else can be unreachable from inside Iran for that
+    # reason alone. Shared by every user of the host: it hides the shape of the
+    # traffic, it does not identify anyone (each user's own secret does that).
+    hysteria2_obfs: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

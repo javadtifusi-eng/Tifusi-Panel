@@ -68,6 +68,7 @@ function emptyForm() {
     core_id: null as number | null,
     hysteria2_sni: '',
     hysteria2_port: '',
+    hysteria2_obfs: '',
   }
 }
 
@@ -181,6 +182,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
       core_id: host.core_id,
       hysteria2_sni: host.hysteria2_sni ?? '',
       hysteria2_port: host.hysteria2_port != null ? String(host.hysteria2_port) : '',
+      hysteria2_obfs: host.hysteria2_obfs ?? '',
     })
     setFormError(null)
     setShowForm(true)
@@ -210,6 +212,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
       core_id: isCoreLinked ? form.core_id : null,
       hysteria2_sni: isHysteria2 ? form.hysteria2_sni || null : null,
       hysteria2_port: isHysteria2 && form.hysteria2_port ? parseInt(form.hysteria2_port, 10) : null,
+      hysteria2_obfs: isHysteria2 ? form.hysteria2_obfs || null : null,
     }
     try {
       if (editingId) await updateHost(editingId, payload)
@@ -664,8 +667,22 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
                 <Field label={t.hostsPage.hysteria2SniLabel}>
                   <input className="input ltr" value={form.hysteria2_sni} onChange={(e) => update('hysteria2_sni', e.target.value)} />
                 </Field>
-                <Field label={t.hostsPage.hysteria2PortLabel}>
+                {/* UDP 443 is where QUIC lives, and measured from Iran it answered
+                    nothing at all — a host set to it is dead there with no error to
+                    explain why. Warned rather than rejected: the port is only
+                    hopeless from the networks this panel is aimed at. */}
+                <Field
+                  label={t.hostsPage.hysteria2PortLabel}
+                  hint={
+                    form.hysteria2_port === '443' ? (
+                      <span style={{ color: 'var(--warn)' }}>{t.hostsPage.hysteria2Port443Warning}</span>
+                    ) : undefined
+                  }
+                >
                   <input className="input" type="number" min="1" max="65535" value={form.hysteria2_port} onChange={(e) => update('hysteria2_port', e.target.value)} />
+                </Field>
+                <Field label={t.hostsPage.hysteria2ObfsLabel} hint={t.hostsPage.hysteria2ObfsHint}>
+                  <input className="input ltr" value={form.hysteria2_obfs} onChange={(e) => update('hysteria2_obfs', e.target.value)} />
                 </Field>
               </div>
             )}

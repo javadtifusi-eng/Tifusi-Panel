@@ -296,6 +296,48 @@ async def reality_field_test_stop(x_node_api_key: str | None = Header(default=No
     return await field_test.status()
 
 
+# --- Hysteria2 --------------------------------------------------------------
+# Hysteria2 is a separate program next to Xray, and its statistics API listens
+# on this machine's loopback, which the panel cannot reach. The agent is the
+# one thing on the node the panel already talks to, so it relays: usage since
+# the last call (the counters are cleared as they are read, exactly as Xray's
+# are for /stats, so the panel only ever adds deltas) and who is online, and
+# it can drop users the panel no longer wants connected.
+
+HYSTERIA_API = os.environ.get("HYSTERIA_API", "")
+HYSTERIA_SECRET = os.environ.get("HYSTERIA_SECRET", "")
+
+
+def _hysteria(method: str, path: str, json_body=None):
+    import httpx
+
+    if not HYSTERIA_API:
+        raise HTTPException(status_code=404, detail="Hysteria2 is not set up on this node")
+    try:
+        resp = httpx.request(method, f"{HYSTERIA_API}{path}", headers={"Authorization": HYSTERIA_SECRET}, json=json_body, timeout=5.0)
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Hysteria2 API: {exc.__class__.__name__}") from exc
+
+
+@app.get("/hysteria/stats")
+async def hysteria_stats(x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    traffic = _hysteria("GET", "/traffic?clear=1")
+    online = _hysteria("GET", "/online")
+    return {"users": {name: {"uplink": c.get("rx", 0), "downlink": c.get("tx", 0)} for name, c in traffic.items()}, "online": online}
+
+
+@app.post("/hysteria/kick")
+async def hysteria_kick(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    ids = [str(i) for i in payload.get("ids") or []][:500]
+    if ids:
+        _hysteria("POST", "/kick", ids)
+    return {"kicked": len(ids)}
+
+
 @app.post("/cdn/check")
 async def cdn_check(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
     """Runs one of the tunnel CDN checks (app/tunnels/cdn_scan.py) from this

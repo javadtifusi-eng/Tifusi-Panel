@@ -74,6 +74,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 | --- | --- |
 | 📦 [Installation](docs/en/installation.md) | Server requirements, standard and professional editions, first-run setup |
 | 🌐 [Nodes](docs/en/nodes.md) | Two cores on one node, adding and removing nodes, synchronisation, device limits |
+| 🚀 [Hysteria2](docs/en/hysteria2.md) | A UDP transport for networks where TCP protocols are poor (mobile operators in Iran): setup, per-user passwords, usage counting, disconnecting |
 | ⚛️ [Cores, hosts and groups](docs/en/cores-and-hosts.md) | Xray, IKEv2 and L2TP cores, public endpoints, REALITY scanner (real per-fingerprint test, filter check from inside Iran), access groups |
 | 👤 [Users and subscriptions](docs/en/users-and-subscriptions.md) | Quotas, expiry, on-hold accounts, subscription links, access codes, client profiles |
 | 💼 [Resellers](docs/en/resellers.md) | Reseller accounts, allowed protocols, user limits and data quotas |

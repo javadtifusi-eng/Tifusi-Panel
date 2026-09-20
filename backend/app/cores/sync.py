@@ -99,6 +99,8 @@ async def sync_inbounds(core: Core, db: AsyncSession) -> list[str]:
         row.header_type = p.header_type
         row.path = p.path
         row.host_header = p.host_header
+        row.xhttp_mode = p.xhttp_mode
+        row.xhttp_extra = p.xhttp_extra
         row.sni = p.sni
         row.alpn = p.alpn
         row.fingerprint = p.fingerprint

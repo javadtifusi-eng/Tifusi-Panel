@@ -57,6 +57,8 @@ def _transport_params(inbound: Inbound, host: Host) -> dict[str, str]:
     network = inbound.network
     path = host.effective_path
     host_header = host.effective_host_header
+    xhttp_mode = inbound.xhttp_mode
+    xhttp_extra = inbound.xhttp_extra
 
     if network in ("tcp", "raw"):
         params["headerType"] = inbound.header_type or "none"
@@ -80,6 +82,14 @@ def _transport_params(inbound: Inbound, host: Host) -> dict[str, str]:
             params["path"] = path
         if host_header:
             params["host"] = host_header
+        if network == "xhttp":
+            # `mode` and `extra` only mean anything to the client, and the link
+            # is the only way they reach it. A client that doesn't know them
+            # ignores them, which is why they are safe to always send.
+            if xhttp_mode:
+                params["mode"] = xhttp_mode
+            if xhttp_extra:
+                params["extra"] = xhttp_extra
     return params
 
 
@@ -187,6 +197,9 @@ def build_hysteria2_link(user: ProxyUser, host: Host) -> str:
     params: dict[str, str] = {}
     if host.effective_sni:
         params["sni"] = host.effective_sni
+    if host.hysteria2_obfs:
+        params["obfs"] = "salamander"
+        params["obfs-password"] = host.hysteria2_obfs
     suffix = f"?{urlencode(params)}" if params else ""
     return f"hysteria2://{user.secret}@{host.address}:{host.effective_port}{suffix}#{_fragment(render_remark(host, user))}"
 

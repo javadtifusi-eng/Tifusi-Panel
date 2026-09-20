@@ -8,6 +8,7 @@ builder (app/xray_config/builder.py) both read back off that registry.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from app.reality.keys import derive_x25519_public_key
@@ -30,6 +31,8 @@ class ParsedInbound:
     header_type: str | None = None
     path: str | None = None
     host_header: str | None = None
+    xhttp_mode: str | None = None
+    xhttp_extra: str | None = None
     sni: str | None = None
     alpn: str | None = None
     fingerprint: str | None = None
@@ -85,6 +88,9 @@ def _parse_network_settings(network: str, net_settings: dict, parsed: ParsedInbo
     elif network == "xhttp":
         parsed.path = net_settings.get("path", "") or None
         parsed.host_header = net_settings.get("host") or None
+        parsed.xhttp_mode = net_settings.get("mode") or None
+        extra = net_settings.get("extra")
+        parsed.xhttp_extra = json.dumps(extra, separators=(",", ":")) if isinstance(extra, dict) else None
     elif network in ("http", "h2"):
         path = net_settings.get("path")
         parsed.path = _first(path) if isinstance(path, list) else (path or None)

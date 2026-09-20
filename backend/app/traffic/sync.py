@@ -25,6 +25,61 @@ async def _fetch_node_stats(node: Node) -> dict[str, dict[str, int]]:
         return resp.json().get("users", {})
 
 
+# Who was connected to each node's Hysteria2 at the last poll, so the
+# enforcement pass can drop the ones that are no longer allowed to be.
+_hysteria_online: dict[int, list[str]] = {}
+
+
+async def _fetch_hysteria_stats(node: Node) -> dict | None:
+    """Hysteria2 usage since the last poll, relayed by the node agent (which is
+    the only thing that can reach Hysteria's loopback-only API). None when the
+    node has no Hysteria2 — the agent answers 404 — so a node without it costs
+    nothing and raises nothing."""
+    async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
+        resp = await client.get(
+            f"https://{node.address}:{node.port}/hysteria/stats", headers={"X-Node-Api-Key": node.api_key}
+        )
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def kick_inactive_hysteria(db: AsyncSession) -> None:
+    """Hysteria2 asks the panel to authenticate a connection once, when it is
+    made, so a user who expires or hits their limit afterwards would otherwise
+    stay connected for as long as they like. Xray needs a config push to drop
+    someone; this is the equivalent."""
+    if not _hysteria_online:
+        return
+    names = {n for users in _hysteria_online.values() for n in users}
+    if not names:
+        return
+    blocked = {
+        u.username
+        for u in (
+            await db.execute(select(ProxyUser).where(ProxyUser.username.in_(names), ProxyUser.status != UserStatus.active))
+        ).scalars()
+    }
+    if not blocked:
+        return
+    nodes = {n.id: n for n in (await db.execute(select(Node).where(Node.id.in_(_hysteria_online.keys())))).scalars()}
+    for node_id, users in _hysteria_online.items():
+        ids = [u for u in users if u in blocked]
+        node = nodes.get(node_id)
+        if not ids or node is None:
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
+                await client.post(
+                    f"https://{node.address}:{node.port}/hysteria/kick",
+                    headers={"X-Node-Api-Key": node.api_key},
+                    json={"ids": ids},
+                )
+        except Exception:
+            continue
+
+
 async def collect_traffic(db: AsyncSession) -> None:
     """Pulls each connected node's traffic since the last poll — the node
     agent resets Xray's own counters after reporting them (see node_agent's
@@ -40,7 +95,22 @@ async def collect_traffic(db: AsyncSession) -> None:
         try:
             stats = await _fetch_node_stats(node)
         except Exception:
-            continue
+            stats = {}
+        # Hysteria2 usage counts exactly like Xray's: without this a user's
+        # data limit would not see a byte that went through it.
+        try:
+            hysteria = await _fetch_hysteria_stats(node)
+        except Exception:
+            hysteria = None
+        if hysteria is not None:
+            _hysteria_online[node.id] = list((hysteria.get("online") or {}).keys())
+            stats = {**stats}
+            for username, counters in (hysteria.get("users") or {}).items():
+                merged = stats.get(username, {})
+                stats[username] = {
+                    "uplink": merged.get("uplink", 0) + counters.get("uplink", 0),
+                    "downlink": merged.get("downlink", 0) + counters.get("downlink", 0),
+                }
         for username, counters in stats.items():
             delta = counters.get("uplink", 0) + counters.get("downlink", 0)
             deltas[username] = deltas.get(username, 0) + delta
@@ -175,3 +245,4 @@ async def run_traffic_cycle(db: AsyncSession) -> None:
     await collect_traffic(db)
     if await enforce_limits(db):
         await resync_connected_nodes(db)
+    await kick_inactive_hysteria(db)

@@ -33,6 +33,7 @@ class HostCreate(BaseModel):
     # hysteria2
     hysteria2_sni: str | None = None
     hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
+    hysteria2_obfs: str | None = Field(default=None, max_length=64)
 
 
 class HostUpdate(BaseModel):
@@ -58,6 +59,7 @@ class HostUpdate(BaseModel):
 
     hysteria2_sni: str | None = None
     hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
+    hysteria2_obfs: str | None = Field(default=None, max_length=64)
 
 
 class HostResponse(BaseModel):
@@ -88,6 +90,7 @@ class HostResponse(BaseModel):
 
     hysteria2_sni: str | None
     hysteria2_port: int | None
+    hysteria2_obfs: str | None
 
     network: str | None
     effective_security: str | None

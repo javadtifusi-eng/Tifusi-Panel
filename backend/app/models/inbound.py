@@ -36,6 +36,14 @@ class Inbound(Base):
     header_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     host_header: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # xhttp only. `mode` picks how the client carries its upload (one stream,
+    # or separate requests); `extra` is the client-side block — xmux above all
+    # — that a server ignores but that has to reach the client somehow, and a
+    # share link is the only channel there is. Spreading a user's traffic over
+    # several connections is what wins share in a congested queue, which is
+    # what an Iranian mobile path is at peak.
+    xhttp_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    xhttp_extra: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     sni: Mapped[str | None] = mapped_column(String(255), nullable=True)
     alpn: Mapped[str | None] = mapped_column(String(64), nullable=True)
     fingerprint: Mapped[str | None] = mapped_column(String(32), nullable=True)

@@ -384,6 +384,7 @@ export interface Host {
 
   hysteria2_sni: string | null
   hysteria2_port: number | null
+  hysteria2_obfs: string | null
 
   network: string | null
   effective_security: string | null
@@ -435,6 +436,7 @@ export interface HostPayload {
 
   hysteria2_sni?: string | null
   hysteria2_port?: number | null
+  hysteria2_obfs?: string | null
 }
 
 export async function createHost(payload: HostPayload): Promise<Host> {
@@ -490,12 +492,16 @@ export type IranVerdict = 'open' | 'blocked' | 'partial' | 'unknown' | 'checking
 
 export interface IranCheck {
   verdict: IranVerdict
+  /** How the probes that failed mostly failed: blockpage (the name resolved
+   *  to Iran's 10.10.34.x filter page), dns, refused, timeout, tls, reset,
+   *  forbidden. A red verdict can then say what kind of red it is. */
+  reason?: string | null
   ok?: number
   checked?: number
   /** Median time the Iranian probes took to reach it — the speed signal a
    *  scan has before a real phone measures throughput. */
   ms?: number | null
-  cities?: { node: string; ok: boolean | null; ms: number | null; error: string | null }[]
+  cities?: { node: string; ok: boolean | null; ms: number | null; error: string | null; reason?: string | null; ip?: string | null; status?: string | null }[]
   error?: string
 }
 

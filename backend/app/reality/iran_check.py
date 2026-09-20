@@ -2,10 +2,25 @@
 
 The panel and the nodes both sit outside Iran, so neither can see Iranian
 filtering. check-host.net runs probe servers inside Iran (Tehran, Isfahan,
-Shiraz, Qom); asking a few of them to open https://NAME tells us whether
-the name is filtered there, and a TCP check against the node's address
-tells us whether the node itself is reachable. Only the name or the node
-address is sent — never anything about users.
+Shiraz, Qom); asking them to open https://NAME tells us whether the name is
+filtered there, and a TCP check against the node's address tells us whether
+the node itself is reachable. Only the name or the node address is sent —
+never anything about users.
+
+What this can and cannot say. Every Iranian probe check-host has sits on a
+small hosting AS — checked against the operator prefixes this panel already
+keeps, not one of them belongs to MCI (AS197207), Irancell (AS44244) or even
+TCI (AS58224). So a verdict here means "as the datacenters inside Iran see
+it", which is the national/backbone layer. It says nothing about what a
+mobile operator does to the same name, and must not be read that way: for
+that there is only a real phone (node_agent/field_test.py) or what the
+Android app reports back.
+
+Each probe also says *how* it failed, and the failure kinds are different
+stories: a name resolved to 10.10.34.x is the filtering page's own address,
+a refused connection is something answering and saying no, a timeout is
+something silently dropping, and a TLS error is the handshake itself being
+broken. The dominant one is kept so a red verdict can explain itself.
 
 Each city also reports how long its request took, and the median of those
 (`ms`) is the one speed signal available before anyone tests from a real
@@ -23,9 +38,13 @@ import time
 import httpx
 
 CHECK_HOST = "https://check-host.net"
-# One per city, so a single datacenter's own routing problem doesn't read
-# as a nationwide block.
-IRAN_NODES = ("ir1.node.check-host.net", "ir2.node.check-host.net", "ir3.node.check-host.net", "ir6.node.check-host.net")
+# All eight, not a subset: they sit on eight different hosting networks, and
+# telling "the country blocks this" from "that one datacenter is having a bad
+# day" is exactly what more networks buys.
+IRAN_NODES = tuple(f"ir{n}.node.check-host.net" for n in range(1, 9))
+
+# The address Iran's DNS hands back for a filtered name — its block page.
+_BLOCKPAGE_PREFIX = "10.10.34."
 _TTL = 20 * 60
 _POLL_FOR = 25.0
 
@@ -36,6 +55,28 @@ _sem = asyncio.Semaphore(3)
 
 def _headers() -> dict:
     return {"Accept": "application/json"}
+
+
+def _reason(ok: bool | None, message: str | None, status: str | None, address: str | None) -> str | None:
+    """Why a probe failed, in the shapes Iranian filtering actually takes."""
+    if address and address.startswith(_BLOCKPAGE_PREFIX):
+        return "blockpage"
+    if ok:
+        return "ok"
+    text = (message or "").lower()
+    if "resolve" in text or "name or service" in text or "dns" in text:
+        return "dns"
+    if "refused" in text:
+        return "refused"
+    if "timed out" in text or "timeout" in text:
+        return "timeout"
+    if "ssl" in text or "tls" in text or "certificate" in text or "handshake" in text:
+        return "tls"
+    if "reset" in text:
+        return "reset"
+    if status in ("403", "451"):
+        return "forbidden"
+    return "other" if text else None
 
 
 async def _run(kind: str, target: str) -> dict:
@@ -63,10 +104,15 @@ async def _run(kind: str, target: str) -> dict:
             continue
         first = raw[0] if isinstance(raw, list) and raw else raw
         if kind == "http" and isinstance(first, list) and first:
+            # [ok, seconds, message, http status, resolved address]
             entry["ok"] = first[0] == 1
             entry["ms"] = round(first[1] * 1000) if len(first) > 1 and isinstance(first[1], (int, float)) else None
+            message = str(first[2]) if len(first) > 2 and first[2] else None
+            entry["status"] = str(first[3]) if len(first) > 3 and first[3] else None
+            entry["ip"] = str(first[4]) if len(first) > 4 and first[4] else None
             if not entry["ok"]:
-                entry["error"] = str(first[2]) if len(first) > 2 else None
+                entry["error"] = message
+            entry["reason"] = _reason(entry["ok"], message, entry["status"], entry["ip"])
         elif kind == "tcp" and isinstance(first, dict):
             entry["ok"] = "time" in first
             entry["ms"] = round(first["time"] * 1000) if "time" in first else None
@@ -74,6 +120,9 @@ async def _run(kind: str, target: str) -> dict:
         per_city.append(entry)
 
     answered = [c for c in per_city if c["ok"] is not None]
+    # What the failures mostly were, so a blocked verdict can say why.
+    reasons = [c.get("reason") for c in answered if c["ok"] is False and c.get("reason")]
+    reason = max(set(reasons), key=reasons.count) if reasons else None
     ok = sum(1 for c in answered if c["ok"])
     if not answered:
         verdict = "unknown"
@@ -88,6 +137,7 @@ async def _run(kind: str, target: str) -> dict:
     times = sorted(c["ms"] for c in answered if c["ok"] and c["ms"] is not None)
     return {
         "verdict": verdict,
+        "reason": reason,
         "ok": ok,
         "checked": len(answered),
         "ms": times[len(times) // 2] if times else None,

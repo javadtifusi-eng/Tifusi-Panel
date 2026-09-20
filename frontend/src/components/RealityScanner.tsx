@@ -50,11 +50,23 @@ function IranPill({ check }: { check: IranCheck | null }) {
   if (!check) return <span className="pill idle">🇮🇷 —</span>
   const tone = { open: 'ok', blocked: 'bad', partial: 'warn', unknown: 'idle', checking: 'info live' }[check.verdict]
   const cities = check.checked ? ` · ${rs.cities(check.ok ?? 0, check.checked)}` : ''
+  const why = check.reason && check.verdict !== 'open' ? ` · ${rs.reason[check.reason] ?? check.reason}` : ''
   return (
-    <span className={`pill ${tone}`} title={(check.cities ?? []).map((c) => `${c.node}: ${c.ok ? '✓' : '✕'}${c.ms ? ` ${c.ms}ms` : ''}`).join('  ')}>
+    <span
+      className={`pill ${tone}`}
+      title={[
+        rs.probesTitle,
+        ...(check.cities ?? []).map(
+          (c) =>
+            `${c.node}: ${c.ok ? '✓' : '✕'}${c.ms ? ` ${c.ms}ms` : ''}` +
+            `${c.reason && !c.ok ? ` — ${rs.reason[c.reason] ?? c.reason}` : ''}${c.ip ? ` (${c.ip})` : ''}`,
+        ),
+      ].join('\n')}
+    >
       <i />
       🇮🇷 {rs.iran[check.verdict]}
       {cities}
+      {why}
     </span>
   )
 }
