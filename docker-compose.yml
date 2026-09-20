@@ -8,6 +8,17 @@ services:
     image: ${TIFUSI_PANEL_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-backend:latest}
     container_name: tifusi-panel
     restart: unless-stopped
+    # Docker's default json-file driver keeps every line a container has ever
+    # written, forever. On a busy panel that is unbounded growth on the host's
+    # root filesystem, and a full disk takes down far more than the panel:
+    # sshd accepts the connection but the session dies the instant PAM tries
+    # to write, so the server locks you out with no way back in but a rescue
+    # boot. 10MB x 3 caps each container at 30MB.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${TIFUSI_PANEL_PORT:-8000}:8000"
       # Only for Settings > SSL Certificate > "Get free SSL" — certbot's
@@ -30,6 +41,17 @@ services:
     image: ${TIFUSI_DASHBOARD_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-frontend:latest}
     container_name: tifusi-dashboard
     restart: unless-stopped
+    # Docker's default json-file driver keeps every line a container has ever
+    # written, forever. On a busy panel that is unbounded growth on the host's
+    # root filesystem, and a full disk takes down far more than the panel:
+    # sshd accepts the connection but the session dies the instant PAM tries
+    # to write, so the server locks you out with no way back in but a rescue
+    # boot. 10MB x 3 caps each container at 30MB.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${TIFUSI_DASHBOARD_PORT:-8080}:80"
       # 443 is what a browser assumes and what Let's Encrypt validates
