@@ -12,10 +12,15 @@ The password is the user's own subscription secret, so nothing new has to be
 generated or stored, and expiry, status and protocol access are decided here
 by exactly the same rules as every other protocol.
 
-Reached over the loopback from the same host, never published: the endpoint
-carries a token derived from the panel's own secret key — stable across
-restarts, nothing to store or migrate — and still refuses a caller that
-isn't on this machine.
+Two kinds of caller are allowed, and nothing else. A Hysteria2 server on the
+panel's own machine reaches this over the loopback. A server on a *remote* node
+cannot: it would arrive from a public address, and it has no panel credential to
+present. So there the node agent answers on its own loopback instead and
+forwards the question here with the node API key it already holds — which keeps
+every panel secret off the node and means a stolen node reveals nothing.
+
+Either way the endpoint carries a token derived from the panel's own secret key,
+stable across restarts with nothing to store or migrate.
 """
 
 import hashlib
@@ -31,6 +36,7 @@ from app.config import settings
 from app.database import get_db
 from app.groups.access import allows_protocol
 from app.models.host import HostProtocol
+from app.models.node import Node
 from app.models.user import ProxyUser, UserStatus
 from app.subscription.lookup import client_ip
 
@@ -52,10 +58,27 @@ def _local(request: Request) -> bool:
         return False
 
 
+async def _from_known_node(request: Request, db: AsyncSession) -> bool:
+    """A node agent forwarding on behalf of the Hysteria2 server it runs. The
+    key is compared in constant time against every node's, because which node
+    asked is not interesting here — only that some node did."""
+    presented = request.headers.get("X-Node-Api-Key")
+    if not presented:
+        return False
+    keys = list((await db.execute(select(Node.api_key))).scalars().all())
+    return any(secrets.compare_digest(presented, k) for k in keys)
+
+
 @router.post("/auth/{token}")
 async def authenticate(token: str, request: Request, body: dict = Body(...), db: AsyncSession = Depends(get_db)) -> dict:
-    if not _local(request) or not secrets.compare_digest(token, auth_token()):
-        raise HTTPException(status_code=404, detail="Not found")
+    # Two separate credentials, not one check with an OR in it. A caller on this
+    # machine proves itself with the token in the path, which is all a loopback
+    # caller can carry. A node agent proves itself with its own API key, and then
+    # the token is not required — it never had a way to learn it, and giving it
+    # one would put a value derived from the panel's secret key on every node.
+    if not (_local(request) and secrets.compare_digest(token, auth_token())):
+        if not await _from_known_node(request, db):
+            raise HTTPException(status_code=404, detail="Not found")
 
     password = str(body.get("auth") or "").strip()
     user = await db.scalar(select(ProxyUser).where(ProxyUser.secret == password)) if password else None

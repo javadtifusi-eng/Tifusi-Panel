@@ -38,6 +38,13 @@ class Node(Base):
     # several of either.
     ipsec_core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
 
+    # A third slot, for the same reason as the second: the agent runs
+    # `hysteria server` as another subprocess beside Xray and the IPsec stack,
+    # so one node can serve all three at once. One per node, not a list —
+    # a second Hysteria2 server would need a second UDP port and there is no
+    # reason to run two on one machine.
+    hysteria_core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
+
     # Optional chained egress for this node's L2TP clients: a vless:// share
     # link to a *different* panel's server. When set, the node agent stops
     # NAT'ing l2tp traffic straight to the internet and instead runs a

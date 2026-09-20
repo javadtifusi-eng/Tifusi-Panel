@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +29,9 @@ _CORE_FIELDS = (
     "ikev2_certificate_key",
     "ikev2_egress_vless",
     "ikev2_auth_mode",
+    "hysteria2_port",
+    "hysteria2_obfs",
+    "hysteria2_rate_mbps",
 )
 
 
@@ -243,7 +246,20 @@ async def generate_ikev2_cert(payload: GenerateIkev2CertRequest) -> GenerateIkev
 async def delete_core(core_id: int, db: AsyncSession = Depends(get_db)) -> None:
     core = await _get_core_or_404(core_id, db)
 
-    node_count = await db.scalar(select(func.count()).select_from(Node).where(Node.core_id == core_id))
+    # All three slots, not just the Xray one: a core assigned to a node's ipsec or
+    # hysteria slot was deletable before this, which left that node pointing at a
+    # row that no longer existed.
+    node_count = await db.scalar(
+        select(func.count())
+        .select_from(Node)
+        .where(
+            or_(
+                Node.core_id == core_id,
+                Node.ipsec_core_id == core_id,
+                Node.hysteria_core_id == core_id,
+            )
+        )
+    )
     inbound_host_count = await db.scalar(
         select(func.count())
         .select_from(Host)

@@ -143,8 +143,9 @@ def _hysteria2_outbound(user: ProxyUser, host: Host) -> dict:
     if host.effective_sni:
         tls["server_name"] = host.effective_sni
     out["tls"] = tls
-    if host.hysteria2_obfs:
-        out["obfs"] = {"type": "salamander", "password": host.hysteria2_obfs}
+    obfs = host.effective_hysteria2_obfs
+    if obfs:
+        out["obfs"] = {"type": "salamander", "password": obfs}
     return out
 
 

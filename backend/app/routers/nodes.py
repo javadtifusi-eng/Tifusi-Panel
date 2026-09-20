@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cores.resolve import resolve_ipsec_core_id, resolve_xray_core_id
+from app.cores.resolve import resolve_hysteria_core_id, resolve_ipsec_core_id, resolve_xray_core_id
 from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
@@ -30,6 +30,7 @@ async def create_node(payload: NodeCreate, db: AsyncSession = Depends(get_db)) -
     )
     node.core_id = await resolve_xray_core_id(payload.core_id, db)
     node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
+    node.hysteria_core_id = await resolve_hysteria_core_id(payload.hysteria_core_id, db)
     db.add(node)
     await db.commit()
     await db.refresh(node)
@@ -53,7 +54,7 @@ async def update_node(node_id: int, payload: NodeUpdate, db: AsyncSession = Depe
     node = await _get_node_or_404(node_id, db)
 
     for field, value in payload.model_dump(
-        exclude_unset=True, exclude={"core_id", "ipsec_core_id"}
+        exclude_unset=True, exclude={"core_id", "ipsec_core_id", "hysteria_core_id"}
     ).items():
         setattr(node, field, value)
 
@@ -61,6 +62,8 @@ async def update_node(node_id: int, payload: NodeUpdate, db: AsyncSession = Depe
         node.core_id = await resolve_xray_core_id(payload.core_id, db)
     if "ipsec_core_id" in payload.model_fields_set:
         node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
+    if "hysteria_core_id" in payload.model_fields_set:
+        node.hysteria_core_id = await resolve_hysteria_core_id(payload.hysteria_core_id, db)
 
     db.add(node)
     await db.commit()

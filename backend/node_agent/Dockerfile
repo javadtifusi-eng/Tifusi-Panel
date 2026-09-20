@@ -53,6 +53,15 @@ COPY --from=strongswan-builder /build/ /
 # The real Xray-core binary. Keep it current: REALITY servers on 1.8.x
 # reject the post-quantum key share that today's chrome, firefox and
 # safari fingerprints send, so those clients fail while ios/edge/qq connect.
+# Hysteria2 runs as a third process beside Xray and the IPsec stack, so its
+# binary belongs in this image rather than in a container of its own — the agent
+# starts it with subprocess exactly as it starts Xray, and a separate container
+# would mean the agent needed the Docker socket to manage it.
+ARG HYSTERIA_VERSION=v2.12.3
+RUN curl -fsSL -o /usr/local/bin/hysteria \
+      "https://github.com/apernet/hysteria/releases/download/app%2F${HYSTERIA_VERSION}/hysteria-linux-amd64" \
+    && chmod +x /usr/local/bin/hysteria
+
 ARG XRAY_VERSION=v26.3.27
 RUN curl -fsSL -o /tmp/xray.zip \
       "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip" \
@@ -72,6 +81,8 @@ COPY node_agent/strongswan-tifusi.conf /etc/strongswan.d/tifusi.conf
 
 ENV XRAY_BIN=/usr/local/bin/xray
 ENV XRAY_CONFIG_PATH=/app/data/xray-config.json
+ENV HYSTERIA_BIN=/usr/local/bin/hysteria
+ENV HYSTERIA_CONFIG_PATH=/app/data/hysteria-config.yaml
 RUN mkdir -p /app/data
 
 EXPOSE 62050

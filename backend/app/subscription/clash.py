@@ -138,9 +138,10 @@ def _hysteria2_proxy(user: ProxyUser, host: Host) -> dict:
     }
     if host.effective_sni:
         proxy["sni"] = host.effective_sni
-    if host.hysteria2_obfs:
+    obfs = host.effective_hysteria2_obfs
+    if obfs:
         proxy["obfs"] = "salamander"
-        proxy["obfs-password"] = host.hysteria2_obfs
+        proxy["obfs-password"] = obfs
     return proxy
 
 

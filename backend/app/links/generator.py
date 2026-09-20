@@ -197,9 +197,10 @@ def build_hysteria2_link(user: ProxyUser, host: Host) -> str:
     params: dict[str, str] = {}
     if host.effective_sni:
         params["sni"] = host.effective_sni
-    if host.hysteria2_obfs:
+    obfs = host.effective_hysteria2_obfs
+    if obfs:
         params["obfs"] = "salamander"
-        params["obfs-password"] = host.hysteria2_obfs
+        params["obfs-password"] = obfs
     suffix = f"?{urlencode(params)}" if params else ""
     return f"hysteria2://{user.secret}@{host.address}:{host.effective_port}{suffix}#{_fragment(render_remark(host, user))}"
 

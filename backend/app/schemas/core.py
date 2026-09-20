@@ -26,6 +26,10 @@ class CoreCreate(BaseModel):
     ikev2_egress_vless: str | None = None
     ikev2_auth_mode: str = "eap"
 
+    hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
+    hysteria2_obfs: str | None = Field(default=None, max_length=64)
+    hysteria2_rate_mbps: int | None = Field(default=None, ge=1, le=10000)
+
     @model_validator(mode="after")
     def _check_required_fields(self) -> "CoreCreate":
         if self.core_type == CoreType.xray:
@@ -46,6 +50,18 @@ class CoreCreate(BaseModel):
                 # itself with a certificate (self-signed off ikev2_remote_id,
                 # or ikev2_certificate/_key below if set), not a shared secret.
                 raise ValueError("ikev2_certificate and ikev2_certificate_key must be set together")
+        elif self.core_type == CoreType.hysteria2:
+            _require(self.hysteria2_port, "hysteria2_port", "hysteria2")
+            # Without obfuscation the first packet is a plain QUIC handshake,
+            # which Iranian networks drop wholesale — a server that works from
+            # anywhere else is unreachable from Iran for that reason alone, so
+            # this is required rather than optional.
+            _require(self.hysteria2_obfs, "hysteria2_obfs", "hysteria2")
+            if self.hysteria2_port == 443:
+                # Measured from Iran on mobile and fixed lines alike: UDP 443
+                # answered nothing at all. Refused rather than warned here,
+                # because a Core is what a node is told to run.
+                raise ValueError("UDP 443 is filtered from Iran — pick another port")
         return self
 
 
@@ -53,6 +69,10 @@ class CoreUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     note: str | None = None
     config: dict[str, Any] | None = None
+    hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
+    hysteria2_obfs: str | None = Field(default=None, max_length=64)
+    hysteria2_rate_mbps: int | None = Field(default=None, ge=1, le=10000)
+
 
     l2tp_psk: str | None = None
 
@@ -105,6 +125,9 @@ class CoreResponse(BaseModel):
 
     ikev2_psk: str | None
     ikev2_remote_id: str | None
+    hysteria2_port: int | None
+    hysteria2_obfs: str | None
+    hysteria2_rate_mbps: int | None
     ikev2_certificate: str | None
     ikev2_certificate_key: str | None
     ikev2_egress_vless: str | None

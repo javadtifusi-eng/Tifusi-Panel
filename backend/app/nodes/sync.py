@@ -15,6 +15,7 @@ from app.models.user import ProxyUser
 from app.notifications.discord import send_discord_message
 from app.notifications.telegram import send_telegram_message
 from app.notifications.webhook import send_webhook_event
+from app.settings_store import get_public_url
 from app.xray_config.builder import build_xray_config
 
 
@@ -85,6 +86,30 @@ async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict
     }
 
 
+def _build_hysteria_payload(core: Core, node: Node, panel_url: str | None) -> dict:
+    """What the agent needs to run `hysteria server` and shape its egress.
+
+    Deliberately carries no panel secret. Authentication is not a password list
+    and not a panel URL either: the agent is told to answer on its own loopback
+    and forward each question to the panel itself, using the node API key it
+    already holds. So a node that is stolen reveals nothing about the panel, and
+    users, expiry and limits stay decided in one place.
+    """
+    return {
+        "port": core.hysteria2_port,
+        "obfs": core.hysteria2_obfs,
+        # None means "do not shape". A number is megabits per second, applied to
+        # the node's own egress on that UDP port — see the field's comment in
+        # app/models/core.py for why a cap makes the connection *feel* faster.
+        "rate_mbps": core.hysteria2_rate_mbps,
+        "agent_port": node.port,
+        # Where the agent forwards each authentication question. Not a secret,
+        # and the agent authenticates itself there with the node API key it
+        # already has, so nothing derived from the panel's secret key travels.
+        "panel_url": panel_url,
+    }
+
+
 def _normalize_xray_version(raw: str | None) -> str | None:
     """A node running an older agent reports Xray's whole banner line
     ("Xray 1.8.24 (Xray, Penetrates Everything.) ...") instead of the bare
@@ -109,20 +134,28 @@ def _apply_health(node: Node, health: dict) -> None:
     on ipsec before this feature existed."""
     xray_health = health.get("xray") or {}
     ipsec_health = health.get("ipsec") or {}
+    hysteria_health = health.get("hysteria") or {}
     xray_ok = node.core_id is None or xray_health.get("running", False)
     ipsec_ok = node.ipsec_core_id is None or ipsec_health.get("running", False)
+    # Same rule as the other two slots: only gate on what this node is assigned.
+    # An older agent that predates Hysteria2 reports no "hysteria" key at all, so
+    # a node with no hysteria core keeps passing exactly as before.
+    hysteria_ok = node.hysteria_core_id is None or hysteria_health.get("running", False)
 
-    node.status = NodeStatus.connected if (xray_ok and ipsec_ok) else NodeStatus.error
+    node.status = NodeStatus.connected if (xray_ok and ipsec_ok and hysteria_ok) else NodeStatus.error
     node.xray_version = _normalize_xray_version(xray_health.get("version"))
 
-    if xray_ok and ipsec_ok:
+    broken = [
+        name
+        for name, ok in (("xray", xray_ok), ("ipsec", ipsec_ok), ("hysteria", hysteria_ok))
+        if not ok
+    ]
+    if not broken:
         node.last_error = None
-    elif not xray_ok and not ipsec_ok:
-        node.last_error = "xray and ipsec both reported not running"
-    elif not xray_ok:
-        node.last_error = "xray reported not running"
+    elif len(broken) == 1:
+        node.last_error = f"{broken[0]} reported not running"
     else:
-        node.last_error = "ipsec reported not running"
+        node.last_error = f"{' and '.join(broken)} reported not running"
 
 
 async def sync_node(node: Node, db: AsyncSession) -> dict:
@@ -132,15 +165,21 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     right after a status change so an expired/limited user's inbound entry
     actually disappears instead of lingering until someone clicks sync.
 
-    A node's Xray slot (core_id) and IPsec slot (ipsec_core_id) are
-    independent — the agent runs an Xray process and a strongSwan/xl2tpd
+    A node's Xray slot (core_id), IPsec slot (ipsec_core_id) and Hysteria2
+    slot (hysteria_core_id) are independent — the agent runs an Xray process and a strongSwan/xl2tpd
     stack at the same time, so both configs get pushed and both health
     results have to check out for the node to count as connected."""
     xray_core = await db.get(Core, node.core_id) if node.core_id is not None else None
     ipsec_core = await db.get(Core, node.ipsec_core_id) if node.ipsec_core_id is not None else None
+    hysteria_core = await db.get(Core, node.hysteria_core_id) if node.hysteria_core_id is not None else None
 
     xray_payload = await _build_xray_payload(xray_core, db)
     ipsec_payload = await _build_ipsec_payload(ipsec_core, node, db) if ipsec_core is not None else None
+    hysteria_payload = (
+        _build_hysteria_payload(hysteria_core, node, await get_public_url(db))
+        if hysteria_core is not None
+        else None
+    )
 
     base_url = f"https://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
@@ -158,6 +197,9 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
             if ipsec_payload is not None:
                 ipsec_resp = await client.post(f"{base_url}/ipsec-config", json=ipsec_payload, headers=headers)
                 ipsec_resp.raise_for_status()
+            if hysteria_payload is not None:
+                hy_resp = await client.post(f"{base_url}/hysteria-config", json=hysteria_payload, headers=headers)
+                hy_resp.raise_for_status()
             health_resp = await client.get(f"{base_url}/health", headers=headers)
             health_resp.raise_for_status()
             health = health_resp.json()

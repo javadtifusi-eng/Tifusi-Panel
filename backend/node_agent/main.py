@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import field_test, ipsec, ipsec_stats, limits, reality_scan
+from node_agent import field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan
 
 try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
     from node_agent import cdn_scan
@@ -27,6 +27,10 @@ except ImportError:  # running from the source tree
 
 API_KEY = os.environ.get("TIFUSI_NODE_API_KEY", "")
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
+# The port this agent itself listens on, read the same way serve.py reads it.
+# Hysteria2's config has to point back at it, since the agent is what answers
+# that server's authentication questions.
+AGENT_PORT = int(os.environ.get("AGENT_PORT", "62050"))
 CONFIG_PATH = Path(os.environ.get("XRAY_CONFIG_PATH", "./data/xray-config.json"))
 
 # Must match app/xray_config/builder.py's STATS_API_PORT — that's the port
@@ -155,9 +159,9 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
 
 @app.get("/health")
 async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
-    """Reports Xray and ipsec state independently — a node can be running
-    both at once, so the panel (app/nodes/sync.py::_apply_health) checks
-    each side against whether it actually assigned that Core, not against
+    """Reports Xray, ipsec and Hysteria2 state independently — a node can be
+    running all three at once, so the panel (app/nodes/sync.py::_apply_health)
+    checks each side against whether it actually assigned that Core, not against
     a single overall 'running' flag."""
     _check_key(x_node_api_key)
 
@@ -180,7 +184,7 @@ async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
     if _ipsec_mode in ("l2tp", "ikev2"):
         ipsec_state["egress_running"] = ipsec.vless_egress.is_egress_running()
 
-    return {"xray": xray, "ipsec": ipsec_state}
+    return {"xray": xray, "ipsec": ipsec_state, "hysteria": hysteria.health()}
 
 
 @app.get("/stats")
@@ -304,17 +308,65 @@ async def reality_field_test_stop(x_node_api_key: str | None = Header(default=No
 # are for /stats, so the panel only ever adds deltas) and who is online, and
 # it can drop users the panel no longer wants connected.
 
+# Kept for a node whose Hysteria2 was started by hand before the panel could
+# push one. When the panel has pushed a config, the agent runs the server itself
+# and knows the API without being told.
 HYSTERIA_API = os.environ.get("HYSTERIA_API", "")
 HYSTERIA_SECRET = os.environ.get("HYSTERIA_SECRET", "")
+
+
+@app.post("/hysteria-config")
+async def apply_hysteria_config(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Third service slot, beside /config for Xray and /ipsec-config."""
+    _check_key(x_node_api_key)
+    try:
+        # The panel knows which port it reaches this agent on; fall back to our own
+        # environment if an older panel does not send it.
+        return hysteria.apply_config(payload, int(payload.get("agent_port") or AGENT_PORT))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/hysteria/auth")
+async def hysteria_auth(payload: dict) -> dict:
+    """Answers the Hysteria2 server this agent runs, by asking the panel.
+
+    Deliberately not behind _check_key: the caller is the local Hysteria2
+    process, which has no node API key and cannot be given one, so this is bound
+    to the loopback by the config that points at it. It carries no credential of
+    its own either — the agent adds the node API key when it forwards, and the
+    only thing that crosses is a password the caller already sent.
+    """
+    import httpx
+
+    base = hysteria.panel_url()
+    if not base:
+        raise HTTPException(status_code=503, detail="no panel address pushed yet")
+    try:
+        async with httpx.AsyncClient(timeout=5.0, verify=True) as client:
+            resp = await client.post(
+                f"{base}/api/hysteria/auth/node",
+                json={"auth": str(payload.get("auth") or "")},
+                headers={"X-Node-Api-Key": API_KEY},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPError:
+        # A refusal is safer than a guess: letting someone in because the panel
+        # was briefly unreachable would ignore expiry and data limits entirely.
+        return {"ok": False}
 
 
 def _hysteria(method: str, path: str, json_body=None):
     import httpx
 
-    if not HYSTERIA_API:
+    api, secret = HYSTERIA_API, HYSTERIA_SECRET
+    if hysteria.health()["running"]:
+        api, secret = hysteria.stats_api()
+    if not api:
         raise HTTPException(status_code=404, detail="Hysteria2 is not set up on this node")
     try:
-        resp = httpx.request(method, f"{HYSTERIA_API}{path}", headers={"Authorization": HYSTERIA_SECRET}, json=json_body, timeout=5.0)
+        resp = httpx.request(method, f"{api}{path}", headers={"Authorization": secret}, json=json_body, timeout=5.0)
         resp.raise_for_status()
         return resp.json() if resp.content else {}
     except httpx.HTTPError as exc:

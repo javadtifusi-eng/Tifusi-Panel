@@ -140,9 +140,21 @@ class Host(Base):
             return self.security_override.value
         return self.inbound.security if self.inbound else None
 
+    # A hysteria2 Host built on a Core takes the port and obfuscation password
+    # from it, so the panel and the server the node is actually running can no
+    # longer disagree. Hosts made before Cores existed have no core_id and keep
+    # using their own columns, which is why both paths stay.
+    @property
+    def effective_hysteria2_obfs(self) -> str | None:
+        if self.core is not None and self.core.hysteria2_obfs:
+            return self.core.hysteria2_obfs
+        return self.hysteria2_obfs
+
     @property
     def effective_port(self) -> int | None:
         if self.protocol == HostProtocol.hysteria2:
+            if self.core is not None and self.core.hysteria2_port:
+                return self.core.hysteria2_port
             return self.hysteria2_port
         if self.port_override is not None:
             return self.port_override
