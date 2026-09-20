@@ -245,10 +245,14 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   const lit = protoFilter ?? protoHover
 
   // A protocol is live when one of its hosts is served by a node that is currently connected:
-  // xray hosts through their inbound's core, IKEv2/L2TP hosts through their own core. Hysteria2
-  // has no core yet, so there is nothing to check it against and it never shows as live.
+  // xray hosts through their inbound's core, IKEv2/L2TP/Hysteria2 hosts through their own. All
+  // three of a node's core slots count, so a Hysteria2 host on a connected node lights up like
+  // any other instead of staying dark because its protocol had no core to check against.
   const liveCoreIds = new Set(
-    nodes.filter((n) => n.status === 'connected').flatMap((n) => [n.core_id, n.ipsec_core_id]).filter((id): id is number => id != null),
+    nodes
+      .filter((n) => n.status === 'connected')
+      .flatMap((n) => [n.core_id, n.ipsec_core_id, n.hysteria_core_id])
+      .filter((id): id is number => id != null),
   )
   const coreOfInbound = new Map(cores.flatMap((c) => c.inbounds.map((i) => [i.id, c.id] as const)))
   const hostIsLive = (host: Host) => {

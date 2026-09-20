@@ -22,7 +22,7 @@ import {
 import RealityScanner from '../components/RealityScanner'
 import { copyToClipboard } from '../lib/clipboard'
 
-const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'l2tp']
+const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'l2tp']
 
 // Where node_agent/ipsec.py actually writes these two fields once synced to
 // a node (IKEV2_LEAF_CERT / IKEV2_LEAF_KEY) — shown read-only so the admin
@@ -43,6 +43,9 @@ function emptyForm() {
     ikev2CertificateKey: '',
     ikev2EgressVless: '',
     ikev2AuthMode: 'eap' as 'eap' | 'psk',
+    hysteria2Port: '',
+    hysteria2Obfs: '',
+    hysteria2RateMbps: '',
   }
 }
 
@@ -441,6 +444,20 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
   )
 }
 
+// A node runs at most one core of each kind at once, in three independent slots:
+// its Xray process, its IPsec stack, and its Hysteria2 process. Which slot a core
+// occupies follows from its type, so every place that assigns or counts asks here
+// rather than re-deriving it.
+const CORE_SLOT = {
+  xray: 'core_id',
+  ikev2: 'ipsec_core_id',
+  l2tp: 'ipsec_core_id',
+  hysteria2: 'hysteria_core_id',
+} as const satisfies Record<CoreType, 'core_id' | 'ipsec_core_id' | 'hysteria_core_id'>
+
+const slotOf = (type: CoreType) => CORE_SLOT[type]
+const coreInSlot = (node: Node, type: CoreType) => node[slotOf(type)]
+
 // Node chips on a core card are how "which node runs this core" gets set —
 // the core/node relationship lives here and nowhere else.
 function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[]; onChanged: () => void }) {
@@ -449,12 +466,12 @@ function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[];
   const [busyId, setBusyId] = useState<number | null>(null)
   const [egressDrafts, setEgressDrafts] = useState<Record<number, string>>({})
   const isIpsec = core.core_type === 'l2tp' || core.core_type === 'ikev2'
+  const slot = slotOf(core.core_type)
 
   async function toggle(node: Node, assign: boolean) {
     setBusyId(node.id)
     try {
-      if (isIpsec) await updateNode(node.id, { ipsec_core_id: assign ? core.id : null })
-      else await updateNode(node.id, { core_id: assign ? core.id : null })
+      await updateNode(node.id, { [slot]: assign ? core.id : null })
       onChanged()
       say(assign ? t.ui.cores.assigned(node.name) : t.ui.cores.unassigned(node.name))
     } finally {
@@ -474,7 +491,7 @@ function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[];
     }
   }
 
-  const assigned = nodes.filter((n) => (isIpsec ? n.ipsec_core_id === core.id : n.core_id === core.id))
+  const assigned = nodes.filter((n) => coreInSlot(n, core.core_type) === core.id)
 
   return (
     <>
@@ -484,8 +501,8 @@ function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[];
         </span>
         {nodes.length === 0 && <span className="hint">{t.nodesPage.noNodesYet}</span>}
         {nodes.map((n) => {
-          const here = isIpsec ? n.ipsec_core_id === core.id : n.core_id === core.id
-          const elsewhere = !here && (isIpsec ? n.ipsec_core_id != null : n.core_id != null)
+          const here = coreInSlot(n, core.core_type) === core.id
+          const elsewhere = !here && coreInSlot(n, core.core_type) != null
           return (
             <button
               key={n.id}
@@ -869,6 +886,9 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
       ikev2CertificateKey: core.ikev2_certificate_key ?? '',
       ikev2EgressVless: core.ikev2_egress_vless ?? '',
       ikev2AuthMode: core.ikev2_auth_mode === 'psk' ? 'psk' : 'eap',
+      hysteria2Port: core.hysteria2_port?.toString() ?? '',
+      hysteria2Obfs: core.hysteria2_obfs ?? '',
+      hysteria2RateMbps: core.hysteria2_rate_mbps?.toString() ?? '',
     })
     setWizard(emptyWizard())
     setLastWarnings([])
@@ -972,6 +992,11 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
         ikev2_certificate_key: form.coreType === 'ikev2' ? form.ikev2CertificateKey || null : null,
         ikev2_egress_vless: form.coreType === 'ikev2' ? form.ikev2EgressVless || null : null,
         ikev2_auth_mode: form.coreType === 'ikev2' ? form.ikev2AuthMode : undefined,
+        hysteria2_port: form.coreType === 'hysteria2' ? Number(form.hysteria2Port) || null : null,
+        hysteria2_obfs: form.coreType === 'hysteria2' ? form.hysteria2Obfs || null : null,
+        // Blank means no cap at all, which is different from zero.
+        hysteria2_rate_mbps:
+          form.coreType === 'hysteria2' ? (form.hysteria2RateMbps.trim() === '' ? null : Number(form.hysteria2RateMbps) || null) : null,
       }
       const result = editingId ? await updateCore(editingId, payload) : await createCore(payload)
       setLastWarnings(result.warnings)
@@ -999,10 +1024,10 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   }
 
   const byType = (type: CoreType) => (cores ?? []).filter((x) => x.core_type === type)
-  const nodesRunning = (type: CoreType) => nodes.filter((n) => byType(type).some((x) => (type === 'xray' ? n.core_id === x.id : n.ipsec_core_id === x.id)))
+  const nodesRunning = (type: CoreType) => nodes.filter((n) => byType(type).some((x) => coreInSlot(n, type) === x.id))
   const shown = byType(engine)
   const codeCore = code ? cores?.find((x) => x.id === code.coreId) : undefined
-  const engineSub: Record<CoreType, string> = { xray: c.xraySub, ikev2: c.ikev2Sub, l2tp: c.l2tpSub }
+  const engineSub: Record<CoreType, string> = { xray: c.xraySub, ikev2: c.ikev2Sub, hysteria2: c.hysteria2Sub, l2tp: c.l2tpSub }
 
   return (
     <div className="pg-cores">
@@ -1073,7 +1098,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
           const config = (core.config ?? {}) as Record<string, unknown>
           const ruleCount = Array.isArray((config.routing as { rules?: unknown[] })?.rules) ? ((config.routing as { rules: unknown[] }).rules.length as number) : 0
           const outCount = Array.isArray(config.outbounds) ? (config.outbounds as unknown[]).length : 0
-          const runningNodes = nodes.filter((n) => (core.core_type === 'xray' ? n.core_id === core.id : n.ipsec_core_id === core.id))
+          const runningNodes = nodes.filter((n) => coreInSlot(n, core.core_type) === core.id)
           const coreLive = runningNodes.some((n) => n.status === 'connected')
           return (
             <div key={core.id} className="flex flex-col gap-3.5">
@@ -1420,6 +1445,41 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                 <Field label={t.hostsPage.l2tpPskLabel} hint={t.hostsPage.l2tpHint}>
                   <input className="input ltr mono" value={form.l2tpPsk} onChange={(e) => setForm((f) => ({ ...f, l2tpPsk: e.target.value }))} required />
                 </Field>
+              )}
+
+              {form.coreType === 'hysteria2' && (
+                <>
+                  <Field label={t.coresPage.hysteria2PortLabel} hint={t.coresPage.hysteria2PortHint}>
+                    <input
+                      className="input ltr mono"
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={form.hysteria2Port}
+                      onChange={(e) => setForm((f) => ({ ...f, hysteria2Port: e.target.value }))}
+                      required
+                    />
+                  </Field>
+                  <Field label={t.coresPage.hysteria2ObfsLabel} hint={t.coresPage.hysteria2ObfsHint}>
+                    <input
+                      className="input ltr mono"
+                      value={form.hysteria2Obfs}
+                      onChange={(e) => setForm((f) => ({ ...f, hysteria2Obfs: e.target.value }))}
+                      required
+                    />
+                  </Field>
+                  <Field label={t.coresPage.hysteria2RateLabel} hint={t.coresPage.hysteria2RateHint}>
+                    <input
+                      className="input ltr mono"
+                      type="number"
+                      min={1}
+                      max={10000}
+                      placeholder={t.coresPage.hysteria2RatePlaceholder}
+                      value={form.hysteria2RateMbps}
+                      onChange={(e) => setForm((f) => ({ ...f, hysteria2RateMbps: e.target.value }))}
+                    />
+                  </Field>
+                </>
               )}
 
               {form.coreType === 'ikev2' && (

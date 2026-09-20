@@ -468,6 +468,7 @@ export interface Node {
   api_key: string
   core_id: number | null
   ipsec_core_id: number | null
+  hysteria_core_id: number | null
   l2tp_egress_vless: string | null
   status: NodeStatus
   xray_version: string | null
@@ -639,6 +640,7 @@ export async function createNode(
     port: number
     core_id?: number | null
     ipsec_core_id?: number | null
+    hysteria_core_id?: number | null
     l2tp_egress_vless?: string | null
   },
 ): Promise<Node> {
@@ -654,6 +656,7 @@ export async function updateNode(
     port: number
     core_id: number | null
     ipsec_core_id: number | null
+    hysteria_core_id: number | null
     l2tp_egress_vless: string | null
   }>,
 ): Promise<Node> {
@@ -1035,7 +1038,7 @@ export interface Inbound {
   group_ids: number[]
 }
 
-export type CoreType = 'xray' | 'l2tp' | 'ikev2'
+export type CoreType = 'xray' | 'l2tp' | 'ikev2' | 'hysteria2'
 
 export interface Core {
   id: number
@@ -1057,6 +1060,10 @@ export interface Core {
   ikev2_certificate_key: string | null
   ikev2_egress_vless: string | null
   ikev2_auth_mode: string
+
+  hysteria2_port: number | null
+  hysteria2_obfs: string | null
+  hysteria2_rate_mbps: number | null
 }
 
 export interface CoreList {
@@ -1078,6 +1085,10 @@ export interface CorePayload {
   ikev2_certificate_key?: string | null
   ikev2_egress_vless?: string | null
   ikev2_auth_mode?: string
+
+  hysteria2_port?: number | null
+  hysteria2_obfs?: string | null
+  hysteria2_rate_mbps?: number | null
 }
 
 export interface Ikev2CertKeypair {

@@ -266,6 +266,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
     for cfg in ikev2_configs:
         cfg.pop("mobileconfig_url", None)
+    links = build_links_for_user(user, allowed_hosts)
 
     return {
         "v": 1,
@@ -282,10 +283,11 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
         "data_limit": user.data_limit,
         "ikev2": ikev2_configs,
         "l2tp": l2tp_configs,
-        # The same share links the plain subscription serves, kept to the
-        # VLESS ones the app's built-in Xray core connects to. Additive under
-        # "v": 1, so older app builds simply ignore the key.
-        "vless": [link for link in build_links_for_user(user, allowed_hosts) if link.startswith("vless://")],
+        # The same share links the plain subscription serves, split by what the
+        # app's own core can dial. Additive under "v": 1, so an older build that
+        # does not know a key simply ignores it.
+        "vless": [link for link in links if link.startswith("vless://")],
+        "hysteria2": [link for link in links if link.startswith("hysteria2://")],
     }
 
 
