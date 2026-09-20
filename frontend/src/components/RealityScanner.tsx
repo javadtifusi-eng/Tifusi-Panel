@@ -11,7 +11,6 @@ import {
   type FieldTest,
   type FieldTestItem,
   type FieldTarget,
-  getOwnNames,
   listNodes,
   startNodeRealityScan,
   type IranCheck,
@@ -143,17 +142,27 @@ function kb(n: number) {
 
 // --- operator pattern -------------------------------------------------------
 //
-// "Fine on TCI, poor on MCI" while MCI leaves most of the SNIs open says the
-// SNI is not what MCI is judging. Every earlier test held two other things
-// fixed, so it could never say what is: the port (always a random high one,
-// where no real HTTPS server lives) and the IP/SNI mismatch every neighbour
-// SNI has (the client dials the node while the name's DNS points elsewhere).
-// This test puts the same SNI on a random port and on standard ones, and adds
-// the admin's own domain — which does resolve to the node — as the one SNI
-// without the mismatch. Each config differs from another in one thing only,
-// so comparing their results on the phone names the pattern.
+// "Fine on TCI, poor on MCI" while the device test shows MCI leaving most of
+// the SNIs open says the SNI is not what MCI is judging. The two things every
+// earlier test held fixed are the suspects: the port — always a random high
+// one, where no real HTTPS server lives — and whether the throttling is on
+// the upload rather than the download, which is what MCI is documented to do
+// (a download that looks fine next to an upload stuck under 1 Mbps).
+//
+// So: one borrowed SNI across several standard HTTPS ports and a random one,
+// a second borrowed SNI to tell a bad name from a bad port, and upload read
+// separately from download. Each config differs from another in one thing
+// only, so comparing them on the phone names the pattern.
+//
+// The admin's own domain was tried here as a "no IP/SNI mismatch" control and
+// the answer came back clear: it never connected from MCI at all, while
+// borrowed names did. Under a whitelist a fresh unknown domain is the worst
+// name to carry, and announcing your own is also the opposite of what REALITY
+// is for — so borrowed SNIs only.
 
-type Finding = 'port' | 'own' | 'route' | 'none' | 'unclear'
+type Finding = 'port' | 'upload' | 'route' | 'none' | 'unclear'
+
+const upRate = (i: FieldTestItem) => i.up_avg_bps || i.up_bps
 
 // The sustained rate where there is one, since an operator's opening burst
 // makes the peak flatter every config alike; the peak only stands in when the
@@ -167,11 +176,14 @@ function patternVerdict(items: FieldTestItem[]): Finding[] | null {
   // x clearly better than y: works where y doesn't, or at least twice as fast.
   // -1 means that config wasn't in the test, so there is nothing to compare.
   const beats = (x: number, y: number) => y >= 0 && x > 0 && (y === 0 || (x > 1 && y > 1 && x >= 2 * y))
-  const nr = best('neighbor:random'), ns = best('neighbor:std'), orr = best('own:random'), os = best('own:std')
+  const nr = best('neighbor:random'), ns = best('neighbor:std')
   if (Math.max(...items.map(worth)) === 0) return ['none']
   const found: Finding[] = []
-  if (beats(ns, nr) || beats(os, orr)) found.push('port')
-  if (beats(os, ns) || beats(orr, nr)) found.push('own')
+  if (beats(ns, nr)) found.push('port')
+  // A download worth having beside an upload stuck under 1 Mbps is the shape
+  // MCI's documented throttle leaves. Only judged where both were measured.
+  const measured = items.filter((i) => rate(i) >= 250000 && upRate(i) > 0)
+  if (measured.length && measured.every((i) => upRate(i) < 125000)) found.push('upload')
   const speeds = items.filter((i) => rate(i) > 0).map(rate)
   // Everything connects, nothing is faster than about 1 Mbps: neither lever
   // mattered, the address or the route to it did.
@@ -245,7 +257,6 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
     if (await copyToClipboard(text)) setCopied(key)
   }
 
-  const [own, setOwn] = useState<{ host: string; dest: string } | null>(null)
   // What the QR shows. Sending the link to the phone over Telegram means
   // turning a VPN on, which spoils a test that must run without one — so
   // the phone scans it off this screen instead. 'all' packs every config
@@ -255,20 +266,17 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
   async function startPattern() {
     const [a, b] = candidates
     if (!a) return
-    let o: { host: string; dest: string } | undefined
-    try {
-      o = (await getOwnNames(nodeId))[0]
-    } catch {
-      /* no own domain: the test still separates port from route */
-    }
-    setOwn(o ?? null)
+    // One name across the ports, so a difference can only be the port; then a
+    // second name on one standard port and one random one, so a difference
+    // there is the name. A port already in use (the live inbound, say) falls
+    // back to another standard one on the node.
     const targets: FieldTarget[] = [
       { host: a.host, dest: a.dest, port: null, label: 'neighbor:random' },
-      { host: a.host, dest: a.dest, port: 2053, label: 'neighbor:std' },
+      { host: a.host, dest: a.dest, port: 2083, label: 'neighbor:std' },
+      { host: a.host, dest: a.dest, port: 2087, label: 'neighbor:std' },
       { host: a.host, dest: a.dest, port: 8443, label: 'neighbor:std' },
     ]
-    if (o) targets.push({ host: o.host, dest: o.dest, port: null, label: 'own:random' }, { host: o.host, dest: o.dest, port: 2083, label: 'own:std' })
-    if (b) targets.push({ host: b.host, dest: b.dest, port: 2087, label: 'neighbor:std' })
+    if (b) targets.push({ host: b.host, dest: b.dest, port: 2096, label: 'neighbor:std' }, { host: b.host, dest: b.dest, port: null, label: 'neighbor:random' })
     await run(() => startFieldTest(nodeId, targets))
   }
 
@@ -364,9 +372,8 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
                     </div>
                     <div className="rsc-side">
                       {rate(it) > 0 ? (
-                        <span className="pill ok en" dir="ltr" title={ft.avgTitle}>
-                          <i />↓ {speed(rate(it))}
-                          {it.down_avg_bps ? ` · ${ft.peak} ${speed(it.down_bps)}` : ''}
+                        <span className={`pill en ${upRate(it) > 0 && upRate(it) < 125000 ? 'warn' : 'ok'}`} dir="ltr" title={ft.avgTitle}>
+                          <i />↓ {speed(rate(it))} · ↑ {upRate(it) > 0 ? speed(upRate(it)) : '—'}
                         </span>
                       ) : it.ok ? (
                         <span className="pill warn"><i />{ft.pattern.connected}</span>
@@ -400,19 +407,6 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
               findings.map((f) => (
                 <div key={f} className={f === 'unclear' ? 'hint' : 'tf-note'} style={{ margin: 0 }}>
                   {ft.pattern.finding[f]}
-                  {f === 'own' && own && (
-                    <div style={{ marginTop: 8 }}>
-                      <button
-                        type="button"
-                        className={`btn ${picked === own.host ? 'on' : 'solid'}`}
-                        onClick={() =>
-                          onPick({ host: own.host, dest: own.dest, ip: null, source: 'neighbor', tls: 'TLSv1.3', alpn: null, latency_ms: null, usable: true, error: null, fingerprints: null, iran: null })
-                        }
-                      >
-                        {picked === own.host ? t.ui.realityScan.used : ft.pattern.useOwn(own.host)}
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))
             )}

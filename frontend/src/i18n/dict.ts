@@ -1056,7 +1056,7 @@ export const dict = {
           pattern: {
             start: 'پیدا کردن الگوی اپراتور',
             howto:
-              'این لینک ساب کانفیگ‌هایی دارد که هر کدام فقط در یک چیز با دیگری فرق دارد: همان SNI روی پورت تصادفی و روی پورت‌های استاندارد HTTPS، و SNI دامنه‌ی خودت که DNS‌اش دقیقاً به IP نود می‌رسد. روی گوشی با اینترنت همان اپراتور (وای‌فای خاموش، VPN خاموش) ساب را وارد کن، «تست تاخیر واقعی» همه را بزن، بعد از هر کانفیگی که وصل شد speed test بگیر. نتیجه اینجا مقایسه می‌شود و الگو گفته می‌شود.',
+              'کانفیگ‌ها فقط در یک چیز با هم فرق دارند: یک SNI ثابت روی چند پورت استاندارد HTTPS و یک پورت تصادفی، به‌علاوه‌ی یک SNI دوم تا معلوم شود تفاوت از پورت است یا از نام. روی گوشی با اینترنت همان اپراتور (وای‌فای خاموش، VPN خاموش) ساب را وارد کن، «تست تاخیر واقعی» همه را بزن، بعد از هر کانفیگی که وصل شد speed test بگیر — حتماً یک تست آپلود هم بگیر، چون محدودیت همراه اول روی آپلود مستند شده است.',
             own: 'دامنه‌ی خودت',
             neighbor: 'همسایه',
             std: (port: number) => `پورت استاندارد ${port}`,
@@ -1066,12 +1066,11 @@ export const dict = {
             waitingVerdict: 'هنوز هیچ کانفیگی از گوشی وصل نشده. ساب را روی گوشی وارد کن و تست بگیر.',
             finding: {
               port: 'الگو: پورت. روی این اپراتور کانفیگ روی پورت استاندارد HTTPS به‌وضوح بهتر از پورت تصادفی کار کرد. در JSON هسته پورت اینباند را به 2053 یا 8443 تغییر بده (و لینک‌های کاربرها بعد از بروزرسانی ساب درست می‌شوند).',
-              own: 'الگو: ناهمخوانی IP و SNI. SNI دامنه‌ی خودت که به IP نود اشاره می‌کند، به‌وضوح بهتر از SNIهای همسایه کار کرد؛ یعنی این اپراتور چک می‌کند SNI به همان IPی می‌رسد که به آن وصل شدی یا نه.',
+              upload: 'الگو: آپلود خفه شده. دانلود قابل قبول است ولی آپلود همه‌ی کانفیگ‌ها زیر ۱ مگابیت مانده — همان کاری که همراه اول مستندا روی آپلود می‌کند. عوض کردن پورت یا SNI این را حل نمی‌کند؛ راه‌حلش جدا کردن مسیر آپلود از دانلود است (XHTTP)، که اگر بخواهی می‌سازمش.',
               route: 'الگو: خود IP یا مسیر. همه‌ی کانفیگ‌ها وصل شدند ولی هیچ‌کدام از حدود ۱ مگابیت سریع‌تر نشد؛ نه پورت فرق کرد نه SNI. این اپراتور مسیر یا IP این سرور را کند کرده و عوض کردن SNI کمکی نمی‌کند. راه‌حل: کاربرهای این اپراتور را از رله‌ی داخل ایران (بخش تانل‌ها) یا از CDN عبور بده.',
               none: 'هیچ کانفیگی داده برنگرداند: یا این اپراتور IP نود را بسته، یا اتصال بعد از handshake قطع می‌شود. اگر روی اینترنت دیگری کار می‌کند، همان راه‌حل رله یا CDN لازم است.',
               unclear: 'تفاوت روشنی بین کانفیگ‌ها نیست: پورت و ناهمخوانی SNI اینجا عامل اصلی نبودند. از هر کانفیگ speed test بگیر تا مقایسه دقیق‌تر شود.',
             } as Record<string, string>,
-            useOwn: (host: string) => `انتخاب ${host} به‌عنوان SNI`,
           },
         },
       },
@@ -2423,7 +2422,7 @@ export const dict = {
           pattern: {
             start: 'Find the operator’s pattern',
             howto:
-              'This subscription holds configs that each differ from another in one thing only: the same SNI on a random port and on standard HTTPS ports, and your own domain as SNI, whose DNS points straight at the node. On a phone on that operator (wifi off, VPN off), import it, run “real delay” on all, then a speed test on each one that connects. The results are compared here and the pattern named.',
+              'The configs differ from one another in one thing only: one SNI across several standard HTTPS ports and a random one, plus a second SNI to tell a bad port from a bad name. On a phone on that operator (wifi off, VPN off), import it, run “real delay” on all, then a speed test on each one that connects — include an upload test, since MCI’s documented throttle is on the upload.',
             own: 'Your domain',
             neighbor: 'Neighbour',
             std: (port: number) => `Standard port ${port}`,
@@ -2433,12 +2432,11 @@ export const dict = {
             waitingVerdict: 'No config has connected from a phone yet. Import the subscription on the phone and test.',
             finding: {
               port: 'Pattern: the port. On this operator the configs on standard HTTPS ports clearly beat the random port. Change the inbound port in the core JSON to 2053 or 8443 (users’ links follow once their subscription refreshes).',
-              own: 'Pattern: IP/SNI mismatch. Your own domain, which points at the node, clearly beat the neighbour SNIs — this operator checks whether the SNI resolves to the address you actually connected to.',
+              upload: 'Pattern: the upload is throttled. The download is decent while every config’s upload stays under 1 Mbps — exactly what MCI is documented to do. No port or SNI fixes that; the answer is to carry the upload separately from the download (XHTTP), which can be built if you want it.',
               route: 'Pattern: the address or the route. Every config connected but none got past about 1 Mbps, whatever the port or SNI. This operator slows this server’s address or route, and no SNI will fix it: send this operator’s users through a relay inside Iran (Tunnels) or a CDN.',
               none: 'No config carried any data back: this operator blocks the node’s address, or cuts connections after the handshake. If it works on other networks, a relay or CDN is the fix here too.',
               unclear: 'No clear difference between the configs: neither the port nor the SNI mismatch is the main factor here. Run a speed test on each to compare more precisely.',
             } as Record<string, string>,
-            useOwn: (host: string) => `Use ${host} as SNI`,
           },
         },
       },

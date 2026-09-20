@@ -19,26 +19,20 @@ this file, where a real phone on Iranian internet measures real throughput.
 
 import asyncio
 import base64
-import ipaddress
 import json
 import secrets
 import socket
-import ssl
-from contextlib import suppress
-from urllib.parse import quote, urlencode, urlparse
+from urllib.parse import quote, urlencode
 from pathlib import Path
 
-import certifi
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies import require_permission
-from app.models.host import Host
 from app.models.node import Node
 from app.network_health.operators import operator_for_ip
 from app.reality import iran_check
@@ -235,48 +229,6 @@ async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> 
 async def whoami(request: Request) -> dict:
     ip = client_ip(request)
     return {"ip": ip, "operator": operator_for_ip(ip)}
-
-
-# --- the node's own names (for the operator-pattern test) ----------------
-#
-# Every neighbour SNI shares one weakness: the client connects to the node's
-# address while the SNI's own DNS points somewhere else. A censor that
-# resolves the SNI and compares sees that mismatch on all of them alike, so no
-# neighbour can show whether it matters. A name of the admin's own that
-# resolves to the node — and is served with a real certificate there — is the
-# one SNI without it, which makes it the control in that test.
-
-async def _serves_tls13(ip: str, name: str) -> bool:
-    ctx = ssl.create_default_context(cafile=certifi.where())
-    ctx.set_alpn_protocols(["h2", "http/1.1"])
-    writer = None
-    try:
-        _, writer = await asyncio.wait_for(asyncio.open_connection(ip, 443, ssl=ctx, server_hostname=name), timeout=6)
-        return writer.get_extra_info("ssl_object").version() == "TLSv1.3"
-    except (OSError, asyncio.TimeoutError, ssl.SSLError):
-        return False
-    finally:
-        if writer is not None:
-            writer.close()
-            with suppress(Exception):
-                await writer.wait_closed()
-
-
-@router.get("/nodes/{node_id}/own-names")
-async def own_names(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
-    node = await _node_or_404(node_id, db)
-    node_ip = await _public_ipv4(node.address)
-    names = {node.address, *(await db.execute(select(Host.address))).scalars().all()}
-    if settings.public_url:
-        names.add(urlparse(settings.public_url).hostname)
-    out = []
-    for name in sorted(n.strip().lower() for n in names if n):
-        with suppress(ValueError):
-            ipaddress.ip_address(name)
-            continue
-        if node_ip and await _public_ipv4(name) == node_ip and await _serves_tls13(node_ip, name):
-            out.append({"host": name, "dest": f"{node_ip}:443"})
-    return {"names": out}
 
 
 # --- real test from inside Iran (node_agent/field_test.py) ----------------
