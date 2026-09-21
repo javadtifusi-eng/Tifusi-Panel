@@ -425,6 +425,12 @@ fi
 if [ -e /dev/ppp ]; then
   EXTRA_DOCKER_ARGS+=(--device=/dev/ppp:/dev/ppp)
 fi
+# Hysteria2 serves TLS with a certificate that has to match the SNI clients send. On the
+# panel's own machine that is the panel's certificate; a node on another machine has none
+# here yet, and a Hysteria2 core assigned to it will not start.
+if [ -d /opt/tifusi-panel/certs ]; then
+  EXTRA_DOCKER_ARGS+=(-v /opt/tifusi-panel/certs:/certs:ro)
+fi
 
 run_spinner "Starting the node agent..." \
   docker run -d --name tifusi-node --restart unless-stopped \

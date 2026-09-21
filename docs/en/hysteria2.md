@@ -30,7 +30,7 @@ This also corrects a wrong reading that was recorded on this page earlier: a pro
 
 ## The uplink is a real ceiling, and the download's ACKs ride on it
 
-Upload settles around 3.5 Mbps, and that is genuine capacity rather than an artefact. It was tested rather than assumed: BBR was suspected of reading MCI's deliberate drops as congestion and parking below the true rate, so the server was switched to honour a client-declared rate (`ignoreClientBandwidth: false` plus `bandwidth` caps) and the client was told to declare 6 Mbps up, which puts its uplink on Brutal — the controller that paces at a fixed rate and treats loss as noise. The result was much worse, and worse *in both directions*: the download's QUIC ACKs travel on that same uplink, so overdriving it damages the download too. It was reverted, and the reasoning is written into `config.yaml` so it is not retried without new evidence.
+Upload settles around 3.5 Mbps, and that is genuine capacity rather than an artefact. It was tested rather than assumed: BBR was suspected of reading MCI's deliberate drops as congestion and parking below the true rate, so the server was switched to honour a client-declared rate (`ignoreClientBandwidth: false` plus `bandwidth` caps) and the client was told to declare 6 Mbps up, which puts its uplink on Brutal — the controller that paces at a fixed rate and treats loss as noise. The result was much worse, and worse *in both directions*: the download's QUIC ACKs travel on that same uplink, so overdriving it damages the download too. It was reverted, and the agent keeps `ignoreClientBandwidth: true` for that reason.
 
 Two things follow. Hysteria2 still beats a TCP protocol upstream here, because TCP reads that loss as congestion and collapses — 0.12 Mbps measured against 1.2 on a throttled port, and everything a browser sends travels upstream, so this is why pages *start* instead of hanging. And there is no tuning left for the uplink: it has no headroom, and Hysteria2 has no forward error correction, so lost upstream packets are simply retransmitted. The protocol that would attack the loss itself is one with FEC — Xray's mKCP — which is untested on this path and, unlike Hysteria2, would live inside the panel's existing Core and Inbound machinery.
 
@@ -42,53 +42,13 @@ Two things follow. Hysteria2 still beats a TCP protocol upstream here, because T
 
 ## Setting it up
 
-The panel does not start Hysteria2; run the official image next to the node agent, on the node, with host networking.
+1. **Cores → Hysteria2 → New core.** Set the UDP port (8801, per the table above), an obfuscation password, and a rate cap (15 Mbps measured best on MCI; empty means none).
+2. On that core's card, pick the node that should run it. The node agent starts `hysteria server` itself and applies the rate cap to its own egress on that port.
+3. **Hosts → New host**, protocol Hysteria2, built on that core. Port and obfuscation password come from the core; the address and SNI must match the node's TLS certificate.
 
-`/opt/tifusi-panel/data/hysteria/config.yaml` (create it yourself; `data/` is not committed):
+The agent writes this configuration; the keys below are the ones it sets.
 
-```yaml
-listen: :8801   # see "The port decides everything" above — this is not arbitrary
-
-tls:
-  cert: /certs/fullchain.pem
-  key: /certs/privkey.pem
-
-auth:
-  type: http
-  http:
-    url: http://127.0.0.1:8000/api/hysteria/auth/<TOKEN>
-
-obfs:
-  type: salamander
-  salamander:
-    password: <random obfs password>
-
-masquerade:
-  type: proxy
-  proxy:
-    url: https://127.0.0.1:443/
-    rewriteHost: true
-
-trafficStats:
-  listen: 127.0.0.1:9998
-  secret: <random stats secret>
-
-# Pin both directions to BBR whatever the client app claims its bandwidth is.
-ignoreClientBandwidth: true
-
-quic:
-  initStreamReceiveWindow: 26843545
-  maxStreamReceiveWindow: 26843545
-  initConnReceiveWindow: 67108864
-  maxConnReceiveWindow: 67108864
-  maxIdleTimeout: 60s
-
-congestion:
-  type: bbr
-  bbrProfile: conservative
-```
-
-### Why those last three keys
+### The keys the agent sets, and why
 
 **`ignoreClientBandwidth: true`.** Hysteria2 has two congestion controllers. BBR measures the path and adapts. Brutal paces at a rate it is *told* and treats loss as noise rather than as a signal to slow down — which is the right trade on a lossy but genuinely fast link, and catastrophic when the declared rate is wrong. Left to itself the server obeys whatever rate the client app declares, so an app with "100 Mbps" typed into its bandwidth fields puts the server on Brutal into whatever ceiling the operator is holding that port class to, where the measured cost of overshooting is heavy packet loss — and the upload experiment above showed how badly that ends. This key makes the server ignore the declaration and also tells the client to do the same, so the outcome no longer depends on a stranger's app settings. Verified both ways on a throwaway server: with the key off, a client declaring 100 Mbps logged `client connected {"tx": 12500000}`; with it on, the same client logged `tx: 0`, which is BBR.
 
@@ -109,31 +69,15 @@ The network was not the cause: the same MCI path kept a UDP mapping alive throug
 
 Be clear about what this key does and does not achieve. QUIC uses the **lower** of the two ends' advertised idle timeouts, so raising it on the server changes nothing for a client that still advertises 30 seconds, and the setting that really prevents the timer from ever firing is the client's `keepAlivePeriod`. That one is not reachable from a subscription: **mihomo, sing-box and the `hysteria2://` URI all have no keepalive or idle-timeout field**, and only the official client's YAML config does. So the server side is raised here for clients that cooperate, and the reconnect churn is a known remaining limit rather than something the panel can configure away.
 
-`<TOKEN>` is derived from the panel's secret key (`app/routers/hysteria.py::auth_token`), so it survives restarts and needs no storage; print it with:
-
-```bash
-docker exec tifusi-panel python -c "import sys; sys.path.insert(0,'/app'); from app.routers.hysteria import auth_token; print(auth_token())"
-```
-
-```bash
-docker run -d --name tifusi-hy2 --network host --restart unless-stopped \
-  -v /opt/tifusi-panel/data/hysteria/config.yaml:/etc/hysteria/config.yaml:ro \
-  -v /opt/tifusi-panel/certs:/certs:ro \
-  tobyxdd/hysteria:latest server -c /etc/hysteria/config.yaml
-```
-
-Tell the **node agent** where Hysteria's statistics API is by adding two environment variables to the node container: `HYSTERIA_API=http://127.0.0.1:9998` and `HYSTERIA_SECRET=<the stats secret>`. Then add a **Host** of protocol Hysteria2 (address, port, SNI, and the obfs password in *Obfuscation password*). Every user without a group restriction receives it in the next subscription refresh, in the link, Clash and sing-box formats alike.
-
 ## How the panel stays in control
 
-- **Authentication.** Hysteria2 asks the panel who a password belongs to on every new connection (`POST /api/hysteria/auth/<token>`). The panel answers only for an `active` user whose allowed protocols include Hysteria2, and only to a caller on the same machine.
-- **Usage.** Each poll cycle the panel reads Hysteria2's counters through the node agent (`/hysteria/stats`, cleared as they are read, exactly like Xray's) and adds them to the user's usage, so data limits see every byte. Checked on a live node: 20,000,000 bytes through it were counted as 20,001,643.
+- **Authentication.** On every new connection Hysteria2 asks the node agent, which forwards the question to the panel with its node API key, so no panel secret is stored on the node. The panel answers only for an `active` user whose allowed protocols include Hysteria2.
+- **Usage.** Each poll cycle the panel reads Hysteria2's counters through the node agent (`/hysteria/stats`, cleared as they are read, exactly like Xray's) and adds them to the user's usage, so data limits see every byte. Checked on a live node: 10,000,000 bytes through it were counted as 10,007,984.
 - **Disconnecting.** When a user expires, hits a limit or is disabled, the panel asks Hysteria2 to kick them (`/hysteria/kick`). Hysteria2 acts on the next traffic of that connection — an idle connection stays until it next moves a byte, and the user cannot reconnect either way.
 
 ## Limits
 
-- One Hysteria2 server per node, and the panel expects it on the same machine as the node agent.
+- One Hysteria2 core per node.
 - The obfuscation password is shared by all users; it hides the shape of the traffic and identifies nobody.
-- **Nothing synchronises the Host with the server.** A Hysteria2 Host has no Inbound and no Core — its port, SNI and obfuscation password sit directly on the Host, and `app/cores/sync.py` does not know Hysteria2 exists. The Host only *describes* a server that must already be running on that machine, so changing the obfuscation password in the panel without editing `config.yaml` and restarting the container silently breaks every link. Making the panel push this config the way it pushes a Core is the obvious next step, and the `hysteria2 is the one exception: no Core concept for it yet` comment in `app/models/host.py` is where that gap is recorded.
-- **`install-node.sh` does not install Hysteria2**, so a freshly added node has none until the container above is started by hand.
+- **Only on the panel's own machine for now.** Hysteria2 needs a TLS certificate matching the SNI; the agent uses the panel's, mounted from `/opt/tifusi-panel/certs`. A node on another machine has no certificate there, and a Hysteria2 core assigned to it will not start.
 - Reconnect churn on high-loss mobile paths, as described above: the panel cannot set a client's keepalive through any subscription format.
