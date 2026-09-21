@@ -1085,7 +1085,15 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
       ) : shown.length === 0 ? (
         <Empty
           title={c.emptyTitle(t.coresPage.coreTypeLabels[engine])}
-          text={engine === 'l2tp' ? t.hostsPage.l2tpHint : engine === 'ikev2' ? t.coresPage.ikev2CertHint : t.coresPage.intro}
+          text={
+            engine === 'l2tp'
+              ? t.hostsPage.l2tpHint
+              : engine === 'ikev2'
+                ? t.coresPage.ikev2CertHint
+                : engine === 'hysteria2'
+                  ? t.coresPage.hysteria2CardHint
+                  : t.coresPage.intro
+          }
           action={
             <button type="button" className="btn solid" onClick={() => openNew(engine)}>
               <IconPlus size={14} />
@@ -1231,6 +1239,23 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                     <span className="chip">{c.hostsCount(core.host_count)}</span>
                   </div>
                   <p className="hint">{t.hostsPage.l2tpHint}</p>
+                </div>
+              )}
+
+              {core.core_type === 'hysteria2' && (
+                <div className="tf-card" style={{ padding: 16 }}>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="chip en">UDP {core.hysteria2_port ?? '—'}</span>
+                    <span className="chip">
+                      {t.coresPage.hysteria2ObfsLabel} {core.hysteria2_obfs ? '••••••••' : '—'}
+                    </span>
+                    <span className="chip en">
+                      {core.hysteria2_rate_mbps ? `${core.hysteria2_rate_mbps} Mbps` : t.coresPage.hysteria2RatePlaceholder}
+                    </span>
+                    <span className="chip">{c.hostsCount(core.host_count)}</span>
+                    <span className="chip en">{runningNodes.map((n) => n.name).join(', ') || '—'}</span>
+                  </div>
+                  <p className="hint">{t.coresPage.hysteria2CardHint}</p>
                 </div>
               )}
             </div>
