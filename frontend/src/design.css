@@ -611,6 +611,26 @@ select.input { padding-block: 7px; }
 @media (hover: none) { .pg-hosts .tray { position: static; opacity: 1; pointer-events: auto; transform: none; grid-column: 1 / -1; margin: 0 12px 12px; } }
 .pg-hosts .placeholder-list { position: absolute; z-index: 5; top: 100%; margin-top: 4px; width: 260px; padding: 6px; border-radius: 12px; background: #151515; border: 1px solid var(--edge2); box-shadow: 0 16px 40px rgb(0 0 0 / 0.5); }
 .pg-hosts .placeholder-list button, .tf-sheet .placeholder-list button { display: flex; width: 100%; justify-content: space-between; gap: 8px; font: inherit; font-size: 0.74rem; color: var(--muted); background: transparent; border: 0; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+/* Protocol colours (--pc, set per node, line and card in Hosts.tsx). */
+.pg-hosts .c-mix { display: flex; gap: 3px; height: 8px; margin: 4px 0 2px; }
+.pg-hosts .c-mix i { min-width: 6px; border-radius: 4px; transition: opacity 0.25s; animation: tf-grow 1s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-origin: left; }
+@keyframes tf-grow { from { transform: scaleX(0); } }
+.pg-hosts .c-line { stroke: color-mix(in srgb, var(--pc) 22%, #1d1d1d); }
+.pg-hosts .c-line.hot, .pg-hosts .c-flow { stroke: var(--pc); }
+.pg-hosts .p-node .badge { color: var(--pc); background: linear-gradient(150deg, color-mix(in srgb, var(--pc) 16%, #141414), #121212 70%); border-color: color-mix(in srgb, var(--pc) 35%, #2a2a2a); }
+.pg-hosts .p-node.live .badge { border-color: color-mix(in srgb, var(--pc) 60%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--pc) 22%, transparent); animation: tf-breathe 2.8s ease-in-out infinite; }
+@keyframes tf-breathe { 50% { box-shadow: 0 0 34px color-mix(in srgb, var(--pc) 34%, transparent); } }
+.pg-hosts .p-node .cnt { background: var(--pc); }
+.pg-hosts .p-node.zero .badge { color: var(--faint); background: var(--card); border-color: var(--edge2); }
+.pg-hosts .p-node:hover .badge, .pg-hosts .p-node[aria-pressed='true'] .badge { border-color: var(--pc); box-shadow: 0 0 30px color-mix(in srgb, var(--pc) 30%, transparent); }
+.pg-hosts .pass-inner { background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--pc) 10%, transparent), transparent 55%), linear-gradient(160deg, #171717, #111 60%); }
+.pg-hosts .pass-inner::before { content: ''; position: absolute; inset: 0 22px auto; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--pc), transparent); opacity: 0.8; }
+.pg-hosts .pass:hover .pass-inner { box-shadow: 0 30px 60px rgb(0 0 0 / 0.55), 0 0 0 1px color-mix(in srgb, var(--pc) 35%, transparent), 0 0 40px color-mix(in srgb, var(--pc) 12%, transparent); }
+.pg-hosts .mono-badge { background: linear-gradient(145deg, color-mix(in srgb, var(--pc) 26%, transparent), color-mix(in srgb, var(--pc) 6%, transparent)); border-color: color-mix(in srgb, var(--pc) 45%, transparent); color: color-mix(in srgb, var(--pc) 55%, #fff); box-shadow: 0 6px 18px color-mix(in srgb, var(--pc) 18%, transparent); }
+.pg-hosts .pass-route { color: color-mix(in srgb, var(--pc) 75%, #fff); }
+.pg-hosts .stub b { color: color-mix(in srgb, var(--pc) 60%, #fff); }
+.pg-hosts .stub { border-inline-start-color: color-mix(in srgb, var(--pc) 30%, #2c2c2c); }
+@media (prefers-reduced-motion: reduce) { .pg-hosts .p-node.live .badge, .pg-hosts .c-mix i { animation: none; } }
 .tf-sheet .placeholder-list { display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 12px; background: var(--well); border: 1px solid var(--hair); }
 .tf-sheet .placeholder-list button:hover { background: var(--raised); color: var(--text); }
 .tf-sheet .placeholder-list code { font-family: 'JetBrains Mono', monospace; color: var(--amber); direction: ltr; }

@@ -46,6 +46,16 @@ const BADGE: Record<HostProtocol, string> = {
   ikev2: 'IKE',
   l2tp: 'L2TP',
 }
+// Each protocol wears one colour everywhere on this page: its node on the map, its lines, its cards.
+const PCOLOR: Record<HostProtocol, string> = {
+  vless: '#38bdf8',
+  vmess: '#a78bfa',
+  trojan: '#f472b6',
+  shadowsocks: '#2dd4bf',
+  hysteria2: '#f97316',
+  ikev2: '#22c55e',
+  l2tp: '#facc15',
+}
 const MONO: Record<HostProtocol, string> = { vless: 'VL', vmess: 'VM', trojan: 'TR', shadowsocks: 'SS', hysteria2: 'HY', ikev2: 'IK', l2tp: 'L2' }
 
 function emptyForm() {
@@ -361,6 +371,13 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
         <div className="c-info">
           <span className="tl">{t.hostsPage.title}</span>
           <span className="big">{hosts ? <CountUp value={protoFilter ? shown.length : hosts.length} /> : '—'}</span>
+          {hosts && hosts.length > 0 && (
+            <div className="c-mix" dir="ltr" aria-hidden="true">
+              {PROTOCOLS.filter((p) => counts[p] > 0).map((p) => (
+                <i key={p} style={{ flexGrow: counts[p], background: PCOLOR[p], opacity: protoFilter && protoFilter !== p ? 0.25 : 1 }} />
+              ))}
+            </div>
+          )}
           <p>{protoFilter ? h.filterState(shown.length, protocolLabels[protoFilter]) : h.filterHint}</p>
           {protoFilter && (
             <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setProtoFilter(null)}>
@@ -372,7 +389,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
           <div className="c-orbit">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               {PROTOCOLS.map((p) => (
-                <g key={p}>
+                <g key={p} style={{ ['--pc' as string]: PCOLOR[p] }}>
                   <line
                     className={`c-line ${lit === p ? 'hot' : lit && protoFilter ? 'dim' : ''}`}
                     x1="50"
@@ -396,7 +413,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
                 type="button"
                 className={`p-node ${counts[p] === 0 ? 'zero' : live[p] ? 'live' : ''}`}
                 aria-pressed={protoFilter === p}
-                style={{ left: `${NODE_POS[p][0]}%`, top: `${NODE_POS[p][1]}%` }}
+                style={{ left: `${NODE_POS[p][0]}%`, top: `${NODE_POS[p][1]}%`, ['--pc' as string]: PCOLOR[p] }}
                 onClick={() => setProtoFilter((f) => (f === p ? null : p))}
                 onPointerEnter={() => setProtoHover(p)}
                 onPointerLeave={() => setProtoHover(null)}
@@ -447,6 +464,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
               <article
                 key={host.id}
                 className="pass"
+                style={{ ['--pc' as string]: PCOLOR[host.protocol] }}
                 tabIndex={0}
                 onPointerEnter={onPassEnter}
                 onPointerMove={onPassMove}
