@@ -32,7 +32,7 @@ from app.schemas.user import (
 from app.schemas.app_report import AppReportResponse
 from app.schemas.user_device import UserDeviceResponse
 from app.settings_store import get_subscription_url
-from app.subscription.app_code import app_code_for
+from app.subscription.app_code import app_code_with_host
 
 router = APIRouter(
     prefix="/api/users",
@@ -408,7 +408,7 @@ async def get_user_links(
 
     return {
         "subscription_url": f"{base}sub/{user.secret}",
-        "app_code": app_code_for(user),
+        "app_code": app_code_with_host(user, base),
         "links": build_links_for_user(user, allowed_hosts),
         "ikev2_configs": ikev2_configs,
         "l2tp_configs": l2tp_configs,

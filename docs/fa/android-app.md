@@ -28,7 +28,7 @@
 
 ## دریافت اپ
 
-دستور `tifusi app` روی سرور پنل آخرین نسخه و لینک دانلود آن را نمایش می‌دهد. برای ساختن اپ برای پنل خودتان، مقدار `tifusi.panelUrl` را در `gradle.properties` برابر نشانی پنل قرار دهید، در صورت تمایل `tifusi.supportTelegram` را هم تنظیم کنید و اپ را بسازید؛ راهنمای کامل در [مخزن Tifusi VPN](https://github.com/javadtifusi-eng/Tifusi-VPN) آمده است.
+دستور `tifusi app` روی سرور پنل آخرین نسخه و لینک دانلود آن را نمایش می‌دهد. اپ به پنل خاصی وابسته نیست و برای پنل شما بیلد جدید نمی‌خواهد؛ برای برند کردن آن، در صورت تمایل `tifusi.supportTelegram` را در `gradle.properties` تنظیم کنید و اپ را بسازید. راهنمای کامل در [مخزن Tifusi VPN](https://github.com/javadtifusi-eng/Tifusi-VPN) آمده است.
 
 </div>
 

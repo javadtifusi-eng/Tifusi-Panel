@@ -15,7 +15,7 @@ from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
 from app.settings_store import get_subscription_url
-from app.subscription.app_code import app_code_for
+from app.subscription.app_code import app_code_with_host
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.info_page import build_info_page_html
@@ -148,7 +148,7 @@ async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession)
         data_limit=user.data_limit,
         expire_text=user.expire.strftime("%Y-%m-%d") if user.expire else "بدون انقضا",
         subscription_url=f"{base}sub/{user.secret}",
-        app_code=app_code_for(user),
+        app_code=app_code_with_host(user, base),
         links=build_links_for_user(user, allowed_hosts),
         ikev2_configs=ikev2_configs,
         l2tp_configs=l2tp_configs,

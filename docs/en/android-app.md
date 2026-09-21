@@ -8,7 +8,7 @@
 
 On the **Servers** tab, enter the user's access code or subscription link and select **Get servers**. Every IKEv2, VLESS and Hysteria2 server of that user is added with its username, password, PSK, remote ID and server certificate. **Refresh** reads changes from the panel again.
 
-The access code looks like `javad7KQ4MP9X` and is shown at the top of the user's subscription page; letter case does not matter. A bare code goes to the panel the app was built for; for any other panel, write `code@panel-domain`, for example `ali7KQ4MP9X@panel.example.com`.
+The access code looks like `javad7KQ4MP9X` and is shown at the top of the user's subscription page; letter case does not matter. The panel puts its own address into the code (an encoded suffix, not a readable domain, so it survives SMS filtering), so the app needs no address of its own and a domain change needs no new app.
 
 ## Protocols
 
@@ -26,7 +26,7 @@ The app reads `app.json` from the panel (see [Tifusi VPN profile](users-and-subs
 
 ## Getting the app
 
-`tifusi app` on the panel server prints the latest release and its download link. To build the app for your own panel, set `tifusi.panelUrl` in `gradle.properties` to your panel's address, optionally set `tifusi.supportTelegram`, and build; the full instructions are in the [Tifusi VPN repository](https://github.com/javadtifusi-eng/Tifusi-VPN).
+`tifusi app` on the panel server prints the latest release and its download link. The app is not tied to a panel and needs no build for yours; to brand it, set `tifusi.supportTelegram` in `gradle.properties` and build. The full instructions are in the [Tifusi VPN repository](https://github.com/javadtifusi-eng/Tifusi-VPN).
 
 ---
 

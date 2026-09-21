@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import ProxyUser
-from app.subscription.app_code import app_code_for
+from app.subscription.app_code import app_code_for, strip_embedded_host
 
 
 async def user_or_404(secret: str, db: AsyncSession) -> ProxyUser:
@@ -25,7 +25,7 @@ async def user_or_404(secret: str, db: AsyncSession) -> ProxyUser:
 async def user_by_app_code_or_404(code: str, db: AsyncSession) -> ProxyUser:
     # Codes are derived from each secret rather than stored, so there is no
     # column to query; a scan is fine at panel scale and needs no migration.
-    wanted = code.strip().lower().encode()
+    wanted = strip_embedded_host(code.strip()).lower().encode()
     for user in (await db.execute(select(ProxyUser))).scalars().all():
         if hmac.compare_digest(app_code_for(user).lower().encode(), wanted):
             return user
