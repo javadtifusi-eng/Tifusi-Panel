@@ -55,7 +55,7 @@ PROBE_URL = "https://www.gstatic.com/generate_204"
 
 _DISCOVER_TIMEOUT = 3.0
 _DISCOVER_CONCURRENCY = 64
-# How many of the users' own sites each scan tries, most-visited first.
+# The most a scan draws from the live random sample (traffic_names.sample()).
 _TRAFFIC_NAMES = 120
 _VALIDATE_TIMEOUT = 5.0
 _FETCH_TIMEOUT = 10
@@ -171,7 +171,7 @@ def start(public_ip: str | None, ring: int = 0, exclude: list[str] | None = None
 
 async def _run(public_ip: str | None, ring: int = 0, exclude: set[str] | None = None) -> None:
     try:
-        await _from_traffic(exclude)
+        await _from_traffic()
         if public_ip:
             await _discover(public_ip, ring, exclude)
         _job.state = "validating"
@@ -288,12 +288,17 @@ async def _discover(public_ip: str, ring: int = 0, exclude: set[str] | None = No
     await asyncio.gather(*(one(ip) for ip in ips))
 
 
-async def _from_traffic(exclude: set[str] | None) -> None:
-    """The servers this node's own users open (node_agent/traffic_names.py):
-    names an operator's whitelist already knows, which a datacenter neighbour
-    never is. Most are logged as an address, named here by its certificate.
-    Reached by their own DNS, so dest is the name, not the address: a big
-    site's name resolves all over a CDN, not only to the one the user hit."""
+async def _from_traffic() -> None:
+    """A random sample of what this node's own users are actually connecting to
+    right now (node_agent/traffic_names.py) — names an operator's whitelist
+    already knows, which a datacenter neighbour never is. Most are logged as
+    an address, named here by its certificate. Reached by their own DNS, so
+    dest is the name, not the address: a big site's name resolves all over a
+    CDN, not only to the one the user hit.
+
+    No exclude set here, unlike a neighbour: traffic_names.sample() is already
+    a fresh random draw every call, with nothing kept from one scan to the
+    next, so there is nothing stable to exclude in the first place."""
     sem = asyncio.Semaphore(_DISCOVER_CONCURRENCY)
 
     async def one(dest: str) -> None:
@@ -304,10 +309,9 @@ async def _from_traffic(exclude: set[str] | None) -> None:
                 der = await _peer_cert(dest)
             names = _cert_names(der)[:3] if der else []
         for name in names:
-            if not (exclude and name in exclude):
-                _job.candidates.setdefault(name, Candidate(host=name, source="traffic"))
+            _job.candidates.setdefault(name, Candidate(host=name, source="traffic"))
 
-    await asyncio.gather(*(one(d) for d in traffic_names.top(_TRAFFIC_NAMES)))
+    await asyncio.gather(*(one(d) for d in traffic_names.sample(_TRAFFIC_NAMES)))
 
 
 # --- 2. validate -----------------------------------------------------------

@@ -274,7 +274,6 @@ def _read_access_log(xray_bin: str, api_addr: str) -> list[tuple[str, str]]:
         if match:
             entries.append((_client_ip(match.group(1)), match.group(2)))
             traffic_names.record(line, match.group(2))
-    traffic_names.flush()
     return entries
 
 

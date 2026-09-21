@@ -201,7 +201,13 @@ async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> 
     node = await _node_or_404(node_id, db)
     scan = await _node_call(node, "GET", "/reality/scan")
     rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    fresh = {r["host"] for r in scan.get("results", [])} - rounds["seen"]
+    # Only a neighbour needs "seen" at all: ring exploration has to move past what
+    # it already turned up or every scan just re-finds the same datacenter boxes.
+    # A traffic-sourced name is the opposite — it is *supposed* to keep reappearing
+    # for as long as it stays among the users' top destinations, so marking it seen
+    # here would retire a proven-good SNI the first time anyone merely glanced at a
+    # scan, long before it was ever put into the live Core.
+    fresh = {r["host"] for r in scan.get("results", []) if r.get("source") != "traffic"} - rounds["seen"]
     if fresh:
         rounds["seen"].update(fresh)
         _save_rounds()
