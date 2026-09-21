@@ -313,6 +313,42 @@ select.input { padding-block: 7px; }
 .pg-dash .row-b { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.8fr); gap: 12px; }
 .pg-dash .row-c { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .pg-dash .row-d { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pg-dash .dash-grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr); grid-template-areas: 'main side'; gap: 12px; align-items: start; }
+.pg-dash .dash-main { grid-area: main; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pg-dash .dash-side { grid-area: side; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pg-dash .dash-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .pg-dash .dash-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'side' 'main'; } }
+@media (max-width: 760px) { .pg-dash .dash-pair { grid-template-columns: 1fr; } }
+/* System health: nodes and the attention list share one small card. */
+.pg-dash .sys .node-row { width: 100%; font: inherit; color: inherit; text-align: start; background: transparent; border: 0; border-bottom: 1px solid var(--hair); padding: 8px 12px; cursor: pointer; }
+.pg-dash .sys .node-row:disabled { cursor: default; }
+.pg-dash .sys .node-row:not(:disabled):hover { background: var(--hover); }
+.pg-dash .sys .attn { margin: 0; padding: 8px 12px 10px; gap: 4px; border-top: 1px dashed var(--edge2); }
+.pg-dash .sys .attn li { grid-template-columns: 3px minmax(0, 1fr) auto; gap: 8px; padding: 3px 0; border: 0; border-radius: 0; background: none; font-size: 0.76rem; }
+.pg-dash .sys .attn li::before { content: ''; align-self: stretch; border-radius: 3px; background: var(--sev); }
+.pg-dash .sys .attn .t { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--body); }
+.pg-dash .sys .attn button { font: inherit; font-size: 0.72rem; color: var(--accent); background: none; border: 0; padding: 0 2px; cursor: pointer; }
+.pg-dash .sys .attn-ok { padding: 8px 12px 10px; border-top: 1px dashed var(--edge2); font-size: 0.76rem; color: var(--ok); }
+.pg-dash .sys > .node-row:last-of-type { border-bottom: 0; }
+/* Live activity: the flowing wave above the event feed. */
+.pg-dash .wave-box { margin: 12px 16px 0; }
+.pg-dash .wave-top { display: flex; justify-content: space-between; gap: 8px; font-size: 0.7rem; color: var(--muted); margin-bottom: 6px; }
+.pg-dash .wave { direction: ltr; background: var(--well); border: 1px solid #1d1d1d; border-radius: 12px; overflow: hidden; }
+.pg-dash .wave svg { display: block; width: 100%; height: 84px; }
+.pg-dash .wkey { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 0.66rem; color: var(--faint); }
+.pg-dash .wkey span { display: inline-flex; align-items: center; gap: 5px; }
+.pg-dash .wkey i { width: 10px; height: 3px; border-radius: 3px; background: var(--c); }
+.pg-dash .wkey i.dt { width: 7px; height: 7px; border-radius: 50%; }
+.pg-dash .well.feed { margin-top: 10px; }
+/* Motion: the traffic lines draw in, KPI lines carry a running highlight, last points pulse. */
+.pg-dash .reveal { transform-box: fill-box; transform-origin: left; animation: tf-reveal 1.4s cubic-bezier(.3, .7, .2, 1) both; }
+@keyframes tf-reveal { from { transform: scaleX(0); } }
+.pg-dash .spark-run { stroke-dasharray: 14 86; stroke-dashoffset: 100; animation: tf-run 3.2s linear infinite; filter: drop-shadow(0 0 3px currentColor); }
+@keyframes tf-run { to { stroke-dashoffset: 0; } }
+.pg-dash .end-pulse { transform-box: fill-box; transform-origin: center; animation: tf-endp 2s ease-out infinite; }
+@keyframes tf-endp { 0% { opacity: .55; transform: scale(1); } 100% { opacity: 0; transform: scale(3.2); } }
+.pg-dash .kpi .spark { width: 96px; height: 34px; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .pg-dash .reveal, .pg-dash .spark-run, .pg-dash .end-pulse { animation: none; } .pg-dash .spark-run { stroke-dasharray: none; } .pg-dash .end-pulse { opacity: 0; } }
 @media (max-width: 1100px) { .pg-dash .row-a, .pg-dash .row-c { grid-template-columns: 1fr; } .pg-dash .row-b { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .pg-dash .row-b, .pg-dash .row-d { grid-template-columns: 1fr; } }
 .pg-dash .dcard { background: var(--card); border: 1px solid var(--edge); border-radius: 16px; min-width: 0; display: flex; flex-direction: column; }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import ServerGauges from '../components/SystemStats'
 import {
   IconAlert,
@@ -14,21 +14,16 @@ import {
   IconUsers,
   IconX,
 } from '../components/icons'
-import { CountUp, Sparkline } from '../components/ui'
+import { CountUp } from '../components/ui'
 import type { Lang } from '../i18n/dict'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
   getTlsStatus,
   getTrafficHistory,
-  listCores,
-  listGroups,
-  listHosts,
   listNodes,
   listRecentAppReports,
   listUsers,
-  type Core,
-  type Host,
   type Node,
   type ProxyUser,
   type RecentAppReport,
@@ -36,7 +31,7 @@ import {
   type TrafficHistoryPoint,
   type UserStatus,
 } from '../lib/api'
-import { avatarColor, initials, parseServerDate } from '../lib/format'
+import { parseServerDate } from '../lib/format'
 
 export type OverviewTab = 'users' | 'hosts' | 'groups' | 'nodes' | 'cores' | 'tunnels' | 'settings'
 
@@ -159,6 +154,129 @@ function ListSkeleton({ rows = 5 }: { rows?: number }) {
   )
 }
 
+// Catmull-Rom through the points, as cubic Béziers: a flowing line with no overshoot at the ends.
+function smoothPath(pts: [number, number][]): string {
+  if (pts.length === 0) return ''
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[i + 2] ?? p2
+    d += ` C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`
+  }
+  return d
+}
+
+// A KPI trend line with a soft area under it; a highlight keeps running along
+// the line and the last point pulses, so the tile reads as live without
+// inventing data points.
+function FlowSpark({ values, color }: { values: number[]; color: string }) {
+  const id = useId().replace(/:/g, '')
+  const W = 96
+  const H = 34
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min
+  const pts = values.map((v, i): [number, number] => [
+    (i / (values.length - 1)) * (W - 4),
+    span ? H - 5 - ((v - min) / span) * (H - 12) : H / 2,
+  ])
+  const d = smoothPath(pts)
+  const end = pts[pts.length - 1]
+  return (
+    <svg className="spark" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+      <defs>
+        <linearGradient id={`sg${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity={0.32} />
+          <stop offset="1" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={`${d} L${end[0]},${H} L0,${H} Z`} fill={`url(#sg${id})`} />
+      <path d={d} fill="none" stroke={color} strokeOpacity={0.55} strokeWidth={1.8} strokeLinecap="round" />
+      <path className="spark-run" d={d} pathLength={100} fill="none" stroke={color} style={{ color }} strokeWidth={2.2} strokeLinecap="round" />
+      <circle className="end-pulse" cx={end[0]} cy={end[1]} r={3} fill={color} />
+      <circle cx={end[0]} cy={end[1]} r={3} fill={color} stroke="#141414" strokeWidth={1.5} />
+    </svg>
+  )
+}
+
+const WAVE_W = 320
+const WAVE_H = 84
+const WAVE_WINDOW = 60 * 60000
+const WAVE_BUCKET = 2 * 60000
+const WAVE_N = WAVE_WINDOW / WAVE_BUCKET
+
+// App reports over the last hour as a wave that slides with the clock: the
+// buckets sit on fixed two-minute boundaries and the whole drawing is shifted
+// left every frame by how far "now" has moved, so it flows instead of ticking.
+function ActivityWave({ reports, label }: { reports: RecentAppReport[]; label: string }) {
+  const [anchor, setAnchor] = useState(() => Math.floor(Date.now() / WAVE_BUCKET) * WAVE_BUCKET)
+  const shiftRef = useRef<SVGGElement>(null)
+  const id = useId().replace(/:/g, '')
+
+  useEffect(() => {
+    let raf = 0
+    let last = 0
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    function frame(now: number) {
+      const t = Date.now()
+      const a = Math.floor(t / WAVE_BUCKET) * WAVE_BUCKET
+      if (a !== anchor) setAnchor(a)
+      else if (now - last > (reduce ? 5000 : 40)) {
+        last = now
+        shiftRef.current?.setAttribute('transform', `translate(${(-((t - anchor) / WAVE_WINDOW) * WAVE_W).toFixed(2)} 0)`)
+      }
+      raf = requestAnimationFrame(frame)
+    }
+    raf = requestAnimationFrame(frame)
+    return () => cancelAnimationFrame(raf)
+  }, [anchor])
+
+  const ok = new Array<number>(WAVE_N + 1).fill(0)
+  const early = new Array<number>(WAVE_N + 1).fill(0)
+  const fail = new Array<number>(WAVE_N + 1).fill(0)
+  const first = anchor - WAVE_N * WAVE_BUCKET
+  for (const r of reports) {
+    const i = Math.floor((parseServerDate(r.reported_at).getTime() - first) / WAVE_BUCKET)
+    if (i < 0 || i > WAVE_N) continue
+    if (r.result === 'connected') ok[i]++
+    else if (r.result === 'disconnected_early') early[i]++
+    else if (r.result !== 'ok') fail[i]++
+  }
+  const top = Math.max(3, ...ok, ...early) * 1.15
+  const x = (i: number) => WAVE_W - ((anchor - (first + i * WAVE_BUCKET + WAVE_BUCKET / 2)) / WAVE_WINDOW) * WAVE_W
+  const y = (v: number) => WAVE_H - 14 - (v / top) * (WAVE_H - 26)
+  const line = (vals: number[]) => smoothPath(vals.map((v, i): [number, number] => [x(i), y(v)]))
+  const area = (d: string) => `${d} L${x(WAVE_N).toFixed(1)},${WAVE_H} L${x(0).toFixed(1)},${WAVE_H} Z`
+  const okD = line(ok)
+  const earlyD = line(early)
+
+  return (
+    <svg viewBox={`0 0 ${WAVE_W} ${WAVE_H}`} preserveAspectRatio="none" role="img" aria-label={label}>
+      <defs>
+        <linearGradient id={`wo${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#22c55e" stopOpacity={0.34} />
+          <stop offset="1" stopColor="#22c55e" stopOpacity={0} />
+        </linearGradient>
+        <linearGradient id={`we${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f59e0b" stopOpacity={0.18} />
+          <stop offset="1" stopColor="#f59e0b" stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <g ref={shiftRef}>
+        <path d={area(okD)} fill={`url(#wo${id})`} />
+        <path d={area(earlyD)} fill={`url(#we${id})`} />
+        <path d={earlyD} fill="none" stroke="#f59e0b" strokeWidth={1.6} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={okD} fill="none" stroke="#22c55e" strokeWidth={2} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        {fail.map((f, i) =>
+          f > 0 ? <rect key={i} x={x(i) - 2.5} y={WAVE_H - 9} width={5} height={5} rx={2.5} fill="#ef4444" /> : null,
+        )}
+      </g>
+    </svg>
+  )
+}
+
 function Kpi({
   label,
   value,
@@ -169,7 +287,7 @@ function Kpi({
   icon,
   tone,
   spark,
-  sparkDot,
+  sparkColor = '#f97316',
 }: {
   label: string
   value: number | null | undefined
@@ -180,7 +298,7 @@ function Kpi({
   icon: ReactNode
   tone: Tone
   spark?: number[]
-  sparkDot?: string
+  sparkColor?: string
 }) {
   return (
     <div className="kpi">
@@ -202,13 +320,17 @@ function Kpi({
       </span>
       <span className="foot">
         <span className={`kdelta ${deltaClass}`}>{delta ?? ' '}</span>
-        {spark && spark.length > 1 ? <Sparkline values={spark} dot={sparkDot} /> : <span />}
+        {spark && spark.length > 1 ? <FlowSpark values={spark} color={sparkColor} /> : <span />}
       </span>
     </div>
   )
 }
 
-// This period in primary ink, the previous one muted; a crosshair snaps to the nearest day.
+// This period in orange over a soft fill, the previous one in dashed sky blue; the lines
+// draw themselves in whenever the data changes and again every 20 seconds, and a
+// crosshair snaps to the nearest day.
+const CUR_C = '#f97316'
+const PREV_C = '#38bdf8'
 function TrafficChart({
   cur,
   prev,
@@ -229,6 +351,16 @@ function TrafficChart({
   const P = { l: 44, r: 62, t: 20, b: 30 }
   const svgRef = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<number | null>(null)
+  const [replay, setReplay] = useState(0)
+  const clipId = `tc${useId().replace(/:/g, '')}`
+  const hovering = useRef(false)
+  hovering.current = hover !== null
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      if (!hovering.current && !document.hidden) setReplay((r) => r + 1)
+    }, 20000)
+    return () => window.clearInterval(t)
+  }, [])
   const n = cur.length
   const max = Math.max(0, ...cur.map((p) => p.total_bytes), ...prev.map((p) => p.total_bytes))
   const unit = max >= GB ? { div: GB, label: 'GB' } : { div: MB, label: 'MB' }
@@ -291,10 +423,22 @@ function TrafficChart({
         </text>
         {max > 0 && n > 1 && (
           <>
-            <path d={`${path(curV)} L${x(last)},${y(0)} L${x(0)},${y(0)} Z`} fill="#e5e5e5" fillOpacity={0.1} />
-            <path d={path(prevV)} fill="none" stroke="#5c5c5c" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            <path d={path(curV)} fill="none" stroke="#e5e5e5" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            <circle cx={x(last)} cy={y(curV[last])} r={4.5} fill="#f97316" stroke="#0e0e0e" strokeWidth={2} />
+            <defs>
+              <linearGradient id={`${clipId}g`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor={CUR_C} stopOpacity={0.3} />
+                <stop offset="1" stopColor={CUR_C} stopOpacity={0} />
+              </linearGradient>
+              <clipPath id={clipId}>
+                <rect key={`${replay}-${cur[0]?.date}-${n}`} className="reveal" x={0} y={0} width={W} height={H} />
+              </clipPath>
+            </defs>
+            <g clipPath={`url(#${clipId})`}>
+              <path d={`${path(curV)} L${x(last)},${y(0)} L${x(0)},${y(0)} Z`} fill={`url(#${clipId}g)`} />
+              <path d={path(prevV)} fill="none" stroke={PREV_C} strokeWidth={2} strokeDasharray="6 5" strokeLinejoin="round" strokeLinecap="round" />
+              <path d={path(curV)} fill="none" stroke={CUR_C} strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+            <circle className="end-pulse" cx={x(last)} cy={y(curV[last])} r={4.5} fill={CUR_C} />
+            <circle cx={x(last)} cy={y(curV[last])} r={4.5} fill={CUR_C} stroke="#0e0e0e" strokeWidth={2} />
             <text x={x(last) + 9} y={y(curV[last]) + 4} fill="#f5f5f5" fontSize={11} fontFamily={font}>
               {`${fmt(curV[last])} ${unit.label}`}
             </text>
@@ -303,8 +447,8 @@ function TrafficChart({
         {hover !== null && hv && (
           <>
             <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} stroke="#404040" />
-            {hv.p !== null && <circle cx={x(hover)} cy={y(hv.p)} r={4} fill="#5c5c5c" stroke="#0e0e0e" strokeWidth={2} />}
-            <circle cx={x(hover)} cy={y(hv.c)} r={4} fill="#e5e5e5" stroke="#0e0e0e" strokeWidth={2} />
+            {hv.p !== null && <circle cx={x(hover)} cy={y(hv.p)} r={4} fill={PREV_C} stroke="#0e0e0e" strokeWidth={2} />}
+            <circle cx={x(hover)} cy={y(hv.c)} r={4} fill={CUR_C} stroke="#0e0e0e" strokeWidth={2} />
           </>
         )}
         {max === 0 && (
@@ -323,12 +467,12 @@ function TrafficChart({
         >
           <div className="d">{longFormat.format(dayDate(cur[hover].date))}</div>
           <div>
-            <span className="lk" style={{ background: '#e5e5e5' }} />
+            <span className="lk" style={{ background: CUR_C }} />
             <b>{`${fmt(hv.c)} ${unit.label}`}</b> {names.cur}
           </div>
           {hv.p !== null && (
             <div>
-              <span className="lk" style={{ background: '#5c5c5c' }} />
+              <span className="lk" style={{ background: PREV_C }} />
               <b>{`${fmt(hv.p)} ${unit.label}`}</b> {names.prev}
             </div>
           )}
@@ -459,9 +603,6 @@ export default function OverviewPage({
   const [nodes, setNodes] = useState<Node[] | null>()
   const [kpiTraffic, setKpiTraffic] = useState<TrafficHistoryPoint[] | null>()
   const [reports, setReports] = useState<RecentAppReport[] | null>()
-  const [hosts, setHosts] = useState<Host[] | null>()
-  const [groupsCount, setGroupsCount] = useState<number | null>()
-  const [cores, setCores] = useState<Core[] | null>()
   const [tls, setTls] = useState<TlsStatus | null>(null)
 
   const [period, setPeriod] = useState(14)
@@ -502,25 +643,16 @@ export default function OverviewPage({
     getTrafficHistory(14)
       .then((res) => ok(setKpiTraffic)(res.points))
       .catch(() => ok(setKpiTraffic)(null))
-    listHosts()
-      .then((res) => ok(setHosts)(res.hosts))
-      .catch(() => ok(setHosts)(null))
-    listGroups()
-      .then((res) => ok(setGroupsCount)(res.total))
-      .catch(() => ok(setGroupsCount)(null))
-    listCores()
-      .then((res) => ok(setCores)(res.cores))
-      .catch(() => ok(setCores)(null))
     getTlsStatus()
       .then((res) => ok(setTls)(res))
       .catch(() => undefined)
 
-    // App reports refresh on their own so the activity feed stays live.
+    // App reports refresh on their own so the activity feed and wave stay live.
     function loadReports() {
       listRecentAppReports(100).then(ok(setReports)).catch(fail(setReports))
     }
     loadReports()
-    const id = window.setInterval(loadReports, 30000)
+    const id = window.setInterval(loadReports, 15000)
 
     return () => {
       cancelled = true
@@ -557,22 +689,10 @@ export default function OverviewPage({
     return `${date} ${time}`
   }
 
-  function formatDay(dt: Date): string {
-    return new Intl.DateTimeFormat(lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-US', { day: 'numeric', month: 'long' }).format(dt)
-  }
-
   function limitText(u: ProxyUser): string {
     if (!u.data_limit) return t.usersPage.unlimited
     const gb = u.data_limit / GB
     return `${Number(gb.toFixed(gb >= 10 ? 0 : 1))} ${t.usersPage.gbSuffix}`
-  }
-
-  function userSubtitle(u: ProxyUser): string {
-    let second: string
-    if (u.expire) second = o.until(formatDay(parseServerDate(u.expire)))
-    else if (u.status === 'on_hold' && u.on_hold_expire_days) second = o.onHoldDays(u.on_hold_expire_days)
-    else second = o.createdWhen(formatWhen(parseServerDate(u.created_at)))
-    return `${limitText(u)} · ${second}`
   }
 
   function networkLabel(network: string | null): string | null {
@@ -661,6 +781,16 @@ export default function OverviewPage({
       ? Array.from({ length: 14 }, (_, i) => {
           const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (13 - i) + 1).getTime()
           return users.filter((u) => parseServerDate(u.created_at).getTime() < end).length
+        })
+      : undefined
+
+  const activeSpark =
+    users && usersTotal != null && users.length >= usersTotal
+      ? Array.from({ length: 14 }, (_, i) => {
+          const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (13 - i) + 1).getTime()
+          return users.filter(
+            (u) => u.status !== 'disabled' && parseServerDate(u.created_at).getTime() < end && (!u.expire || parseServerDate(u.expire).getTime() > end),
+          ).length
         })
       : undefined
 
@@ -791,11 +921,16 @@ export default function OverviewPage({
     return `${s.value.toFixed(s.unit === 'GB' ? (s.value >= 100 ? 0 : 1) : s.decimals)} ${s.unit}`
   }
 
-  const infraCounts: { label: string; count: number | null | undefined }[] = [
-    { label: o.totalHosts, count: hosts === undefined ? undefined : hosts?.length ?? null },
-    { label: o.totalGroups, count: groupsCount },
-    { label: o.totalCores, count: cores === undefined ? undefined : cores?.length ?? null },
-  ]
+  const hourAgo = Date.now() - 60 * 60000
+  const lastHour = (reports ?? []).filter((r) => parseServerDate(r.reported_at).getTime() >= hourAgo)
+  const waveOk = lastHour.filter((r) => r.result === 'connected').length
+  const waveFail = lastHour.filter((r) => r.result !== 'connected' && r.result !== 'ok').length
+  const liveBadge = (
+    <span className="tf-live">
+      <i />
+      {d.live}
+    </span>
+  )
 
   return (
     <div className="pg-dash">
@@ -852,6 +987,8 @@ export default function OverviewPage({
           deltaClass={statusCounts && (activeCount ?? 0) > 0 ? 'up' : ''}
           icon={<IconCheckCircle size={18} strokeWidth={2} />}
           tone={TONES.green}
+          spark={activeSpark}
+          sparkColor="#22c55e"
         />
         <Kpi
           label={o.kpiTodayTraffic}
@@ -863,7 +1000,7 @@ export default function OverviewPage({
           icon={<IconDownload size={18} strokeWidth={2} />}
           tone={TONES.purple}
           spark={kpiTraffic?.map((p) => p.total_bytes)}
-          sparkDot={trafficDeltaClass === 'down' ? '#ef4444' : '#f97316'}
+          sparkColor="#38bdf8"
         />
         <Kpi
           label={o.kpiNodes}
@@ -883,293 +1020,239 @@ export default function OverviewPage({
           deltaClass={nodes && nodes.length > 0 && connectedNodes < nodes.length ? 'down' : ''}
           icon={<IconServer size={18} />}
           tone={TONES.amber}
+          spark={nodes && nodes.length > 0 ? Array.from({ length: 14 }, () => connectedNodes) : undefined}
+          sparkColor="#a78bfa"
         />
-      </section>
-
-      <section className="row-a">
-        <Card
-          title={o.trafficTitle}
-          action={
-            <div className="flex flex-wrap items-center gap-2">
-              {nodes && nodes.length > 0 && (
-                <select
-                  value={chartNodeId ?? ''}
-                  onChange={(e) => setChartNodeId(e.target.value ? Number(e.target.value) : null)}
-                  aria-label={o.allNodesOption}
-                  className="select"
-                >
-                  <option value="">{o.allNodesOption}</option>
-                  {nodes.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <span className="dseg" role="group" aria-label={o.trafficTitle}>
-                {PERIODS.map((p) => (
-                  <button key={p} type="button" aria-pressed={period === p} onClick={() => setPeriod(p)}>
-                    {d.periodShort(p)}
-                  </button>
-                ))}
-              </span>
-            </div>
-          }
-        >
-          <div className="dlegend">
-            <span style={{ ['--c' as string]: '#e5e5e5' }}>
-              <i className="lk" />
-              {d.thisPeriod}
-            </span>
-            <span style={{ ['--c' as string]: '#5c5c5c' }}>
-              <i className="lk" />
-              {d.prevPeriod}
-            </span>
-          </div>
-          <div className="well" style={{ marginTop: 8 }}>
-            <div dir="ltr" className={`chart-wrap ${chartBusy ? 'busy' : ''}`}>
-              {chart === undefined ? (
-                <div className="skel m-2 aspect-[640/250] min-w-[400px] opacity-40" />
-              ) : chart === null ? (
-                <DEmpty icon={<IconDownload size={18} />} text={o.loadFailed} />
-              ) : (
-                <TrafficChart
-                  cur={curPts}
-                  prev={prevPts}
-                  lang={lang}
-                  label={`${o.trafficTitle}, ${o.periodDays(period)}`}
-                  emptyText={o.trafficHistoryNoData}
-                  names={{ cur: d.thisPeriod, prev: d.prevPeriod }}
-                />
-              )}
-            </div>
-          </div>
-          {chart && sumCur > 0 && (
-            <div className="chart-sum">
-              <span>
-                {d.sumTotal} <b dir="ltr">{fmtBytes(sumCur)}</b>
-              </span>
-              {changePct !== null && (
-                <span className={changePct >= 0 ? 'up' : 'down'}>{d.sumChange(Math.abs(changePct), changePct >= 0)}</span>
-              )}
-              <span>
-                {d.sumPeak} <b dir="ltr">{fmtBytes(peak)}</b>
-              </span>
-            </div>
-          )}
-        </Card>
-
-        <Card title={d.attnTitle} action={shownAttention.length > 0 ? <span className="chip">{d.attnCount(shownAttention.length)}</span> : undefined}>
-          {!attentionReady ? (
-            <div className="well">
-              <ListSkeleton rows={3} />
-            </div>
-          ) : shownAttention.length === 0 ? (
-            <div className="attn-empty">✓ {d.attnAllClear}</div>
-          ) : (
-            <ul className="attn">
-              {shownAttention.map((a) => (
-                <li key={a.key} style={{ ['--sev' as string]: a.sev }}>
-                  <span className="ic">{a.icon}</span>
-                  <span className="t">
-                    <b>{a.title}</b>
-                    <small title={a.sub}>{a.sub}</small>
-                  </span>
-                  <button type="button" className="btn" onClick={() => onNavigate!(a.tab)}>
-                    {a.action}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
       </section>
 
       <ServerGauges />
 
-      <section className="row-c">
-        <Card title={o.statusTitle} action={viewAll('users')}>
-          <div className="well">
-            {statusCounts === undefined ? (
-              <div className="flex items-center gap-[18px] px-4 py-3.5">
-                <div className="h-[170px] w-[170px] flex-shrink-0 animate-pulse rounded-full border-[20px] border-raised" />
-                <div className="flex-1 space-y-3">
-                  {STATUS_ORDER.map((s) => (
-                    <div key={s} className="skel h-3" />
+      <div className="dash-grid">
+        <aside className="dash-side">
+          <Card title={d.sysTitle} action={liveBadge}>
+            <div className="well sys">
+              {nodes === undefined ? (
+                <ListSkeleton rows={2} />
+              ) : nodes === null ? (
+                <DEmpty icon={<IconServer size={18} />} text={o.unavailable} />
+              ) : nodes.length === 0 ? (
+                <DEmpty icon={<IconServer size={18} />} text={o.noNodesYet} />
+              ) : (
+                nodes.map((n) => (
+                  <button key={n.id} type="button" className="node-row" disabled={!may('nodes')} onClick={() => onNavigate?.('nodes')}>
+                    <span className={`tf-led ${n.status === 'connected' ? 'on' : n.status === 'error' ? 'err' : 'wait'}`} />
+                    <span className="nm">
+                      <bdi>{n.name}</bdi>
+                      <small dir="ltr">{n.address}</small>
+                    </span>
+                    <span className={`chip-st ${n.status === 'connected' ? 'st-active' : n.status === 'error' ? 'st-expired' : 'st-on_hold'}`}>
+                      {t.nodesPage.status[n.status]}
+                    </span>
+                  </button>
+                ))
+              )}
+              {!attentionReady ? null : shownAttention.length === 0 ? (
+                <div className="attn-ok">✓ {d.attnAllClear}</div>
+              ) : (
+                <ul className="attn">
+                  {shownAttention.map((a) => (
+                    <li key={a.key} style={{ ['--sev' as string]: a.sev }}>
+                      <span className="t" title={a.sub}>
+                        {a.title}
+                      </span>
+                      <button type="button" onClick={() => onNavigate!(a.tab)}>
+                        {a.action}
+                      </button>
+                    </li>
                   ))}
-                </div>
-              </div>
-            ) : statusCounts === null ? (
-              <DEmpty icon={<IconUsers size={18} />} text={usersBlockedText} />
-            ) : (
-              <StatusDonut
-                counts={statusCounts}
-                labels={t.usersPage.status}
-                unitLabel={o.usersUnit}
-                ariaLabel={o.statusTitle}
-                onPick={may('users') ? () => onNavigate!('users') : undefined}
-              />
-            )}
-          </div>
-        </Card>
+                </ul>
+              )}
+            </div>
+          </Card>
 
-        <Card title={d.protoTitle}>
-          <div className="well">
-            {reports === undefined ? (
-              <ListSkeleton rows={3} />
-            ) : protoTotal === 0 ? (
-              <DEmpty icon={<IconCheck size={18} />} text={d.protoEmpty} />
-            ) : (
-              <div className="protomix">
-                <div className="pstack" role="img" aria-label={protoSlices.map((s) => `${s.name} ${s.v}`).join('، ')}>
-                  {protoSlices.map((s) => (
-                    <i
-                      key={s.name}
-                      style={{ width: `${(s.v / protoTotal) * 100}%`, background: s.c }}
-                      title={`${s.name}: ${s.v} (${Math.round((s.v / protoTotal) * 100)}%)`}
-                    />
+          <Card title={d.liveTitle} action={liveBadge}>
+            <div className="wave-box">
+              <div className="wave-top">
+                <span>{d.waveSum(waveOk, waveFail)}</span>
+                <span>{d.waveWindow}</span>
+              </div>
+              <div className="wave">
+                {reports === undefined ? <div className="skel h-[84px]" /> : <ActivityWave reports={reports ?? []} label={`${d.liveTitle}, ${d.waveWindow}`} />}
+              </div>
+              <div className="wkey">
+                <span style={{ ['--c' as string]: '#22c55e' }}>
+                  <i />
+                  {d.waveOk}
+                </span>
+                <span style={{ ['--c' as string]: '#f59e0b' }}>
+                  <i />
+                  {d.waveEarly}
+                </span>
+                <span style={{ ['--c' as string]: '#ef4444' }}>
+                  <i className="dt" />
+                  {d.waveFail}
+                </span>
+              </div>
+            </div>
+            <div className="well feed">
+              {users === undefined || reports === undefined ? (
+                <ListSkeleton rows={LIST_ROWS} />
+              ) : users === null && reports === null ? (
+                <DEmpty icon={<IconClock size={18} />} text={usersBlockedText} />
+              ) : activity.length === 0 ? (
+                <DEmpty icon={<IconClock size={18} />} text={o.noActivityYet} />
+              ) : (
+                activity.map((a) => (
+                  <div key={a.key} className={`list-row ${freshKeys.has(a.key) ? 'act-new' : ''}`}>
+                    <span className="act-ic" style={{ background: a.tone.bg, color: a.tone.fg }}>
+                      {a.icon}
+                    </span>
+                    <span className="t">
+                      <b>{a.title}</b>
+                      <small>{a.sub}</small>
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </aside>
+
+        <div className="dash-main">
+          <Card
+            title={o.trafficTitle}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                {nodes && nodes.length > 0 && (
+                  <select
+                    value={chartNodeId ?? ''}
+                    onChange={(e) => setChartNodeId(e.target.value ? Number(e.target.value) : null)}
+                    aria-label={o.allNodesOption}
+                    className="select"
+                  >
+                    <option value="">{o.allNodesOption}</option>
+                    {nodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <span className="dseg" role="group" aria-label={o.trafficTitle}>
+                  {PERIODS.map((p) => (
+                    <button key={p} type="button" aria-pressed={period === p} onClick={() => setPeriod(p)}>
+                      {d.periodShort(p)}
+                    </button>
                   ))}
-                </div>
-                <div className="proto-rows">
-                  {protoSlices.map((s) => (
-                    <div key={s.name}>
-                      <span className="sq" style={{ background: s.c }} />
-                      <span className="en">{s.name}</span>
-                      <b>
-                        {s.v} · {Math.round((s.v / protoTotal) * 100)}%
-                      </b>
-                    </div>
-                  ))}
-                </div>
-                <div className="proto-cap">{d.protoCaption(protoTotal)}</div>
+                </span>
+              </div>
+            }
+          >
+            <div className="dlegend">
+              <span style={{ ['--c' as string]: CUR_C }}>
+                <i className="lk" />
+                {d.thisPeriod}
+              </span>
+              <span style={{ ['--c' as string]: PREV_C }}>
+                <i className="lk" />
+                {d.prevPeriod}
+              </span>
+            </div>
+            <div className="well" style={{ marginTop: 8 }}>
+              <div dir="ltr" className={`chart-wrap ${chartBusy ? 'busy' : ''}`}>
+                {chart === undefined ? (
+                  <div className="skel m-2 aspect-[640/250] min-w-[400px] opacity-40" />
+                ) : chart === null ? (
+                  <DEmpty icon={<IconDownload size={18} />} text={o.loadFailed} />
+                ) : (
+                  <TrafficChart
+                    cur={curPts}
+                    prev={prevPts}
+                    lang={lang}
+                    label={`${o.trafficTitle}, ${o.periodDays(period)}`}
+                    emptyText={o.trafficHistoryNoData}
+                    names={{ cur: d.thisPeriod, prev: d.prevPeriod }}
+                  />
+                )}
+              </div>
+            </div>
+            {chart && sumCur > 0 && (
+              <div className="chart-sum">
+                <span>
+                  {d.sumTotal} <b dir="ltr">{fmtBytes(sumCur)}</b>
+                </span>
+                {changePct !== null && (
+                  <span className={changePct >= 0 ? 'up' : 'down'}>{d.sumChange(Math.abs(changePct), changePct >= 0)}</span>
+                )}
+                <span>
+                  {d.sumPeak} <b dir="ltr">{fmtBytes(peak)}</b>
+                </span>
               </div>
             )}
-          </div>
-        </Card>
+          </Card>
 
-        <Card title={o.nodesStatusTitle} action={viewAll('nodes')}>
-          <div className="well">
-            {nodes === undefined ? (
-              <ListSkeleton rows={3} />
-            ) : nodes === null ? (
-              <DEmpty icon={<IconServer size={18} />} text={o.unavailable} />
-            ) : nodes.length === 0 ? (
-              <DEmpty icon={<IconServer size={18} />} text={o.noNodesYet} />
-            ) : (
-              nodes.map((n) => (
-                <div key={n.id} className="node-row">
-                  <span className={`tf-led ${n.status === 'connected' ? 'on' : n.status === 'error' ? 'err' : 'wait'}`} />
-                  <span className="nm">
-                    <bdi>{n.name}</bdi>
-                    <small dir="ltr">{n.address}</small>
-                  </span>
-                  <span className={`chip-st ${n.status === 'connected' ? 'st-active' : n.status === 'error' ? 'st-expired' : 'st-on_hold'}`}>
-                    {t.nodesPage.status[n.status]}
-                  </span>
+          <div className="dash-pair">
+          <Card title={o.statusTitle} action={viewAll('users')}>
+            <div className="well">
+              {statusCounts === undefined ? (
+                <div className="flex items-center gap-[18px] px-4 py-3.5">
+                  <div className="h-[170px] w-[170px] flex-shrink-0 animate-pulse rounded-full border-[20px] border-raised" />
+                  <div className="flex-1 space-y-3">
+                    {STATUS_ORDER.map((s) => (
+                      <div key={s} className="skel h-3" />
+                    ))}
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </section>
+              ) : statusCounts === null ? (
+                <DEmpty icon={<IconUsers size={18} />} text={usersBlockedText} />
+              ) : (
+                <StatusDonut
+                  counts={statusCounts}
+                  labels={t.usersPage.status}
+                  unitLabel={o.usersUnit}
+                  ariaLabel={o.statusTitle}
+                  onPick={may('users') ? () => onNavigate!('users') : undefined}
+                />
+              )}
+            </div>
+          </Card>
 
-      <section className="row-d">
-        <Card title={o.recentUsersTitle} action={viewAll('users')}>
-          <div className="well">
-            {users === undefined ? (
-              <ListSkeleton rows={LIST_ROWS} />
-            ) : users === null ? (
-              <DEmpty icon={<IconUsers size={18} />} text={usersBlockedText} />
-            ) : users.length === 0 ? (
-              <DEmpty icon={<IconPlus size={18} />} text={o.noUsersYet} />
-            ) : (
-              users.slice(0, LIST_ROWS).map((u) => (
-                <div key={u.id} className="list-row">
-                  <span className="davatar" style={{ background: avatarColor(u.username) }}>
-                    {initials(u.username)}
-                  </span>
-                  <span className="t">
-                    <b>
-                      <bdi className="font-en">{u.username}</bdi>
-                    </b>
-                    <small>{userSubtitle(u)}</small>
-                  </span>
-                  <span className={`chip-st st-${u.status}`}>{t.usersPage.status[u.status]}</span>
+          <Card title={d.protoTitle}>
+            <div className="well">
+              {reports === undefined ? (
+                <ListSkeleton rows={3} />
+              ) : protoTotal === 0 ? (
+                <DEmpty icon={<IconCheck size={18} />} text={d.protoEmpty} />
+              ) : (
+                <div className="protomix">
+                  <div className="pstack" role="img" aria-label={protoSlices.map((s) => `${s.name} ${s.v}`).join('، ')}>
+                    {protoSlices.map((s) => (
+                      <i
+                        key={s.name}
+                        style={{ width: `${(s.v / protoTotal) * 100}%`, background: s.c }}
+                        title={`${s.name}: ${s.v} (${Math.round((s.v / protoTotal) * 100)}%)`}
+                      />
+                    ))}
+                  </div>
+                  <div className="proto-rows">
+                    {protoSlices.map((s) => (
+                      <div key={s.name}>
+                        <span className="sq" style={{ background: s.c }} />
+                        <span className="en">{s.name}</span>
+                        <b>
+                          {s.v} · {Math.round((s.v / protoTotal) * 100)}%
+                        </b>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="proto-cap">{d.protoCaption(protoTotal)}</div>
                 </div>
-              ))
-            )}
+              )}
+            </div>
+          </Card>
           </div>
-        </Card>
-
-        <Card
-          title={o.recentActivityTitle}
-          action={
-            <span className="tf-live">
-              <i />
-              {d.live}
-            </span>
-          }
-        >
-          <div className="well">
-            {users === undefined || reports === undefined ? (
-              <ListSkeleton rows={LIST_ROWS} />
-            ) : users === null && reports === null ? (
-              <DEmpty icon={<IconClock size={18} />} text={usersBlockedText} />
-            ) : activity.length === 0 ? (
-              <DEmpty icon={<IconClock size={18} />} text={o.noActivityYet} />
-            ) : (
-              activity.map((a) => (
-                <div key={a.key} className={`list-row ${freshKeys.has(a.key) ? 'act-new' : ''}`}>
-                  <span className="act-ic" style={{ background: a.tone.bg, color: a.tone.fg }}>
-                    {a.icon}
-                  </span>
-                  <span className="t">
-                    <b>{a.title}</b>
-                    <small>{a.sub}</small>
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </section>
-
-      <Card title={o.infraTitle}>
-        <div className="well infra">
-          <div className="infra-counts">
-            {infraCounts.map((c) => (
-              <div key={c.label}>
-                <span>{c.label}</span>
-                <b className="tabular">{c.count === undefined ? <span className="skel inline-block h-4 w-6" /> : c.count ?? '—'}</b>
-              </div>
-            ))}
-          </div>
-          {hosts && hosts.length > 0 && (
-            <>
-              <div className="infra-sub">{o.hostsByProtocolTitle}</div>
-              <div className="flex flex-wrap gap-1.5">
-                {countBy(hosts, (h) => h.protocol).map(([protocol, count]) => (
-                  <span key={protocol} className="chip">
-                    {t.coresPage.protocolLabels[protocol as keyof typeof t.coresPage.protocolLabels] ?? protocol} <b>{count}</b>
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-          {cores && cores.length > 0 && (
-            <>
-              <div className="infra-sub">{o.coresByTypeTitle}</div>
-              <div className="flex flex-wrap gap-1.5">
-                {countBy(cores, (c) => c.core_type).map(([type, count]) => (
-                  <span key={type} className="chip">
-                    {t.coresPage.coreTypeLabels[type as keyof typeof t.coresPage.coreTypeLabels] ?? type} <b>{count}</b>
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
         </div>
-      </Card>
+      </div>
     </div>
   )
 }
