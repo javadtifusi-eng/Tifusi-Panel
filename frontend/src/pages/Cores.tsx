@@ -1280,7 +1280,10 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
           title={editingId ? c.formEdit(form.name) : c.formNew}
           sub={form.coreType ? t.coresPage.coreTypeLabels[form.coreType] : t.coresPage.coreTypeLabel}
           onClose={resetForm}
-          full
+          // Full screen only for Xray, whose JSON, routing and outbound editors need the width. IKEv2,
+          // L2TP and Hysteria2 are a handful of fields, and a full screen around them is mostly empty.
+          full={form.coreType === 'xray'}
+          width={520}
           footer={
             form.coreType ? (
               <>
