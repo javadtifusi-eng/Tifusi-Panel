@@ -26,8 +26,10 @@ network stack instead of an isolated container-only one.
 import contextlib
 import os
 import ipaddress
+import re
 import subprocess
 import time
+import warnings
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,7 +43,10 @@ from node_agent import vless_egress
 CHARON_BIN = "/usr/libexec/ipsec/charon"
 SWANCTL_CONF = Path("/etc/swanctl/swanctl.conf")
 SWANCTL_X509 = Path("/etc/swanctl/x509")
+SWANCTL_X509CA = Path("/etc/swanctl/x509ca")
 SWANCTL_PRIVATE = Path("/etc/swanctl/private")
+# Where the image's own trust store keeps roots; see _publish_chain.
+SYSTEM_CA_DIR = Path("/etc/ssl/certs")
 IKEV2_CERT_BASE = "ikev2-server"
 XL2TPD_CONF = Path("/etc/xl2tpd/xl2tpd.conf")
 PPP_OPTIONS = Path("/etc/ppp/options.xl2tpd")
@@ -95,6 +100,53 @@ def _cert_matches_host(host: str) -> bool:
     return host in sans
 
 
+def _publish_chain(certificate: str) -> None:
+    """Writes the leaf where swanctl uses it and every certificate above it as a CA.
+
+    A Core's certificate is usually a whole fullchain.pem. Written as one file into x509/, charon
+    used only the first certificate and sent the leaf alone, so the client had to finish the chain
+    itself. iOS does; Windows' built-in IKEv2 does not. It asks for the roots it trusts
+    (CERTREQ "ISRG Root X1"), and a Let's Encrypt leaf now chains to the newer Root YR, which a
+    Windows store may not hold yet — so the handshake stopped right after the server's
+    certificate, before the user was even asked for a password. Loaded into x509ca/, charon sends
+    each intermediate ("sending issuer cert"), including Root YR as cross-signed by X1, and Windows
+    reaches a root it knows.
+
+    charon only sends intermediates once it can complete the chain to a CA it has loaded, so when
+    the chain given ends in a certificate that is not self-signed, its issuer is added from the
+    image's own trust store.
+    """
+    blocks = [m + "\n" for m in re.findall(r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", certificate, re.S)]
+    if not blocks:
+        _write(IKEV2_LEAF_CERT, certificate.strip() + "\n")
+        return
+    _write(IKEV2_LEAF_CERT, blocks[0])
+
+    SWANCTL_X509CA.mkdir(parents=True, exist_ok=True)
+    for stale in SWANCTL_X509CA.glob(f"{IKEV2_CERT_BASE}-chain-*.pem"):
+        stale.unlink(missing_ok=True)
+    for i, block in enumerate(blocks[1:], start=1):
+        _write(SWANCTL_X509CA / f"{IKEV2_CERT_BASE}-chain-{i}.pem", block)
+
+    try:
+        top = x509.load_pem_x509_certificate(blocks[-1].encode())
+    except ValueError:
+        return
+    if top.issuer == top.subject:
+        return
+    for candidate in SYSTEM_CA_DIR.glob("*.pem"):
+        try:
+            # Some roots in the store predate RFC 5280's positive-serial rule and warn on every load.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                root = x509.load_pem_x509_certificate(candidate.read_bytes())
+        except (OSError, ValueError):
+            continue
+        if root.subject == top.issuer and root.issuer == root.subject:
+            _write(SWANCTL_X509CA / f"{IKEV2_CERT_BASE}-chain-root.pem", root.public_bytes(serialization.Encoding.PEM).decode())
+            return
+
+
 def _ensure_ikev2_cert(host: str, certificate: str | None = None, certificate_key: str | None = None) -> None:
     """Publishes the server cert for IKEv2's `auth = pubkey` local round.
     With certificate/certificate_key given (the Core's admin-provided
@@ -107,7 +159,7 @@ def _ensure_ikev2_cert(host: str, certificate: str | None = None, certificate_ke
     if certificate and certificate_key:
         SWANCTL_X509.mkdir(parents=True, exist_ok=True)
         SWANCTL_PRIVATE.mkdir(parents=True, exist_ok=True)
-        _write(IKEV2_LEAF_CERT, certificate.strip() + "\n")
+        _publish_chain(certificate)
         _write(IKEV2_LEAF_KEY, certificate_key.strip() + "\n", mode=0o600)
         return
     host = host or "ikev2-server"
