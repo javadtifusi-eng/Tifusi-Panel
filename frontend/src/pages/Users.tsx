@@ -1191,7 +1191,7 @@ function usageFill(pct: number): string {
 function validityFill(days: number): string {
   if (days <= 0) return '#ef4444'
   if (days <= 3) return 'linear-gradient(90deg, #ef4444, #f97316)'
-  if (days <= 7) return 'linear-gradient(90deg, #f59e0b, #facc15)'
+  if (days <= 7) return 'linear-gradient(90deg, #f97316, #fb923c)'
   return 'linear-gradient(90deg, #38bdf8, #a78bfa)'
 }
 

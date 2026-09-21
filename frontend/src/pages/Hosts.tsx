@@ -54,7 +54,7 @@ const PCOLOR: Record<HostProtocol, string> = {
   shadowsocks: '#2dd4bf',
   hysteria2: '#f97316',
   ikev2: '#22c55e',
-  l2tp: '#facc15',
+  l2tp: '#94a3b8',
 }
 const MONO: Record<HostProtocol, string> = { vless: 'VL', vmess: 'VM', trojan: 'TR', shadowsocks: 'SS', hysteria2: 'HY', ikev2: 'IK', l2tp: 'L2' }
 
