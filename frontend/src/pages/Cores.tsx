@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
-import { IconCopy, IconPlus } from '../components/icons'
+import { IconCopy, IconPlus, IconRefresh } from '../components/icons'
 import { Empty, Field, Sheet, highlightJsonLines, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
@@ -23,6 +23,16 @@ import RealityScanner from '../components/RealityScanner'
 import { copyToClipboard } from '../lib/clipboard'
 
 const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'l2tp']
+// A Record, so a core type added later cannot silently fall through to another type's label —
+// the way Hysteria2 used to show up marked "L2TP".
+const ENGINE_MARK: Record<CoreType, string> = { xray: 'XRAY', ikev2: 'IKEv2', hysteria2: 'HY2', l2tp: 'L2TP' }
+
+/** 32 hex characters, the same as the panel generates when the field is left empty. */
+function randomObfs(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 // Where node_agent/ipsec.py actually writes these two fields once synced to
 // a node (IKEV2_LEAF_CERT / IKEV2_LEAF_KEY) — shown read-only so the admin
@@ -854,7 +864,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
 
   function openNew(type: CoreType | '') {
     setEditingId(null)
-    setForm({ ...emptyForm(), coreType: type })
+    setForm({ ...emptyForm(), coreType: type, hysteria2Obfs: type === 'hysteria2' ? randomObfs() : '' })
     setWizard(emptyWizard())
     setGeneratedKey(null)
     setLastWarnings([])
@@ -1046,7 +1056,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
               className={`engine ${count === 0 ? 'empty-engine' : ''}`}
               onClick={() => setEngine(type)}
             >
-              <span className="mark">{type === 'xray' ? 'XRAY' : type === 'ikev2' ? 'IKEv2' : 'L2TP'}</span>
+              <span className="mark">{ENGINE_MARK[type]}</span>
               <span className="t">
                 <b>{t.coresPage.coreTypeLabels[type]}</b>
                 <small>{engineSub[type]}</small>
@@ -1486,12 +1496,18 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                     />
                   </Field>
                   <Field label={t.coresPage.hysteria2ObfsLabel} hint={t.coresPage.hysteria2ObfsHint}>
-                    <input
-                      className="input ltr mono"
-                      value={form.hysteria2Obfs}
-                      onChange={(e) => setForm((f) => ({ ...f, hysteria2Obfs: e.target.value }))}
-                      required
-                    />
+                    <div className="flex gap-2">
+                      <input className="input ltr mono" value={form.hysteria2Obfs} readOnly style={{ flex: 1 }} />
+                      <button
+                        type="button"
+                        className="btn"
+                        title={t.coresPage.hysteria2ObfsNew}
+                        onClick={() => setForm((f) => ({ ...f, hysteria2Obfs: randomObfs() }))}
+                      >
+                        <IconRefresh size={14} />
+                        {t.coresPage.hysteria2ObfsNew}
+                      </button>
+                    </div>
                   </Field>
                   <Field label={t.coresPage.hysteria2RateLabel} hint={t.coresPage.hysteria2RateHint}>
                     <input

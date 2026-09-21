@@ -2,6 +2,8 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+import secrets
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
@@ -33,6 +35,17 @@ _CORE_FIELDS = (
     "hysteria2_obfs",
     "hysteria2_rate_mbps",
 )
+
+
+def _ensure_hysteria2_obfs(core: Core) -> None:
+    """A Hysteria2 core always has an obfuscation password, made here when none is given.
+
+    Without one the first packet is a plain QUIC handshake, which Iranian networks drop wholesale,
+    so a server that works from anywhere else is unreachable from inside Iran for that reason alone.
+    It is shared by every user of the core and identifies nobody, so there is nothing for an admin
+    to choose — only something to get wrong by typing it."""
+    if core.core_type == CoreType.hysteria2 and not core.hysteria2_obfs:
+        core.hysteria2_obfs = secrets.token_hex(16)
 
 
 async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None = None) -> CoreResponse:
@@ -190,6 +203,7 @@ async def create_core(payload: CoreCreate, db: AsyncSession = Depends(get_db)) -
         config=payload.config if payload.core_type == CoreType.xray else None,
         **{field: getattr(payload, field) for field in _CORE_FIELDS},
     )
+    _ensure_hysteria2_obfs(core)
     core.inbounds = []  # avoids a lazy-load attempt on the brand-new object below
     db.add(core)
     await db.flush()
@@ -220,6 +234,7 @@ async def update_core(
     for field in _CORE_FIELDS:
         if field in updates:
             setattr(core, field, updates[field])
+    _ensure_hysteria2_obfs(core)
 
     warnings: list[str] = []
     if core.core_type == CoreType.xray and "config" in updates:

@@ -97,7 +97,9 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
 
   const allInbounds: Inbound[] = cores.flatMap((c) => c.inbounds)
   const isXray = form.protocol !== '' && XRAY_PROTOCOLS.includes(form.protocol)
-  const isCoreLinked = form.protocol === 'l2tp' || form.protocol === 'ikev2'
+  // Hysteria2 is built on a core too now: the core carries the port and obfuscation password,
+  // so the host only says where clients connect and which name they present.
+  const isCoreLinked = form.protocol === 'l2tp' || form.protocol === 'ikev2' || form.protocol === 'hysteria2'
   const isHysteria2 = form.protocol === 'hysteria2'
   const inboundsForProtocol = allInbounds.filter((i) => i.protocol === form.protocol)
   const coresForProtocol = cores.filter((c) => c.core_type === form.protocol)
@@ -211,8 +213,8 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
       fragment_packets: isXray ? form.fragment_packets || null : null,
       core_id: isCoreLinked ? form.core_id : null,
       hysteria2_sni: isHysteria2 ? form.hysteria2_sni || null : null,
-      hysteria2_port: isHysteria2 && form.hysteria2_port ? parseInt(form.hysteria2_port, 10) : null,
-      hysteria2_obfs: isHysteria2 ? form.hysteria2_obfs || null : null,
+      hysteria2_port: null,
+      hysteria2_obfs: null,
     }
     try {
       if (editingId) await updateHost(editingId, payload)
@@ -317,11 +319,13 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
       }
     }
     if (host.protocol === 'hysteria2') {
+      const core = host.core_id != null ? coreById.get(host.core_id) : undefined
+      const port = core?.hysteria2_port ?? host.hysteria2_port
       return {
         kind: 'QUIC',
-        pill: { cls: 'info', text: 'Hysteria2' },
-        route: `${host.address}${host.hysteria2_port ? ` : ${host.hysteria2_port}` : ''}`,
-        port: host.hysteria2_port ? String(host.hysteria2_port) : '—',
+        pill: core ? { cls: 'ok', text: core.name } : { cls: 'warn', text: h.noCore },
+        route: `${host.address}${port ? ` : ${port}` : ''}`,
+        port: port ? `UDP ${port}` : '—',
         meta: [
           ['SNI', host.hysteria2_sni ?? '—'],
           [h.network, 'UDP'],
@@ -668,26 +672,22 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
 
             {isHysteria2 && (
               <div className="form-grid">
-                <Field label={t.hostsPage.hysteria2SniLabel}>
-                  <input className="input ltr" value={form.hysteria2_sni} onChange={(e) => update('hysteria2_sni', e.target.value)} />
+                <Field label={t.hostsPage.hysteria2SniLabel} hint={t.hostsPage.hysteria2SniHint}>
+                  <input
+                    className="input ltr"
+                    value={form.hysteria2_sni}
+                    placeholder={form.address || undefined}
+                    onChange={(e) => update('hysteria2_sni', e.target.value)}
+                  />
                 </Field>
-                {/* UDP 443 is where QUIC lives, and measured from Iran it answered
-                    nothing at all — a host set to it is dead there with no error to
-                    explain why. Warned rather than rejected: the port is only
-                    hopeless from the networks this panel is aimed at. */}
-                <Field
-                  label={t.hostsPage.hysteria2PortLabel}
-                  hint={
-                    form.hysteria2_port === '443' ? (
-                      <span style={{ color: 'var(--warn)' }}>{t.hostsPage.hysteria2Port443Warning}</span>
-                    ) : undefined
-                  }
-                >
-                  <input className="input" type="number" min="1" max="65535" value={form.hysteria2_port} onChange={(e) => update('hysteria2_port', e.target.value)} />
-                </Field>
-                <Field label={t.hostsPage.hysteria2ObfsLabel} hint={t.hostsPage.hysteria2ObfsHint}>
-                  <input className="input ltr" value={form.hysteria2_obfs} onChange={(e) => update('hysteria2_obfs', e.target.value)} />
-                </Field>
+                {(() => {
+                  const core = form.core_id != null ? coreById.get(form.core_id) : undefined
+                  return core ? (
+                    <Field label={t.hostsPage.hysteria2PortLabel} hint={t.hostsPage.hysteria2FromCore}>
+                      <input className="input ltr mono" value={`UDP ${core.hysteria2_port ?? '—'}`} readOnly />
+                    </Field>
+                  ) : null
+                })()}
               </div>
             )}
 

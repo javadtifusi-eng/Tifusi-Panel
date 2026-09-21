@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import require_permission
 from app.groups.access import resolve_groups
-from app.models.core import Core
+from app.models.core import Core, CoreType
 from app.models.host import CORE_LINKED_PROTOCOLS, XRAY_PROTOCOLS, Host, HostProtocol
 from app.models.inbound import Inbound
 from app.reality.keys import generate_reality_keypair
@@ -49,9 +49,20 @@ async def _validate(protocol: HostProtocol, get, db: AsyncSession) -> None:
                 detail=f"core '{core.name}' is {core.core_type.value}, not {protocol.value}",
             )
     elif protocol == HostProtocol.hysteria2:
-        missing = _missing(hysteria2_sni=get("hysteria2_sni"), hysteria2_port=get("hysteria2_port"))
-        if missing:
-            raise HTTPException(status_code=400, detail=f"hysteria2 requires: {', '.join(missing)}")
+        # Built on a Hysteria2 core, the port and obfuscation password come from the core, so the
+        # host carries only what the client sees: address and SNI. A host without a core predates
+        # them and still has to say which port its hand-run server listens on.
+        core_id = get("core_id")
+        if core_id is not None:
+            core = await db.get(Core, core_id)
+            if core is None:
+                raise HTTPException(status_code=400, detail="core_id not found")
+            if core.core_type != CoreType.hysteria2:
+                raise HTTPException(status_code=400, detail=f"core '{core.name}' is {core.core_type.value}, not hysteria2")
+        else:
+            missing = _missing(hysteria2_port=get("hysteria2_port"))
+            if missing:
+                raise HTTPException(status_code=400, detail=f"hysteria2 requires a core, or: {', '.join(missing)}")
 
 
 @router.get("/reality-keypair", response_model=RealityKeypairResponse)

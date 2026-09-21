@@ -6,7 +6,7 @@
 
 ## Importing servers
 
-On the **Servers** tab, enter the user's access code or subscription link and select **Get servers**. Every IKEv2 and L2TP server of that user is added with its username, password, PSK, remote ID and server certificate. **Refresh** reads changes from the panel again.
+On the **Servers** tab, enter the user's access code or subscription link and select **Get servers**. Every IKEv2, VLESS and Hysteria2 server of that user is added with its username, password, PSK, remote ID and server certificate. **Refresh** reads changes from the panel again.
 
 The access code looks like `javad7KQ4MP9X` and is shown at the top of the user's subscription page; letter case does not matter. A bare code goes to the panel the app was built for; for any other panel, write `code@panel-domain`, for example `ali7KQ4MP9X@panel.example.com`.
 
@@ -14,8 +14,9 @@ The access code looks like `javad7KQ4MP9X` and is shown at the top of the user's
 
 | Protocol | In the app |
 | --- | --- |
-| IKEv2 (EAP or PSK) | Automatic connect and disconnect, Android 11 and later. |
-| L2TP/IPsec | Shows the connection details and opens the phone's VPN settings. |
+| IKEv2 (EAP or PSK) | Automatic connect and disconnect on Android 11 and later; on 8-10 it shows the details and opens the phone's VPN settings. |
+| VLESS | Through the built-in Xray core. |
+| Hysteria2 | The official Hysteria2 client behind the same core, with a QUIC keepalive no subscription link can set. |
 
 For IKEv2 with a self-signed server certificate, the panel sends the CA certificate and the app pins it. A publicly trusted certificate, such as one from Let's Encrypt, needs no CA.
 

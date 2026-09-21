@@ -52,11 +52,6 @@ class CoreCreate(BaseModel):
                 raise ValueError("ikev2_certificate and ikev2_certificate_key must be set together")
         elif self.core_type == CoreType.hysteria2:
             _require(self.hysteria2_port, "hysteria2_port", "hysteria2")
-            # Without obfuscation the first packet is a plain QUIC handshake,
-            # which Iranian networks drop wholesale — a server that works from
-            # anywhere else is unreachable from Iran for that reason alone, so
-            # this is required rather than optional.
-            _require(self.hysteria2_obfs, "hysteria2_obfs", "hysteria2")
             if self.hysteria2_port == 443:
                 # Measured from Iran on mobile and fixed lines alike: UDP 443
                 # answered nothing at all. Refused rather than warned here,
