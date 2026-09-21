@@ -509,7 +509,7 @@ export interface IranCheck {
 export interface RealityCandidate {
   host: string
   ip: string | null
-  source: 'neighbor'
+  source: 'neighbor' | 'traffic'
   tls: string | null
   alpn: string | null
   /** Warm, from the node, by IP: median TCP connect and median TLS handshake to the target. */

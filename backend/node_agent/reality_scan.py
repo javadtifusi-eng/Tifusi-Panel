@@ -46,6 +46,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 
+from node_agent import traffic_names
+
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
 
 FINGERPRINTS = ["chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq", "random", "randomized"]
@@ -53,6 +55,8 @@ PROBE_URL = "https://www.gstatic.com/generate_204"
 
 _DISCOVER_TIMEOUT = 3.0
 _DISCOVER_CONCURRENCY = 64
+# How many of the users' own sites each scan tries, most-visited first.
+_TRAFFIC_NAMES = 120
 _VALIDATE_TIMEOUT = 5.0
 _FETCH_TIMEOUT = 10
 
@@ -167,6 +171,7 @@ def start(public_ip: str | None, ring: int = 0, exclude: list[str] | None = None
 
 async def _run(public_ip: str | None, ring: int = 0, exclude: set[str] | None = None) -> None:
     try:
+        await _from_traffic(exclude)
         if public_ip:
             await _discover(public_ip, ring, exclude)
         _job.state = "validating"
@@ -281,6 +286,28 @@ async def _discover(public_ip: str, ring: int = 0, exclude: set[str] | None = No
                 _job.candidates.setdefault(name, Candidate(host=name, ip=ip, source="neighbor"))
 
     await asyncio.gather(*(one(ip) for ip in ips))
+
+
+async def _from_traffic(exclude: set[str] | None) -> None:
+    """The servers this node's own users open (node_agent/traffic_names.py):
+    names an operator's whitelist already knows, which a datacenter neighbour
+    never is. Most are logged as an address, named here by its certificate.
+    Reached by their own DNS, so dest is the name, not the address: a big
+    site's name resolves all over a CDN, not only to the one the user hit."""
+    sem = asyncio.Semaphore(_DISCOVER_CONCURRENCY)
+
+    async def one(dest: str) -> None:
+        if not dest.replace(".", "").isdigit():
+            names = [dest]
+        else:
+            async with sem:
+                der = await _peer_cert(dest)
+            names = _cert_names(der)[:3] if der else []
+        for name in names:
+            if not (exclude and name in exclude):
+                _job.candidates.setdefault(name, Candidate(host=name, source="traffic"))
+
+    await asyncio.gather(*(one(d) for d in traffic_names.top(_TRAFFIC_NAMES)))
 
 
 # --- 2. validate -----------------------------------------------------------

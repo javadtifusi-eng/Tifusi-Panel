@@ -25,6 +25,8 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable
+
+from node_agent import traffic_names
 from copy import deepcopy
 from pathlib import Path
 
@@ -271,6 +273,8 @@ def _read_access_log(xray_bin: str, api_addr: str) -> list[tuple[str, str]]:
         match = _ACCESS_LINE.search(line)
         if match:
             entries.append((_client_ip(match.group(1)), match.group(2)))
+            traffic_names.record(line, match.group(2))
+    traffic_names.flush()
     return entries
 
 

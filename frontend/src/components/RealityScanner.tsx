@@ -312,7 +312,13 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
   const opName = (op: string) => t.ui.realityScan.device.ops[op] ?? op
 
   const left = test?.active && test.expires_at ? Math.max(0, Math.round((test.expires_at * 1000 - Date.now()) / 60000)) : null
-  const items = test ? [...test.items].sort((a, b) => rate(b) - rate(a) || Number(b.ok) - Number(a.ok) || b.down - a.down) : []
+  // Upload first once the test measured any: on MCI the download is fine through
+  // nearly every SNI and the upload is what separates them, so ranking by
+  // download put a name that cannot send at the top.
+  const byUp = !!test?.items.some((i) => upRate(i) > 0)
+  const items = test
+    ? [...test.items].sort((a, b) => (byUp ? upRate(b) - upRate(a) : 0) || rate(b) - rate(a) || Number(b.ok) - Number(a.ok) || b.down - a.down)
+    : []
   const fastest = rate(items[0] ?? ({} as FieldTestItem)) ? items[0].host : null
 
   return (
