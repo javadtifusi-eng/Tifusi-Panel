@@ -451,7 +451,7 @@ select.input { padding-block: 7px; }
 .pg-users .ostack span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 600 0.64rem var(--font-en); color: #0a0a0a; border: 2px solid var(--card); margin-left: -8px; }
 .pg-users .ostack span:first-child { margin-left: 0; }
 .pg-users .ostack .more { background: var(--raised); color: var(--muted); }
-.pg-users .tile.stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; cursor: pointer; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+.pg-users .tile.stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; cursor: pointer; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; -webkit-tap-highlight-color: transparent; }
 .pg-users .tile.stat::before { content: ''; position: absolute; inset: auto auto -40% -20%; width: 70%; height: 90%; background: radial-gradient(closest-side, color-mix(in srgb, var(--c) 16%, transparent), transparent); pointer-events: none; }
 .pg-users .tile.stat:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--edge)); transform: translateY(-2px); }
 .pg-users .tile.stat[aria-pressed='true'] { border-color: color-mix(in srgb, var(--c) 60%, var(--edge)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 14%, transparent); }
@@ -1279,3 +1279,4 @@ select.input { padding-block: 7px; }
 @keyframes cdt-slide-rtl { 0% { transform: translateX(120%); } 100% { transform: translateX(-320%); } }
 @media (prefers-reduced-motion: reduce) { .rsc-bar.indeterminate i { animation: none; width: 100%; opacity: 0.5; } }
 @media (max-width: 560px) { .cdt-head { flex-direction: column; } .cdt-row { flex-wrap: wrap; } }
+.pg-users .tile.stat:focus:not(:focus-visible) { outline: none; }
