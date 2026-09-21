@@ -535,7 +535,10 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
     get_cert=${get_cert:-Y}
     if [[ "$get_cert" =~ ^[Yy]$ ]]; then
       info "Requesting a Let's Encrypt certificate for $domain (needs port 80 free, and $domain must already resolve to this server)..."
-      mkdir -p certs letsencrypt-work
+      # Issued straight into the panel's own ACME directory, at the paths the
+      # panel container sees (./data is its /app/data), so the panel's
+      # automatic renewal (backend/app/tls_renewal.py) picks it up as is.
+      mkdir -p certs data/letsencrypt
       CERT_LOG="$(mktemp)"
       # --key-type rsa: not certbot's own ECDSA default — this cert can end
       # up reused as an IKEv2 Core's certificate (Cores > "Use panel's
@@ -543,16 +546,18 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
       # compiled in, so an ECDSA cert there fails outright ("parsing X509
       # certificate failed", confirmed live). RSA works identically for
       # the dashboard's own HTTPS.
-      if docker run --rm -p 80:80 -v "$(pwd)/letsencrypt-work:/etc/letsencrypt" \
+      if docker run --rm -p 80:80 -v "$(pwd)/data/letsencrypt:/app/data/letsencrypt" \
         certbot/certbot certonly --standalone --non-interactive --agree-tos \
         --key-type rsa --rsa-key-size 2048 \
+        --config-dir /app/data/letsencrypt/config --work-dir /app/data/letsencrypt/work \
+        --logs-dir /app/data/letsencrypt/logs \
         -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
         # Certbot's own "Congratulations" box already states exactly where
         # the cert and key ended up — show it instead of just our one-line
         # paraphrase of it, the way every other panel's installer does.
         cat "$CERT_LOG"
-        cp "letsencrypt-work/live/${domain}/fullchain.pem" certs/fullchain.pem
-        cp "letsencrypt-work/live/${domain}/privkey.pem" certs/privkey.pem
+        cp "data/letsencrypt/config/live/${domain}/fullchain.pem" certs/fullchain.pem
+        cp "data/letsencrypt/config/live/${domain}/privkey.pem" certs/privkey.pem
         # Only 443 is implied by "https://host" — on any other port the
         # subscription links the panel hands to clients have to name it.
         if [ "$dashboard_https_port" = 443 ]; then
@@ -562,7 +567,7 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
         fi
         echo "TIFUSI_PUBLIC_URL=${PANEL_PUBLIC_URL}" >> .env
         show_ssl_summary "$(pwd)/certs/fullchain.pem" "$(pwd)/certs/privkey.pem" "$PANEL_PUBLIC_URL" "$dashboard_https_port"
-        warn "Let's Encrypt certificates expire every 90 days — this installer doesn't set up auto-renewal, so you'll need to repeat this (or set up certbot renew plus a container restart) before then."
+        info "The panel renews this certificate on its own before it expires (port 80 has to stay reachable)."
       else
         warn "Certificate request failed — full output:"
         cat "$CERT_LOG"
