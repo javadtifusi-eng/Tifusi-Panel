@@ -25,6 +25,7 @@ nothing else on the machine is shaped.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -40,6 +41,9 @@ CONFIG_PATH = Path(os.environ.get("HYSTERIA_CONFIG_PATH", "./data/hysteria-confi
 # this path on the node exactly as it is for the panel itself.
 CERT_PATH = Path(os.environ.get("HYSTERIA_CERT", "/certs/fullchain.pem"))
 KEY_PATH = Path(os.environ.get("HYSTERIA_KEY", "/certs/privkey.pem"))
+# The last payload the panel pushed, kept so a container restart can bring the server back without
+# waiting for the next push — the same reason main.py restarts Xray from its saved config.
+STATE_PATH = CONFIG_PATH.with_name("hysteria-state.json")
 # Loopback only, and read by the agent itself rather than by the panel.
 STATS_LISTEN = "127.0.0.1:9998"
 
@@ -61,8 +65,15 @@ def _build_yaml(payload: dict, agent_port: int) -> str:
     cfg: dict = {
         "listen": f":{port}",
         "tls": {"cert": str(CERT_PATH), "key": str(KEY_PATH)},
-        # The agent answers here and relays to the panel; see the module docstring.
-        "auth": {"type": "http", "http": {"url": f"http://127.0.0.1:{agent_port}/hysteria/auth"}},
+        # The agent answers here and relays to the panel; see the module docstring. HTTPS because
+        # that is all the agent speaks (node_agent/tls.py), and `insecure` because its certificate is
+        # self-signed — which is safe to skip verifying here only because this is the loopback, where
+        # nothing can sit in between. Plain http:// to that port fails the TLS handshake, and every
+        # client then sees "authentication error, HTTP status code: 502".
+        "auth": {
+            "type": "http",
+            "http": {"url": f"https://127.0.0.1:{agent_port}/hysteria/auth", "insecure": True},
+        },
         "trafficStats": {"listen": STATS_LISTEN, "secret": _stats_secret},
         # A bare Hysteria2 handshake is a QUIC handshake, which Iranian networks
         # drop wholesale, so without obfuscation a server that works everywhere
@@ -115,8 +126,11 @@ def _shape(port: int, rate_mbps: int | None) -> None:
         return
     rate = f"{int(rate_mbps)}mbit"
     _tc("qdisc", "add", "dev", dev, "root", "handle", "1:", "htb", "default", "10")
-    _tc("class", "add", "dev", dev, "parent", "1:", "classid", "1:1", "htb", "rate", "10gbit")
-    _tc("class", "add", "dev", dev, "parent", "1:1", "classid", "1:10", "htb", "rate", "10gbit", "ceil", "10gbit")
+    # Explicit quantum on the two line-rate classes: HTB derives it as rate/r2q, which at 10gbit is
+    # far past its 200000-byte limit, and it warns and clamps. Stating it removes the guesswork
+    # from a command that reshapes the whole interface.
+    _tc("class", "add", "dev", dev, "parent", "1:", "classid", "1:1", "htb", "rate", "10gbit", "quantum", "60000")
+    _tc("class", "add", "dev", dev, "parent", "1:1", "classid", "1:10", "htb", "rate", "10gbit", "ceil", "10gbit", "quantum", "60000")
     _tc("class", "add", "dev", dev, "parent", "1:1", "classid", "1:20", "htb", "rate", rate, "ceil", rate)
     _tc("qdisc", "add", "dev", dev, "parent", "1:10", "handle", "10:", "fq")
     _tc("qdisc", "add", "dev", dev, "parent", "1:20", "handle", "20:", "fq_codel")
@@ -167,11 +181,32 @@ def apply_config(payload: dict, agent_port: int) -> dict:
 
     CONFIG_PATH.write_text(text)
     os.chmod(CONFIG_PATH, 0o600)
+    STATE_PATH.write_text(json.dumps({"payload": payload, "agent_port": agent_port}))
+    os.chmod(STATE_PATH, 0o600)
     stop()
     _process = subprocess.Popen([HYSTERIA_BIN, "server", "-c", str(CONFIG_PATH)])
     _started_at = time.monotonic()
     _shape(_state["port"], _state["rate_mbps"])
     return {"status": "applied", "port": _state["port"]}
+
+
+def resume() -> None:
+    """Brings the server back after a container restart, from the last payload the panel pushed.
+
+    Rebuilt rather than re-run from the old YAML: the stats secret is generated fresh each time the
+    agent starts, so the old file would point Hysteria at a secret this process no longer holds, and
+    the agent would stop being able to read usage. Shaping is re-applied too, since it lives in the
+    kernel and a reboot clears it.
+    """
+    if not STATE_PATH.exists():
+        return
+    try:
+        saved = json.loads(STATE_PATH.read_text())
+        apply_config(saved["payload"], int(saved["agent_port"]))
+    except (OSError, ValueError, KeyError):
+        # A damaged state file must not stop the agent itself from starting; the panel's next push
+        # rewrites it.
+        pass
 
 
 def panel_url() -> str | None:

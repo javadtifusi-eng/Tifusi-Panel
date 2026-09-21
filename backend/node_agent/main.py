@@ -71,6 +71,10 @@ if CONFIG_PATH.exists():
 
 limits.start(XRAY_BIN, STATS_API_ADDR, lambda: _process is not None and _process.poll() is None)
 
+# Same reason as Xray above: without it a restarted node serves no Hysteria2 until the panel next
+# pushes, which only happens when something changes.
+hysteria.resume()
+
 
 def _check_key(x_node_api_key: str | None) -> None:
     # hmac.compare_digest, not `!=`: a plain string compare short-circuits
