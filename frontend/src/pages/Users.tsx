@@ -1203,7 +1203,7 @@ function StatRing({ pct }: { pct: number }) {
     return () => cancelAnimationFrame(id)
   }, [pct])
   return (
-    <svg className="ring" viewBox="0 0 46 46" aria-hidden="true">
+    <svg className="stat-ring" viewBox="0 0 46 46" aria-hidden="true">
       <circle cx={23} cy={23} r={19} stroke="#1f1f1f" />
       <circle className="fg" cx={23} cy={23} r={19} strokeDasharray={`${((C * shown) / 100).toFixed(1)} ${C.toFixed(1)}`} />
     </svg>
