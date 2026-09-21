@@ -294,6 +294,21 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
         return
 
     _apply_health(node, health)
+    # Reachable, but nothing it's assigned is running: an agent that came back
+    # empty (a recreated container keeps no config), which otherwise stayed down
+    # until someone clicked sync. Only when *everything* is down — a push
+    # restarts every service, so doing it while one is still serving would cut
+    # that one off on every health check.
+    assigned = [
+        (health.get(key) or {}).get("running", False)
+        for key, slot in (("xray", node.core_id), ("ipsec", node.ipsec_core_id), ("hysteria", node.hysteria_core_id))
+        if slot is not None
+    ]
+    if assigned and not any(assigned):
+        try:
+            await sync_node(node, db)
+        except Exception:
+            pass
     await db.commit()
 
     if node.status != previous_status:
