@@ -569,6 +569,43 @@ export async function getNodeRealityScan(nodeId: number): Promise<RealityNodeSca
   return res.json()
 }
 
+// ---- Cloudflare clean edge-IP scanner ----
+
+export interface CfCandidate {
+  ip: string
+  tls: string | null
+  alpn: string | null
+  /** node -> edge TLS handshake, median ms. */
+  latency_ms: number | null
+  usable: boolean
+  error: string | null
+  /** Filled by the panel from check-host.net probes inside Iran. */
+  iran?: IranCheck | null
+  operator?: string | null
+}
+
+export interface CfScan {
+  state: 'idle' | 'fetching' | 'probing' | 'done' | 'error'
+  phase_total: number
+  phase_done: number
+  error: string | null
+  sni: string | null
+  results: CfCandidate[]
+}
+
+export async function startCfScan(nodeId: number, sni?: string): Promise<CfScan> {
+  const res = await authorizedFetch(`/cloudflare/nodes/${nodeId}/scan`, {
+    method: 'POST',
+    body: JSON.stringify(sni ? { sni } : {}),
+  })
+  return res.json()
+}
+
+export async function getCfScan(nodeId: number): Promise<CfScan> {
+  const res = await authorizedFetch(`/cloudflare/nodes/${nodeId}/scan`)
+  return res.json()
+}
+
 export interface FieldTestItem {
   host: string
   dest: string

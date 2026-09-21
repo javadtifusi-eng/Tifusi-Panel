@@ -20,6 +20,7 @@ import {
   type RealityCandidate,
 } from '../lib/api'
 import RealityScanner from '../components/RealityScanner'
+import CloudflareScanner from '../components/CloudflareScanner'
 import { copyToClipboard } from '../lib/clipboard'
 
 const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'l2tp']
@@ -857,7 +858,7 @@ function CoreChain({ hops, live }: { hops: Hop[]; live: boolean }) {
 }
 
 export default function CoresPage({ createSignal = 0 }: { createSignal?: number } = {}) {
-  const { t } = useLang()
+  const { t, dir } = useLang()
   const c = t.ui.cores
   const say = useToast()
   const protocolLabels = t.coresPage.protocolLabels
@@ -886,6 +887,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
       (!!wizard.network && !!wizard.security && (wizard.security !== 'reality' || (!!wizard.sni && !!wizard.realityPrivateKey && !!wizard.realityShortId))))
 
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [cfScannerOpen, setCfScannerOpen] = useState(false)
   const [generatingKeys, setGeneratingKeys] = useState(false)
   const [generatedKey, setGeneratedKey] = useState<{ private_key: string; public_key: string; short_id: string } | null>(null)
   const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
@@ -1492,6 +1494,23 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                       ✓ {t.coresPage.realityKeysInfo} <span className="mono">publicKey: {generatedKey.public_key}</span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {isTransportProtocol && wizard.security === 'tls' && (
+                <div className="form-section">
+                  <h4>{dir === 'rtl' ? 'IP تمیز کلودفلر' : 'Cloudflare clean IP'}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => setCfScannerOpen((o) => !o)} className="btn">
+                      {dir === 'rtl' ? 'پیدا کردن IP تمیز کلودفلر' : 'Find a clean Cloudflare IP'}
+                    </button>
+                    <span className="hint" style={{ margin: 0 }}>
+                      {dir === 'rtl'
+                        ? 'برای وقتی هاست پشت کلودفلر با TLS کار می‌کند: سریع‌ترین ادج از داخل ایران.'
+                        : 'For a host behind Cloudflare on plain TLS: the fastest edge from inside Iran.'}
+                    </span>
+                  </div>
+                  {cfScannerOpen && <CloudflareScanner onClose={() => setCfScannerOpen(false)} />}
                 </div>
               )}
 

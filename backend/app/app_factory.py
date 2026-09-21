@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import async_session, init_db
 from app.network_health.operators import refresh_prefixes
-from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, hysteria, network_health, nodes, reality, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
+from app.routers import admin, api_keys, app_reports, auth, cloudflare, cores, groups, hosts, hysteria, network_health, nodes, reality, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
 from app.shield.engine import run_shield_cycle
 from app.tls_renewal import renew_certificates
 from app.traffic.sync import run_traffic_cycle
@@ -114,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(user_templates.router)
     app.include_router(reality.router)
     app.include_router(reality.field_public_router)
+    app.include_router(cloudflare.router)
     app.include_router(hysteria.router)
     app.include_router(hosts.router)
     app.include_router(subscription.router)

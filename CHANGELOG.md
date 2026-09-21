@@ -2,6 +2,9 @@
 
 ## v1.4.2 — 2026-09-19
 
+### Cloudflare clean-IP scanner
+- **A clean-edge scanner for TLS-behind-Cloudflare hosts.** When a host uses plain TLS behind Cloudflare rather than REALITY, which edge IP the client dials decides its speed on a given operator. The scanner fetches Cloudflare's ranges live, draws a random sample of edge IPs, keeps the ones that answer TLS 1.3, and ranks them by real speed from inside Iran (check-host.net) — same live-and-random, speed-ranked rules as the REALITY scanner. It appears in the Core wizard when security is TLS.
+
 ### REALITY scanner
 - **SNIs from your own users' live traffic, sampled fresh every scan.** Datacenter neighbours are names MCI has never seen, and it held their upload under 1 Mbps. Each scan now also draws a random sample from the servers the node's users have actually opened in the last few minutes (read from Xray's access log, named by their certificate) — nothing is saved to disk or carried across restarts, so this can never turn into a fixed "most popular sites" list. The phone test ranks results by upload once one is measured.
 - **No built-in list of target names, anywhere.** The "Critical services" and "Well-known sites" lists are gone from the source. A name published in a panel's code is the first one a censor blocks, and a name that is excellent on one server's network is ordinary on another's — so every scan now discovers its own targets live, from the TLS certificates of the node's own datacenter neighbours.

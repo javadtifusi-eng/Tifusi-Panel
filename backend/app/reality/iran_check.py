@@ -191,7 +191,21 @@ def start_sni(name: str) -> None:
     key = f"http:{target}"
     if cached_only("http", target) is not None or key in _inflight:
         return
-    task = _inflight[key] = asyncio.get_running_loop().create_task(_run("http", target))
+    _fire_and_forget("http", target, key)
+
+
+def start_address(host: str, port: int) -> None:
+    """Fire-and-forget TCP reachability/speed check for an IP:port, mirroring
+    start_sni — the scanner poll reads the answer from the cache."""
+    target = f"{host}:{port}"
+    key = f"tcp:{target}"
+    if cached_only("tcp", target) is not None or key in _inflight:
+        return
+    _fire_and_forget("tcp", target, key)
+
+
+def _fire_and_forget(kind: str, target: str, key: str) -> None:
+    task = _inflight[key] = asyncio.get_running_loop().create_task(_run(kind, target))
 
     def _store(t: asyncio.Task) -> None:
         _inflight.pop(key, None)

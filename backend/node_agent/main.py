@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan
+from node_agent import cf_scan, field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan
 
 try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
     from node_agent import cdn_scan
@@ -255,6 +255,24 @@ async def reality_scan_start(payload: dict, x_node_api_key: str | None = Header(
 async def reality_scan_status(x_node_api_key: str | None = Header(default=None)) -> dict:
     _check_key(x_node_api_key)
     return reality_scan.status()
+
+
+@app.post("/cf/scan")
+async def cf_scan_start(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Starts a clean Cloudflare edge-IP scan (node_agent/cf_scan.py); the panel
+    polls GET /cf/scan for progress. One scan at a time."""
+    _check_key(x_node_api_key)
+    if cf_scan.running():
+        raise HTTPException(status_code=409, detail="A Cloudflare scan is already running on this node")
+    sni = str(payload.get("sni") or "").strip().lower() or None
+    cf_scan.start(sni=sni, sample=int(payload.get("sample") or 60))
+    return cf_scan.status()
+
+
+@app.get("/cf/scan")
+async def cf_scan_status(x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    return cf_scan.status()
 
 
 @app.post("/reality/prove")
