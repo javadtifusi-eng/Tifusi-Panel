@@ -154,11 +154,25 @@ def stop() -> None:
     _started_at = None
 
 
+def _cert_mtime() -> float | None:
+    try:
+        return CERT_PATH.stat().st_mtime
+    except OSError:
+        return None
+
+
+# The certificate file's mtime when the running server started. Hysteria reads
+# its certificate only at startup, so a renewed certificate (the panel renews
+# Let's Encrypt on its own) must count as a change, or it would keep serving
+# the old one until it expired.
+_cert_loaded: float | None = None
+
+
 def apply_config(payload: dict, agent_port: int) -> dict:
     """Writes the config and restarts the server. Called on every sync, so it
     has to be idempotent — the panel re-syncs a node whenever any user's status
     changes, and restarting on each of those would drop every connection."""
-    global _process, _started_at
+    global _process, _started_at, _cert_loaded
 
     if not payload.get("port") or not payload.get("obfs"):
         raise ValueError("a hysteria2 core needs both a port and an obfuscation password")
@@ -173,7 +187,7 @@ def apply_config(payload: dict, agent_port: int) -> dict:
         panel_url=(payload.get("panel_url") or "").rstrip("/") or None,
     )
 
-    if unchanged and running:
+    if unchanged and running and _cert_mtime() == _cert_loaded:
         # Shaping is re-asserted even so: it lives in the kernel, not in the
         # config file, and a reboot or someone else's tc command clears it.
         _shape(_state["port"], _state["rate_mbps"])
@@ -184,6 +198,7 @@ def apply_config(payload: dict, agent_port: int) -> dict:
     STATE_PATH.write_text(json.dumps({"payload": payload, "agent_port": agent_port}))
     os.chmod(STATE_PATH, 0o600)
     stop()
+    _cert_loaded = _cert_mtime()
     _process = subprocess.Popen([HYSTERIA_BIN, "server", "-c", str(CONFIG_PATH)])
     _started_at = time.monotonic()
     _shape(_state["port"], _state["rate_mbps"])

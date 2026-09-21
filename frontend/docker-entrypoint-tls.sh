@@ -26,13 +26,22 @@ apply_conf() {
 
 apply_conf
 
+# "0" without a cert, otherwise the files' modification times — so a cert
+# replaced in place (the panel renews Let's Encrypt on its own) reloads nginx
+# too, not only one that appears or disappears.
+cert_state() {
+  if has_cert; then
+    stat -c %Y "$CERT_DIR/fullchain.pem" "$CERT_DIR/privkey.pem" | tr '\n' ' '
+  else
+    echo 0
+  fi
+}
+
 (
-  state=""
-  has_cert && state=1 || state=0
+  state="$(cert_state)"
   while true; do
     sleep 15
-    next=""
-    has_cert && next=1 || next=0
+    next="$(cert_state)"
     if [ "$next" != "$state" ]; then
       apply_conf
       nginx -s reload 2>/dev/null || true

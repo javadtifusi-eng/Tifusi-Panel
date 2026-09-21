@@ -11,6 +11,7 @@ from app.database import async_session, init_db
 from app.network_health.operators import refresh_prefixes
 from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, hysteria, network_health, nodes, reality, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
 from app.shield.engine import run_shield_cycle
+from app.tls_renewal import renew_certificates
 from app.traffic.sync import run_traffic_cycle
 
 
@@ -56,6 +57,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_traffic_loop()),
         asyncio.create_task(_every(settings.shield_check_interval_seconds, run_shield_cycle)),
         asyncio.create_task(_prefix_loop()),
+        # certbot only renews within 30 days of expiry, so twice a day is plenty.
+        asyncio.create_task(_every(12 * 3600, renew_certificates)),
     ]
     yield
     for task in tasks:
