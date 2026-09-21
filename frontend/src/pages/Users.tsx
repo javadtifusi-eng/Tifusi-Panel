@@ -28,7 +28,7 @@ import {
   type UserTemplate,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
-import { initials, parseServerDate } from '../lib/format'
+import { avatarColor, initials, parseServerDate } from '../lib/format'
 
 const STATUS_ORDER: UserStatus[] = ['active', 'limited', 'expired', 'on_hold', 'disabled']
 const PILL: Record<UserStatus, string> = { active: 'ok', limited: 'warn', expired: 'bad', on_hold: 'idle', disabled: 'idle' }
@@ -207,7 +207,14 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
     const handle = setTimeout(() => {
       refresh()
     }, searchQuery ? 300 : 0)
-    return () => clearTimeout(handle)
+    // Quietly re-read every 30s so online dots and usage bars stay current.
+    const poll = window.setInterval(() => {
+      if (!document.hidden) refresh()
+    }, 30000)
+    return () => {
+      clearTimeout(handle)
+      window.clearInterval(poll)
+    }
   }, [searchQuery, statusFilter, groupFilter])
 
   useEffect(() => {
@@ -470,12 +477,28 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
   }
 
   const groupName = (id: number) => groups.find((g) => g.id === id)?.name ?? `#${id}`
-  const online = allUsers.filter(isOnline).length
   const newThisWeek = allUsers.filter((x) => Date.now() - parseServerDate(x.created_at).getTime() < 7 * DAY).length
   const top = [...allUsers].sort((a, b) => b.used_traffic - a.used_traffic).slice(0, 5)
   const topMax = top[0]?.used_traffic || 1
   const openUser = users?.find((x) => x.id === openUserId) ?? allUsers.find((x) => x.id === openUserId) ?? null
   const groupOptions = groups.map((g) => ({ id: g.id, label: g.name }))
+  const onlineUsers = allUsers.filter(isOnline)
+  const isNew = (x: ProxyUser) => Date.now() - parseServerDate(x.created_at).getTime() < 7 * DAY
+  const daysLeft = (x: ProxyUser) => (x.expire ? (parseServerDate(x.expire).getTime() - Date.now()) / DAY : null)
+  const endingSoon = allUsers
+    .filter((x) => x.status === 'active' && (daysLeft(x) ?? 99) > 0 && (daysLeft(x) ?? 99) <= 7)
+    .sort((a, b) => daysLeft(a)! - daysLeft(b)!)
+    .slice(0, 5)
+  // A users trend is only honest when every user is in the fetched list.
+  const trend =
+    counts && allUsers.length >= counts.all && counts.all > 0
+      ? Array.from({ length: 14 }, (_, i) => {
+          const end = Date.now() - (13 - i) * DAY
+          return allUsers.filter((x) => parseServerDate(x.created_at).getTime() <= end).length
+        })
+      : null
+  const share = (n: number) => (counts && counts.all ? Math.round((n / counts.all) * 100) : 0)
+  const pickStatus = (s: UserStatus) => setStatusFilter((f) => (f === s ? 'all' : s))
 
   return (
     <div className="pg-users">
@@ -522,34 +545,49 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
         <div className="tile hero">
           <div className="row">
             <span className="tl">{u.allUsers}</span>
-            <span className={`pill ${online > 0 ? 'ok live' : 'idle'}`}>
+            <span className={`pill ${onlineUsers.length > 0 ? 'ok live' : 'idle'}`}>
               <i />
-              <span className="en">{online}</span> {u.onlineWord}
+              <span className="en">{onlineUsers.length}</span> {u.onlineWord}
             </span>
           </div>
-          <div>
-            <div className="big">{counts ? <CountUp value={counts.all} /> : '—'}</div>
-            <div className="tl" style={{ marginTop: 6 }}>
-              {u.newThisWeek(newThisWeek)}
-            </div>
+          <div className="big">{counts ? <CountUp value={counts.all} /> : '—'}</div>
+          {trend && <TrendLine values={trend} label={u.trendAria} />}
+          <div className="row">
+            <span className="tl">{u.newThisWeek(newThisWeek)}</span>
+            {onlineUsers.length > 0 && (
+              <span className="ostack" dir="ltr">
+                {onlineUsers.slice(0, 6).map((x) => (
+                  <span key={x.id} title={x.username} style={{ background: avatarColor(x.username) }}>
+                    {initials(x.username)}
+                  </span>
+                ))}
+                {onlineUsers.length > 6 && <span className="more">+{onlineUsers.length - 6}</span>}
+              </span>
+            )}
           </div>
         </div>
-        <div className="tile">
-          <span className="tl">{t.usersPage.status.limited}</span>
-          <span className="mid">{counts ? <CountUp value={counts.limited} /> : '—'}</span>
-        </div>
-        <div className="tile">
-          <span className="tl">{t.usersPage.status.expired}</span>
-          <span className="mid">{counts ? <CountUp value={counts.expired} /> : '—'}</span>
-        </div>
-        <div className="tile wide">
+        {(
+          [
+            ['active', 'var(--ok)', counts ? u.shareOfAll(share(counts.active)) : ''],
+            ['limited', 'var(--warn)', u.limitedHint],
+            ['expired', 'var(--bad)', u.expiredHint],
+          ] as [UserStatus, string, string][]
+        ).map(([s, c, sub]) => (
+          <button key={s} type="button" className="tile stat" style={{ ['--c' as string]: c }} aria-pressed={statusFilter === s} onClick={() => pickStatus(s)}>
+            <span className="tl">{t.usersPage.status[s]}</span>
+            <StatRing pct={counts ? share(counts[s]) : 0} />
+            <span className="v">{counts ? <CountUp value={counts[s]} /> : '—'}</span>
+            <span className="s">{sub}</span>
+          </button>
+        ))}
+        <div className="tile split">
           <div className="row">
             <span className="tl">{u.statusSplit}</span>
             <span className="tl en">{counts?.all ?? ''}</span>
           </div>
           {counts && counts.all > 0 ? (
             <>
-              <div className="tf-meter" role="img" aria-label={STATUS_ORDER.map((s) => `${t.usersPage.status[s]} ${counts[s]}`).join('، ')}>
+              <div className="tf-meter grow-in" role="img" aria-label={STATUS_ORDER.map((s) => `${t.usersPage.status[s]} ${counts[s]}`).join('، ')}>
                 {STATUS_ORDER.filter((s) => counts[s] > 0).map((s) => (
                   <i key={s} style={{ width: `${(counts[s] / counts.all) * 100}%`, background: METER[s] }} title={`${t.usersPage.status[s]}: ${counts[s]}`} />
                 ))}
@@ -749,18 +787,21 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
             />
           ) : (
             <div className="list">
-              <div className="srow" style={{ cursor: 'default', background: 'transparent', paddingBlock: 8 }}>
+              <div className="srow head" style={{ cursor: 'default' }}>
                 <input type="checkbox" checked={selected.size === users.length} onChange={toggleSelectAll} aria-label={t.usersPage.selectAll} />
                 <span className="hint" style={{ margin: 0, gridColumn: '2 / -1' }}>
                   {t.usersPage.selectAll}
                 </span>
               </div>
-              {users.map((x) => {
+              {users.map((x, i) => {
                 const on = isOnline(x)
+                const pct = usagePct(x)
+                const left = daysLeft(x)
                 return (
                   <div
                     key={x.id}
                     className={`srow ${selected.has(x.id) ? 'sel' : ''}`}
+                    style={{ ['--sc' as string]: STATUS_TONE[x.status], animationDelay: `${Math.min(i, 12) * 35}ms` }}
                     role="button"
                     tabIndex={0}
                     onClick={() => setOpenUserId(x.id)}
@@ -775,24 +816,39 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
                       onChange={() => setSelected((prev) => toggleInSet(prev, x.id))}
                       aria-label={x.username}
                     />
-                    <span className={`tf-avatar ${on ? 'on' : ''}`}>{initials(x.username)}</span>
+                    <span className={`uav ${on ? 'on' : ''}`} style={{ background: avatarColor(x.username) }}>
+                      {initials(x.username)}
+                    </span>
                     <span className="who">
-                      <span>{x.username}</span>
-                      <small>{formatLastSeen(x.last_seen)}</small>
+                      <span>
+                        {x.username}
+                        {isNew(x) && <em className="new">{u.newBadge}</em>}
+                      </span>
+                      <small className={on ? 'live' : ''}>{formatLastSeen(x.last_seen)}</small>
                     </span>
                     <span className={`pill ${PILL[x.status]} ${on ? 'live' : ''}`}>
                       <i />
                       {t.usersPage.status[x.status]}
                     </span>
-                    <span className="use">
-                      <span>
-                        <b>{gb(x.used_traffic)}</b> / {x.data_limit ? gb(x.data_limit) : '∞'} GB
+                    <span className="meter-col">
+                      <span className="top">
+                        <span>{u.usage}</span>
+                        <b dir="ltr">
+                          {gb(x.used_traffic)} / {x.data_limit ? gb(x.data_limit) : '∞'} GB
+                        </b>
                       </span>
-                      <span className="uring" style={{ ['--p' as string]: usagePct(x), ['--rc' as string]: RING[x.status] }} />
+                      <span className={`ubar ${x.data_limit ? '' : 'inf'}`}>
+                        {x.data_limit ? <i style={{ width: `${Math.max(3, pct)}%`, background: usageFill(pct) }} /> : <i />}
+                      </span>
                     </span>
-                    <span className="exp">{expiryText(x)}</span>
-                    <span className="chev" aria-hidden="true">
-                      ‹
+                    <span className="meter-col">
+                      <span className="top">
+                        <span>{u.validity}</span>
+                        <span>{expiryText(x)}</span>
+                      </span>
+                      <span className={`ubar ${left === null ? 'inf' : ''}`}>
+                        {left === null ? <i /> : <i style={{ width: `${left <= 0 ? 100 : Math.max(3, Math.min(100, (left / 30) * 100))}%`, background: validityFill(left) }} />}
+                      </span>
                     </span>
                   </div>
                 )
@@ -802,27 +858,53 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
           )}
         </div>
 
-        <aside className="board">
-          <h3>
-            {u.topUsage}
-            <small>{u.topUsageSub}</small>
-          </h3>
-          {top.length === 0 || top[0].used_traffic === 0 ? (
-            <div className="hint">{u.topEmpty}</div>
-          ) : (
-            <ol>
-              {top.map((x, i) => (
-                <li key={x.id} title={`${x.username}: ${gb(x.used_traffic)} GB`} onClick={() => setOpenUserId(x.id)}>
-                  <span className="rank">{i + 1}</span>
-                  <span className="nm">{x.username}</span>
-                  <span className="gb">{gb(x.used_traffic)} GB</span>
-                  <span className="track">
-                    <BoardBar pct={(x.used_traffic / topMax) * 100} />
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+        <aside className="uside">
+          <section className="board">
+            <h3>
+              {u.topUsage}
+              <small>{u.topUsageSub}</small>
+            </h3>
+            {top.length === 0 || top[0].used_traffic === 0 ? (
+              <div className="hint">{u.topEmpty}</div>
+            ) : (
+              <ol>
+                {top.map((x, i) => (
+                  <li key={x.id} title={`${x.username}: ${gb(x.used_traffic)} GB`} onClick={() => setOpenUserId(x.id)}>
+                    <span className="rank">{i + 1}</span>
+                    <span className="nm">{x.username}</span>
+                    <span className="gb">{gb(x.used_traffic)} GB</span>
+                    <span className="track">
+                      <BoardBar pct={(x.used_traffic / topMax) * 100} />
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+          <section className="board">
+            <h3>
+              {u.soonTitle}
+              <small>{u.soonSub}</small>
+            </h3>
+            {endingSoon.length === 0 ? (
+              <div className="hint">{u.soonEmpty}</div>
+            ) : (
+              <ul className="soon">
+                {endingSoon.map((x) => (
+                  <li key={x.id}>
+                    <span className="uav sm" style={{ background: avatarColor(x.username) }}>
+                      {initials(x.username)}
+                    </span>
+                    <b>{x.username}</b>
+                    <span className={`left ${daysLeft(x)! <= 3 ? 'hot' : ''}`}>{expiryText(x)}</span>
+                    <button type="button" onClick={() => startEdit(x)}>
+                      {u.renew}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </aside>
       </div>
 
@@ -1087,6 +1169,65 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
       {linksUser && <UserLinksModal userId={linksUser.id} username={linksUser.username} onClose={() => setLinksUser(null)} />}
       {devicesUser && <UserDevicesModal userId={devicesUser.id} username={devicesUser.username} onClose={() => setDevicesUser(null)} />}
     </div>
+  )
+}
+
+const STATUS_TONE: Record<UserStatus, string> = {
+  active: 'var(--ok)',
+  limited: 'var(--warn)',
+  expired: 'var(--bad)',
+  on_hold: 'var(--info)',
+  disabled: 'var(--strong)',
+}
+
+// Green while there's room, orange past 70%, red past 90%.
+function usageFill(pct: number): string {
+  if (pct >= 90) return 'linear-gradient(90deg, #f59e0b, #ef4444)'
+  if (pct >= 70) return 'linear-gradient(90deg, #f97316, #f59e0b)'
+  return 'linear-gradient(90deg, #22c55e, #84cc16)'
+}
+
+// Calm blue with a month or more left, warming as the end gets close.
+function validityFill(days: number): string {
+  if (days <= 0) return '#ef4444'
+  if (days <= 3) return 'linear-gradient(90deg, #ef4444, #f97316)'
+  if (days <= 7) return 'linear-gradient(90deg, #f59e0b, #facc15)'
+  return 'linear-gradient(90deg, #38bdf8, #a78bfa)'
+}
+
+function StatRing({ pct }: { pct: number }) {
+  const C = 2 * Math.PI * 19
+  const [shown, setShown] = useState(0)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(pct))
+    return () => cancelAnimationFrame(id)
+  }, [pct])
+  return (
+    <svg className="ring" viewBox="0 0 46 46" aria-hidden="true">
+      <circle cx={23} cy={23} r={19} stroke="#1f1f1f" />
+      <circle className="fg" cx={23} cy={23} r={19} strokeDasharray={`${((C * shown) / 100).toFixed(1)} ${C.toFixed(1)}`} />
+    </svg>
+  )
+}
+
+// Users over the last 14 days, with a highlight that keeps running along the line.
+function TrendLine({ values, label }: { values: number[]; label: string }) {
+  const min = Math.min(...values)
+  const span = Math.max(...values) - min
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * 296 + 2).toFixed(1)},${(span ? 58 - ((v - min) / span) * 48 : 34).toFixed(1)}`)
+  const d = `M${pts.join(' L')}`
+  return (
+    <svg className="trend" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label={`${label}: ${values[values.length - 1]}`}>
+      <defs>
+        <linearGradient id="users-trend" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f97316" stopOpacity={0.35} />
+          <stop offset="1" stopColor="#f97316" stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={`${d} L298,64 L2,64 Z`} fill="url(#users-trend)" />
+      <path d={d} fill="none" stroke="#f97316" strokeOpacity={0.6} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      <path className="run" d={d} pathLength={100} fill="none" stroke="#fdba74" strokeWidth={3} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
   )
 }
 
