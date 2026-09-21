@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
-import { IconCopy, IconPlus, IconRefresh } from '../components/icons'
+import { IconArrow, IconBolt, IconCopy, IconGlobe, IconLock, IconPlus, IconRefresh, IconServer, IconShield, IconUser } from '../components/icons'
 import { Empty, Field, Sheet, highlightJsonLines, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
@@ -25,6 +25,8 @@ import { copyToClipboard } from '../lib/clipboard'
 const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'l2tp']
 // A Record, so a core type added later cannot silently fall through to another type's label —
 // the way Hysteria2 used to show up marked "L2TP".
+// Each engine wears the colour its protocol has on the Hosts page (L2TP is slate: no yellow).
+const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', l2tp: '#94a3b8' }
 const ENGINE_MARK: Record<CoreType, string> = { xray: 'XRAY', ikev2: 'IKEv2', hysteria2: 'HY2', l2tp: 'L2TP' }
 
 /** 32 hex characters, the same as the panel generates when the field is left empty. */
@@ -774,6 +776,86 @@ function CodeSheet({ core, part, onPart, onClose }: { core: Core; part: string; 
   )
 }
 
+function Spec({ label, value, tint, wide, fa }: { label: string; value: string; tint?: boolean; wide?: boolean; fa?: boolean }) {
+  return (
+    <div className={`spec ${wide ? 'wide' : ''}`}>
+      <span>{label}</span>
+      <b className={`${tint ? 'tint' : ''} ${fa ? 'fa' : ''}`} title={value}>
+        {value}
+      </b>
+    </div>
+  )
+}
+
+function SecretSpec({ label, value, show, hide }: { label: string; value: string | null; show: string; hide: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="spec wide">
+      <span>{label}</span>
+      <div className="secret">
+        <b className="mono">{value ? (open ? value : '•'.repeat(16)) : '—'}</b>
+        {value && (
+          <button type="button" onClick={() => setOpen((o) => !o)}>
+            {open ? hide : show}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// The cap as a bar on a scale twice its size, so the cap marker sits mid-way.
+function RateSpec({ label, mbps, none }: { label: string; mbps: number | null; none: string }) {
+  const [w, setW] = useState(0)
+  const top = Math.max(20, (mbps ?? 0) * 2)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setW(mbps ? (mbps / top) * 100 : 0))
+    return () => cancelAnimationFrame(id)
+  }, [mbps, top])
+  return (
+    <div className="spec wide">
+      <span>{label}</span>
+      <b className="tint">{mbps ? `${mbps} Mbps` : none}</b>
+      {mbps ? (
+        <>
+          <div className="cap-meter">
+            <i style={{ width: `${w}%` }} />
+          </div>
+          <div className="cap-scale">
+            <span>0</span>
+            <span>{top / 2}</span>
+            <span>{top} Mbps</span>
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+interface Hop {
+  icon: React.ReactNode
+  title: string
+  sub?: string
+  tag?: string
+  core?: boolean
+}
+
+// Device → core → node → internet, with traffic running along the wire while the core is live.
+function CoreChain({ hops, live }: { hops: Hop[]; live: boolean }) {
+  return (
+    <div className="cchain" dir="ltr" style={{ ['--n' as string]: hops.length }}>
+      <div className={`wire ${live ? 'live' : ''}`} />
+      {hops.map((h, i) => (
+        <div key={i} className={`hop ${h.core ? 'core-hop' : ''}`}>
+          <span className="box">{h.icon}</span>
+          <b>{h.title}</b>
+          {h.tag ? <span className="tag">{h.tag}</span> : h.sub ? <small>{h.sub}</small> : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function CoresPage({ createSignal = 0 }: { createSignal?: number } = {}) {
   const { t } = useLang()
   const c = t.ui.cores
@@ -1040,7 +1122,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   const engineSub: Record<CoreType, string> = { xray: c.xraySub, ikev2: c.ikev2Sub, hysteria2: c.hysteria2Sub, l2tp: c.l2tpSub }
 
   return (
-    <div className="pg-cores">
+    <div className="pg-cores" style={{ ['--ec' as string]: ENGINE_COLOR[engine] }}>
       <h1 className="sr-only">{t.coresPage.title}</h1>
 
       <div className="engines" role="tablist" aria-label={t.coresPage.coreTypeLabel}>
@@ -1054,6 +1136,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
               role="tab"
               aria-selected={engine === type}
               className={`engine ${count === 0 ? 'empty-engine' : ''}`}
+              style={{ ['--ec' as string]: ENGINE_COLOR[type] }}
               onClick={() => setEngine(type)}
             >
               <span className="mark">{ENGINE_MARK[type]}</span>
@@ -1120,7 +1203,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
           const coreLive = runningNodes.some((n) => n.status === 'connected')
           return (
             <div key={core.id} className="flex flex-col gap-3.5">
-              <div className="tf-card">
+              <div className="tf-card core-card" style={{ ['--ec' as string]: ENGINE_COLOR[core.core_type] }}>
                 <div className="core-head">
                   <span className="t">
                     <b>{core.name}</b>
@@ -1138,7 +1221,10 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                     ) : (
                       <span className="chip">{c.hostsCount(core.host_count)}</span>
                     )}
-                    <span className="chip">{c.nodesCount(runningNodes.length)}</span>
+                  </span>
+                  <span className={`pill ${coreLive ? 'ok live' : 'idle'}`}>
+                    <i />
+                    {runningNodes.length ? c.liveOn(runningNodes.length) : c.notRunning}
                   </span>
                   <span className="acts">
                     {core.core_type === 'xray' && (
@@ -1161,6 +1247,77 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                     ))}
                   </div>
                 )}
+                {core.core_type !== 'xray' && (
+                  <div className="core-body">
+                    <div className="panel">
+                      <h4>{c.specsTitle}</h4>
+                      <div className="specs">
+                        {core.core_type === 'hysteria2' && (
+                          <>
+                            <Spec label={t.coresPage.hysteria2PortLabel} value={`UDP ${core.hysteria2_port ?? '—'}`} tint />
+                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                            <SecretSpec label={t.coresPage.hysteria2ObfsLabel} value={core.hysteria2_obfs} show={c.reveal} hide={c.conceal} />
+                            <RateSpec label={c.rateCap} mbps={core.hysteria2_rate_mbps} none={t.coresPage.hysteria2RatePlaceholder} />
+                          </>
+                        )}
+                        {core.core_type === 'ikev2' && (
+                          <>
+                            <Spec label="Remote ID" value={core.ikev2_remote_id ?? '—'} tint wide />
+                            <Spec
+                              label={t.coresPage.ikev2AuthModeLabel}
+                              value={core.ikev2_auth_mode === 'psk' ? t.coresPage.ikev2AuthModePsk : t.coresPage.ikev2AuthModeEap}
+                              fa
+                            />
+                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                            <Spec
+                              label="SSL"
+                              value={core.ikev2_certificate ? t.coresPage.ikev2CertStatusCustom : t.coresPage.ikev2CertStatusAuto}
+                              fa
+                              wide
+                            />
+                            {core.ikev2_psk && <SecretSpec label="PSK" value={core.ikev2_psk} show={c.reveal} hide={c.conceal} />}
+                          </>
+                        )}
+                        {core.core_type === 'l2tp' && (
+                          <>
+                            <Spec label="UDP" value="500 · 1701 · 4500" tint />
+                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                            <SecretSpec label="PSK" value={core.l2tp_psk} show={c.reveal} hide={c.conceal} />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="panel">
+                      <h4>{c.chainTitle}</h4>
+                      <CoreChain
+                        live={coreLive}
+                        hops={[
+                          { icon: <IconUser size={20} />, title: c.hopPhone, sub: core.core_type === 'hysteria2' ? c.hopApp : c.hopNative },
+                          {
+                            icon: core.core_type === 'hysteria2' ? <IconBolt size={20} /> : core.core_type === 'ikev2' ? <IconShield size={20} /> : <IconLock size={20} />,
+                            title: t.coresPage.coreTypeLabels[core.core_type],
+                            tag: core.core_type === 'hysteria2' ? `QUIC · UDP ${core.hysteria2_port ?? '—'}` : core.core_type === 'ikev2' ? 'UDP 500 · 4500' : 'UDP 1701',
+                            core: true,
+                          },
+                          { icon: <IconServer size={20} />, title: runningNodes.map((n) => n.name).join(', ') || '—', sub: c.hopNode },
+                          ...(core.core_type === 'ikev2' && core.ikev2_egress_vless ? [{ icon: <IconArrow size={20} />, title: 'VLESS', sub: c.hopEgress }] : []),
+                          { icon: <IconGlobe size={20} />, title: c.hopInternet },
+                        ]}
+                      />
+                      <p className="hint" style={{ marginTop: 14 }}>
+                        {core.core_type === 'hysteria2'
+                          ? t.coresPage.hysteria2CardHint
+                          : core.core_type === 'l2tp'
+                            ? t.hostsPage.l2tpHint
+                            : core.ikev2_egress_vless
+                              ? c.chainEgress
+                              : core.ikev2_auth_mode === 'psk'
+                                ? t.coresPage.ikev2AuthModePskHint
+                                : c.chainDirect}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <NodeAssignment
                   core={core}
                   nodes={nodes}
@@ -1175,99 +1332,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                 <XrayFlow core={core} live={coreLive} onOpen={(part) => setCode({ coreId: core.id, part })} />
               )}
 
-              {core.core_type === 'ikev2' && (
-                <div className="ike-grid">
-                  <div className="cert">
-                    <div className="cert-top">
-                      <small>SERVER CERTIFICATE</small>
-                      <b>{core.ikev2_remote_id ?? '—'}</b>
-                      <span style={{ fontSize: '.74rem', color: '#a08b6a' }}>
-                        {core.ikev2_certificate ? t.coresPage.ikev2CertStatusCustom : t.coresPage.ikev2CertStatusAuto}
-                      </span>
-                    </div>
-                    <div className="cert-kv">
-                      <div>
-                        <span>Remote ID</span>
-                        <b className="mono">{core.ikev2_remote_id ?? '—'}</b>
-                      </div>
-                      <div>
-                        <span>{t.coresPage.ikev2AuthModeLabel}</span>
-                        <b>{core.ikev2_auth_mode === 'psk' ? t.coresPage.ikev2AuthModePsk : t.coresPage.ikev2AuthModeEap}</b>
-                      </div>
-                      <div>
-                        <span>PSK</span>
-                        <b className="en">{core.ikev2_psk ? '••••••••' : '—'}</b>
-                      </div>
-                      <div>
-                        <span>{t.coresPage.colHosts}</span>
-                        <b className="en">{core.host_count}</b>
-                      </div>
-                    </div>
-                    <p className="hint" style={{ marginTop: 12 }}>
-                      {core.ikev2_auth_mode === 'psk' ? t.coresPage.ikev2AuthModePskHint : t.coresPage.ikev2AuthModeEapHint}
-                    </p>
-                  </div>
-                  <div className="tf-card chain-card">
-                    <div className="tf-card-head">
-                      <h3>{c.chainTitle}</h3>
-                    </div>
-                    <div className="chain">
-                      <div className="hop">
-                        <span className="box">{c.hopDevice}</span>
-                        <small>{c.hopDeviceSub}</small>
-                      </div>
-                      <div className={`chain-wire ${coreLive ? '' : 'idle'}`} />
-                      <div className="hop">
-                        <span className="box">IKEv2</span>
-                        <small className="en">{runningNodes.map((n) => n.name).join(', ') || '—'}</small>
-                      </div>
-                      {core.ikev2_egress_vless && (
-                        <>
-                          <div className={`chain-wire ${coreLive ? '' : 'idle'}`} />
-                          <div className="hop extra">
-                            <span className="box">VLESS</span>
-                            <small>{c.hopEgress}</small>
-                          </div>
-                        </>
-                      )}
-                      <div className={`chain-wire ${coreLive ? '' : 'idle'}`} />
-                      <div className="hop">
-                        <span className="box">WWW</span>
-                        <small>{c.hopInternet}</small>
-                      </div>
-                    </div>
-                    <p className="chain-note">{core.ikev2_egress_vless ? c.chainEgress : c.chainDirect}</p>
-                  </div>
-                </div>
-              )}
-
-              {core.core_type === 'l2tp' && (
-                <div className="tf-card" style={{ padding: 16 }}>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="chip">PSK {core.l2tp_psk ? '••••••••' : '—'}</span>
-                    <span className="chip en">UDP 500 · 1701 · 4500</span>
-                    <span className="chip">{c.hostsCount(core.host_count)}</span>
-                  </div>
-                  <p className="hint">{t.hostsPage.l2tpHint}</p>
-                </div>
-              )}
-
-              {core.core_type === 'hysteria2' && (
-                <div className="tf-card" style={{ padding: 16 }}>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="chip en">UDP {core.hysteria2_port ?? '—'}</span>
-                    <span className="chip">
-                      {t.coresPage.hysteria2ObfsLabel} {core.hysteria2_obfs ? '••••••••' : '—'}
-                    </span>
-                    <span className="chip en">
-                      {core.hysteria2_rate_mbps ? `${core.hysteria2_rate_mbps} Mbps` : t.coresPage.hysteria2RatePlaceholder}
-                    </span>
-                    <span className="chip">{c.hostsCount(core.host_count)}</span>
-                    <span className="chip en">{runningNodes.map((n) => n.name).join(', ') || '—'}</span>
-                  </div>
-                  <p className="hint">{t.coresPage.hysteria2CardHint}</p>
-                </div>
-              )}
             </div>
           )
         })
