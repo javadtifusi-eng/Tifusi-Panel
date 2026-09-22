@@ -1,10 +1,10 @@
 """Builds an iOS/macOS Configuration Profile (.mobileconfig) for a user's
 IKEv2 host — the one-tap alternative to typing server/remote-ID/username
-/password into Settings > VPN by hand. Connect On Demand ships enabled:
-the manual "Connecting..." delay users perceive with IKEv2 happens before
-the first packet even reaches the server (DNS + iOS's own connect flow,
-confirmed by server-side charon logs completing full handshakes in well
-under a second), so removing the manual tap is the actual fix.
+/password into Settings > VPN by hand.
+
+Connect On Demand is deliberately left out. With it on, iOS reconnects the
+VPN by itself the moment the customer turns it off, so it feels impossible
+to switch off — customers found that more annoying than tapping connect.
 """
 import base64
 import re
@@ -175,15 +175,6 @@ def _build_plist(
                     <integer>60</integer>
                 </dict>
             </dict>
-            <key>OnDemandEnabled</key>
-            <integer>1</integer>
-            <key>OnDemandRules</key>
-            <array>
-                <dict>
-                    <key>Action</key>
-                    <string>Connect</string>
-                </dict>
-            </array>
             <key>PayloadDescription</key>
             <string>Configures the {display_name} VPN connection</string>
             <key>PayloadDisplayName</key>
@@ -212,7 +203,7 @@ def _build_plist(
     <key>PayloadDisplayName</key>
     <string>{display_name}</string>
     <key>PayloadDescription</key>
-    <string>IKEv2 VPN profile for {escape(remote_id)}, with Connect On Demand enabled</string>
+    <string>IKEv2 VPN profile for {escape(remote_id)}</string>
     <key>PayloadIdentifier</key>
     <string>ir.tifusi.vpn.profile.{profile_uuid}</string>
     <key>PayloadOrganization</key>
