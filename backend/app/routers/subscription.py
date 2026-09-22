@@ -19,7 +19,7 @@ from app.subscription.app_code import app_code_with_host
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.info_page import build_info_page_html
-from app.subscription.lookup import client_ip, user_by_app_code_or_404, user_or_404
+from app.subscription.lookup import user_by_app_code_or_404, user_or_404
 from app.subscription.singbox import build_singbox_config
 
 _STATUS_LABELS_FA = {
@@ -75,13 +75,19 @@ async def _activate_if_on_hold(user: ProxyUser, db: AsyncSession) -> None:
     await db.refresh(user)
 
 
-async def _enforce_device_limit(user: ProxyUser, identifier: str, db: AsyncSession) -> None:
-    """Best-effort device limiting: a "device" is whatever fetches this
-    subscription URL, identified by an explicit ?hwid= the client sent or
-    else its IP. Only a *new* identifier can be turned away — one already
-    on file always gets served, so a returning device is never randomly
-    locked out by another device's request racing it."""
-    if not user.hwid_limit:
+async def _enforce_device_limit(user: ProxyUser, identifier: str | None, db: AsyncSession) -> None:
+    """Best-effort device limiting: a "device" is a client that identifies
+    itself with an explicit ?hwid=. Only a *new* identifier can be turned
+    away — one already on file always gets served, so a returning device is
+    never randomly locked out by another device's request racing it.
+
+    A request without a hwid is deliberately not counted at all. Falling back
+    to the client's IP counted one customer as several devices: an Iranian
+    mobile subscriber's address changes on its own several times an hour, and
+    merely opening the subscription link in a browser (to reach the install
+    page) spent the account's only slot, so the app that came next was refused
+    with 403 on a brand-new account."""
+    if not user.hwid_limit or not identifier:
         return
 
     existing = await db.scalar(
@@ -172,7 +178,7 @@ async def get_subscription(
 
     user = await user_or_404(secret, db)
 
-    await _enforce_device_limit(user, hwid or client_ip(request), db)
+    await _enforce_device_limit(user, hwid, db)
     await _activate_if_on_hold(user, db)
 
     hosts = list((await db.execute(select(Host))).scalars().all())
@@ -254,7 +260,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     info page's cards show, as JSON, so the app can fetch and refresh them.
     Same device limit and on_hold activation as the main subscription link,
     since the app is one more client of it."""
-    await _enforce_device_limit(user, hwid or client_ip(request), db)
+    await _enforce_device_limit(user, hwid, db)
     await _activate_if_on_hold(user, db)
 
     hosts = list((await db.execute(select(Host))).scalars().all())
