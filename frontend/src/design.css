@@ -1334,15 +1334,12 @@ select.input { padding-block: 7px; }
 .ib-head p { margin: 2px 0 0; font-size: 0.74rem; color: var(--muted); }
 
 .ib-flow {
-  border: 1px solid var(--edge); border-radius: 14px; padding: 8px 8px 2px; overflow: hidden;
+  border: 1px solid var(--edge); border-radius: 14px; padding: 8px 8px 4px; overflow: hidden;
   background: radial-gradient(120% 90% at 50% 0%, #161a22 0%, #0c0c0c 60%);
 }
 .ib-flow svg { display: block; width: 100%; height: auto; }
 .ib-flow text { font-family: var(--font-fa); }
 .ib-flow .ib-lat { font-family: var(--font-en); }
-.ib-legend { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; font-size: 0.68rem; color: var(--faint); padding-bottom: 6px; }
-.ib-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.ib-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
 .ib-group { display: flex; flex-direction: column; gap: 8px; }
 .ib-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1427,7 +1424,7 @@ select.input { padding-block: 7px; }
   .ib-tile, .ib-seg button { transition: none; }
 }
 @keyframes ib-stream { to { stroke-dashoffset: -180; } }
-@keyframes ib-breathe { 0%, 100% { opacity: .06; } 50% { opacity: .2; } }
+@keyframes ib-breathe { 0%, 100% { opacity: .04; } 50% { opacity: .13; } }
 @keyframes ib-breathe-soft { 0%, 100% { stroke-opacity: .25; } 50% { stroke-opacity: .6; } }
 .ib-stream { animation: ib-stream 1.6s linear infinite; }
 .ib-breathe { animation: ib-breathe 2.4s ease-in-out infinite; }

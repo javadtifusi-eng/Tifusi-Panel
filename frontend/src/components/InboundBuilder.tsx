@@ -334,13 +334,13 @@ function InboundFlow({ w }: { w: InboundWizard }) {
   const { t, dir } = useLang()
   const f = t.coresPage.builder.flow
   const uid = useId().replace(/:/g, '')
-  const transport = w.protocol !== '' && w.protocol !== 'shadowsocks'
+  const transport = w.protocol !== 'shadowsocks'
   const secHue = transport && w.security ? HUE[w.security] : w.protocol === 'shadowsocks' ? HUE.protocol : IDLE
   const plain = transport && w.security === 'none'
   const cdn = transport && w.network === 'ws'
 
   const W = 720
-  const y = 88
+  const y = 64
   const rtl = dir === 'rtl'
   const toward = rtl ? -1 : 1
   const edgeX = rtl ? W - 8 : 8
@@ -406,7 +406,7 @@ function InboundFlow({ w }: { w: InboundWizard }) {
 
   return (
     <div className="ib-flow">
-      <svg viewBox={`0 0 ${W} 150`} role="img" aria-label={f.aria}>
+      <svg viewBox={`0 0 ${W} 108`} role="img" aria-label={f.aria}>
         <defs>
           {/* userSpaceOnUse: a perfectly horizontal line has a zero-height bounding box, and a gradient in
               bounding-box units then isn't painted at all. */}
@@ -426,16 +426,14 @@ function InboundFlow({ w }: { w: InboundWizard }) {
           <path id={`r${uid}`} d={`M${wireFrom} ${y} L${wireTo} ${y}`} />
         </defs>
 
-        <rect x={bandA} y="14" width={bandB - bandA} height="26" rx="13" fill={seenHue} fillOpacity=".08" stroke={seenHue} strokeOpacity=".4" className={live ? 'ib-breathe-soft' : undefined} />
-        <text x={W / 2} y="31.5" textAnchor="middle" fontSize="12" fill={seenHue}>
+        <rect x={bandA} y="4" width={bandB - bandA} height="24" rx="12" fill={seenHue} fillOpacity=".08" stroke={seenHue} strokeOpacity=".4" className={live ? 'ib-breathe-soft' : undefined} />
+        <text x={W / 2} y="20.5" textAnchor="middle" fontSize="12" fill={seenHue}>
           <tspan fill="#8b8b8b">{f.filterSees}</tspan>
           {seen}
         </text>
 
         <line x1={wireFrom} y1={y} x2={wireTo} y2={y} stroke={`url(#w${uid})`} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={plain ? '6 7' : undefined} opacity=".55" />
-        {live && (
-          <line x1={wireFrom} y1={y} x2={wireTo} y2={y} stroke={`url(#w${uid})`} strokeWidth="2.5" strokeLinecap="round" strokeDasharray="2 16" className="ib-stream" />
-        )}
+        <line x1={wireFrom} y1={y} x2={wireTo} y2={y} stroke={`url(#w${uid})`} strokeWidth="2.5" strokeLinecap="round" strokeDasharray="2 16" className="ib-stream" opacity={live ? 1 : 0.6} />
 
         {live &&
           [0, 1, 2, 3, 4, 5].map((i) => (
@@ -462,7 +460,7 @@ function InboundFlow({ w }: { w: InboundWizard }) {
               <text x={xs[i]} y={y + 4.5} textAnchor="middle" fontSize="12.5" fontWeight="600" fill={c.hue} className="ib-lat">
                 {c.label}
               </text>
-              <text x={xs[i]} y={y + 34} textAnchor="middle" fontSize="10.5" fill="#5c5c5c">
+              <text x={xs[i]} y={y + 30} textAnchor="middle" fontSize="10.5" fill="#5c5c5c">
                 {c.cap}
               </text>
             </g>
@@ -475,23 +473,23 @@ function InboundFlow({ w }: { w: InboundWizard }) {
             <text x={cdnX} y={y + 4} textAnchor="middle" fontSize="10.5" fontWeight="600" fill={HUE.network} className="ib-lat">
               CDN
             </text>
-            <text x={cdnX} y={y + 34} textAnchor="middle" fontSize="10.5" fill="#5c5c5c">
+            <text x={cdnX} y={y + 30} textAnchor="middle" fontSize="10.5" fill="#5c5c5c">
               {f.optional}
             </text>
           </g>
         )}
 
         <g>
-          <rect x={serverX - 24} y={y - 24} width="48" height="48" rx="9" fill="#141414" stroke={live ? secHue : '#404040'} strokeOpacity={live ? 0.6 : 1} />
-          {[-12, 0, 12].map((d, i) => (
+          <rect x={serverX - 22} y={y - 21} width="44" height="42" rx="9" fill="#141414" stroke={live ? secHue : '#404040'} strokeOpacity={live ? 0.6 : 1} />
+          {[-11, 0, 11].map((d, i) => (
             <g key={d}>
-              <rect x={serverX - 16} y={y + d - 4} width="32" height="8" rx="2" fill="#1c1c1c" />
+              <rect x={serverX - 15} y={y + d - 3.5} width="30" height="7" rx="2" fill="#1c1c1c" />
               <circle cx={serverX + toward * -10} cy={y + d} r="1.9" fill={live ? secHue : '#404040'}>
                 {live && <animate attributeName="opacity" values="1;.25;1" dur={`${0.9 + i * 0.35}s`} repeatCount="indefinite" />}
               </circle>
             </g>
           ))}
-          <text x={serverX} y={y + 46} textAnchor="middle" fontSize="11.5" fill="#bebebe">
+          <text x={serverX} y={y + 36} textAnchor="middle" fontSize="11" fill="#bebebe">
             {f.server}
             <tspan fill="#8b8b8b" className="ib-lat">
               {' '}
@@ -500,24 +498,6 @@ function InboundFlow({ w }: { w: InboundWizard }) {
           </text>
         </g>
       </svg>
-      <div className="ib-legend">
-        <span>
-          <i style={{ background: HUE.protocol }} />
-          {f.layerProtocol}
-        </span>
-        {transport && (
-          <>
-            <span>
-              <i style={{ background: HUE.network }} />
-              {f.layerTransport}
-            </span>
-            <span>
-              <i style={{ background: secHue }} />
-              {f.layerSecurity}
-            </span>
-          </>
-        )}
-      </div>
     </div>
   )
 }
