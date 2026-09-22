@@ -6,7 +6,6 @@ import {
   ApiError,
   createCore,
   deleteCore,
-  FINGERPRINTS,
   generateIkev2Cert,
   getPanelCertForIkev2,
   getRealityKeypair,
@@ -20,6 +19,7 @@ import {
   type RealityCandidate,
 } from '../lib/api'
 import RealityScanner from '../components/RealityScanner'
+import InboundBuilder from '../components/InboundBuilder'
 import CloudflareScanner from '../components/CloudflareScanner'
 import { copyToClipboard } from '../lib/clipboard'
 
@@ -80,10 +80,6 @@ function emptyWizard() {
     realityPrivateKey: '',
     realityShortId: '',
   }
-}
-
-function randomPort(): string {
-  return String(10000 + Math.floor(Math.random() * 50000))
 }
 
 // Applies `patch` to every REALITY inbound already in the JSON. Returns the new text, or null when
@@ -889,7 +885,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   const [scannerOpen, setScannerOpen] = useState(false)
   const [cfScannerOpen, setCfScannerOpen] = useState(false)
   const [generatingKeys, setGeneratingKeys] = useState(false)
-  const [generatedKey, setGeneratedKey] = useState<{ private_key: string; public_key: string; short_id: string } | null>(null)
   const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
   const [usingPanelCert, setUsingPanelCert] = useState(false)
 
@@ -950,7 +945,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     setEditingId(null)
     setForm({ ...emptyForm(), coreType: type, hysteria2Obfs: type === 'hysteria2' ? randomObfs() : '' })
     setWizard(emptyWizard())
-    setGeneratedKey(null)
     setLastWarnings([])
     setFormError(null)
     setShowForm(true)
@@ -960,7 +954,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     setEditingId(null)
     setForm(emptyForm())
     setWizard(emptyWizard())
-    setGeneratedKey(null)
     setShowForm(false)
     setLastWarnings([])
     setFormError(null)
@@ -1013,7 +1006,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     setFormError(null)
     try {
       const keys = await getRealityKeypair()
-      setGeneratedKey(keys)
       setWizard((w) => ({ ...w, realityPrivateKey: keys.private_key, realityShortId: keys.short_id }))
       const next = patchRealityInJson(form.configText, (reality) => {
         reality.privateKey = keys.private_key
@@ -1383,119 +1375,17 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
 
           {form.coreType === 'xray' && (
             <div className="form-section">
-              <h4>{t.coresPage.wizardTitle}</h4>
-              <div className="hint" style={{ marginTop: -4 }}>
-                {t.coresPage.wizardHint}
-              </div>
-              <div className="form-grid">
-                <Field label={t.coresPage.tagLabel}>
-                  <input className="input ltr" value={wizard.tag} onChange={(e) => updateWizard('tag', e.target.value)} placeholder="vless-reality-1" />
-                </Field>
-                <Field label={t.coresPage.protocolLabel}>
-                  <select className="input" value={wizard.protocol} onChange={(e) => updateWizard('protocol', e.target.value as WizardProtocol)}>
-                    <option value="" disabled>
-                      {t.coresPage.selectPlaceholder}
-                    </option>
-                    <option value="vless">{protocolLabels.vless}</option>
-                    <option value="vmess">{protocolLabels.vmess}</option>
-                    <option value="trojan">{protocolLabels.trojan}</option>
-                    <option value="shadowsocks">{protocolLabels.shadowsocks}</option>
-                  </select>
-                </Field>
-                <Field label={t.coresPage.portLabel}>
-                  <span className="flex gap-1.5">
-                    <input className="input" type="number" min="1" max="65535" value={wizard.port} onChange={(e) => updateWizard('port', e.target.value)} />
-                    <button type="button" onClick={() => updateWizard('port', randomPort())} className="btn" title="random">
-                      🎲
-                    </button>
-                  </span>
-                </Field>
-                {isTransportProtocol && (
-                  <>
-                    <Field label={t.coresPage.networkLabel}>
-                      <select className="input" value={wizard.network} onChange={(e) => updateWizard('network', e.target.value as typeof wizard.network)}>
-                        <option value="" disabled>
-                          {t.coresPage.selectPlaceholder}
-                        </option>
-                        <option value="tcp">{t.coresPage.networkTcp}</option>
-                        <option value="ws">{t.coresPage.networkWs}</option>
-                        <option value="grpc">{t.coresPage.networkGrpc}</option>
-                      </select>
-                    </Field>
-                    <Field label={t.coresPage.securityLabel}>
-                      <select className="input" value={wizard.security} onChange={(e) => updateWizard('security', e.target.value as typeof wizard.security)}>
-                        <option value="" disabled>
-                          {t.coresPage.selectPlaceholder}
-                        </option>
-                        <option value="none">{t.coresPage.securityNone}</option>
-                        <option value="tls">{t.coresPage.securityTls}</option>
-                        <option value="reality">{t.coresPage.securityReality}</option>
-                      </select>
-                    </Field>
-                  </>
-                )}
-                {wizard.protocol === 'shadowsocks' && (
-                  <Field label={t.coresPage.methodLabel}>
-                    <input className="input ltr" value={wizard.method} onChange={(e) => updateWizard('method', e.target.value)} placeholder="2022-blake3-aes-128-gcm" />
-                  </Field>
-                )}
-                {isTransportProtocol && (wizard.security === 'tls' || wizard.security === 'reality') && (
-                  <>
-                    <Field label={t.coresPage.sniLabel}>
-                      <input className="input ltr" value={wizard.sni} onChange={(e) => updateWizard('sni', e.target.value)} placeholder="www.example.com" />
-                    </Field>
-                    <Field label={t.coresPage.fingerprintLabel}>
-                      <select className="input ltr" value={wizard.fingerprint} onChange={(e) => updateWizard('fingerprint', e.target.value)}>
-                        <option value="">{t.coresPage.selectPlaceholder}</option>
-                        {FINGERPRINTS.map((fp) => (
-                          <option key={fp} value={fp}>
-                            {fp}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    {wizard.security === 'tls' && (
-                      <Field label={t.coresPage.alpnLabel}>
-                        <input className="input ltr" value={wizard.alpn} onChange={(e) => updateWizard('alpn', e.target.value)} placeholder="h2,http/1.1" />
-                      </Field>
-                    )}
-                  </>
-                )}
-                {isTransportProtocol && (wizard.network === 'ws' || wizard.network === 'grpc') && (
-                  <>
-                    <Field label={wizard.network === 'ws' ? t.coresPage.wsPathLabel : t.coresPage.grpcServiceLabel}>
-                      <input className="input ltr" value={wizard.path} onChange={(e) => updateWizard('path', e.target.value)} />
-                    </Field>
-                    {wizard.network === 'ws' && (
-                      <Field label={t.coresPage.hostHeaderLabel}>
-                        <input className="input ltr" value={wizard.hostHeader} onChange={(e) => updateWizard('hostHeader', e.target.value)} />
-                      </Field>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {isTransportProtocol && wizard.security === 'reality' && (
-                <div className="form-section">
-                  <h4>{t.coresPage.realityToolsTitle}</h4>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={generateKeys} disabled={generatingKeys} className="btn">
-                      {generatingKeys ? t.coresPage.generatingKeys : t.coresPage.generateNewKey}
-                    </button>
-                    <button type="button" onClick={() => setScannerOpen(true)} className="btn">
-                      {t.coresPage.suggestTarget}
-                    </button>
-                    <span className="hint mono" style={{ margin: 0 }}>
-                      privateKey: {wizard.realityPrivateKey ? '••••••••' : '—'} · shortId: {wizard.realityShortId || '—'}
-                    </span>
-                  </div>
-                  {generatedKey && (
-                    <div className="hint" style={{ margin: 0 }}>
-                      ✓ {t.coresPage.realityKeysInfo} <span className="mono">publicKey: {generatedKey.public_key}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              <InboundBuilder
+                wizard={wizard}
+                onChange={(patch) => setWizard((w) => ({ ...w, ...patch }))}
+                existingTags={((parseConfig(form.configText).inbounds as { tag?: string }[] | undefined) ?? []).map((i) => i.tag ?? '')}
+                canAdd={wizardCanAdd}
+                added={addedFlash}
+                onAdd={addWizardToJson}
+                generatingKeys={generatingKeys}
+                onGenerateKeys={generateKeys}
+                onScan={() => setScannerOpen(true)}
+              />
 
               {isTransportProtocol && wizard.security === 'tls' && (
                 <div className="form-section">
@@ -1516,11 +1406,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
 
               {scannerOpen && <RealityScanner onPick={applyScannedTarget} onClose={() => setScannerOpen(false)} picked={wizard.sni} />}
 
-              <div>
-                <button type="button" onClick={addWizardToJson} disabled={!wizardCanAdd} className="btn solid">
-                  {addedFlash ? t.coresPage.addedToJson : t.coresPage.addToJsonBtn}
-                </button>
-              </div>
             </div>
           )}
 
