@@ -157,12 +157,13 @@ def _used_percent(used: int, limit: int | None) -> int | None:
     return max(0, min(100, round(used * 100 / limit)))
 
 
-def _card(title: str, copy_value: str, body_html: str) -> str:
+def _card(title: str, body_html: str, copy_value: str | None = None) -> str:
+    copy_btn = f'<button class="copy-btn" data-copy="{_esc(copy_value)}">کپی</button>' if copy_value else ""
     return f"""
     <div class="card">
       <div class="card-head">
         <span class="badge">{_esc(title)}</span>
-        <button class="copy-btn" data-copy="{_esc(copy_value)}">کپی</button>
+        {copy_btn}
       </div>
       {body_html}
     </div>"""
@@ -201,16 +202,9 @@ def build_info_page_html(
     for ike in ikev2_configs:
         body = f"""
           <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('ikev2', ike, subscription_url)}</div></div>
-          <div class="kv"><span>سرور</span><span class="mono">{_esc(ike['server'])}</span></div>
-          {f'<div class="kv"><span>Remote ID</span><span class="mono">{_esc(ike["remote_id"])}</span></div>' if ike.get('remote_id') else ''}
-          <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(ike['username'])}</span></div>
-          <div class="kv"><span>پسورد</span><span class="mono">{_esc(ike['password'])}</span></div>
-          {f'<div class="kv"><span>PSK</span><span class="mono">{_esc(ike["psk"])}</span></div>' if ike.get('psk') else ''}
           {f'<a class="mobileconfig-btn" href="{_esc(ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>' if ike.get('mobileconfig_url') else ''}
         """
-        remote_id_line = f"\nRemote ID: {ike['remote_id']}" if ike.get('remote_id') else ""
-        copy_text = f"Server: {ike['server']}{remote_id_line}\nUsername: {ike['username']}\nPassword: {ike['password']}"
-        sections.append(_card(f"IKEv2 · {ike['remark']}", copy_text, body))
+        sections.append(_card(f"IKEv2 · {ike['remark']}", body))
 
     for l2tp in l2tp_configs:
         body = f"""
@@ -221,7 +215,7 @@ def build_info_page_html(
           {f'<div class="kv"><span>PSK</span><span class="mono">{_esc(l2tp["psk"])}</span></div>' if l2tp.get('psk') else ''}
         """
         copy_text = f"Server: {l2tp['server']}\nUsername: {l2tp['username']}\nPassword: {l2tp['password']}"
-        sections.append(_card(f"L2TP · {l2tp['remark']}", copy_text, body))
+        sections.append(_card(f"L2TP · {l2tp['remark']}", body, copy_text))
 
     if not sections:
         sections.append('<div class="empty">هیچ سرویسی برای این اکانت تعریف نشده.</div>')
