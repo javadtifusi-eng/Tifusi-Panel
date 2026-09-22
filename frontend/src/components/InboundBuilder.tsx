@@ -424,7 +424,22 @@ function InboundFlow({ w }: { w: InboundWizard }) {
             </feMerge>
           </filter>
           <path id={`r${uid}`} d={`M${wireFrom} ${y} L${wireTo} ${y}`} />
+          <pattern id={`d${uid}`} width="16" height="16" patternUnits="userSpaceOnUse">
+            <circle cx="1.5" cy="1.5" r="1" fill="#ffffff" fillOpacity=".055" />
+          </pattern>
+          <radialGradient id={`ga${uid}`}>
+            <stop offset="0" stopColor={hues[0]} stopOpacity=".32" />
+            <stop offset="1" stopColor={hues[0]} stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id={`gb${uid}`}>
+            <stop offset="0" stopColor={secHue} stopOpacity=".34" />
+            <stop offset="1" stopColor={secHue} stopOpacity="0" />
+          </radialGradient>
         </defs>
+
+        <rect width={W} height="108" fill={`url(#d${uid})`} />
+        <ellipse cx={edgeX + toward * 150} cy={y} rx="210" ry="70" fill={`url(#ga${uid})`} className="ib-glow" />
+        <ellipse cx={serverX - toward * 60} cy={y} rx="200" ry="72" fill={`url(#gb${uid})`} className="ib-glow" style={{ animationDelay: '1.6s' }} />
 
         <rect x={bandA} y="4" width={bandB - bandA} height="24" rx="12" fill={seenHue} fillOpacity=".08" stroke={seenHue} strokeOpacity=".4" className={live ? 'ib-breathe-soft' : undefined} />
         <text x={W / 2} y="20.5" textAnchor="middle" fontSize="12" fill={seenHue}>

@@ -1334,8 +1334,7 @@ select.input { padding-block: 7px; }
 .ib-head p { margin: 2px 0 0; font-size: 0.74rem; color: var(--muted); }
 
 .ib-flow {
-  border: 1px solid var(--edge); border-radius: 14px; padding: 8px 8px 4px; overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 0%, #161a22 0%, #0c0c0c 60%);
+  border: 1px solid var(--edge); border-radius: 14px; overflow: hidden; background: #0b0c0e;
 }
 .ib-flow svg { display: block; width: 100%; height: auto; }
 .ib-flow text { font-family: var(--font-fa); }
@@ -1425,10 +1424,12 @@ select.input { padding-block: 7px; }
 }
 @keyframes ib-stream { to { stroke-dashoffset: -180; } }
 @keyframes ib-breathe { 0%, 100% { opacity: .04; } 50% { opacity: .13; } }
+@keyframes ib-glow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @keyframes ib-breathe-soft { 0%, 100% { stroke-opacity: .25; } 50% { stroke-opacity: .6; } }
 .ib-stream { animation: ib-stream 1.6s linear infinite; }
 .ib-breathe { animation: ib-breathe 2.4s ease-in-out infinite; }
 .ib-breathe-soft { animation: ib-breathe-soft 3s ease-in-out infinite; }
+.ib-glow { animation: ib-glow 3.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .ib-stream, .ib-breathe, .ib-breathe-soft { animation: none; }
+  .ib-stream, .ib-breathe, .ib-breathe-soft, .ib-glow { animation: none; }
 }
