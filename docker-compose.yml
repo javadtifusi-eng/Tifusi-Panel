@@ -9,7 +9,11 @@ services:
     container_name: tifusi-panel
     restart: unless-stopped
     ports:
-      - "${TIFUSI_PANEL_PORT:-8000}:8000"
+      # Loopback only. Everything outside reaches the API through the dashboard's
+      # nginx (/api/, /sub/, /code/, /app/ on the HTTPS port), with TLS and the real
+      # client IP. Published on every address it served plain HTTP — an admin login
+      # over it traveled unencrypted — and let anyone set X-Real-IP themselves.
+      - "127.0.0.1:${TIFUSI_PANEL_PORT:-8000}:8000"
       # Only for Settings > SSL Certificate > "Get free SSL" — certbot's
       # standalone plugin needs to answer Let's Encrypt's HTTP-01 challenge
       # on the real port 80 itself. Harmless to leave published even if

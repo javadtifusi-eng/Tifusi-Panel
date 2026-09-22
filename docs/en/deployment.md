@@ -13,7 +13,7 @@ docker compose up -d --build
 
 | Service | Container | Ports |
 | --- | --- | --- |
-| Panel API | `tifusi-panel` | `8000` (API), `80` (ACME HTTP-01 challenge only) |
+| Panel API | `tifusi-panel` | `8000` (API, loopback only), `80` (ACME HTTP-01 challenge only) |
 | Dashboard | `tifusi-dashboard` | `8080` (HTTP), `443` (HTTPS) |
 
 Every port above is chosen during installation and changeable afterwards with `tifusi panel port`; answer `r` at any prompt for a random free one. The only exception is `80`, which is fixed because the panel answers Let's Encrypt's HTTP-01 challenge there. The HTTPS port is `TIFUSI_DASHBOARD_HTTPS_PORT` and defaults to `443`; set it to one of `2053`, `2083`, `2087`, `2096` or `8443` for an origin behind Cloudflare's proxy, and keep `TIFUSI_PUBLIC_URL` in step, since only `443` is implied by a bare `https://host`.
