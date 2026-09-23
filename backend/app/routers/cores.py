@@ -19,6 +19,7 @@ from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.node import Node
 from app.nodes.sync import resync_nodes_in_background
+from app.wireguard import keys as wg_keys
 from app.schemas.core import CoreCreate, CoreList, CoreResponse, CoreUpdate, InboundResponse
 
 router = APIRouter(prefix="/api/cores", tags=["cores"], dependencies=[Depends(require_permission("cores"))])
@@ -34,6 +35,8 @@ _CORE_FIELDS = (
     "hysteria2_port",
     "hysteria2_obfs",
     "hysteria2_rate_mbps",
+    "wireguard_port",
+    "wireguard_mtu",
 )
 
 
@@ -46,6 +49,19 @@ def _ensure_hysteria2_obfs(core: Core) -> None:
     to choose — only something to get wrong by typing it."""
     if core.core_type == CoreType.hysteria2 and not core.hysteria2_obfs:
         core.hysteria2_obfs = secrets.token_hex(16)
+
+
+def _ensure_wireguard_defaults(core: Core) -> None:
+    """The server key is made here, never typed; the port and MTU default to
+    what measured best on MCI (see the fields' comments in app/models/core.py)."""
+    if core.core_type != CoreType.wireguard:
+        return
+    if not core.wireguard_private_key:
+        core.wireguard_private_key = wg_keys.generate_private_key()
+    if not core.wireguard_port:
+        core.wireguard_port = wg_keys.DEFAULT_PORT
+    if not core.wireguard_mtu:
+        core.wireguard_mtu = wg_keys.DEFAULT_MTU
 
 
 async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None = None) -> CoreResponse:
@@ -115,6 +131,9 @@ async def _to_response(core: Core, db: AsyncSession, warnings: list[str] | None 
         hysteria2_port=core.hysteria2_port,
         hysteria2_obfs=core.hysteria2_obfs,
         hysteria2_rate_mbps=core.hysteria2_rate_mbps,
+        wireguard_port=core.wireguard_port,
+        wireguard_mtu=core.wireguard_mtu,
+        wireguard_public_key=wg_keys.public_key(core.wireguard_private_key) if core.wireguard_private_key else None,
     )
 
 
@@ -204,6 +223,7 @@ async def create_core(payload: CoreCreate, db: AsyncSession = Depends(get_db)) -
         **{field: getattr(payload, field) for field in _CORE_FIELDS},
     )
     _ensure_hysteria2_obfs(core)
+    _ensure_wireguard_defaults(core)
     core.inbounds = []  # avoids a lazy-load attempt on the brand-new object below
     db.add(core)
     await db.flush()
@@ -235,6 +255,7 @@ async def update_core(
         if field in updates:
             setattr(core, field, updates[field])
     _ensure_hysteria2_obfs(core)
+    _ensure_wireguard_defaults(core)
 
     warnings: list[str] = []
     if core.core_type == CoreType.xray and "config" in updates:
@@ -275,6 +296,7 @@ async def delete_core(core_id: int, db: AsyncSession = Depends(get_db)) -> None:
                 Node.core_id == core_id,
                 Node.ipsec_core_id == core_id,
                 Node.hysteria_core_id == core_id,
+                Node.wireguard_core_id == core_id,
             )
         )
     )

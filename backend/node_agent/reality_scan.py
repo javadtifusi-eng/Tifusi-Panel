@@ -7,11 +7,24 @@ there is no built-in list of names anywhere in this project, because a
 name that is published as a good REALITY target is exactly the name a
 censor gets to block first.
 
+Datacenter neighbours (TLS-connecting to every address in the node's own
+/24 and reading the name off each certificate) used to be the only source.
+They are gone: on MCI a neighbour is a name that operator's SNI whitelist
+has never seen, so it tests fine from the node and is still throttled in
+Iran — "این همسایه بدرد ریلیتی نمیخوره". Two sources replace it, both
+picked because an operator's whitelist already knows them:
+
+- the node's own users' live traffic (node_agent/traffic_names.py) — names
+  this node is already carrying, so whichever whitelist matters here has
+  already let them through;
+- a page of the Tranco top-domains list (https://tranco-list.eu), fetched
+  fresh every scan — research-grade, rebuilt daily, and never stored in
+  this project, so "scan more" always draws from the live list, not a
+  cached one.
+
 The scan runs in two halves, with the panel's Iran check in between:
 
-1. discover: TLS-connect to every address in the node's own /24 and read
-   the names off each certificate — neighbours in the same datacenter are
-   the targets Xray's authors recommend;
+1. discover: pull names from live traffic and the feed (above);
 2. validate: connect to each name with SNI and a verified certificate,
    keeping those that speak TLS 1.3 and HTTP/2, and time them.
 
@@ -30,7 +43,7 @@ each and a name Iran blocks is worthless however well it tests here:
 
 import asyncio
 import base64
-import ipaddress
+import io
 import json
 import os
 import random
@@ -38,7 +51,9 @@ import socket
 import ssl
 import tempfile
 import time
+import urllib.request
 import uuid
+import zipfile
 from contextlib import suppress
 from dataclasses import asdict, dataclass, field
 
@@ -57,6 +72,14 @@ _DISCOVER_TIMEOUT = 3.0
 _DISCOVER_CONCURRENCY = 64
 # The most a scan draws from the live random sample (traffic_names.sample()).
 _TRAFFIC_NAMES = 120
+
+# Live top-domains feed. Tranco is research-grade and rebuilt daily, so a scan
+# fetches it fresh every run rather than this project carrying a name list of
+# its own — the owner's standing rule is no predetermined list, and "fresh from
+# a feed" keeps that while giving the scan a large, current pool to work
+# through. A "scan more" walks to the next page of the same live list.
+_FEED_URL = "https://tranco-list.eu/top-1m.csv.zip"
+_FEED_PAGE = 2000
 _VALIDATE_TIMEOUT = 5.0
 _FETCH_TIMEOUT = 10
 
@@ -65,7 +88,7 @@ _FETCH_TIMEOUT = 10
 class Candidate:
     host: str
     ip: str | None = None
-    source: str = "neighbor"
+    source: str = "traffic"
     tls: str | None = None
     alpn: str | None = None
     # REALITY hands every unauthenticated handshake to dest, and a client's
@@ -76,8 +99,10 @@ class Candidate:
     latency_ms: int | None = None
     usable: bool = False
     error: str | None = None
-    # What goes in realitySettings.dest: a neighbour is reached by its own
-    # address, so the node's REALITY traffic stays inside the datacenter.
+    # What goes in realitySettings.dest: always the name itself, resolved by
+    # the node like any other TLS client — DNS is what a censor checks a
+    # REALITY dest against, so a stale or hand-picked address is exactly
+    # what would make a good name fail.
     dest: str | None = None
     # None until the real REALITY test has run for this host.
     fingerprints: dict[str, dict] | None = None
@@ -97,7 +122,6 @@ class Job:
     finished_at: float | None = None
     error: str | None = None
     ring: int = 0
-    blocks: list[str] = field(default_factory=list)
     candidates: dict[str, Candidate] = field(default_factory=dict)
 
     def snapshot(self) -> dict:
@@ -110,7 +134,6 @@ class Job:
             "finished_at": self.finished_at,
             "error": self.error,
             "ring": self.ring,
-            "blocks": self.blocks,
             "results": [asdict(c) for c in items],
         }
 
@@ -164,26 +187,79 @@ def running() -> bool:
 def start(public_ip: str | None, ring: int = 0, exclude: list[str] | None = None) -> None:
     global _job, _task
     _job = Job(state="discovering", started_at=time.time(), ring=ring)
-    if public_ip:
-        _job.blocks = [str(n) for n in ring_blocks(public_ip, ring)]
-    _task = asyncio.get_running_loop().create_task(_run(public_ip, ring, set(exclude or [])))
+    _task = asyncio.get_running_loop().create_task(_run(ring, set(exclude or [])))
 
 
-async def _run(public_ip: str | None, ring: int = 0, exclude: set[str] | None = None) -> None:
+def stop() -> dict:
+    """Halt a running scan but keep everything it found so far — the whole point
+    of a big feed scan is that the admin stops it once enough good targets are
+    in, rather than waiting for all of it. Lands in "checking", the same state
+    a full scan reaches on its own, so the panel still runs its Iran check and
+    per-fingerprint prove on whatever validated before the stop — "done" would
+    skip both and waste every candidate found so far."""
+    global _task
+    if _task is not None and not _task.done():
+        _task.cancel()
+    if _job.state not in ("done", "error", "idle", "checking"):
+        _job.state = "checking"
+        _job.finished_at = time.time()
+    return _job.snapshot()
+
+
+async def _run(ring: int = 0, exclude: set[str] | None = None) -> None:
     try:
+        # The node's own users' live traffic (small, always fresh) plus a page of
+        # the live top-domains feed. Datacenter neighbours are gone: they turned
+        # out to be poor REALITY targets on MCI (names its whitelist never sees),
+        # which is what "این همسایه بدرد ریلیتی نمیخوره" settled.
         await _from_traffic()
-        if public_ip:
-            await _discover(public_ip, ring, exclude)
+        await _from_feed(ring, exclude)
         _job.state = "validating"
         await _validate(list(_job.candidates.values()))
-        await _measure_all(list(_job.candidates.values()))
+        await _measure_all([c for c in _job.candidates.values() if c.usable])
         # Parked: the panel asks Iran about these and calls prove() back with
         # the ones that are open there. Nothing else is worth a minute of
         # REALITY testing.
         _job.state = "checking"
+    except asyncio.CancelledError:
+        # A manual stop mid-scan: keep the partial results, mark it finished so
+        # the panel stops polling and can still Iran-check what came in.
+        if _job.state not in ("done", "error"):
+            _job.state = "checking"
+        _job.finished_at = time.time()
+        raise
     except Exception as exc:  # noqa: BLE001 - reported to the panel, not raised
         _job.state, _job.error = "error", str(exc)[:300]
         _job.finished_at = time.time()
+
+
+def _fetch_feed(page: int) -> list[str]:
+    """Domains ranked (page*_FEED_PAGE) .. +_FEED_PAGE from the live Tranco list.
+    Fetched every scan, so it is always current and nothing is stored here."""
+    req = urllib.request.Request(_FEED_URL, headers={"User-Agent": "TifusiPanel-node"})
+    with urllib.request.urlopen(req, timeout=45) as resp:
+        blob = resp.read()
+    lo = max(0, page) * _FEED_PAGE
+    hi = lo + _FEED_PAGE
+    out: list[str] = []
+    zf = zipfile.ZipFile(io.BytesIO(blob))
+    with zf.open(zf.namelist()[0]) as f:
+        for n, line in enumerate(io.TextIOWrapper(f, encoding="ascii", errors="ignore")):
+            if n >= hi:
+                break
+            if n < lo:
+                continue
+            parts = line.strip().split(",")
+            if len(parts) >= 2 and parts[1]:
+                out.append(parts[1].lower())
+    return out
+
+
+async def _from_feed(ring: int, exclude: set[str] | None) -> None:
+    domains = await asyncio.to_thread(_fetch_feed, ring)
+    for d in domains:
+        if not (exclude and d in exclude):
+            _job.candidates.setdefault(d, Candidate(host=d, source="feed"))
 
 
 def prove_hosts(hosts: list[str]) -> None:
@@ -248,46 +324,6 @@ async def _peer_cert(ip: str) -> bytes | None:
                 await writer.wait_closed()
 
 
-def ring_blocks(public_ip: str, ring: int) -> list[ipaddress.IPv4Network]:
-    """Ring 0 is the node's own /24; ring k the two /24s k blocks either
-    side of it — still the same provider's space almost always, so each
-    "find more" walks outward instead of re-reading the same neighbours."""
-    try:
-        own = ipaddress.ip_network(f"{public_ip}/24", strict=False)
-    except ValueError:
-        return []
-    if ring <= 0:
-        return [own]
-    out = []
-    for step in (-ring, ring):
-        start = int(own.network_address) + step * 256
-        if 0 < start < 2**32 - 256:
-            net = ipaddress.ip_network(f"{ipaddress.IPv4Address(start)}/24")
-            if net.is_global:
-                out.append(net)
-    return out
-
-
-async def _discover(public_ip: str, ring: int = 0, exclude: set[str] | None = None) -> None:
-    ips = [str(ip) for net in ring_blocks(public_ip, ring) for ip in net.hosts() if str(ip) != public_ip]
-    _job.phase_total, _job.phase_done = len(ips), 0
-    sem = asyncio.Semaphore(_DISCOVER_CONCURRENCY)
-
-    async def one(ip: str) -> None:
-        async with sem:
-            der = await _peer_cert(ip)
-        _job.phase_done += 1
-        if not der:
-            return
-        with suppress(Exception):
-            for name in _cert_names(der)[:3]:
-                if exclude and name in exclude:
-                    continue
-                _job.candidates.setdefault(name, Candidate(host=name, ip=ip, source="neighbor"))
-
-    await asyncio.gather(*(one(ip) for ip in ips))
-
-
 async def _from_traffic() -> None:
     """A random sample of what this node's own users are actually connecting to
     right now (node_agent/traffic_names.py) — names an operator's whitelist
@@ -316,39 +352,21 @@ async def _from_traffic() -> None:
 
 # --- 2. validate -----------------------------------------------------------
 
-async def _resolves_to(host: str, ip: str) -> bool:
-    """A neighbour only makes a good SNI when the name's own DNS points at the
-    address it was found on: a censor can resolve the SNI and compare it with
-    where the packets actually go, and a name that lives elsewhere (on a CDN,
-    or nowhere, like an internal cert name) gets the connection throttled."""
-    try:
-        infos = await asyncio.wait_for(
-            asyncio.get_running_loop().getaddrinfo(host, 443, family=socket.AF_INET, type=socket.SOCK_STREAM), timeout=5
-        )
-    except Exception:  # noqa: BLE001
-        return False
-    return ip in {i[4][0] for i in infos}
-
-
 async def _validate_one(c: Candidate) -> None:
-    if c.source == "neighbor" and c.ip and not await _resolves_to(c.host, c.ip):
-        c.error = "the name's DNS points somewhere else"
-        return
     ctx = ssl.create_default_context()
     ctx.set_alpn_protocols(["h2", "http/1.1"])
     writer = None
-    target = c.ip if c.source == "neighbor" and c.ip else c.host
     start = time.monotonic()
     try:
         _, writer = await asyncio.wait_for(
-            asyncio.open_connection(target, 443, ssl=ctx, server_hostname=c.host), timeout=_VALIDATE_TIMEOUT
+            asyncio.open_connection(c.host, 443, ssl=ctx, server_hostname=c.host), timeout=_VALIDATE_TIMEOUT
         )
         first_ms = round((time.monotonic() - start) * 1000)
         obj = writer.get_extra_info("ssl_object")
         c.tls, c.alpn = obj.version(), obj.selected_alpn_protocol()
-        c.ip = c.ip or writer.get_extra_info("peername")[0]
+        c.ip = writer.get_extra_info("peername")[0]
         c.usable = c.tls == "TLSv1.3" and c.alpn == "h2"
-        c.dest = f"{target}:443" if ":" not in target else f"[{target}]:443"
+        c.dest = f"{c.host}:443"
         if not c.usable:
             c.error = "needs TLS 1.3 and HTTP/2"
         # timed separately in _measure_all(), once the burst of validations

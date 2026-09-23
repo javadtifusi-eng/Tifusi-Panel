@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import cf_scan, field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan
+from node_agent import field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan, wireguard
 
 try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
     from node_agent import cdn_scan
@@ -74,6 +74,7 @@ limits.start(XRAY_BIN, STATS_API_ADDR, lambda: _process is not None and _process
 # Same reason as Xray above: without it a restarted node serves no Hysteria2 until the panel next
 # pushes, which only happens when something changes.
 hysteria.resume()
+wireguard.resume()
 
 
 def _check_key(x_node_api_key: str | None) -> None:
@@ -188,7 +189,7 @@ async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
     if _ipsec_mode in ("l2tp", "ikev2"):
         ipsec_state["egress_running"] = ipsec.vless_egress.is_egress_running()
 
-    return {"xray": xray, "ipsec": ipsec_state, "hysteria": hysteria.health()}
+    return {"xray": xray, "ipsec": ipsec_state, "hysteria": hysteria.health(), "wireguard": wireguard.health()}
 
 
 @app.get("/stats")
@@ -202,10 +203,11 @@ async def stats(x_node_api_key: str | None = Header(default=None)) -> dict:
     _check_key(x_node_api_key)
 
     users: dict[str, dict[str, int]] = {}
-    for username, (uplink, downlink) in ipsec_stats.read_deltas().items():
-        bucket = users.setdefault(username, {"uplink": 0, "downlink": 0})
-        bucket["uplink"] += uplink
-        bucket["downlink"] += downlink
+    for deltas in (ipsec_stats.read_deltas(), wireguard.read_deltas()):
+        for username, (uplink, downlink) in deltas.items():
+            bucket = users.setdefault(username, {"uplink": 0, "downlink": 0})
+            bucket["uplink"] += uplink
+            bucket["downlink"] += downlink
 
     if _process is None or _process.poll() is not None:
         return {"users": users}
@@ -257,22 +259,11 @@ async def reality_scan_status(x_node_api_key: str | None = Header(default=None))
     return reality_scan.status()
 
 
-@app.post("/cf/scan")
-async def cf_scan_start(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
-    """Starts a clean Cloudflare edge-IP scan (node_agent/cf_scan.py); the panel
-    polls GET /cf/scan for progress. One scan at a time."""
+@app.delete("/reality/scan")
+async def reality_scan_stop(x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Halt a running scan, keeping whatever it found so far."""
     _check_key(x_node_api_key)
-    if cf_scan.running():
-        raise HTTPException(status_code=409, detail="A Cloudflare scan is already running on this node")
-    sni = str(payload.get("sni") or "").strip().lower() or None
-    cf_scan.start(sni=sni, sample=int(payload.get("sample") or 60))
-    return cf_scan.status()
-
-
-@app.get("/cf/scan")
-async def cf_scan_status(x_node_api_key: str | None = Header(default=None)) -> dict:
-    _check_key(x_node_api_key)
-    return cf_scan.status()
+    return reality_scan.stop()
 
 
 @app.post("/reality/prove")
@@ -377,6 +368,16 @@ async def hysteria_auth(payload: dict) -> dict:
         # A refusal is safer than a guess: letting someone in because the panel
         # was briefly unreachable would ignore expiry and data limits entirely.
         return {"ok": False}
+
+
+@app.post("/wireguard-config")
+async def apply_wireguard_config(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Fourth service slot: WireGuard, run as its own Xray process."""
+    _check_key(x_node_api_key)
+    try:
+        return wireguard.apply_config(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _hysteria(method: str, path: str, json_body=None):

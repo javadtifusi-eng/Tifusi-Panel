@@ -22,6 +22,7 @@
   <img src="https://img.shields.io/badge/Trojan-EF4444?style=flat-square" />
   <img src="https://img.shields.io/badge/Shadowsocks-F59E0B?style=flat-square" />
   <img src="https://img.shields.io/badge/Hysteria2-10B981?style=flat-square" />
+  <img src="https://img.shields.io/badge/WireGuard-6366F1?style=flat-square" />
   <img src="https://img.shields.io/badge/L2TP%2FIPsec-3B82F6?style=flat-square" />
   <img src="https://img.shields.io/badge/IKEv2%2FIPsec-EC4899?style=flat-square" />
 </p>
@@ -75,6 +76,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 | 📦 [Installation](docs/en/installation.md) | Server requirements, standard and professional editions, first-run setup |
 | 🌐 [Nodes](docs/en/nodes.md) | Two cores on one node, adding and removing nodes, synchronisation, device limits |
 | 🚀 [Hysteria2](docs/en/hysteria2.md) | A UDP transport for networks where TCP protocols are poor (mobile operators in Iran): setup, per-user passwords, usage counting, disconnecting |
+| 🔐 WireGuard | Its own core on UDP 4500 beside IKEv2; per-user keys, a `wireguard://` link and a `.conf`/QR for the official app |
+| 🛟 Backup domains | Spare subscription domains the Tifusi app falls over to when the live one is filtered (Settings) |
 | ⚛️ [Cores, hosts and groups](docs/en/cores-and-hosts.md) | Xray, IKEv2 and L2TP cores, public endpoints, REALITY scanner (real per-fingerprint test, filter check from inside Iran), access groups |
 | 👤 [Users and subscriptions](docs/en/users-and-subscriptions.md) | Quotas, expiry, on-hold accounts, subscription links, access codes, client profiles |
 | 💼 [Resellers](docs/en/resellers.md) | Reseller accounts, allowed protocols, user limits and data quotas |

@@ -7,9 +7,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.subscription.backup_domains import check_live_domain
 from app.database import async_session, init_db
 from app.network_health.operators import refresh_prefixes
-from app.routers import admin, api_keys, app_reports, auth, cloudflare, cores, groups, hosts, hysteria, network_health, nodes, reality, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
+from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, hysteria, network_health, nodes, reality, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
 from app.shield.engine import run_shield_cycle
 from app.tls_renewal import renew_certificates
 from app.traffic.sync import run_traffic_cycle
@@ -59,6 +60,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_prefix_loop()),
         # certbot only renews within 30 days of expiry, so twice a day is plenty.
         asyncio.create_task(_every(12 * 3600, renew_certificates)),
+        # Whether the live subscription domain still answers from inside Iran.
+        asyncio.create_task(_every(10 * 60, check_live_domain)),
     ]
     yield
     for task in tasks:
@@ -114,7 +117,6 @@ def create_app() -> FastAPI:
     app.include_router(user_templates.router)
     app.include_router(reality.router)
     app.include_router(reality.field_public_router)
-    app.include_router(cloudflare.router)
     app.include_router(hysteria.router)
     app.include_router(hosts.router)
     app.include_router(subscription.router)

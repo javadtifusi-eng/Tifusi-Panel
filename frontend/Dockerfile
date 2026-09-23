@@ -9,6 +9,7 @@ FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/nginx-http.conf.available
 COPY nginx-ssl.conf /etc/nginx/nginx-ssl.conf.available
+COPY nginx-backup-locations.conf /etc/nginx/tifusi-backup-locations.conf
 COPY docker-entrypoint-tls.sh /docker-entrypoint.d/40-tifusi-tls.sh
 RUN chmod +x /docker-entrypoint.d/40-tifusi-tls.sh
 EXPOSE 80 443

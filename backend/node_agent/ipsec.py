@@ -433,7 +433,7 @@ def _ensure_forwarding_and_nat(subnet_cidr: str) -> None:
     # so large transfers stall. Clamping the MSS on SYNs avoids that.
     for direction in ("-s", "-d"):
         rule = ["FORWARD", direction, subnet_cidr, "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
-                "-j", "TCPMSS", "--set-mss", "1100"]
+                "-j", "TCPMSS", "--set-mss", "1250"]
         if _run(["iptables", "-t", "mangle", "-C", *rule]).returncode != 0:
             _run(["iptables", "-t", "mangle", "-A", *rule])
 

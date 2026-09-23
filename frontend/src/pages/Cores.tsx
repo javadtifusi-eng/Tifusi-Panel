@@ -20,15 +20,14 @@ import {
 } from '../lib/api'
 import RealityScanner from '../components/RealityScanner'
 import InboundBuilder from '../components/InboundBuilder'
-import CloudflareScanner from '../components/CloudflareScanner'
 import { copyToClipboard } from '../lib/clipboard'
 
-const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'l2tp']
+const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp']
 // A Record, so a core type added later cannot silently fall through to another type's label —
 // the way Hysteria2 used to show up marked "L2TP".
 // Each engine wears the colour its protocol has on the Hosts page (L2TP is slate: no yellow).
-const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', l2tp: '#94a3b8' }
-const ENGINE_MARK: Record<CoreType, string> = { xray: 'XRAY', ikev2: 'IKEv2', hysteria2: 'HY2', l2tp: 'L2TP' }
+const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', wireguard: '#818cf8', l2tp: '#94a3b8' }
+const ENGINE_MARK: Record<CoreType, string> = { xray: 'XRAY', ikev2: 'IKEv2', hysteria2: 'HY2', wireguard: 'WG', l2tp: 'L2TP' }
 
 /** 32 hex characters, the same as the panel generates when the field is left empty. */
 function randomObfs(): string {
@@ -59,6 +58,8 @@ function emptyForm() {
     hysteria2Port: '',
     hysteria2Obfs: '',
     hysteria2RateMbps: '',
+    wireguardPort: '',
+    wireguardMtu: '',
   }
 }
 
@@ -462,7 +463,8 @@ const CORE_SLOT = {
   ikev2: 'ipsec_core_id',
   l2tp: 'ipsec_core_id',
   hysteria2: 'hysteria_core_id',
-} as const satisfies Record<CoreType, 'core_id' | 'ipsec_core_id' | 'hysteria_core_id'>
+  wireguard: 'wireguard_core_id',
+} as const satisfies Record<CoreType, 'core_id' | 'ipsec_core_id' | 'hysteria_core_id' | 'wireguard_core_id'>
 
 const slotOf = (type: CoreType) => CORE_SLOT[type]
 const coreInSlot = (node: Node, type: CoreType) => node[slotOf(type)]
@@ -883,7 +885,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
       (!!wizard.network && !!wizard.security && (wizard.security !== 'reality' || (!!wizard.sni && !!wizard.realityPrivateKey && !!wizard.realityShortId))))
 
   const [scannerOpen, setScannerOpen] = useState(false)
-  const [cfScannerOpen, setCfScannerOpen] = useState(false)
   const [generatingKeys, setGeneratingKeys] = useState(false)
   const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
   const [usingPanelCert, setUsingPanelCert] = useState(false)
@@ -943,7 +944,13 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
 
   function openNew(type: CoreType | '') {
     setEditingId(null)
-    setForm({ ...emptyForm(), coreType: type, hysteria2Obfs: type === 'hysteria2' ? randomObfs() : '' })
+    setForm({
+      ...emptyForm(),
+      coreType: type,
+      hysteria2Obfs: type === 'hysteria2' ? randomObfs() : '',
+      wireguardPort: type === 'wireguard' ? '4500' : '',
+      wireguardMtu: type === 'wireguard' ? '1420' : '',
+    })
     setWizard(emptyWizard())
     setLastWarnings([])
     setFormError(null)
@@ -976,6 +983,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
       hysteria2Port: core.hysteria2_port?.toString() ?? '',
       hysteria2Obfs: core.hysteria2_obfs ?? '',
       hysteria2RateMbps: core.hysteria2_rate_mbps?.toString() ?? '',
+      wireguardPort: core.wireguard_port?.toString() ?? '',
+      wireguardMtu: core.wireguard_mtu?.toString() ?? '',
     })
     setWizard(emptyWizard())
     setLastWarnings([])
@@ -1083,6 +1092,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
         // Blank means no cap at all, which is different from zero.
         hysteria2_rate_mbps:
           form.coreType === 'hysteria2' ? (form.hysteria2RateMbps.trim() === '' ? null : Number(form.hysteria2RateMbps) || null) : null,
+        wireguard_port: form.coreType === 'wireguard' ? Number(form.wireguardPort) || null : null,
+        wireguard_mtu: form.coreType === 'wireguard' ? Number(form.wireguardMtu) || null : null,
       }
       const result = editingId ? await updateCore(editingId, payload) : await createCore(payload)
       setLastWarnings(result.warnings)
@@ -1113,7 +1124,13 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   const nodesRunning = (type: CoreType) => nodes.filter((n) => byType(type).some((x) => coreInSlot(n, type) === x.id))
   const shown = byType(engine)
   const codeCore = code ? cores?.find((x) => x.id === code.coreId) : undefined
-  const engineSub: Record<CoreType, string> = { xray: c.xraySub, ikev2: c.ikev2Sub, hysteria2: c.hysteria2Sub, l2tp: c.l2tpSub }
+  const engineSub: Record<CoreType, string> = {
+    xray: c.xraySub,
+    ikev2: c.ikev2Sub,
+    hysteria2: c.hysteria2Sub,
+    wireguard: c.wireguardSub,
+    l2tp: c.l2tpSub,
+  }
 
   return (
     <div className="pg-cores" style={{ ['--ec' as string]: ENGINE_COLOR[engine] }}>
@@ -1179,7 +1196,9 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                 ? t.coresPage.ikev2CertHint
                 : engine === 'hysteria2'
                   ? t.coresPage.hysteria2CardHint
-                  : t.coresPage.intro
+                  : engine === 'wireguard'
+                    ? t.coresPage.wireguardCardHint
+                    : t.coresPage.intro
           }
           action={
             <button type="button" className="btn solid" onClick={() => openNew(engine)}>
@@ -1254,6 +1273,14 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                             <RateSpec label={c.rateCap} mbps={core.hysteria2_rate_mbps} none={t.coresPage.hysteria2RatePlaceholder} />
                           </>
                         )}
+                        {core.core_type === 'wireguard' && (
+                          <>
+                            <Spec label={t.coresPage.wireguardPortLabel} value={`UDP ${core.wireguard_port ?? '—'}`} tint />
+                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                            <Spec label="MTU" value={String(core.wireguard_mtu ?? '—')} />
+                            <Spec label={t.coresPage.wireguardKeyLabel} value={core.wireguard_public_key ?? '—'} wide />
+                          </>
+                        )}
                         {core.core_type === 'ikev2' && (
                           <>
                             <Spec label="Remote ID" value={core.ikev2_remote_id ?? '—'} tint wide />
@@ -1286,11 +1313,16 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                       <CoreChain
                         live={coreLive}
                         hops={[
-                          { icon: <IconUser size={20} />, title: c.hopPhone, sub: core.core_type === 'hysteria2' ? c.hopApp : c.hopNative },
+                          { icon: <IconUser size={20} />, title: c.hopPhone, sub: core.core_type === 'hysteria2' || core.core_type === 'wireguard' ? c.hopApp : c.hopNative },
                           {
-                            icon: core.core_type === 'hysteria2' ? <IconBolt size={20} /> : core.core_type === 'ikev2' ? <IconShield size={20} /> : <IconLock size={20} />,
+                            icon: core.core_type === 'hysteria2' || core.core_type === 'wireguard' ? <IconBolt size={20} /> : core.core_type === 'ikev2' ? <IconShield size={20} /> : <IconLock size={20} />,
                             title: t.coresPage.coreTypeLabels[core.core_type],
-                            tag: core.core_type === 'hysteria2' ? `QUIC · UDP ${core.hysteria2_port ?? '—'}` : core.core_type === 'ikev2' ? 'UDP 500 · 4500' : 'UDP 1701',
+                            tag:
+                              core.core_type === 'hysteria2'
+                                ? `QUIC · UDP ${core.hysteria2_port ?? '—'}`
+                                : core.core_type === 'wireguard'
+                                  ? `UDP ${core.wireguard_port ?? '—'}`
+                                  : core.core_type === 'ikev2' ? 'UDP 500 · 4500' : 'UDP 1701',
                             core: true,
                           },
                           { icon: <IconServer size={20} />, title: runningNodes.map((n) => n.name).join(', ') || '—', sub: c.hopNode },
@@ -1301,7 +1333,9 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                       <p className="hint" style={{ marginTop: 14 }}>
                         {core.core_type === 'hysteria2'
                           ? t.coresPage.hysteria2CardHint
-                          : core.core_type === 'l2tp'
+                          : core.core_type === 'wireguard'
+                            ? t.coresPage.wireguardCardHint
+                            : core.core_type === 'l2tp'
                             ? t.hostsPage.l2tpHint
                             : core.ikev2_egress_vless
                               ? c.chainEgress
@@ -1383,23 +1417,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                 onGenerateKeys={generateKeys}
                 onScan={() => setScannerOpen(true)}
               />
-
-              {isTransportProtocol && wizard.security === 'tls' && (
-                <div className="form-section">
-                  <h4>{dir === 'rtl' ? 'IP تمیز کلودفلر' : 'Cloudflare clean IP'}</h4>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={() => setCfScannerOpen((o) => !o)} className="btn">
-                      {dir === 'rtl' ? 'پیدا کردن IP تمیز کلودفلر' : 'Find a clean Cloudflare IP'}
-                    </button>
-                    <span className="hint" style={{ margin: 0 }}>
-                      {dir === 'rtl'
-                        ? 'برای وقتی هاست پشت کلودفلر با TLS کار می‌کند: سریع‌ترین ادج از داخل ایران.'
-                        : 'For a host behind Cloudflare on plain TLS: the fastest edge from inside Iran.'}
-                    </span>
-                  </div>
-                  {cfScannerOpen && <CloudflareScanner onClose={() => setCfScannerOpen(false)} />}
-                </div>
-              )}
 
               {scannerOpen && <RealityScanner onPick={applyScannedTarget} onClose={() => setScannerOpen(false)} picked={wizard.sni} />}
 
@@ -1486,6 +1503,33 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                       placeholder={t.coresPage.hysteria2RatePlaceholder}
                       value={form.hysteria2RateMbps}
                       onChange={(e) => setForm((f) => ({ ...f, hysteria2RateMbps: e.target.value }))}
+                    />
+                  </Field>
+                </>
+              )}
+
+              {form.coreType === 'wireguard' && (
+                <>
+                  <Field label={t.coresPage.wireguardPortLabel} hint={t.coresPage.wireguardPortHint}>
+                    <input
+                      className="input ltr mono"
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={form.wireguardPort}
+                      onChange={(e) => setForm((f) => ({ ...f, wireguardPort: e.target.value }))}
+                      required
+                    />
+                  </Field>
+                  <Field label={t.coresPage.wireguardMtuLabel} hint={t.coresPage.wireguardMtuHint}>
+                    <input
+                      className="input ltr mono"
+                      type="number"
+                      min={1280}
+                      max={1500}
+                      value={form.wireguardMtu}
+                      onChange={(e) => setForm((f) => ({ ...f, wireguardMtu: e.target.value }))}
+                      required
                     />
                   </Field>
                 </>

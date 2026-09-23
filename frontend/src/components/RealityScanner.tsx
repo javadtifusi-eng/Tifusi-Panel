@@ -13,6 +13,7 @@ import {
   type FieldTarget,
   listNodes,
   startNodeRealityScan,
+  stopNodeRealityScan,
   type IranCheck,
   type Node,
   type RealityCandidate,
@@ -491,7 +492,7 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
 }
 
 export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c: RealityCandidate) => void; onClose: () => void; picked?: string }) {
-  const { t } = useLang()
+  const { t, dir } = useLang()
   const rs = t.ui.realityScan
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [nodeId, setNodeId] = useState<number | null>(null)
@@ -554,14 +555,27 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
     }, POLL_MS)
   }
 
-  async function start() {
+  async function start(fromTop = false) {
     if (timer.current) window.clearTimeout(timer.current)
     if (nodeId == null) return
     setError(null)
     setShowAll(false)
     try {
-      setScan(await startNodeRealityScan(nodeId))
+      // First press scans the top of today's live feed (page 0); "scan more"
+      // walks to the next page. fromTop forces back to the top.
+      const page = fromTop || !scan ? 0 : undefined
+      setScan(await startNodeRealityScan(nodeId, page))
       poll(nodeId)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.common.genericError)
+    }
+  }
+
+  async function stop() {
+    if (timer.current) window.clearTimeout(timer.current)
+    if (nodeId == null) return
+    try {
+      setScan(await stopNodeRealityScan(nodeId))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.common.genericError)
     }
@@ -648,12 +662,19 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
               </label>
             </div>
             <div className="hint" style={{ margin: 0 }}>{rs.intro}</div>
-            {/* Every scan walks one ring further out and skips what has been
-                seen, so "again" is always the next range — there is no button
-                that re-reads the same neighbours. */}
-            <button type="button" className="btn primary lg" onClick={start} disabled={busy || nodeId == null}>
-              {busy ? rs.phase[scan!.state] : scan ? rs.more : rs.start}
-            </button>
+            {/* First press scans the top of today's live feed; "scan more" walks
+                to the next page. A long scan can be stopped whenever enough good
+                targets are in — the partial results stay. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" className="btn primary lg" onClick={() => start()} disabled={busy || nodeId == null}>
+                {busy ? rs.phase[scan!.state] : scan ? rs.more : rs.start}
+              </button>
+              {busy && (
+                <button type="button" className="btn lg" onClick={stop}>
+                  {dir === 'rtl' ? 'توقف' : 'Stop'}
+                </button>
+              )}
+            </div>
           </>
         )}
 
@@ -685,13 +706,9 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
                 {rs.found(usable.length, results.length)}
                 {checkingIran ? ` · ${rs.iran.checking}` : ''}
               </div>
-              {scan.blocks && scan.blocks.length > 0 && (
+              {scan.ring != null && (
                 <div className="hint" style={{ margin: 0 }}>
-                  {rs.ring((scan.ring ?? 0) + 1)} ·{' '}
-                  <span className="en" dir="ltr">
-                    {scan.blocks.join(' , ')}
-                  </span>
-                  {scan.seen_total ? ` · ${rs.seenTotal(scan.seen_total)}` : ''}
+                  {rs.ring(scan.ring + 1)}
                 </div>
               )}
               {scan.state === 'error' && scan.error && <div className="tf-alert">{scan.error}</div>}

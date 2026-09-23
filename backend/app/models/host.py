@@ -14,6 +14,7 @@ class HostProtocol(str, enum.Enum):
     trojan = "trojan"
     shadowsocks = "shadowsocks"
     hysteria2 = "hysteria2"
+    wireguard = "wireguard"
     ikev2 = "ikev2"
     l2tp = "l2tp"
 
@@ -25,7 +26,7 @@ XRAY_PROTOCOLS = {HostProtocol.vless, HostProtocol.vmess, HostProtocol.trojan, H
 # Standalone servers this panel doesn't run itself — a Host just picks a
 # Core of the matching core_type, which holds the shared technical fields
 # (PSK/port) once instead of repeating them per Host.
-CORE_LINKED_PROTOCOLS = {HostProtocol.l2tp, HostProtocol.ikev2}
+CORE_LINKED_PROTOCOLS = {HostProtocol.l2tp, HostProtocol.ikev2, HostProtocol.wireguard}
 
 FINGERPRINTS = (
     "chrome",
@@ -156,6 +157,10 @@ class Host(Base):
             if self.core is not None and self.core.hysteria2_port:
                 return self.core.hysteria2_port
             return self.hysteria2_port
+        if self.protocol == HostProtocol.wireguard:
+            if self.port_override is not None:
+                return self.port_override
+            return self.core.wireguard_port if self.core is not None else None
         if self.port_override is not None:
             return self.port_override
         return self.inbound.port if self.inbound else None

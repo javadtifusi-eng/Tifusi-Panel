@@ -9,13 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.groups.access import hosts_for_user
-from app.links.generator import build_ipsec_configs_for_user, build_links_for_user, build_subscription_content
+from app.links.generator import (
+    build_ipsec_configs_for_user,
+    build_links_for_user,
+    build_subscription_content,
+    build_wireguard_conf,
+)
 from app.models.host import Host, HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
 from app.settings_store import get_subscription_url
 from app.subscription.app_code import app_code_with_host
+from app.subscription import backup_domains as bd
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig
 from app.subscription.info_page import build_info_page_html
@@ -134,6 +140,10 @@ async def _moved_to_subscription_host(request: Request, db: AsyncSession) -> Red
     # name the client actually asked for rather than a container hostname.
     if not target_host or request.url.hostname == target_host:
         return None
+    # A backup domain must answer for itself: bouncing it to the live domain
+    # would send the app straight back to the name that is filtered.
+    if (request.url.hostname or "").lower() in await bd.backups(db):
+        return None
     moved = urlsplit(configured)
     url = urlunsplit((moved.scheme or "https", moved.netloc, request.url.path, request.url.query, ""))
     return RedirectResponse(url, status_code=301)
@@ -147,6 +157,8 @@ async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession)
     sub_url = await get_subscription_url(db)
     base = sub_url.rstrip("/") + "/" if sub_url else str(request.base_url)
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
+    wg_host = next((h for h in allowed_hosts if h.protocol == HostProtocol.wireguard), None)
+    wg_conf = build_wireguard_conf(user, wg_host) if wg_host is not None else None
     return build_info_page_html(
         username=user.username,
         status=_STATUS_LABELS_FA.get(user.status, user.status.value),
@@ -158,6 +170,8 @@ async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession)
         links=build_links_for_user(user, allowed_hosts),
         ikev2_configs=ikev2_configs,
         l2tp_configs=l2tp_configs,
+        wireguard_conf=wg_conf,
+        wireguard_conf_url=f"{base}sub/{user.secret}/wireguard.conf" if wg_conf else None,
     )
 
 
@@ -202,7 +216,10 @@ async def get_subscription(
         content = build_singbox_config(user, allowed_hosts)
         media_type = "application/json; charset=utf-8"
     else:
-        content = build_subscription_content(build_links_for_user(user, allowed_hosts))
+        # Fetched through a backup domain: the links follow it, since the live
+        # name is presumably the one that stopped resolving.
+        override = await bd.link_host_override(request.url.hostname, db)
+        content = build_subscription_content(bd.rewrite_links(build_links_for_user(user, allowed_hosts), override))
         media_type = "text/plain; charset=utf-8"
 
     return Response(
@@ -255,6 +272,22 @@ async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> 
     )
 
 
+@router.get("/sub/{secret}/wireguard.conf")
+async def get_wireguard_conf(secret: str, db: AsyncSession = Depends(get_db)) -> Response:
+    """The user's WireGuard tunnel as a file for the official WireGuard apps."""
+    user = await user_or_404(secret, db)
+    hosts = list((await db.execute(select(Host))).scalars().all())
+    host = next((h for h in hosts_for_user(user, hosts) if h.protocol == HostProtocol.wireguard), None)
+    content = build_wireguard_conf(user, host) if host is not None else None
+    if content is None:
+        raise HTTPException(status_code=404, detail="No WireGuard host available for this user")
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="tifusi.conf"'},
+    )
+
+
 async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: AsyncSession) -> dict:
     """What the Tifusi VPN Android app imports: the same IKEv2/L2TP fields the
     info page's cards show, as JSON, so the app can fetch and refresh them.
@@ -272,7 +305,9 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
     for cfg in ikev2_configs:
         cfg.pop("mobileconfig_url", None)
-    links = build_links_for_user(user, allowed_hosts)
+    links = bd.rewrite_links(
+        build_links_for_user(user, allowed_hosts), await bd.link_host_override(request.url.hostname, db)
+    )
 
     return {
         "v": 1,
@@ -294,6 +329,12 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
         # does not know a key simply ignores it.
         "vless": [link for link in links if link.startswith("vless://")],
         "hysteria2": [link for link in links if link.startswith("hysteria2://")],
+        "wireguard": [link for link in links if link.startswith("wireguard://")],
+        # Other names this same panel answers on, for the app to try in order
+        # when the one above stops answering (app/subscription/backup_domains.py).
+        # Never shown anywhere a filter could read them — only here, to an app
+        # that already holds this account's secret.
+        "backup_domains": [d for d in await bd.backups(db) if bd.has_cert(d)],
     }
 
 

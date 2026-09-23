@@ -22,6 +22,7 @@
   <img src="https://img.shields.io/badge/Trojan-EF4444?style=flat-square" />
   <img src="https://img.shields.io/badge/Shadowsocks-F59E0B?style=flat-square" />
   <img src="https://img.shields.io/badge/Hysteria2-10B981?style=flat-square" />
+  <img src="https://img.shields.io/badge/WireGuard-6366F1?style=flat-square" />
   <img src="https://img.shields.io/badge/L2TP%2FIPsec-3B82F6?style=flat-square" />
   <img src="https://img.shields.io/badge/IKEv2%2FIPsec-EC4899?style=flat-square" />
 </p>
@@ -89,6 +90,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 | 📦 [نصب](docs/fa/installation.md) | مشخصات سرور، نسخه‌ی عادی و حرفه‌ای، راه‌اندازی اولیه |
 | 🌐 [نودها](docs/fa/nodes.md) | دو هسته روی یک نود، افزودن و حذف نود، همگام‌سازی، محدودیت دستگاه |
 | 🚀 [Hysteria2](docs/fa/hysteria2.md) | ترنسپورت UDP برای شبکه‌هایی که پروتکل‌های TCP رویشان بد کار می‌کنند (اپراتورهای موبایل ایران): راه‌اندازی، رمز جدا برای هر کاربر، شمارش حجم، قطع کردن |
+| 🔐 WireGuard | هسته‌ی جدا روی UDP 4500 کنار IKEv2؛ کلید جدا برای هر کاربر، لینک `wireguard://` و فایل/QR برای اپ رسمی |
+| 🛟 دامنه‌های پشتیبان | دامنه‌های یدکی اشتراک که اپ تیفوسی در صورت فیلتر شدن دامنه‌ی اصلی خودش به آن‌ها می‌رود (تنظیمات) |
 | ⚛️ [هسته‌ها، هاست‌ها و گروه‌ها](docs/fa/cores-and-hosts.md) | هسته‌های Xray، IKEv2 و L2TP، نقاط اتصال عمومی، اسکنر REALITY (تست واقعی هر fingerprint و فیلتر از داخل ایران)، گروه‌های دسترسی |
 | 👤 [کاربران و اشتراک‌ها](docs/fa/users-and-subscriptions.md) | سهمیه، انقضا، حساب‌های در انتظار، لینک اشتراک، کد دسترسی، پروفایل کلاینت‌ها |
 | 💼 [نمایندگان](docs/fa/resellers.md) | حساب نماینده، پروتکل‌های مجاز، سقف کاربر و سهمیه‌ی حجم |

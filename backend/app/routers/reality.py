@@ -170,25 +170,18 @@ _rounds: dict[int, dict] = _load_rounds()
 
 
 @router.post("/nodes/{node_id}/scan")
-async def start_node_scan(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+async def start_node_scan(node_id: int, page: int | None = None, db: AsyncSession = Depends(get_db)) -> dict:
     node = await _node_or_404(node_id, db)
     rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    if not rounds["seen"]:
-        # First search since this file existed: count whatever the node
-        # already found as seen, so this one still moves on.
-        try:
-            last = await _node_call(node, "GET", "/reality/scan")
-            rounds["seen"].update(r["host"] for r in last.get("results", []))
-            rounds["ring"] = int(last.get("ring") or 0)
-        except HTTPException:
-            pass
-    if rounds["seen"]:
-        rounds["ring"] += 1
+    # ring is the page into the live top-domains feed. "Start" (page 0) rescans
+    # the top of the current-day list; "Scan more" (page omitted) walks to the
+    # next page. Either way it is fetched fresh from the feed, never stored here.
+    rounds["ring"] = page if page is not None else rounds.get("ring", 0) + 1
     _save_rounds()
     scan = await _node_call(node, "POST", "/reality/scan", json={
         "public_ip": await _public_ipv4(node.address),
-        "ring": rounds["ring"],
-        "exclude": sorted(rounds["seen"]),
+        "ring": max(0, rounds["ring"]),
+        "exclude": [],
     })
     # Whether the node itself is reachable from Iran is worth knowing
     # before any SNI is: a blocked address makes every SNI moot.
@@ -196,27 +189,25 @@ async def start_node_scan(node_id: int, db: AsyncSession = Depends(get_db)) -> d
     return _with_iran(scan, node)
 
 
+@router.delete("/nodes/{node_id}/scan")
+async def stop_node_scan(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    node = await _node_or_404(node_id, db)
+    return _with_iran(await _node_call(node, "DELETE", "/reality/scan"), node)
+
+
 @router.get("/nodes/{node_id}/scan")
 async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     node = await _node_or_404(node_id, db)
     scan = await _node_call(node, "GET", "/reality/scan")
-    rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    # Only a neighbour needs "seen" at all: ring exploration has to move past what
-    # it already turned up or every scan just re-finds the same datacenter boxes.
-    # A traffic-sourced name is the opposite — it is *supposed* to keep reappearing
-    # for as long as it stays among the users' top destinations, so marking it seen
-    # here would retire a proven-good SNI the first time anyone merely glanced at a
-    # scan, long before it was ever put into the live Core.
-    fresh = {r["host"] for r in scan.get("results", []) if r.get("source") != "traffic"} - rounds["seen"]
-    if fresh:
-        rounds["seen"].update(fresh)
-        _save_rounds()
+    # No "seen" tracking any more: the candidate sources are the node's own live
+    # traffic (meant to reappear) and a page of the live top-domains feed (the
+    # page number itself, ring, is what advances on "scan more"). Neither wants a
+    # growing exclude set, and the neighbour discovery that needed one is gone.
     # The verdicts have to be on the results before _maybe_prove can read
     # them; when it does hand over, it returns the node's fresh status, which
     # needs them again. The second pass is free — the answers are cached.
     scan = await _maybe_prove(node, _with_iran(scan, node))
     scan = _with_iran(scan, node)
-    scan["seen_total"] = len(rounds["seen"])
     return scan
 
 

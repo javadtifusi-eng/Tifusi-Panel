@@ -11,11 +11,12 @@ from app.models.core import Core, CoreType
 from app.models.host import Host
 from app.models.inbound import Inbound
 from app.models.node import XRAY_VERSION_MAX_LENGTH, Node, NodeStatus
-from app.models.user import ProxyUser
+from app.models.user import ProxyUser, UserStatus
 from app.notifications.discord import send_discord_message
 from app.notifications.telegram import send_telegram_message
 from app.notifications.webhook import send_webhook_event
 from app.settings_store import get_public_url
+from app.wireguard import keys as wg_keys
 from app.xray_config.builder import build_xray_config
 
 
@@ -110,6 +111,26 @@ def _build_hysteria_payload(core: Core, node: Node, panel_url: str | None) -> di
     }
 
 
+async def _build_wireguard_payload(core: Core, db: AsyncSession) -> dict:
+    """Every active user allowed on a Host built on this core becomes a peer.
+    Keys and addresses are derived (app/wireguard/keys.py), so a peer is the
+    same on every sync and only a real change to the list restarts the server."""
+    users = [u for u in await _ipsec_allowed_users(core, db) if u.status == UserStatus.active]
+    return {
+        "port": core.wireguard_port or wg_keys.DEFAULT_PORT,
+        "mtu": core.wireguard_mtu or wg_keys.DEFAULT_MTU,
+        "private_key": core.wireguard_private_key,
+        "peers": [
+            {
+                "username": u.username,
+                "public_key": wg_keys.public_key(wg_keys.user_private_key(core.wireguard_private_key, u.secret)),
+                "address": wg_keys.user_address(u.id),
+            }
+            for u in sorted(users, key=lambda u: u.id)
+        ],
+    }
+
+
 def _normalize_xray_version(raw: str | None) -> str | None:
     """A node running an older agent reports Xray's whole banner line
     ("Xray 1.8.24 (Xray, Penetrates Everything.) ...") instead of the bare
@@ -141,13 +162,21 @@ def _apply_health(node: Node, health: dict) -> None:
     # An older agent that predates Hysteria2 reports no "hysteria" key at all, so
     # a node with no hysteria core keeps passing exactly as before.
     hysteria_ok = node.hysteria_core_id is None or hysteria_health.get("running", False)
+    wireguard_ok = node.wireguard_core_id is None or (health.get("wireguard") or {}).get("running", False)
 
-    node.status = NodeStatus.connected if (xray_ok and ipsec_ok and hysteria_ok) else NodeStatus.error
+    node.status = (
+        NodeStatus.connected if (xray_ok and ipsec_ok and hysteria_ok and wireguard_ok) else NodeStatus.error
+    )
     node.xray_version = _normalize_xray_version(xray_health.get("version"))
 
     broken = [
         name
-        for name, ok in (("xray", xray_ok), ("ipsec", ipsec_ok), ("hysteria", hysteria_ok))
+        for name, ok in (
+            ("xray", xray_ok),
+            ("ipsec", ipsec_ok),
+            ("hysteria", hysteria_ok),
+            ("wireguard", wireguard_ok),
+        )
         if not ok
     ]
     if not broken:
@@ -172,6 +201,7 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
     xray_core = await db.get(Core, node.core_id) if node.core_id is not None else None
     ipsec_core = await db.get(Core, node.ipsec_core_id) if node.ipsec_core_id is not None else None
     hysteria_core = await db.get(Core, node.hysteria_core_id) if node.hysteria_core_id is not None else None
+    wireguard_core = await db.get(Core, node.wireguard_core_id) if node.wireguard_core_id is not None else None
 
     xray_payload = await _build_xray_payload(xray_core, db)
     ipsec_payload = await _build_ipsec_payload(ipsec_core, node, db) if ipsec_core is not None else None
@@ -180,6 +210,10 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
         if hysteria_core is not None
         else None
     )
+    if wireguard_core is not None and not wireguard_core.wireguard_private_key:
+        wireguard_core.wireguard_private_key = wg_keys.generate_private_key()
+        db.add(wireguard_core)
+    wireguard_payload = await _build_wireguard_payload(wireguard_core, db) if wireguard_core is not None else None
 
     base_url = f"https://{node.address}:{node.port}"
     headers = {"X-Node-Api-Key": node.api_key}
@@ -200,6 +234,9 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
             if hysteria_payload is not None:
                 hy_resp = await client.post(f"{base_url}/hysteria-config", json=hysteria_payload, headers=headers)
                 hy_resp.raise_for_status()
+            if wireguard_payload is not None:
+                wg_resp = await client.post(f"{base_url}/wireguard-config", json=wireguard_payload, headers=headers)
+                wg_resp.raise_for_status()
             health_resp = await client.get(f"{base_url}/health", headers=headers)
             health_resp.raise_for_status()
             health = health_resp.json()
@@ -301,7 +338,12 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
     # that one off on every health check.
     assigned = [
         (health.get(key) or {}).get("running", False)
-        for key, slot in (("xray", node.core_id), ("ipsec", node.ipsec_core_id), ("hysteria", node.hysteria_core_id))
+        for key, slot in (
+            ("xray", node.core_id),
+            ("ipsec", node.ipsec_core_id),
+            ("hysteria", node.hysteria_core_id),
+            ("wireguard", node.wireguard_core_id),
+        )
         if slot is not None
     ]
     if assigned and not any(assigned):

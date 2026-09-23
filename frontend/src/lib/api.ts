@@ -340,7 +340,7 @@ export async function getUserLinks(id: number): Promise<UserLinks> {
   return res.json()
 }
 
-export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'hysteria2' | 'ikev2' | 'l2tp'
+export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'hysteria2' | 'wireguard' | 'ikev2' | 'l2tp'
 export type HostSecurity = 'none' | 'tls' | 'reality'
 
 export const FINGERPRINTS = [
@@ -469,6 +469,7 @@ export interface Node {
   core_id: number | null
   ipsec_core_id: number | null
   hysteria_core_id: number | null
+  wireguard_core_id?: number | null
   l2tp_egress_vless: string | null
   status: NodeStatus
   xray_version: string | null
@@ -509,7 +510,7 @@ export interface IranCheck {
 export interface RealityCandidate {
   host: string
   ip: string | null
-  source: 'neighbor' | 'traffic'
+  source: 'traffic' | 'feed'
   tls: string | null
   alpn: string | null
   /** Warm, from the node, by IP: median TCP connect and median TLS handshake to the target. */
@@ -544,15 +545,19 @@ export interface RealityNodeScan {
   error: string | null
   results: RealityCandidate[]
   node_iran: IranCheck
-  /** Scans walk outward: ring 0 is the node's own /24, ring k the /24s k blocks away. */
+  /** Page into the live top-domains feed: page 0 is the top of today's list,
+   *  each "scan more" walks to the next page. */
   ring?: number
-  blocks?: string[]
-  /** Names found on this node over all rings so far. */
-  seen_total?: number
 }
 
-export async function startNodeRealityScan(nodeId: number): Promise<RealityNodeScan> {
-  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST' })
+export async function startNodeRealityScan(nodeId: number, page?: number): Promise<RealityNodeScan> {
+  const q = page != null ? `?page=${page}` : ''
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan${q}`, { method: 'POST' })
+  return res.json()
+}
+
+export async function stopNodeRealityScan(nodeId: number): Promise<RealityNodeScan> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'DELETE' })
   return res.json()
 }
 
@@ -566,43 +571,6 @@ export async function getRealityWhoami(): Promise<{ ip: string; operator: string
 
 export async function getNodeRealityScan(nodeId: number): Promise<RealityNodeScan> {
   const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`)
-  return res.json()
-}
-
-// ---- Cloudflare clean edge-IP scanner ----
-
-export interface CfCandidate {
-  ip: string
-  tls: string | null
-  alpn: string | null
-  /** node -> edge TLS handshake, median ms. */
-  latency_ms: number | null
-  usable: boolean
-  error: string | null
-  /** Filled by the panel from check-host.net probes inside Iran. */
-  iran?: IranCheck | null
-  operator?: string | null
-}
-
-export interface CfScan {
-  state: 'idle' | 'fetching' | 'probing' | 'done' | 'error'
-  phase_total: number
-  phase_done: number
-  error: string | null
-  sni: string | null
-  results: CfCandidate[]
-}
-
-export async function startCfScan(nodeId: number, sni?: string): Promise<CfScan> {
-  const res = await authorizedFetch(`/cloudflare/nodes/${nodeId}/scan`, {
-    method: 'POST',
-    body: JSON.stringify(sni ? { sni } : {}),
-  })
-  return res.json()
-}
-
-export async function getCfScan(nodeId: number): Promise<CfScan> {
-  const res = await authorizedFetch(`/cloudflare/nodes/${nodeId}/scan`)
   return res.json()
 }
 
@@ -678,6 +646,7 @@ export async function createNode(
     core_id?: number | null
     ipsec_core_id?: number | null
     hysteria_core_id?: number | null
+    wireguard_core_id?: number | null
     l2tp_egress_vless?: string | null
   },
 ): Promise<Node> {
@@ -694,6 +663,7 @@ export async function updateNode(
     core_id: number | null
     ipsec_core_id: number | null
     hysteria_core_id: number | null
+    wireguard_core_id: number | null
     l2tp_egress_vless: string | null
   }>,
 ): Promise<Node> {
@@ -1075,7 +1045,7 @@ export interface Inbound {
   group_ids: number[]
 }
 
-export type CoreType = 'xray' | 'l2tp' | 'ikev2' | 'hysteria2'
+export type CoreType = 'xray' | 'l2tp' | 'ikev2' | 'hysteria2' | 'wireguard'
 
 export interface Core {
   id: number
@@ -1101,6 +1071,10 @@ export interface Core {
   hysteria2_port: number | null
   hysteria2_obfs: string | null
   hysteria2_rate_mbps: number | null
+
+  wireguard_port?: number | null
+  wireguard_mtu?: number | null
+  wireguard_public_key?: string | null
 }
 
 export interface CoreList {
@@ -1126,6 +1100,9 @@ export interface CorePayload {
   hysteria2_port?: number | null
   hysteria2_obfs?: string | null
   hysteria2_rate_mbps?: number | null
+
+  wireguard_port?: number | null
+  wireguard_mtu?: number | null
 }
 
 export interface Ikev2CertKeypair {
@@ -1446,5 +1423,44 @@ export interface VersionInfo {
 
 export async function getVersion(): Promise<VersionInfo> {
   const res = await authorizedFetch('/system/version')
+  return res.json()
+}
+
+export interface BackupDomainsState {
+  live: string | null
+  live_ok: boolean | null
+  live_reachable: number
+  live_total: number
+  backups: { domain: string; has_cert: boolean }[]
+  auto_failover: boolean
+}
+
+export async function getBackupDomains(): Promise<BackupDomainsState> {
+  const res = await authorizedFetch('/settings/backup-domains')
+  return res.json()
+}
+
+export async function addBackupDomain(domain: string): Promise<BackupDomainsState> {
+  const res = await authorizedFetch('/settings/backup-domains', { method: 'POST', body: JSON.stringify({ domain }) })
+  return res.json()
+}
+
+export async function removeBackupDomain(domain: string): Promise<BackupDomainsState> {
+  const res = await authorizedFetch(`/settings/backup-domains/${encodeURIComponent(domain)}`, { method: 'DELETE' })
+  return res.json()
+}
+
+export async function checkBackupDomains(): Promise<BackupDomainsState> {
+  const res = await authorizedFetch('/settings/backup-domains/check', { method: 'POST' })
+  return res.json()
+}
+
+export async function failoverBackupDomain(): Promise<BackupDomainsState> {
+  const res = await authorizedFetch('/settings/backup-domains/failover', { method: 'POST' })
+  return res.json()
+}
+
+export async function setBackupAutoFailover(on: boolean): Promise<PanelSettings> {
+  const res = await authorizedFetch('/settings', { method: 'PUT', body: JSON.stringify({ backup_auto_failover: on }) })
   return res.json()
 }

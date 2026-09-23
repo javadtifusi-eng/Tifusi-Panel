@@ -20,6 +20,7 @@
   <img src="https://img.shields.io/badge/Trojan-EF4444?style=flat-square" />
   <img src="https://img.shields.io/badge/Shadowsocks-F59E0B?style=flat-square" />
   <img src="https://img.shields.io/badge/Hysteria2-10B981?style=flat-square" />
+  <img src="https://img.shields.io/badge/WireGuard-6366F1?style=flat-square" />
   <img src="https://img.shields.io/badge/L2TP%2FIPsec-3B82F6?style=flat-square" />
   <img src="https://img.shields.io/badge/IKEv2%2FIPsec-EC4899?style=flat-square" />
 </p>
@@ -163,7 +164,7 @@ sequenceDiagram
 - **Пользователи.** Создание, включение, отключение и удаление по одному и пакетно. Квоты трафика с учётом потребления, автоматические переходы в `expired` и `limited`, отложенные аккаунты со сроком действия от первого подключения, ограничение числа устройств и шаблоны.
 - **Ядра (Cores).** Полная JSON-конфигурация Xray со структурированными редакторами routing, outbounds и DNS либо параметры сервера IKEv2/L2TP. Каждое ядро назначается одному или нескольким узлам.
 - **Два ядра на одном узле.** У каждого узла два независимых слота ядер, и оба работают одновременно: ядро Xray (VLESS, VMess, Trojan, Shadowsocks) и ядро IPsec (IKEv2 или L2TP). Один сервер обслуживает и прокси-клиентов, и клиентов нативного VPN, тогда как в панелях, где к узлу привязано только одно ядро, для этого нужен второй сервер.
-- **Хосты.** Публичные точки подключения для VLESS, VMess, Trojan, Shadowsocks, Hysteria2, L2TP и IKEv2. Хосты на базе Xray ссылаются на inbound из конфигурации ядра и наследуют параметры transport, security и REALITY. Хосты L2TP используют общий PSK. Хосты IKEv2 аутентифицируют сервер сертификатом X.509 (по умолчанию самоподписанным или импортированной цепочкой от CA), а пользователей — через EAP-MSCHAPv2.
+- **Хосты.** Публичные точки подключения для VLESS, VMess, Trojan, Shadowsocks, Hysteria2, WireGuard, L2TP и IKEv2. Хосты на базе Xray ссылаются на inbound из конфигурации ядра и наследуют параметры transport, security и REALITY. Хосты L2TP используют общий PSK. Хосты IKEv2 аутентифицируют сервер сертификатом X.509 (по умолчанию самоподписанным или импортированной цепочкой от CA), а пользователей — через EAP-MSCHAPv2.
 - **Группы.** Принудительный контроль доступа. Членство в группе определяет как ссылки пользователя, так и учётные данные в конфигурациях узлов.
 - **Сканер целей REALITY.** Измеряет задержку до примерно 160 SNI-доменов и предлагает самый быстрый прямо в форме хоста.
 - **Подписки.** URI `vless://`, `vmess://`, `trojan://`, `ss://` и `hysteria2://` для каждого хоста; параметры подключения L2TP и IKEv2; профиль `.mobileconfig` для IKEv2; единый URL подписки с QR-кодом. Клиенты семейства Clash и sing-box определяются по User-Agent и получают нативный профиль.

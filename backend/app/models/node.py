@@ -45,6 +45,10 @@ class Node(Base):
     # reason to run two on one machine.
     hysteria_core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
 
+    # A fourth slot: WireGuard runs as its own Xray process on the node
+    # (node_agent/wireguard.py), beside the other three.
+    wireguard_core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
+
     # Optional chained egress for this node's L2TP clients: a vless:// share
     # link to a *different* panel's server. When set, the node agent stops
     # NAT'ing l2tp traffic straight to the internet and instead runs a

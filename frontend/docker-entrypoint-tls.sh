@@ -32,6 +32,9 @@ apply_conf
 cert_state() {
   if has_cert; then
     stat -c %Y "$CERT_DIR/fullchain.pem" "$CERT_DIR/privkey.pem" | tr '\n' ' '
+    # Backup domains' server blocks (and the certificates they point at).
+    find "$CERT_DIR/sni" -type f -name '*.pem' -o -type f -name 'servers*.conf' 2>/dev/null \
+      | sort | xargs -r stat -c '%n%Y' 2>/dev/null | md5sum | cut -c1-12
   else
     echo 0
   fi

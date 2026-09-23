@@ -30,6 +30,9 @@ class CoreCreate(BaseModel):
     hysteria2_obfs: str | None = Field(default=None, max_length=64)
     hysteria2_rate_mbps: int | None = Field(default=None, ge=1, le=10000)
 
+    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
+    wireguard_mtu: int | None = Field(default=None, ge=1280, le=1500)
+
     @model_validator(mode="after")
     def _check_required_fields(self) -> "CoreCreate":
         if self.core_type == CoreType.xray:
@@ -57,6 +60,9 @@ class CoreCreate(BaseModel):
                 # answered nothing at all. Refused rather than warned here,
                 # because a Core is what a node is told to run.
                 raise ValueError("UDP 443 is filtered from Iran — pick another port")
+        elif self.core_type == CoreType.wireguard:
+            if self.wireguard_port == 443:
+                raise ValueError("UDP 443 is filtered from Iran — pick another port")
         return self
 
 
@@ -67,6 +73,8 @@ class CoreUpdate(BaseModel):
     hysteria2_port: int | None = Field(default=None, ge=1, le=65535)
     hysteria2_obfs: str | None = Field(default=None, max_length=64)
     hysteria2_rate_mbps: int | None = Field(default=None, ge=1, le=10000)
+    wireguard_port: int | None = Field(default=None, ge=1, le=65535)
+    wireguard_mtu: int | None = Field(default=None, ge=1280, le=1500)
 
 
     l2tp_psk: str | None = None
@@ -123,6 +131,10 @@ class CoreResponse(BaseModel):
     hysteria2_port: int | None
     hysteria2_obfs: str | None
     hysteria2_rate_mbps: int | None
+    wireguard_port: int | None = None
+    wireguard_mtu: int | None = None
+    # Only the public half ever leaves the panel.
+    wireguard_public_key: str | None = None
     ikev2_certificate: str | None
     ikev2_certificate_key: str | None
     ikev2_egress_vless: str | None

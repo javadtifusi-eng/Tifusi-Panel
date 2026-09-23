@@ -181,6 +181,8 @@ def build_info_page_html(
     links: list[str],
     ikev2_configs: list[dict],
     l2tp_configs: list[dict],
+    wireguard_conf: str | None = None,
+    wireguard_conf_url: str | None = None,
 ) -> str:
     sections: list[str] = []
 
@@ -198,6 +200,14 @@ def build_info_page_html(
           {rows}
         </div>"""
         )
+
+    if wireguard_conf and wireguard_conf_url:
+        # The official WireGuard app (the snake) scans this QR or opens the file.
+        body = f"""
+          <div class="qr-wrap"><div class="qr-box">{_qr_svg(wireguard_conf)}</div></div>
+          <a class="mobileconfig-btn" href="{_esc(wireguard_conf_url)}"><span>دانلود فایل برای اپ WireGuard</span></a>
+        """
+        sections.append(_card("WireGuard", body))
 
     for ike in ikev2_configs:
         body = f"""

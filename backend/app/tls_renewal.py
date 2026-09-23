@@ -15,6 +15,7 @@ installed certificate is ever installed.
 """
 
 import asyncio
+from urllib.parse import urlsplit
 import subprocess
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from cryptography import x509
 from sqlalchemy import select
 
 from app.database import async_session
+from app.settings_store import get_settings_row
+from app.subscription.backup_domains import refresh_renewed_certs
 from app.models.core import Core, CoreType
 from app.nodes.sync import resync_connected_nodes
 from app.notifications.telegram import send_telegram_message
@@ -89,6 +92,13 @@ async def renew_certificates() -> None:
         async with async_session() as db:
             await send_telegram_message(db, f"⚠️ تمدید خودکار گواهی SSL ناموفق بود:\n{tail}")
         return
+
+    # Backup subscription domains keep their own certificates beside the main one.
+    async with async_session() as db:
+        row = await get_settings_row(db)
+        domains = list(row.backup_domains or [])
+        live = urlsplit(row.subscription_url or row.public_url or "").hostname
+    await asyncio.to_thread(refresh_renewed_certs, domains + ([live] if live else []))
 
     old_pem = _CERT_FILE.read_text() if _CERT_FILE.exists() else None
     old = _leaf(old_pem)

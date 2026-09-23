@@ -1433,3 +1433,49 @@ select.input { padding-block: 7px; }
 @media (prefers-reduced-motion: reduce) {
   .ib-stream, .ib-breathe, .ib-breathe-soft, .ib-glow { animation: none; }
 }
+
+/* ═════════ Dotted cards ═════════
+   The big container cards carry a faint dot grid over the card fill. Only
+   containers get it: rows, chips, inputs and inner wells keep a solid fill
+   so the text on them never sits over dots. */
+:root { --dots: radial-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1.3px); }
+.tf-card, .pg-login .lcard,
+.pg-dash .kpi, .pg-dash .dcard, .pg-dash .uptime,
+.pg-users .tile, .pg-users .board,
+.pg-nodes .nd-head, .pg-nodes .panel,
+.pg-tunnels .route-card, .pg-set .sec,
+.pg-resellers .tile, .pg-resellers .list {
+  background-image: var(--dots);
+  background-size: 14px 14px;
+}
+/* Inner screens too: side sheets (the core editor, inbound builder, scanner),
+   modals and the command palette get the same dotted black; the code view
+   and the tree beside it stay solid so the JSON reads cleanly. */
+.tf-sheet, .tf-modal, .tf-palette, .pg-cores .engine, .pg-cores .spec {
+  background: #0d0d0e var(--dots);
+  background-size: 14px 14px;
+}
+.tf-sheet-foot, .tf-code-sheet .code-head, .tf-code-sheet .tree { background: #0b0b0c; }
+.ib-flow { background: #0b0b0c var(--dots); background-size: 14px 14px; }
+
+/* ═════════ Settings: backup subscription domains ═════════ */
+.bkd { display: flex; flex-direction: column; gap: 10px; }
+.bkd .grow { flex: 1; min-width: 0; }
+.bkd .dom { font-size: 0.86rem; direction: ltr; text-align: left; overflow-wrap: anywhere; }
+.bkd .meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+.bkd-live { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--edge2); background: var(--well); }
+.bkd-live.down { border-color: rgb(239 68 68 / 0.5); box-shadow: 0 0 0 3px rgb(239 68 68 / 0.07); }
+.bkd-live .orb { width: 11px; height: 11px; border-radius: 50%; flex: none; background: var(--faint); }
+.bkd-live .orb[data-ok='true'] { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+.bkd-live .orb[data-ok='false'] { background: var(--bad); box-shadow: 0 0 10px var(--bad); }
+.bkd-alert { font-size: 0.8rem; line-height: 1.8; border: 1px solid rgb(239 68 68 / 0.4); background: rgb(239 68 68 / 0.06); border-radius: 12px; padding: 9px 12px; }
+.bkd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.bkd-list { display: flex; flex-direction: column; gap: 8px; }
+.bkd-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--edge2); background: var(--well); }
+.bkd-row .n { font-size: 0.66rem; color: var(--faint); }
+.bkd-add { display: flex; gap: 8px; }
+.bkd-add .input { flex: 1; min-width: 0; }
+.bkd-auto { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; font-size: 0.82rem; }
+.bkd-auto small { display: block; color: var(--muted); font-size: 0.72rem; }
+.btn.bad-solid { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+.btn.bad-solid:hover:not(:disabled) { color: #fff; filter: brightness(1.08); border-color: var(--bad); }

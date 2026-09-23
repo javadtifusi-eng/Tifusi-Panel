@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 from cryptography import x509
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,15 @@ from app.dependencies import require_permission
 from app.notifications.discord import send_discord_message
 from app.notifications.telegram import send_telegram_message
 from app.notifications.webhook import send_webhook_event
-from app.schemas.settings import PanelSettingsResponse, PanelSettingsUpdate
+from app.nodes.sync import resync_nodes_in_background
+from app.schemas.settings import (
+    BackupDomainAdd,
+    BackupDomainsResponse,
+    BackupDomainState,
+    PanelSettingsResponse,
+    PanelSettingsUpdate,
+)
+from app.subscription import backup_domains as bd
 from app.settings_store import get_settings_row
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_permission("settings"))])
@@ -262,3 +270,72 @@ async def request_ssl(payload: SslRequest, db: AsyncSession = Depends(get_db)) -
         await db.commit()
         await db.refresh(row)
     return row
+
+
+# --- backup subscription domains (app/subscription/backup_domains.py) ---
+
+
+async def _backup_state(db: AsyncSession) -> BackupDomainsResponse:
+    row = await get_settings_row(db)
+    health = bd.health()
+    live = await bd.live_domain(db)
+    same = health.get("domain") == live
+    return BackupDomainsResponse(
+        live=live,
+        live_ok=health.get("ok") if same else None,
+        live_reachable=health.get("reachable", 0) if same else 0,
+        live_total=health.get("total", 0) if same else 0,
+        backups=[BackupDomainState(domain=d, has_cert=bd.has_cert(d)) for d in (row.backup_domains or [])],
+        auto_failover=bool(row.backup_auto_failover),
+    )
+
+
+@router.get("/backup-domains", response_model=BackupDomainsResponse)
+async def get_backup_domains(db: AsyncSession = Depends(get_db)) -> BackupDomainsResponse:
+    return await _backup_state(db)
+
+
+@router.post("/backup-domains", response_model=BackupDomainsResponse)
+async def add_backup_domain(payload: BackupDomainAdd, db: AsyncSession = Depends(get_db)) -> BackupDomainsResponse:
+    """Adds a backup and gets its own certificate. The domain must already
+    point at this server (an A record, not proxied), exactly like Settings > SSL."""
+    domain = bd.normalize(payload.domain)
+    if not bd.DOMAIN_RE.match(domain):
+        raise HTTPException(status_code=400, detail="That doesn't look like a real domain name")
+    row = await get_settings_row(db)
+    current = list(row.backup_domains or [])
+    if domain == await bd.live_domain(db) or domain in current:
+        raise HTTPException(status_code=409, detail="This domain is already in use")
+    error = await asyncio.to_thread(bd.issue_cert, domain)
+    if error:
+        raise HTTPException(status_code=502, detail=error)
+    row.backup_domains = current + [domain]
+    db.add(row)
+    await db.commit()
+    bd.write_nginx_map(row.backup_domains)
+    return await _backup_state(db)
+
+
+@router.delete("/backup-domains/{domain}", response_model=BackupDomainsResponse)
+async def remove_backup_domain(domain: str, db: AsyncSession = Depends(get_db)) -> BackupDomainsResponse:
+    row = await get_settings_row(db)
+    row.backup_domains = [d for d in (row.backup_domains or []) if d != domain.lower()]
+    db.add(row)
+    await db.commit()
+    bd.write_nginx_map(row.backup_domains)
+    return await _backup_state(db)
+
+
+@router.post("/backup-domains/check", response_model=BackupDomainsResponse)
+async def check_backup_domains(db: AsyncSession = Depends(get_db)) -> BackupDomainsResponse:
+    await bd.check_live_domain()
+    return await _backup_state(db)
+
+
+@router.post("/backup-domains/failover", response_model=BackupDomainsResponse)
+async def failover_backup_domain(background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)) -> BackupDomainsResponse:
+    moved = await bd.promote_next(db)
+    if moved is None:
+        raise HTTPException(status_code=400, detail="No backup domain with a certificate to move to")
+    background_tasks.add_task(resync_nodes_in_background)
+    return await _backup_state(db)

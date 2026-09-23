@@ -87,10 +87,9 @@ def _build_yaml(payload: dict, agent_port: int) -> str:
         # declared rate and treat loss as noise, so an app with "100 Mbps" typed
         # in would drive the link into heavy loss.
         "ignoreClientBandwidth": True,
-        # Lower gains than standard BBR, drains the queue it builds, and cuts its
-        # rate on detected overshoot — the right shape for a path that polices
-        # rather than queues, and latency is what this is all optimising for.
-        "congestion": {"type": "bbr", "bbrProfile": "conservative"},
+        # Standard BBR gains. "conservative" ramped up so slowly that on MCI
+        # every page felt late to start; standard still backs off on real loss.
+        "congestion": {"type": "bbr", "bbrProfile": "standard"},
         "quic": {
             "initStreamReceiveWindow": 26843545,
             "maxStreamReceiveWindow": 26843545,

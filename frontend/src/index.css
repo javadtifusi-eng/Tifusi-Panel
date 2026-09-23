@@ -24,16 +24,16 @@
 
   --c-app: 10 10 10; /* #0a0a0a ground */
   --c-side: 13 13 13; /* #0d0d0d sidebar */
-  --c-surface: 20 20 20; /* #141414 card */
+  --c-surface: 13 13 14; /* #0d0d0e card (dotted, see design.css) */
   --c-field: 14 14 14; /* #0e0e0e inputs */
-  --c-well: 14 14 14; /* #0e0e0e inner well */
+  --c-well: 13 13 14; /* #0d0d0e inner well */
   --c-well-strong: 8 8 8;
   --c-hover: 23 23 23; /* #171717 nav/list hover */
   --c-raised: 28 28 28; /* #1c1c1c active nav, chips */
 
-  --c-border-hair: 25 25 25; /* #191919 row dividers */
-  --c-border-subtle: 35 35 35; /* #232323 card edge */
-  --c-border-default: 42 42 42; /* #2a2a2a inputs */
+  --c-border-hair: 24 24 26; /* #18181a row dividers */
+  --c-border-subtle: 34 34 36; /* #222224 card edge */
+  --c-border-default: 42 42 45; /* #2a2a2d inputs */
   --c-border-strong: 64 64 64;
   --c-border-well: 29 29 29; /* #1d1d1d well edge */
 

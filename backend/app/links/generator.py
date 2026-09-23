@@ -6,6 +6,7 @@ from urllib.parse import quote, urlencode
 from app.models.host import Host, HostProtocol
 from app.models.inbound import Inbound
 from app.models.user import ProxyUser
+from app.wireguard import keys as wg_keys
 
 _BYTES_PER_GB = 1024**3
 
@@ -205,6 +206,49 @@ def build_hysteria2_link(user: ProxyUser, host: Host) -> str:
     return f"hysteria2://{user.secret}@{host.address}:{host.effective_port}{suffix}#{_fragment(render_remark(host, user))}"
 
 
+def build_wireguard_link(user: ProxyUser, host: Host) -> str | None:
+    """wireguard://<user private key>@host:port?publickey=...&address=...&mtu=...
+
+    The format V2Box, v2rayNG and Hiddify import. The key is the user's own,
+    derived from the core (app/wireguard/keys.py), so it is the same one the
+    node was told about."""
+    core = host.core
+    if core is None or not core.wireguard_private_key:
+        return None
+    params = {
+        "publickey": wg_keys.public_key(core.wireguard_private_key),
+        "address": f"{wg_keys.user_address(user.id)}/32",
+        "mtu": str(core.wireguard_mtu or wg_keys.DEFAULT_MTU),
+    }
+    private_key = quote(wg_keys.user_private_key(core.wireguard_private_key, user.secret), safe="")
+    return (
+        f"wireguard://{private_key}@{host.address}:{host.effective_port}"
+        f"?{urlencode(params)}#{_fragment(render_remark(host, user))}"
+    )
+
+
+def build_wireguard_conf(user: ProxyUser, host: Host) -> str | None:
+    """The same tunnel as build_wireguard_link, as the .conf file the official
+    WireGuard apps import (they take a file or its QR code, not a link)."""
+    core = host.core
+    if core is None or not core.wireguard_private_key:
+        return None
+    return (
+        "[Interface]\n"
+        f"PrivateKey = {wg_keys.user_private_key(core.wireguard_private_key, user.secret)}\n"
+        f"Address = {wg_keys.user_address(user.id)}/32\n"
+        "DNS = 1.1.1.1, 8.8.8.8\n"
+        f"MTU = {core.wireguard_mtu or wg_keys.DEFAULT_MTU}\n"
+        "\n"
+        "[Peer]\n"
+        f"PublicKey = {wg_keys.public_key(core.wireguard_private_key)}\n"
+        "AllowedIPs = 0.0.0.0/0\n"
+        f"Endpoint = {host.address}:{host.effective_port}\n"
+        # Mobile NAT forgets an idle UDP mapping within seconds to minutes.
+        "PersistentKeepalive = 25\n"
+    )
+
+
 # l2tp/ikev2 have no importable URI scheme at all (see the routers, which
 # hand those out as plain connection fields instead) — excluded here rather
 # than emitting a link that can't work.
@@ -214,15 +258,21 @@ _BUILDERS = {
     HostProtocol.trojan: build_trojan_link,
     HostProtocol.shadowsocks: build_shadowsocks_link,
     HostProtocol.hysteria2: build_hysteria2_link,
+    HostProtocol.wireguard: build_wireguard_link,
 }
+
+# Hosts that stand on a Core rather than an Xray Inbound.
+_CORE_HOSTED = (HostProtocol.hysteria2, HostProtocol.wireguard)
 
 
 def build_links_for_user(user: ProxyUser, hosts: list[Host]) -> list[str]:
     links = []
     for host in hosts:
         builder = _BUILDERS.get(host.protocol)
-        if builder is not None and (host.inbound is not None or host.protocol == HostProtocol.hysteria2):
-            links.append(builder(user, host))
+        if builder is not None and (host.inbound is not None or host.protocol in _CORE_HOSTED):
+            link = builder(user, host)
+            if link:
+                links.append(link)
     return links
 
 

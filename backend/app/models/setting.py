@@ -1,4 +1,4 @@
-from sqlalchemy import String
+from sqlalchemy import JSON, Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -24,6 +24,16 @@ class PanelSetting(Base):
     # up filtered or shared around can be swapped without moving the panel.
     # Empty falls back to public_url, which is how this behaved before.
     subscription_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Backup subscription domains: bare hostnames pointing at this same server,
+    # each with its own certificate (never a shared SAN list, which would show
+    # every backup to anyone who opens the main one). They serve exactly what
+    # the main domain serves, and the Tifusi app learns the list from app.json
+    # and falls over to them on its own when the main one stops answering from
+    # inside Iran. See app/subscription/backup_domains.py.
+    backup_domains: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    # Promote the first healthy backup automatically after repeated failed checks.
+    backup_auto_failover: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # Both required together for notifications to actually send — see
     # app/notifications/telegram.py. The chat ID is whatever Telegram gives

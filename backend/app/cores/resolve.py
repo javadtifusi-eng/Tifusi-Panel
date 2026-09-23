@@ -36,3 +36,8 @@ async def resolve_hysteria_core_id(core_id: int | None, db: AsyncSession) -> int
     because the agent runs `hysteria server` as its own subprocess beside Xray
     and the IPsec stack."""
     return await _resolve(core_id, db, {CoreType.hysteria2}, "hysteria2")
+
+
+async def resolve_wireguard_core_id(core_id: int | None, db: AsyncSession) -> int | None:
+    """The Node's WireGuard slot, run by the agent as its own Xray process."""
+    return await _resolve(core_id, db, {CoreType.wireguard}, "wireguard")

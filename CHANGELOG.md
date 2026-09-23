@@ -2,8 +2,16 @@
 
 ## v1.4.2 — 2026-09-19
 
-### Cloudflare clean-IP scanner
-- **A clean-edge scanner for TLS-behind-Cloudflare hosts.** When a host uses plain TLS behind Cloudflare rather than REALITY, which edge IP the client dials decides its speed on a given operator. The scanner fetches Cloudflare's ranges live, draws a random sample of edge IPs, keeps the ones that answer TLS 1.3, and ranks them by real speed from inside Iran (check-host.net) — same live-and-random, speed-ranked rules as the REALITY scanner. It appears in the Core wizard when security is TLS.
+### WireGuard core
+- **WireGuard is back, as its own core.** The node runs it as a separate Xray process on UDP 4500 by default, sharing the port with IKEv2 (WireGuard packets are recognised by their header). Each user gets their own key and address, a `wireguard://` link in the subscription, and a `.conf` file and QR code on the subscription page for the official WireGuard app. Usage counts and expiry work like every other protocol.
+
+### Backup subscription domains
+- **Settings › Subscription domain & backups.** Add spare domains pointing at the same server; each gets its own certificate and serves only subscriptions, never the dashboard. The Tifusi app receives the list and switches to a backup on its own when the live domain stops answering. The live domain is checked from inside Iran every 10 minutes, and one click (or automatic failover) moves the subscription and config links to the next backup. IKEv2 profiles are never moved.
+
+### Other
+- IKEv2 MSS clamp raised from 1100 to 1250.
+- Dotted black fill for cards, sheets and dialogs.
+- The Cloudflare clean-IP scanner was removed.
 
 ### REALITY scanner
 - **SNIs from your own users' live traffic, sampled fresh every scan.** Datacenter neighbours are names MCI has never seen, and it held their upload under 1 Mbps. Each scan now also draws a random sample from the servers the node's users have actually opened in the last few minutes (read from Xray's access log, named by their certificate) — nothing is saved to disk or carried across restarts, so this can never turn into a fixed "most popular sites" list. The phone test ranks results by upload once one is measured.
