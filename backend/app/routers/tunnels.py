@@ -174,6 +174,7 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         sni=payload.sni,
         domain=payload.domain,
         path=payload.path,
+        spoof_source=payload.spoof_source,
         connection_count=payload.connection_count,
         forwards=[f.model_dump() for f in payload.forwards],
         cdn_provider=payload.cdn_provider,

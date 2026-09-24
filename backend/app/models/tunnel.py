@@ -19,6 +19,7 @@ class TunnelTransport(str, enum.Enum):
     wsmux = "wsmux"
     wssmux = "wssmux"
     udp = "udp"
+    spoof = "spoof"
 
 
 class TunnelStatus(str, enum.Enum):
@@ -71,6 +72,14 @@ class Tunnel(Base):
 
     # Only meaningful for ws/wss/wsmux/wssmux.
     path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Only meaningful for the "spoof" transport: the forged source IPv4 both
+    # sides stamp on their outbound packets so they pass L3 egress filtering
+    # during national-internet mode. It must be an address the filter
+    # allow-lists — measured first with the spooftest probe. Each side sends
+    # to the OTHER's real address (iran_address / foreign_address), so there
+    # is no separate peer field to store.
+    spoof_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Set when the foreign side reaches the relay through a CDN. The foreign
     # side then dials cdn_host:cdn_port instead of iran_address, which stays

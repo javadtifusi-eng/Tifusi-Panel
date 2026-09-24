@@ -40,6 +40,12 @@ def build_iran_config(tunnel: Tunnel) -> dict:
     # name whose traffic the CDN answers.
     if tunnel.domain and not tunnel.cdn_host:
         config["domain"] = tunnel.domain
+    if tunnel.transport == TunnelTransport.spoof:
+        # Iran side stamps the forged source and aims its spoofed packets at
+        # the foreign side's real address (its listener stays on iran_port).
+        config["spoof_source"] = tunnel.spoof_source
+        if tunnel.foreign_address:
+            config["peer"] = f"{tunnel.foreign_address}:{tunnel.iran_port}"
     config["forwards"] = [
         {
             "name": f["name"],
@@ -77,7 +83,14 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
         config["sni"] = sni
     if tunnel.path:
         config["path"] = tunnel.path
-    if tunnel.transport in _MUX_TRANSPORTS:
+    if tunnel.transport == TunnelTransport.spoof:
+        # Foreign side stamps the forged source and binds the tunnel port so
+        # the Iran side's spoofed packets reach it; peer is the Iran address.
+        config["spoof_source"] = tunnel.spoof_source
+        config["listen"] = f"0.0.0.0:{tunnel.iran_port}"
+        config["peer"] = f"{tunnel.iran_address}:{tunnel.iran_port}"
+        config["pool"] = tunnel.connection_count
+    elif tunnel.transport in _MUX_TRANSPORTS:
         config["mux_con"] = tunnel.connection_count
     else:
         config["pool"] = tunnel.connection_count

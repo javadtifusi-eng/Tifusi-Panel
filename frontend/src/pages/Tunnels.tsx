@@ -30,7 +30,7 @@ import { parseServerDate } from '../lib/format'
 
 // The form offers only the three that earn their place; older tunnels on
 // another transport still show (and keep) theirs.
-const PICK: TunnelTransport[] = ['tcpmux', 'wssmux', 'udp']
+const PICK: TunnelTransport[] = ['tcpmux', 'wssmux', 'udp', 'spoof']
 const PILL: Record<TunnelStatus, string> = { connected: 'ok live', pending: 'idle', error: 'bad' }
 // The HTTPS ports Cloudflare proxies; it reaches the relay on the same one.
 const CF_PORTS = [443, 2053, 2083, 2087, 2096, 8443]
@@ -101,6 +101,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [sni, setSni] = useState('')
   const [domain, setDomain] = useState('')
   const [path, setPath] = useState('')
+  const [spoofSourceIp, setSpoofSourceIp] = useState('')
   const [connectionCount, setConnectionCount] = useState('8')
   const [forwards, setForwards] = useState<TunnelForward[]>([])
   const [tunerFor, setTunerFor] = useState<Tunnel | null>(null)
@@ -149,6 +150,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSni('')
     setDomain('')
     setPath('')
+    setSpoofSourceIp('')
     setConnectionCount('8')
     setForwards([])
     setUseCdn(false)
@@ -173,6 +175,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSni(tunnel.sni ?? '')
     setDomain(tunnel.domain ?? '')
     setPath(tunnel.path ?? '')
+    setSpoofSourceIp(tunnel.spoof_source ?? '')
     setConnectionCount(String(tunnel.connection_count))
     setForwards(tunnel.forwards)
     setUseCdn(!!tunnel.cdn_host)
@@ -197,6 +200,10 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       setFormError(t.tunnelsPage.forwardIncomplete)
       return
     }
+    if (transport === 'spoof' && !spoofSourceIp.trim()) {
+      setFormError(t.tunnelsPage.spoofSourceRequired)
+      return
+    }
     setSubmitting(true)
     setFormError(null)
     try {
@@ -211,6 +218,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         sni: sni || null,
         domain: domain || null,
         path: path || null,
+        spoof_source: transport === 'spoof' ? spoofSourceIp.trim() || null : null,
         connection_count: parseInt(connectionCount, 10) || 8,
         forwards,
         cdn_provider: useCdn ? cdnProvider : null,
@@ -938,6 +946,20 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     <input className="input ltr" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/tunnel" />
                   </Field>
                 )}
+              </div>
+            )}
+
+            {transport === 'spoof' && (
+              <div className="form-grid">
+                <Field label={t.tunnelsPage.spoofSourceLabel}>
+                  <input
+                    className="input ltr"
+                    value={spoofSourceIp}
+                    onChange={(e) => setSpoofSourceIp(e.target.value)}
+                    placeholder="10.10.10.10"
+                  />
+                  <small className="muted">{t.tunnelsPage.spoofSourceHint}</small>
+                </Field>
               </div>
             )}
 

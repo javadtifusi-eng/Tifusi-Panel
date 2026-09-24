@@ -16,6 +16,8 @@ func TestExpandIPs(t *testing.T) {
 		{"1.2.3.4-1.2.3.8", 5, false},
 		{"1.2.3.0/30", 4, false},
 		{"1.2.3.8-1.2.3.4", 0, true},
+		{"10.0.0.0/8", 0, true},
+		{"1.0.0.0-1.2.0.0", 0, true},
 		{"not-an-ip", 0, true},
 	}
 	for _, c := range cases {

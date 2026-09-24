@@ -132,6 +132,14 @@ type Config struct {
 	// HTTP-01, needs port 80 reachable) instead of generating a
 	// self-signed one. SNI should match this domain in that case.
 	Domain string `json:"domain,omitempty"`
+	// SpoofSource, "spoof" transport only: the forged source IPv4 stamped on
+	// every outbound packet so it passes L3 egress filtering. It must be an
+	// address the filter allow-lists (measured first with `spooftest`).
+	SpoofSource string `json:"spoof_source,omitempty"`
+	// Peer, "spoof" transport only: the OTHER side's real ip:port that
+	// outbound spoofed packets are aimed at. On the server this is the
+	// foreign side's real address; on the client it is the same as Server.
+	Peer string `json:"peer,omitempty"`
 }
 
 func (c *Config) applyDefaults() {
@@ -181,8 +189,25 @@ func (c *Config) validate() error {
 	}
 	switch c.Transport {
 	case "tcp", "tls", "ws", "wss", "tcpmux", "wsmux", "wssmux", "udp":
+	case "spoof":
+		if c.SpoofSource == "" {
+			return errors.New("spoof transport needs \"spoof_source\" (the forged source IP)")
+		}
+		if net.ParseIP(c.SpoofSource).To4() == nil {
+			return fmt.Errorf("spoof_source must be an IPv4 address, got %q", c.SpoofSource)
+		}
+		peer := c.Peer
+		if peer == "" && c.Mode == "client" {
+			peer = c.Server
+		}
+		if peer == "" {
+			return errors.New("spoof transport needs \"peer\" (the other side's real ip:port)")
+		}
+		if _, err := net.ResolveUDPAddr("udp4", peer); err != nil {
+			return fmt.Errorf("spoof peer %q is not a valid ip:port: %w", peer, err)
+		}
 	default:
-		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux or udp, got %q", c.Transport)
+		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux, udp or spoof, got %q", c.Transport)
 	}
 	if len(c.Token) < 8 {
 		return errors.New("token must be at least 8 characters")
@@ -762,6 +787,16 @@ func (s *Server) Run() error {
 			return fmt.Errorf("cannot listen on %s: %w", s.cfg.Listen, err)
 		}
 		ln = kln
+	} else if s.cfg.Transport == "spoof" {
+		peer, err := net.ResolveUDPAddr("udp4", s.cfg.Peer)
+		if err != nil {
+			return fmt.Errorf("spoof peer %q: %w", s.cfg.Peer, err)
+		}
+		sln, err := spoofListen(s.cfg.Listen, net.ParseIP(s.cfg.SpoofSource), peer)
+		if err != nil {
+			return err
+		}
+		ln = sln
 	} else {
 		rawLn, err := net.Listen("tcp", s.cfg.Listen)
 		if err != nil {
@@ -1232,6 +1267,25 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 	var raw net.Conn
 	if c.cfg.Transport == "udp" {
 		sess, err := kcp.DialWithOptions(addr, nil, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		tuneKCP(sess)
+		raw = sess
+	} else if c.cfg.Transport == "spoof" {
+		peerStr := c.cfg.Peer
+		if peerStr == "" {
+			peerStr = addr
+		}
+		peer, err := net.ResolveUDPAddr("udp4", peerStr)
+		if err != nil {
+			return nil, fmt.Errorf("spoof peer %q: %w", peerStr, err)
+		}
+		bind := c.cfg.Listen
+		if bind == "" {
+			bind = "0.0.0.0:0"
+		}
+		sess, err := spoofDial(bind, net.ParseIP(c.cfg.SpoofSource), peer)
 		if err != nil {
 			return nil, err
 		}

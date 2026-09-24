@@ -27,6 +27,7 @@ class TunnelCreate(BaseModel):
     sni: str | None = Field(default=None, max_length=255)
     domain: str | None = Field(default=None, max_length=255)
     path: str | None = Field(default=None, max_length=255)
+    spoof_source: str | None = Field(default=None, max_length=64)
     connection_count: int = Field(default=8, ge=1, le=256)
     forwards: list[TunnelForward] = []
     cdn_provider: CdnProvider | None = None
@@ -47,6 +48,7 @@ class TunnelUpdate(BaseModel):
     sni: str | None = Field(default=None, max_length=255)
     domain: str | None = Field(default=None, max_length=255)
     path: str | None = Field(default=None, max_length=255)
+    spoof_source: str | None = Field(default=None, max_length=64)
     connection_count: int | None = Field(default=None, ge=1, le=256)
     forwards: list[TunnelForward] | None = None
     cdn_provider: CdnProvider | None = None
@@ -71,6 +73,7 @@ class TunnelResponse(BaseModel):
     sni: str | None
     domain: str | None
     path: str | None
+    spoof_source: str | None = None
     connection_count: int
     forwards: list[TunnelForward]
     cdn_provider: str | None = None

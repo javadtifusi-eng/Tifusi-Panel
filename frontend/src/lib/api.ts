@@ -675,7 +675,7 @@ export async function deleteNode(id: number): Promise<void> {
   await authorizedFetch(`/nodes/${id}`, { method: 'DELETE' })
 }
 
-export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp'
+export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp' | 'spoof'
 export type TunnelStatus = 'pending' | 'connected' | 'error'
 export type CdnProvider = 'arvan' | 'cloudflare'
 
@@ -699,6 +699,7 @@ export interface Tunnel {
   sni: string | null
   domain: string | null
   path: string | null
+  spoof_source: string | null
   connection_count: number
   forwards: TunnelForward[]
   cdn_provider: CdnProvider | null
@@ -761,6 +762,7 @@ export type TunnelPayload = {
   sni?: string | null
   domain?: string | null
   path?: string | null
+  spoof_source?: string | null
   connection_count?: number
   forwards?: TunnelForward[]
   cdn_provider?: CdnProvider | null

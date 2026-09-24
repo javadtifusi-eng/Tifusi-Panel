@@ -151,13 +151,20 @@ func (s *spoofSender) close() { syscall.Close(s.fd) }
 // expandIPs turns "1.2.3.4", "1.2.3.4-1.2.3.20", or "1.2.3.0/24" into the
 // concrete list of addresses to try as forged sources.
 func expandIPs(spec string) ([]net.IP, error) {
+	// A count over this many addresses is rejected up front, before any list is
+	// built, so a huge CIDR or range can never balloon memory first.
+	const maxIPs = 65536
 	if _, cidr, err := net.ParseCIDR(spec); err == nil {
+		ones, bits := cidr.Mask.Size()
+		if bits != 32 {
+			return nil, fmt.Errorf("spooftest only supports IPv4 CIDRs: %q", spec)
+		}
+		if bits-ones > 16 {
+			return nil, fmt.Errorf("CIDR %q expands to more than %d addresses", spec, maxIPs)
+		}
 		var out []net.IP
 		for ip := cidr.IP.Mask(cidr.Mask); cidr.Contains(ip); ip = nextIP(ip) {
 			out = append(out, dupIP(ip))
-			if len(out) > 65536 {
-				return nil, errors.New("CIDR expands to more than 65536 addresses")
-			}
 		}
 		return out, nil
 	}
@@ -166,14 +173,17 @@ func expandIPs(spec string) ([]net.IP, error) {
 		if loIP == nil || hiIP == nil {
 			return nil, fmt.Errorf("invalid range %q", spec)
 		}
+		if ipToU32(loIP) > ipToU32(hiIP) {
+			return nil, fmt.Errorf("range %q starts above it ends", spec)
+		}
+		if ipToU32(hiIP)-ipToU32(loIP) >= maxIPs {
+			return nil, fmt.Errorf("range %q spans more than %d addresses", spec, maxIPs)
+		}
 		var out []net.IP
 		for ip := loIP; ; ip = nextIP(ip) {
 			out = append(out, dupIP(ip))
 			if ipToU32(ip) == ipToU32(hiIP) {
 				break
-			}
-			if ipToU32(ip) > ipToU32(hiIP) || len(out) > 65536 {
-				return nil, fmt.Errorf("invalid or oversized range %q", spec)
 			}
 		}
 		return out, nil
