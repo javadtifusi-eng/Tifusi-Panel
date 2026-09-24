@@ -121,7 +121,9 @@ def build_spooftest_commands(
     prefix = _download_binary_snippet()
     recv = f"{prefix} && /tmp/tifusi-tunnel spooftest recv --port {port} --seconds {seconds}"
     send = (
-        f"{prefix} && sudo /tmp/tifusi-tunnel spooftest send "
+        # Raw sockets need root; sudo only when not already root, since minimal
+        # servers that log in as root often have no sudo at all.
+        f'{prefix} && $([ "$(id -u)" = 0 ] || echo sudo) /tmp/tifusi-tunnel spooftest send '
         f"--to {foreign_host} --port {port} --spoof {spoof_ip}"
     )
     return recv, send
