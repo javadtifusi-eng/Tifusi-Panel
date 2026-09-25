@@ -30,7 +30,7 @@ from node_agent import traffic_names
 from copy import deepcopy
 from pathlib import Path
 
-from node_agent import ipsec_stats
+from node_agent import ipsec, ipsec_stats
 
 log = logging.getLogger("tifusi.limits")
 
@@ -144,13 +144,13 @@ def _enforce_ikev2() -> None:
         if not _IKE_CONN.match(line):
             continue
         ike = line.split(" child-sas ", 1)[0]
-        user = _EAP_ID.search(ike)
+        user = ipsec.sa_username(ike)
         uniqueid = _IKE_UNIQUEID.search(ike)
         state = _IKE_STATE.search(ike)
         if not user or not uniqueid or (state and state.group(1) != "ESTABLISHED"):
             continue
         established = _IKE_ESTABLISHED.search(ike)
-        sessions.setdefault(user.group(1).strip("'\""), []).append(
+        sessions.setdefault(user, []).append(
             (int(established.group(1)) if established else 0, uniqueid.group(1))
         )
 

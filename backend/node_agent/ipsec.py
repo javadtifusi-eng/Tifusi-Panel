@@ -547,6 +547,15 @@ def apply_ikev2(
     ikev2_auth_mode: str = "eap",
 ) -> None:
     _load_swanctl_config("ikev2", psk, remote_id, users, certificate, certificate_key, ikev2_auth_mode)
+    # swanctl --load-all only updates connection *definitions*; charon keeps
+    # every already-established IKE_SA running until it rekeys or the client
+    # reconnects. So a user the panel just removed (out of traffic, expired,
+    # deleted) would keep their live session — reported active though their
+    # quota is gone. In EAP mode each SA carries the user's identity, so tear
+    # down any established SA whose EAP id is no longer an allowed user.
+    if ikev2_auth_mode == "eap":
+        allowed = {str(u.get("username", "")) for u in (users or []) if u.get("username")}
+        _terminate_disallowed_ikev2(allowed)
     _ensure_forwarding_and_nat(_IKEV2_SUBNET)
     # Chained egress (see vless_egress.py) — same mechanism apply_l2tp uses,
     # just against the ikev2 subnet. A node's l2tp/ikev2 slot is exclusive
@@ -557,6 +566,67 @@ def apply_ikev2(
         vless_egress.apply(egress_vless, _IKEV2_SUBNET)
     except Exception:
         pass
+
+
+# Matchers for `swanctl --list-sas --raw`, mirroring node_agent/limits.py so
+# the two stay consistent: one event line per IKE_SA, carrying its EAP id,
+# uniqueid and state.
+_SA_CONN = re.compile(r"^list-sa event \{(ikev2[^ {]*) \{")
+_SA_EAP_ID = re.compile(r"\bremote-eap-id=([^ {}]+)")
+_SA_REMOTE_ID = re.compile(r"\bremote-id=([^ {}]+)")
+_SA_UNIQUEID = re.compile(r"\buniqueid=(\d+)")
+_SA_STATE = re.compile(r"\bstate=(\w+)")
+
+
+def sa_username(ike: str) -> str | None:
+    """The panel username an IKE_SA line belongs to. When the client's IKE
+    identity already equals its username, charon skips the separate EAP id
+    and only reports remote-id, so fall back to that — but only when it
+    cannot be an address or domain (usernames never contain '.', ':' or '@')."""
+    eap = _SA_EAP_ID.search(ike)
+    if eap:
+        return eap.group(1).strip("'\"")
+    rid = _SA_REMOTE_ID.search(ike)
+    if rid:
+        value = rid.group(1).strip("'\"")
+        if value and not any(ch in value for ch in ".:@"):
+            return value
+    return None
+
+
+def _terminate_disallowed_ikev2(allowed: set[str]) -> None:
+    """Terminates every established IKE_SA whose EAP identity is not in the
+    allowed set, so a user removed from the config loses their live session at
+    once instead of lingering until it happens to rekey. Best effort: a parse
+    or vici hiccup must never break applying the config."""
+    # An empty list means something upstream went wrong, never "block
+    # everyone" — cutting every live user on a bad sync would be far worse.
+    if not allowed:
+        return
+    try:
+        out = subprocess.run(
+            ["swanctl", "--list-sas", "--raw"], capture_output=True, text=True, timeout=5
+        ).stdout
+    except Exception:
+        return
+    for line in out.splitlines():
+        if not _SA_CONN.match(line):
+            continue
+        ike = line.split(" child-sas ", 1)[0]
+        user = sa_username(ike)
+        uniqueid = _SA_UNIQUEID.search(ike)
+        state = _SA_STATE.search(ike)
+        if not user or not uniqueid:
+            continue
+        if state and state.group(1) != "ESTABLISHED":
+            continue
+        if user in allowed:
+            continue
+        subprocess.run(
+            ["swanctl", "--terminate", "--ike-id", uniqueid.group(1), "--force"],
+            capture_output=True,
+            timeout=10,
+        )
 
 
 def is_ipsec_running() -> bool:
