@@ -46,7 +46,16 @@ async def _build_xray_payload(core: Core | None, db: AsyncSession) -> dict:
 
 
 async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict:
-    users = await _ipsec_allowed_users(core, db)
+    # Only users who may still connect get a login on the node. Without this
+    # a user flipped to limited/expired/disabled kept their IKEv2/L2TP secret,
+    # so the traffic cap and expiry never cut them off. on_hold stays in: its
+    # countdown starts on first use, and dropping it here would lock out an
+    # IKEv2-only account that was never activated through the subscription.
+    users = [
+        u
+        for u in await _ipsec_allowed_users(core, db)
+        if u.status in (UserStatus.active, UserStatus.on_hold)
+    ]
     user_payload = [
         {"username": u.username, "password": u.ipsec_login_password, "limit": u.hwid_limit or 0} for u in users
     ]
