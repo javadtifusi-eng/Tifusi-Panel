@@ -41,7 +41,7 @@ const RING: Record<UserStatus, string> = {
 }
 const METER: Record<UserStatus, string> = {
   active: 'var(--ok)',
-  limited: 'var(--warn)',
+  limited: '#fb7a3c',
   expired: 'var(--bad)',
   on_hold: 'var(--strong)',
   disabled: '#2e2e2e',
@@ -569,13 +569,13 @@ export default function UsersPage({ search, createSignal = 0 }: { search?: strin
         {(
           [
             ['active', 'var(--ok)', counts ? u.shareOfAll(share(counts.active)) : ''],
-            ['limited', 'var(--warn)', u.limitedHint],
+            ['limited', '#fb7a3c', u.limitedHint],
             ['expired', 'var(--bad)', u.expiredHint],
           ] as [UserStatus, string, string][]
         ).map(([s, c, sub]) => (
           <button key={s} type="button" className="tile stat" style={{ ['--c' as string]: c }} aria-pressed={statusFilter === s} onClick={() => pickStatus(s)}>
             <span className="tl">{t.usersPage.status[s]}</span>
-            <StatRing pct={counts ? share(counts[s]) : 0} />
+            <StatRing pct={counts ? share(counts[s]) : 0} of={u.ringOf(counts?.all ?? 0)} />
             <span className="v">{counts ? <CountUp value={counts[s]} /> : '—'}</span>
             <span className="s">{sub}</span>
           </button>
@@ -1195,18 +1195,27 @@ function validityFill(days: number): string {
   return 'linear-gradient(90deg, #38bdf8, #a78bfa)'
 }
 
-function StatRing({ pct }: { pct: number }) {
-  const C = 2 * Math.PI * 19
+function StatRing({ pct, of }: { pct: number; of: string }) {
+  const C = 2 * Math.PI * 40
   const [shown, setShown] = useState(0)
   useEffect(() => {
     const id = requestAnimationFrame(() => setShown(pct))
     return () => cancelAnimationFrame(id)
   }, [pct])
+  // A few users still get a visible sliver, so a small share never reads as an empty ring.
+  const arc = pct > 0 ? Math.max((C * shown) / 100, shown > 0 ? 4 : 0) : 0
   return (
-    <svg className="stat-ring" viewBox="0 0 46 46" aria-hidden="true">
-      <circle cx={23} cy={23} r={19} stroke="#1f1f1f" />
-      <circle className="fg" cx={23} cy={23} r={19} strokeDasharray={`${((C * shown) / 100).toFixed(1)} ${C.toFixed(1)}`} />
-    </svg>
+    <span className="stat-ring" aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle className="tick" cx={50} cy={50} r={47} />
+        <circle className="tr" cx={50} cy={50} r={40} />
+        <circle className="fg" cx={50} cy={50} r={40} strokeDasharray={`${arc.toFixed(1)} ${C.toFixed(1)}`} />
+      </svg>
+      <span className="mid">
+        <b>{Math.round(pct)}%</b>
+        <small>{of}</small>
+      </span>
+    </span>
   )
 }
 
