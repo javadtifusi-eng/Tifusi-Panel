@@ -679,7 +679,7 @@ export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' 
 export type TunnelStatus = 'pending' | 'connected' | 'error'
 export type CdnProvider = 'arvan' | 'cloudflare'
 /** L4 protocol the spoof transport's forged packets ride on. */
-export type SpoofCarrier = 'udp' | 'icmp' | 'tcp'
+export type SpoofCarrier = 'auto' | 'udp' | 'icmp' | 'tcp'
 
 export interface TunnelForward {
   name: string
@@ -703,6 +703,7 @@ export interface Tunnel {
   path: string | null
   spoof_source: string | null
   spoof_carrier: SpoofCarrier | null
+  spoof_stealth: boolean | null
   connection_count: number
   forwards: TunnelForward[]
   cdn_provider: CdnProvider | null
@@ -767,6 +768,7 @@ export type TunnelPayload = {
   path?: string | null
   spoof_source?: string | null
   spoof_carrier?: SpoofCarrier | null
+  spoof_stealth?: boolean | null
   connection_count?: number
   forwards?: TunnelForward[]
   cdn_provider?: CdnProvider | null

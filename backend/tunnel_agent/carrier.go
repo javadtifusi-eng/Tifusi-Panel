@@ -57,11 +57,70 @@ const icmpTunnelID uint16 = 0xF5F1
 
 var errIPv4Only = errors.New("spoof carrier only supports IPv4 addresses")
 
+// spoofOpts carries the optional hardening knobs shared by every carrier. A
+// nil *spoofOpts means "all defaults, nothing extra", so callers that don't
+// care can pass nil.
+type spoofOpts struct {
+	// stealth randomises the outbound packet's fingerprint: a per-packet TTL
+	// drawn from common values, a random DSCP, and a random L4 source port.
+	// It only changes how our own packets look on the wire, so the peer needs
+	// no matching setting to read them.
+	stealth bool
+	// peerSrc, when set, is the one forged source address inbound packets are
+	// allowed to carry; anything else is dropped before the cipher sees it.
+	// It mirrors the far side's spoof_source and tightens the receive filter.
+	peerSrc net.IP
+}
+
+// stealthTTLs are the initial TTLs a fresh packet most commonly leaves a host
+// with, so drawing from them looks like ordinary mixed traffic.
+var stealthTTLs = [3]byte{64, 128, 255}
+
+func (o *spoofOpts) on() bool { return o != nil && o.stealth }
+
+// srcPort returns the L4 source port to stamp: a random high port when stealth
+// is on, otherwise the fixed default the carrier normally uses.
+func (o *spoofOpts) srcPort(def uint16) uint16 {
+	if !o.on() {
+		return def
+	}
+	var b [2]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return def
+	}
+	// A high, ephemeral-range port (1024..65535).
+	return 1024 + binary.BigEndian.Uint16(b[:])%64512
+}
+
+// decorate applies the IP-header-only stealth tweaks (TTL, DSCP) to an
+// assembled packet and fixes the IP checksum. The L4 checksum is untouched
+// because it does not cover these bytes.
+func (o *spoofOpts) decorate(pkt []byte) {
+	if !o.on() || len(pkt) < 20 {
+		return
+	}
+	var b [2]byte
+	rand.Read(b[:])
+	pkt[8] = stealthTTLs[int(b[0])%len(stealthTTLs)] // TTL
+	pkt[1] = b[1] & 0xFC                             // DSCP in the top 6 bits, ECN left 0
+	binary.BigEndian.PutUint16(pkt[10:12], 0)
+	binary.BigEndian.PutUint16(pkt[10:12], onesComplementSum(pkt[0:20]))
+}
+
+// allowSrc reports whether an inbound packet from forged source src passes the
+// peer-source pin. With no pin configured every source is allowed.
+func (o *spoofOpts) allowSrc(src net.IP) bool {
+	if o == nil || o.peerSrc == nil {
+		return true
+	}
+	return o.peerSrc.Equal(src)
+}
+
 // validSpoofCarrier reports whether name is a carrier we implement. An empty
 // name is treated as the udp default by the caller, so it is not accepted here.
 func validSpoofCarrier(name string) bool {
 	switch name {
-	case carrierUDP, carrierICMP, carrierTCP:
+	case carrierUDP, carrierICMP, carrierTCP, carrierAuto:
 		return true
 	default:
 		return false
@@ -73,7 +132,10 @@ func validSpoofCarrier(name string) bool {
 // datagram still fits inside a 1500-byte path without fragmenting. TCP's header
 // is 12 bytes larger than UDP's, so it gets a little less room.
 func carrierMTU(name string) int {
-	if name == carrierTCP {
+	// auto may land on the TCP carrier, so it must use TCP's smaller budget
+	// for every carrier — a fixed MTU that both ends agree on regardless of
+	// which carrier a given packet rides.
+	if name == carrierTCP || name == carrierAuto {
 		return 1180
 	}
 	return 1200
@@ -98,18 +160,18 @@ type spoofCarrier interface {
 // newSpoofCarrier opens the receive side for the named carrier and returns a
 // carrier bound to peer. listenAddr is our real "host:port"; its port is used
 // as the UDP source port / the TCP port both filtering and framing key on.
-func newSpoofCarrier(name, listenAddr string, peer *net.UDPAddr) (spoofCarrier, error) {
+func newSpoofCarrier(name, listenAddr string, peer *net.UDPAddr, opts *spoofOpts) (spoofCarrier, error) {
 	la, err := net.ResolveUDPAddr("udp4", listenAddr)
 	if err != nil {
 		return nil, fmt.Errorf("spoof: resolve listen %q: %w", listenAddr, err)
 	}
 	switch name {
 	case "", carrierUDP:
-		return newUDPCarrier(la, peer)
+		return newUDPCarrier(la, peer, opts)
 	case carrierICMP:
-		return newICMPCarrier(uint16(la.Port), peer)
+		return newICMPCarrier(uint16(la.Port), peer, opts)
 	case carrierTCP:
-		return newTCPCarrier(uint16(la.Port), peer)
+		return newTCPCarrier(uint16(la.Port), peer, opts)
 	default:
 		return nil, fmt.Errorf("unknown spoof carrier %q", name)
 	}
@@ -123,9 +185,10 @@ type udpCarrier struct {
 	rx    *net.UDPConn
 	sport uint16
 	peer  *net.UDPAddr
+	opts  *spoofOpts
 }
 
-func newUDPCarrier(la, peer *net.UDPAddr) (*udpCarrier, error) {
+func newUDPCarrier(la, peer *net.UDPAddr, opts *spoofOpts) (*udpCarrier, error) {
 	rx, err := net.ListenUDP("udp4", la)
 	if err != nil {
 		return nil, fmt.Errorf("spoof: listen udp %s: %w", la, err)
@@ -136,16 +199,31 @@ func newUDPCarrier(la, peer *net.UDPAddr) (*udpCarrier, error) {
 			sport = uint16(a.Port)
 		}
 	}
-	return &udpCarrier{rx: rx, sport: sport, peer: peer}, nil
+	return &udpCarrier{rx: rx, sport: sport, peer: peer, opts: opts}, nil
 }
 
 func (c *udpCarrier) readPayload(p []byte) (int, error) {
-	n, _, err := c.rx.ReadFromUDP(p)
-	return n, err
+	for {
+		n, from, err := c.rx.ReadFromUDP(p)
+		if err != nil {
+			return n, err
+		}
+		// The kernel reports the forged source on a plain UDP socket, so the
+		// peer-source pin can be enforced here directly.
+		if from != nil && !c.opts.allowSrc(from.IP.To4()) {
+			continue
+		}
+		return n, nil
+	}
 }
 
 func (c *udpCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
-	return buildSpoofedUDP(src, c.peer.IP, c.sport, uint16(c.peer.Port), payload)
+	pkt, err := buildSpoofedUDP(src, c.peer.IP, c.opts.srcPort(c.sport), uint16(c.peer.Port), payload)
+	if err != nil {
+		return nil, err
+	}
+	c.opts.decorate(pkt)
+	return pkt, nil
 }
 
 func (c *udpCarrier) setReadDeadline(t time.Time) error { return c.rx.SetReadDeadline(t) }
@@ -187,14 +265,15 @@ type icmpCarrier struct {
 	id   uint16
 	seq  uint32
 	peer *net.UDPAddr
+	opts *spoofOpts
 }
 
-func newICMPCarrier(_ uint16, peer *net.UDPAddr) (*icmpCarrier, error) {
+func newICMPCarrier(_ uint16, peer *net.UDPAddr, opts *spoofOpts) (*icmpCarrier, error) {
 	rx, err := openRawRecv(syscall.IPPROTO_ICMP)
 	if err != nil {
 		return nil, err
 	}
-	return &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: icmpTunnelID, peer: peer}, nil
+	return &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: icmpTunnelID, peer: peer, opts: opts}, nil
 }
 
 func (c *icmpCarrier) readPayload(p []byte) (int, error) {
@@ -205,6 +284,9 @@ func (c *icmpCarrier) readPayload(p []byte) (int, error) {
 		}
 		ihl := ipHeaderLen(c.rbuf[:n])
 		if ihl == 0 || n < ihl+8 {
+			continue
+		}
+		if !c.opts.allowSrc(net.IP(c.rbuf[12:16])) {
 			continue
 		}
 		icmp := c.rbuf[ihl:n]
@@ -223,7 +305,12 @@ func (c *icmpCarrier) readPayload(p []byte) (int, error) {
 
 func (c *icmpCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
 	seq := uint16(atomic.AddUint32(&c.seq, 1))
-	return buildSpoofedICMP(src, c.peer.IP, c.id, seq, payload)
+	pkt, err := buildSpoofedICMP(src, c.peer.IP, c.id, seq, payload)
+	if err != nil {
+		return nil, err
+	}
+	c.opts.decorate(pkt)
+	return pkt, nil
 }
 
 func (c *icmpCarrier) setReadDeadline(t time.Time) error { return c.rx.SetReadDeadline(t) }
@@ -245,10 +332,11 @@ type tcpCarrier struct {
 	peer    *net.UDPAddr
 	seq     uint32
 	ack     uint32
+	opts    *spoofOpts
 	rstRule []string // installed iptables OUTPUT rule, for cleanup on close
 }
 
-func newTCPCarrier(port uint16, peer *net.UDPAddr) (*tcpCarrier, error) {
+func newTCPCarrier(port uint16, peer *net.UDPAddr, opts *spoofOpts) (*tcpCarrier, error) {
 	rx, err := openRawRecv(syscall.IPPROTO_TCP)
 	if err != nil {
 		return nil, err
@@ -260,6 +348,7 @@ func newTCPCarrier(port uint16, peer *net.UDPAddr) (*tcpCarrier, error) {
 		peer: peer,
 		seq:  randU32(),
 		ack:  randU32(),
+		opts: opts,
 	}
 	c.installRSTDrop()
 	return c, nil
@@ -273,6 +362,9 @@ func (c *tcpCarrier) readPayload(p []byte) (int, error) {
 		}
 		ihl := ipHeaderLen(c.rbuf[:n])
 		if ihl == 0 || n < ihl+20 {
+			continue
+		}
+		if !c.opts.allowSrc(net.IP(c.rbuf[12:16])) {
 			continue
 		}
 		tcp := c.rbuf[ihl:n]
@@ -296,7 +388,12 @@ func (c *tcpCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
 	// counter looks consistent to a stateful observer.
 	end := atomic.AddUint32(&c.seq, uint32(len(payload)))
 	seq := end - uint32(len(payload))
-	return buildSpoofedTCP(src, c.peer.IP, c.port, uint16(c.peer.Port), seq, atomic.LoadUint32(&c.ack), payload)
+	pkt, err := buildSpoofedTCP(src, c.peer.IP, c.opts.srcPort(c.port), uint16(c.peer.Port), seq, atomic.LoadUint32(&c.ack), payload)
+	if err != nil {
+		return nil, err
+	}
+	c.opts.decorate(pkt)
+	return pkt, nil
 }
 
 func (c *tcpCarrier) setReadDeadline(t time.Time) error { return c.rx.SetReadDeadline(t) }

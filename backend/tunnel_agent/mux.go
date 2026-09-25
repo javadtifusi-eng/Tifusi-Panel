@@ -76,14 +76,16 @@ type muxSession struct {
 	pendingMu sync.Mutex
 	pending   map[uint32]chan error // server only: outstanding OpenStream calls
 
-	dead int32 // atomic
+	readTimeout time.Duration // silence before the link is declared dead
+	dead        int32         // atomic
 }
 
 func newMuxSession(f *fconn) *muxSession {
 	return &muxSession{
-		f:       f,
-		streams: make(map[uint32]*muxStream),
-		pending: make(map[uint32]chan error),
+		f:           f,
+		streams:     make(map[uint32]*muxStream),
+		pending:     make(map[uint32]chan error),
+		readTimeout: 60 * time.Second,
 	}
 }
 
@@ -102,7 +104,7 @@ func (ms *muxSession) serve(isServer bool, dial func(id uint32, req dialReq)) {
 		// pool, and every request routed to it would stall for the full
 		// OpenStream timeout. Heartbeat pings every 15s, so a few missed
 		// round trips is a reliable dead-peer signal.
-		ms.f.SetReadDeadline(time.Now().Add(60 * time.Second))
+		ms.f.SetReadDeadline(time.Now().Add(ms.readTimeout))
 		t, p, err := ms.f.recv()
 		if err != nil {
 			return
@@ -546,11 +548,16 @@ func (s *Server) serveUDPForwardMux(fw Forward) {
 // ---------------------------------------------------------------- client side
 
 func (c *Client) muxWorker() {
+	auto := c.cfg.Transport == "spoof" && c.cfg.SpoofCarrier == carrierAuto
 	backoff := time.Second
 	for {
+		if auto {
+			c.log("spoof auto: trying %s carrier", c.spoofCarrier())
+		}
 		f, err := c.connect("mux")
 		if err != nil {
 			c.log("mux link: %v (retrying in %s)", err, backoff)
+			c.advanceSpoofCarrier() // auto only; no-op otherwise
 			time.Sleep(backoff)
 			if backoff < 30*time.Second {
 				backoff *= 2
@@ -560,11 +567,24 @@ func (c *Client) muxWorker() {
 		c.log("mux link established with %s", c.target())
 		backoff = time.Second
 
+		up := time.Now()
 		ms := newMuxSession(f)
+		if auto {
+			// Notice a dead carrier fast (server pings every 15s), so failover
+			// takes ~20s per carrier instead of a full minute.
+			ms.readTimeout = 22 * time.Second
+		}
 		ms.serve(false, func(id uint32, req dialReq) {
 			c.acceptMuxStream(ms, id, req)
 		})
 
+		// A link that never carried traffic long points at a carrier the path
+		// is now dropping, so move to the next one; a link that stayed up well
+		// past the dead-link timeout is redialed on the same carrier. The
+		// threshold sits above readTimeout so a genuine failure always rotates.
+		if time.Since(up) < 60*time.Second {
+			c.advanceSpoofCarrier()
+		}
 		c.log("mux link lost, reconnecting")
 		time.Sleep(2 * time.Second)
 	}

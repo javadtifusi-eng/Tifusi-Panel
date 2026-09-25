@@ -1256,6 +1256,8 @@ select.input { padding-block: 7px; }
 .tr-card:hover { border-color: rgb(249 115 22 / 0.45); }
 .tr-card[aria-pressed='true'] { border-color: #f97316; background: rgb(249 115 22 / 0.08); }
 .tr-card.spoof { border-style: dashed; }
+.tr-pick.carrier-pick { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 560px) { .tr-pick.carrier-pick { grid-template-columns: 1fr; } }
 
 /* CDN quality sheet */
 .cdt { display: flex; flex-direction: column; gap: 12px; }

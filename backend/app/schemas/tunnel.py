@@ -7,7 +7,7 @@ from app.models.tunnel import TunnelStatus, TunnelTransport
 
 ForwardNet = Literal["tcp", "udp"]
 CdnProvider = Literal["arvan", "cloudflare"]
-SpoofCarrier = Literal["udp", "icmp", "tcp"]
+SpoofCarrier = Literal["auto", "udp", "icmp", "tcp"]
 
 
 class TunnelForward(BaseModel):
@@ -30,6 +30,7 @@ class TunnelCreate(BaseModel):
     path: str | None = Field(default=None, max_length=255)
     spoof_source: str | None = Field(default=None, max_length=64)
     spoof_carrier: SpoofCarrier | None = None
+    spoof_stealth: bool | None = None
     connection_count: int = Field(default=8, ge=1, le=256)
     forwards: list[TunnelForward] = []
     cdn_provider: CdnProvider | None = None
@@ -52,6 +53,7 @@ class TunnelUpdate(BaseModel):
     path: str | None = Field(default=None, max_length=255)
     spoof_source: str | None = Field(default=None, max_length=64)
     spoof_carrier: SpoofCarrier | None = None
+    spoof_stealth: bool | None = None
     connection_count: int | None = Field(default=None, ge=1, le=256)
     forwards: list[TunnelForward] | None = None
     cdn_provider: CdnProvider | None = None
@@ -78,6 +80,7 @@ class TunnelResponse(BaseModel):
     path: str | None
     spoof_source: str | None = None
     spoof_carrier: str | None = None
+    spoof_stealth: bool | None = None
     connection_count: int
     forwards: list[TunnelForward]
     cdn_provider: str | None = None

@@ -103,3 +103,47 @@ func TestBuildSpoofedTCPWellFormed(t *testing.T) {
 		t.Errorf("TCP checksum invalid: re-sum = %#x, want 0", s)
 	}
 }
+
+func TestStealthDecorateAndPin(t *testing.T) {
+	off := (*spoofOpts)(nil)
+	if off.on() || !off.allowSrc(net.ParseIP("9.9.9.9")) {
+		t.Fatal("nil opts must be inert: stealth off, every source allowed")
+	}
+	if p := off.srcPort(443); p != 443 {
+		t.Errorf("nil opts srcPort = %d, want the default 443", p)
+	}
+
+	st := &spoofOpts{stealth: true, peerSrc: net.ParseIP("5.6.7.8").To4()}
+
+	// A random high source port, never the fixed default, always in range.
+	for i := 0; i < 200; i++ {
+		p := st.srcPort(443)
+		if p < 1024 {
+			t.Fatalf("stealth srcPort %d below the ephemeral range", p)
+		}
+	}
+
+	// decorate rewrites TTL/DSCP and keeps the IP checksum valid.
+	pkt, err := buildSpoofedUDP(net.ParseIP("1.1.1.1"), net.ParseIP("2.2.2.2"), 40000, 443, []byte("data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.decorate(pkt)
+	if pkt[8] != 64 && pkt[8] != 128 && pkt[8] != 255 {
+		t.Errorf("stealth TTL = %d, want one of 64/128/255", pkt[8])
+	}
+	if pkt[1]&0x03 != 0 {
+		t.Errorf("ECN bits must stay 0, got byte %#x", pkt[1])
+	}
+	if s := onesComplementSum(pkt[0:20]); s != 0 {
+		t.Errorf("IP checksum invalid after decorate: re-sum %#x", s)
+	}
+
+	// Peer-source pin: only the configured source is allowed through.
+	if !st.allowSrc(net.ParseIP("5.6.7.8").To4()) {
+		t.Error("pinned source should be allowed")
+	}
+	if st.allowSrc(net.ParseIP("5.6.7.9").To4()) {
+		t.Error("non-pinned source should be rejected")
+	}
+}

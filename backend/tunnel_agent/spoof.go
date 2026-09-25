@@ -54,11 +54,11 @@ type spoofPacketConn struct {
 // (our real address) and the raw sender. spoofIPs is the forged-source pool;
 // peer is the other side's real ip:port that outbound packets are aimed at. An
 // empty carrier name defaults to plain source-spoofed UDP.
-func newSpoofPacketConn(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr) (*spoofPacketConn, error) {
+func newSpoofPacketConn(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr, opts *spoofOpts) (*spoofPacketConn, error) {
 	if len(spoofIPs) == 0 {
 		return nil, errNoSpoofSources
 	}
-	car, err := newSpoofCarrier(carrier, listenAddr, peer)
+	car, err := newSpoofCarrier(carrier, listenAddr, peer, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +130,8 @@ func (c *spoofPacketConn) SetWriteDeadline(t time.Time) error { return nil }
 // spoofListen is the server (Iran) side: it wraps a spoof packet conn in a KCP
 // listener so the rest of the tunnel treats it exactly like the "udp"
 // transport.
-func spoofListen(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (net.Listener, error) {
-	pc, err := newSpoofPacketConn(listenAddr, carrier, spoofIPs, peer)
+func spoofListen(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int, opts *spoofOpts) (net.Listener, error) {
+	pc, err := newSpoofPacketConn(listenAddr, carrier, spoofIPs, peer, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +152,8 @@ func spoofListen(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAdd
 
 // spoofDial is the client (foreign) side: it wraps a spoof packet conn in a
 // single KCP session aimed at the peer.
-func spoofDial(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (*kcp.UDPSession, error) {
-	pc, err := newSpoofPacketConn(listenAddr, carrier, spoofIPs, peer)
+func spoofDial(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int, opts *spoofOpts) (*kcp.UDPSession, error) {
+	pc, err := newSpoofPacketConn(listenAddr, carrier, spoofIPs, peer, opts)
 	if err != nil {
 		return nil, err
 	}

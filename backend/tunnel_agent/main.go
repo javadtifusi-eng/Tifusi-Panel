@@ -141,11 +141,26 @@ type Config struct {
 	// foreign side's real address; on the client it is the same as Server.
 	Peer string `json:"peer,omitempty"`
 	// SpoofCarrier, "spoof" transport only: which L4 protocol the forged
-	// packets pretend to be — "udp" (default), "icmp" or "tcp". The spoofing
-	// itself is identical; the carrier only changes what a filter or DPI box
-	// sees on the wire, so a link that throttles UDP may still pass ICMP or
-	// fake-TCP. Both ends must match; the panel sets the same value on each.
+	// packets pretend to be — "udp" (default), "icmp", "tcp" or "auto". The
+	// spoofing itself is identical; the carrier only changes what a filter or
+	// DPI box sees on the wire, so a link that throttles UDP may still pass
+	// ICMP or fake-TCP. "auto" makes the client try each carrier and settle on
+	// one that works while the server listens on all of them. Both ends must
+	// match; the panel sets the same value on each.
 	SpoofCarrier string `json:"spoof_carrier,omitempty"`
+	// SpoofStealth, "spoof" transport only: randomise each outbound packet's
+	// fingerprint — TTL drawn from {64,128,255}, a random DSCP, and a random
+	// high source port — so the flow has no fixed shape to match on. It only
+	// changes how our own packets look, so the peer needs no matching setting.
+	SpoofStealth bool `json:"spoof_stealth,omitempty"`
+	// SpoofPeerSrc, "spoof" transport only: the single forged source the OTHER
+	// side stamps on its packets. When set, inbound packets carrying any other
+	// source are dropped before the cipher — a tighter receive filter. It is
+	// the peer's spoof_source; the panel fills it in per side.
+	SpoofPeerSrc string `json:"spoof_peer_src,omitempty"`
+	// SpoofMTU, "spoof" transport only: override the KCP MTU. 0 uses the
+	// per-carrier default. Lower it on a path with a smaller MTU.
+	SpoofMTU int `json:"spoof_mtu,omitempty"`
 	// FECData/FECParity, "udp" and "spoof" transports only: forward error
 	// correction. For every FECData data packets, FECParity redundant packets
 	// are sent, so up to FECParity lost packets in that group are rebuilt
@@ -155,6 +170,29 @@ type Config struct {
 	// 0 disables FEC.
 	FECData   int `json:"fec_data,omitempty"`
 	FECParity int `json:"fec_parity,omitempty"`
+}
+
+// spoofOptions builds the shared carrier options from the config. It returns
+// nil when nothing optional is set, which every carrier treats as plain
+// defaults.
+func (c *Config) spoofOptions() *spoofOpts {
+	if !c.SpoofStealth && c.SpoofPeerSrc == "" {
+		return nil
+	}
+	o := &spoofOpts{stealth: c.SpoofStealth}
+	if c.SpoofPeerSrc != "" {
+		o.peerSrc = net.ParseIP(c.SpoofPeerSrc).To4()
+	}
+	return o
+}
+
+// spoofMTU is the KCP MTU for the spoof transport: the explicit override when
+// set, otherwise the per-carrier default.
+func (c *Config) spoofMTU(carrier string) int {
+	if c.SpoofMTU > 0 {
+		return c.SpoofMTU
+	}
+	return carrierMTU(carrier)
 }
 
 func (c *Config) applyDefaults() {
@@ -837,7 +875,12 @@ func (s *Server) Run() error {
 		if err != nil {
 			return fmt.Errorf("spoof_source: %w", err)
 		}
-		sln, err := spoofListen(s.cfg.Listen, s.cfg.SpoofCarrier, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity)
+		var sln net.Listener
+		if s.cfg.SpoofCarrier == carrierAuto {
+			sln, err = spoofListenAuto(s.cfg.Listen, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity, s.cfg.spoofOptions())
+		} else {
+			sln, err = spoofListen(s.cfg.Listen, s.cfg.SpoofCarrier, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity, s.cfg.spoofOptions())
+		}
 		if err != nil {
 			return err
 		}
@@ -897,7 +940,7 @@ func (s *Server) Run() error {
 		}
 		if sess, ok := c.(*kcp.UDPSession); ok {
 			if s.cfg.Transport == "spoof" {
-				tuneKCPMtu(sess, carrierMTU(s.cfg.SpoofCarrier))
+				tuneKCPMtu(sess, s.cfg.spoofMTU(s.cfg.SpoofCarrier))
 			} else {
 				tuneKCP(sess)
 			}
@@ -1262,11 +1305,32 @@ func label(fw Forward) string {
 // ---------------------------------------------------------------- client
 
 type Client struct {
-	next uint32 // round-robin index into cfg.Servers
-	cfg  *Config
+	next     uint32 // round-robin index into cfg.Servers
+	spoofIdx uint32 // auto mode: cursor into autoCarriers for the next dial
+	cfg      *Config
 }
 
 func (c *Client) log(format string, v ...interface{}) { log.Printf(format, v...) }
+
+// spoofCarrier resolves the carrier to use for the next spoof dial. In auto
+// mode it walks autoCarriers as spoofIdx advances; otherwise it is the fixed
+// configured carrier.
+func (c *Client) spoofCarrier() string {
+	if c.cfg.SpoofCarrier != carrierAuto {
+		return c.cfg.SpoofCarrier
+	}
+	i := atomic.LoadUint32(&c.spoofIdx)
+	return autoCarriers[int(i)%len(autoCarriers)]
+}
+
+// advanceSpoofCarrier moves to the next carrier for the following dial. Called
+// in auto mode when a link fails to establish or dies quickly, so a throttled
+// carrier is abandoned instead of retried forever.
+func (c *Client) advanceSpoofCarrier() {
+	if c.cfg.SpoofCarrier == carrierAuto {
+		atomic.AddUint32(&c.spoofIdx, 1)
+	}
+}
 
 func (c *Client) Run() error {
 	if isMuxTransport(c.cfg.Transport) {
@@ -1346,11 +1410,12 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 		if err != nil {
 			return nil, fmt.Errorf("spoof_source: %w", err)
 		}
-		sess, err := spoofDial(bind, c.cfg.SpoofCarrier, srcs, peer, c.cfg.Token, c.cfg.FECData, c.cfg.FECParity)
+		carrier := c.spoofCarrier()
+		sess, err := spoofDial(bind, carrier, srcs, peer, c.cfg.Token, c.cfg.FECData, c.cfg.FECParity, c.cfg.spoofOptions())
 		if err != nil {
 			return nil, err
 		}
-		tuneKCPMtu(sess, carrierMTU(c.cfg.SpoofCarrier))
+		tuneKCPMtu(sess, c.cfg.spoofMTU(carrier))
 		raw = sess
 	} else {
 		tconn, err := net.DialTimeout("tcp", addr, 15*time.Second)

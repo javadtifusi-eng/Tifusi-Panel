@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -89,6 +89,14 @@ class Tunnel(Base):
     # each side). NULL is treated as "udp" for tunnels created before carriers
     # existed.
     spoof_carrier: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    # Only meaningful for the "spoof" transport: advanced stealth. When on,
+    # each side randomises its outbound packets (TTL, DSCP, source port) so the
+    # flow has no fixed shape to fingerprint, and only accepts inbound packets
+    # whose forged source is the configured spoof_source. NULL/false keeps the
+    # plain behaviour. The config builder derives the per-side peer-source pin
+    # from spoof_source, so no separate column is needed.
+    spoof_stealth: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Set when the foreign side reaches the relay through a CDN. The foreign
     # side then dials cdn_host:cdn_port instead of iran_address, which stays
