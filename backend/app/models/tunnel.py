@@ -81,6 +81,15 @@ class Tunnel(Base):
     # is no separate peer field to store.
     spoof_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # Only meaningful for the "spoof" transport: the L4 protocol the forged
+    # packets pretend to be — "udp" (default), "icmp" or "tcp". The spoofing
+    # is identical for all three; the carrier only changes what a filter or
+    # DPI box sees, so a link that throttles UDP may still pass ICMP or
+    # fake-TCP. Both sides use the same value (the config builder stamps it on
+    # each side). NULL is treated as "udp" for tunnels created before carriers
+    # existed.
+    spoof_carrier: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
     # Set when the foreign side reaches the relay through a CDN. The foreign
     # side then dials cdn_host:cdn_port instead of iran_address, which stays
     # the address users connect to; the CDN forwards WebSocket traffic to

@@ -34,74 +34,64 @@ import (
 	kcp "github.com/xtaci/kcp-go/v5"
 )
 
-// spoofPacketConn is a net.PacketConn whose reads come from a plain UDP socket
-// and whose writes leave through a raw socket with a forged source IP, aimed
-// at the peer's real address. It is deliberately point-to-point: ReadFrom
+// spoofPacketConn is a net.PacketConn whose reads and writes are delegated to a
+// pluggable carrier (see carrier.go): reads come from the carrier's receive
+// socket, writes leave through a shared raw socket with a forged source IP
+// aimed at the peer's real address. It is deliberately point-to-point: ReadFrom
 // always reports the configured peer, so a forged inbound source can never
 // confuse the KCP session above it.
 type spoofPacketConn struct {
-	rx       *net.UDPConn // plain listener: receives packets sent to our real IP
+	car      spoofCarrier // frames outbound and reads inbound payloads per carrier
 	sender   *spoofSender // raw socket: sends with a forged source
 	spoofIPs []net.IP     // forged source pool; rotated per packet
 	rr       uint32       // round-robin cursor over spoofIPs
 	peer     *net.UDPAddr // the other side's REAL ip:port (KCP's stable peer)
-	sport    uint16       // UDP source port stamped on outbound packets
 
 	closeOnce sync.Once
 }
 
-// newSpoofPacketConn binds a UDP listener on listenAddr (our real address) and
-// opens the raw sender. spoofIP is the forged source; peer is the other side's
-// real ip:port that outbound packets are aimed at.
-func newSpoofPacketConn(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr) (*spoofPacketConn, error) {
+// newSpoofPacketConn opens the receive side for the named carrier on listenAddr
+// (our real address) and the raw sender. spoofIPs is the forged-source pool;
+// peer is the other side's real ip:port that outbound packets are aimed at. An
+// empty carrier name defaults to plain source-spoofed UDP.
+func newSpoofPacketConn(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr) (*spoofPacketConn, error) {
 	if len(spoofIPs) == 0 {
 		return nil, errNoSpoofSources
 	}
-	la, err := net.ResolveUDPAddr("udp4", listenAddr)
+	car, err := newSpoofCarrier(carrier, listenAddr, peer)
 	if err != nil {
-		return nil, fmt.Errorf("spoof: resolve listen %q: %w", listenAddr, err)
-	}
-	rx, err := net.ListenUDP("udp4", la)
-	if err != nil {
-		return nil, fmt.Errorf("spoof: listen udp %s: %w", listenAddr, err)
+		return nil, err
 	}
 	sender, err := newSpoofSender()
 	if err != nil {
-		rx.Close()
+		car.close()
 		return nil, err
-	}
-	sport := uint16(la.Port)
-	if sport == 0 {
-		if a, ok := rx.LocalAddr().(*net.UDPAddr); ok {
-			sport = uint16(a.Port)
-		}
 	}
 	pool := make([]net.IP, len(spoofIPs))
 	for i, ip := range spoofIPs {
 		pool[i] = ip.To4()
 	}
 	return &spoofPacketConn{
-		rx:       rx,
+		car:      car,
 		sender:   sender,
 		spoofIPs: pool,
 		peer:     peer,
-		sport:    sport,
 	}, nil
 }
 
 // ReadFrom returns the payload of the next inbound packet, always attributed
 // to the configured peer regardless of the forged source the kernel saw.
 func (c *spoofPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
-	n, _, err := c.rx.ReadFromUDP(p)
+	n, err := c.car.readPayload(p)
 	if err != nil {
 		return n, nil, err
 	}
 	return n, c.peer, nil
 }
 
-// WriteTo sends p to the peer's real IP with the forged source. The addr
-// argument is ignored: this conn only ever talks to its one configured peer,
-// which is what KCP hands back after ReadFrom.
+// WriteTo sends p to the peer's real IP with the forged source, framed by the
+// active carrier. The addr argument is ignored: this conn only ever talks to
+// its one configured peer, which is what KCP hands back after ReadFrom.
 func (c *spoofPacketConn) WriteTo(p []byte, _ net.Addr) (int, error) {
 	// Rotate the forged source across the pool so a single address the filter
 	// later drops does not take the whole tunnel down with it.
@@ -110,7 +100,11 @@ func (c *spoofPacketConn) WriteTo(p []byte, _ net.Addr) (int, error) {
 		n := atomic.AddUint32(&c.rr, 1)
 		src = c.spoofIPs[int(n)%len(c.spoofIPs)]
 	}
-	if err := c.sender.send(src, c.peer.IP, c.sport, uint16(c.peer.Port), p); err != nil {
+	pkt, err := c.car.frame(src, p)
+	if err != nil {
+		return 0, err
+	}
+	if err := c.sender.sendPacket(pkt, c.peer.IP); err != nil {
 		return 0, err
 	}
 	return len(p), nil
@@ -119,21 +113,25 @@ func (c *spoofPacketConn) WriteTo(p []byte, _ net.Addr) (int, error) {
 func (c *spoofPacketConn) Close() error {
 	c.closeOnce.Do(func() {
 		c.sender.close()
-		c.rx.Close()
+		c.car.close()
 	})
 	return nil
 }
 
-func (c *spoofPacketConn) LocalAddr() net.Addr                { return c.rx.LocalAddr() }
-func (c *spoofPacketConn) SetDeadline(t time.Time) error      { return c.rx.SetDeadline(t) }
-func (c *spoofPacketConn) SetReadDeadline(t time.Time) error  { return c.rx.SetReadDeadline(t) }
-func (c *spoofPacketConn) SetWriteDeadline(t time.Time) error { return c.rx.SetWriteDeadline(t) }
+func (c *spoofPacketConn) LocalAddr() net.Addr               { return c.car.localAddr() }
+func (c *spoofPacketConn) SetReadDeadline(t time.Time) error { return c.car.setReadDeadline(t) }
+
+// SetDeadline applies to the read side; SetWriteDeadline is a no-op because
+// writes go out through the raw sender's blocking Sendto, which has no
+// deadline, and KCP only ever sets read deadlines on this conn.
+func (c *spoofPacketConn) SetDeadline(t time.Time) error      { return c.car.setReadDeadline(t) }
+func (c *spoofPacketConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // spoofListen is the server (Iran) side: it wraps a spoof packet conn in a KCP
 // listener so the rest of the tunnel treats it exactly like the "udp"
 // transport.
-func spoofListen(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (net.Listener, error) {
-	pc, err := newSpoofPacketConn(listenAddr, spoofIPs, peer)
+func spoofListen(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (net.Listener, error) {
+	pc, err := newSpoofPacketConn(listenAddr, carrier, spoofIPs, peer)
 	if err != nil {
 		return nil, err
 	}
@@ -154,8 +152,8 @@ func spoofListen(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr, token 
 
 // spoofDial is the client (foreign) side: it wraps a spoof packet conn in a
 // single KCP session aimed at the peer.
-func spoofDial(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (*kcp.UDPSession, error) {
-	pc, err := newSpoofPacketConn(listenAddr, spoofIPs, peer)
+func spoofDial(listenAddr, carrier string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (*kcp.UDPSession, error) {
+	pc, err := newSpoofPacketConn(listenAddr, carrier, spoofIPs, peer)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +162,10 @@ func spoofDial(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr, token st
 		pc.Close()
 		return nil, err
 	}
-	sess, err := kcp.NewConn2(peer, nil, fecData, fecParity, obf)
+	// ownConn=true: closing the session must also close the spoof conn, or a
+	// reconnect finds the port still bound (udp) or leaks raw sockets and
+	// the RST-drop rule (tcp).
+	sess, err := kcp.NewConn4(randU32(), peer, nil, fecData, fecParity, true, obf)
 	if err != nil {
 		obf.Close()
 		return nil, err

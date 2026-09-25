@@ -3,6 +3,7 @@
 ## v1.4.2 — 2026-09-19
 
 ### Tunnel engine
+- **Spoof carriers: UDP, ICMP or TCP.** The spoof tunnel can now wrap its forged packets as ICMP Echo or forged TCP (PSH/ACK) instead of UDP — pick it in the tunnel form; try ICMP/TCP when an operator throttles UDP. Spoof now runs as one multiplexed KCP session, fixing reconnects that failed with "address already in use" and links that closed each other.
 - **Encryption and error correction on the packet transports.** `udp` and `spoof` now encrypt every packet — `udp` with AES-256 keyed from the tunnel token, `spoof` with authenticated XChaCha20-Poly1305 so a forged or tampered packet is dropped before it reaches the stream. Both add Reed-Solomon FEC (10 data / 3 parity by default), which rebuilds up to three lost packets in every ten without waiting for a retransmit — the difference between a usable and an unusable tunnel under the loss Iran's throttling produces. Both ends derive the same keys and FEC from the shared config, so nothing extra has to be set.
 - **Spoof source pool with rotation, and random packet sizes.** `spoof_source` now takes a list, range (`a-b`) or CIDR as well as a single address; the tunnel rotates the forged source across the pool per packet, so one address the filter later drops no longer takes the tunnel down. Each spoof packet is also padded by a random amount, so the tunnel has no fixed packet-size signature to fingerprint.
 

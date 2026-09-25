@@ -44,6 +44,7 @@ def build_iran_config(tunnel: Tunnel) -> dict:
         # Iran side stamps the forged source and aims its spoofed packets at
         # the foreign side's real address (its listener stays on iran_port).
         config["spoof_source"] = tunnel.spoof_source
+        config["spoof_carrier"] = tunnel.spoof_carrier or "udp"
         if tunnel.foreign_address:
             config["peer"] = f"{tunnel.foreign_address}:{tunnel.iran_port}"
     config["forwards"] = [
@@ -87,6 +88,7 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
         # Foreign side stamps the forged source and binds the tunnel port so
         # the Iran side's spoofed packets reach it; peer is the Iran address.
         config["spoof_source"] = tunnel.spoof_source
+        config["spoof_carrier"] = tunnel.spoof_carrier or "udp"
         config["listen"] = f"0.0.0.0:{tunnel.iran_port}"
         config["peer"] = f"{tunnel.iran_address}:{tunnel.iran_port}"
         config["pool"] = tunnel.connection_count

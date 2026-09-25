@@ -109,15 +109,15 @@ type PanelConfig struct {
 }
 
 type Config struct {
-	Mode      string       `json:"mode"`      // server | client
-	Listen    string       `json:"listen"`    // server only: tunnel listen address
-	Server    string       `json:"server"`    // client only: iran_ip:tunnel_port
+	Mode   string `json:"mode"`   // server | client
+	Listen string `json:"listen"` // server only: tunnel listen address
+	Server string `json:"server"` // client only: iran_ip:tunnel_port
 	// client only: CDN edge addresses (ip:port) tried in turn instead of
 	// Server; connections are spread across them and a dead one is skipped.
 	Servers []string `json:"servers,omitempty"`
 	// client only: WebSocket Host header when it differs from SNI (domain
 	// fronting through a CDN: SNI names another site, Host names ours).
-	Host string `json:"host,omitempty"`
+	Host      string       `json:"host,omitempty"`
 	Transport string       `json:"transport"` // tcp | tls | ws | wss | tcpmux | wsmux | wssmux | udp
 	Token     string       `json:"token"`
 	SNI       string       `json:"sni"`     // TLS server name / certificate CN
@@ -140,6 +140,12 @@ type Config struct {
 	// outbound spoofed packets are aimed at. On the server this is the
 	// foreign side's real address; on the client it is the same as Server.
 	Peer string `json:"peer,omitempty"`
+	// SpoofCarrier, "spoof" transport only: which L4 protocol the forged
+	// packets pretend to be — "udp" (default), "icmp" or "tcp". The spoofing
+	// itself is identical; the carrier only changes what a filter or DPI box
+	// sees on the wire, so a link that throttles UDP may still pass ICMP or
+	// fake-TCP. Both ends must match; the panel sets the same value on each.
+	SpoofCarrier string `json:"spoof_carrier,omitempty"`
 	// FECData/FECParity, "udp" and "spoof" transports only: forward error
 	// correction. For every FECData data packets, FECParity redundant packets
 	// are sent, so up to FECParity lost packets in that group are rebuilt
@@ -177,6 +183,14 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Panel != nil && c.Panel.Listen == "" {
 		c.Panel.Listen = "0.0.0.0:9443"
+	}
+	if c.Transport == "spoof" {
+		if c.SpoofCarrier == "" {
+			c.SpoofCarrier = carrierUDP
+		}
+		// One KCP session per peer pair is a hard limit of the spoof
+		// transport (see isMuxTransport), so it always runs one mux link.
+		c.MuxCon = 1
 	}
 	if (c.Transport == "udp" || c.Transport == "spoof") && c.FECData == 0 && c.FECParity == 0 {
 		// ~30% redundancy: rebuilds up to 3 lost packets in every 10 without a
@@ -220,6 +234,9 @@ func (c *Config) validate() error {
 		}
 		if _, err := net.ResolveUDPAddr("udp4", peer); err != nil {
 			return fmt.Errorf("spoof peer %q is not a valid ip:port: %w", peer, err)
+		}
+		if c.SpoofCarrier != "" && !validSpoofCarrier(c.SpoofCarrier) {
+			return fmt.Errorf("spoof_carrier must be udp, icmp or tcp, got %q", c.SpoofCarrier)
 		}
 	default:
 		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux, udp or spoof, got %q", c.Transport)
@@ -820,7 +837,7 @@ func (s *Server) Run() error {
 		if err != nil {
 			return fmt.Errorf("spoof_source: %w", err)
 		}
-		sln, err := spoofListen(s.cfg.Listen, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity)
+		sln, err := spoofListen(s.cfg.Listen, s.cfg.SpoofCarrier, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity)
 		if err != nil {
 			return err
 		}
@@ -846,7 +863,11 @@ func (s *Server) Run() error {
 			ln = tls.NewListener(ln, tc)
 		}
 	}
-	s.log("tunnel listening on %s (%s)", s.cfg.Listen, s.cfg.Transport)
+	if s.cfg.Transport == "spoof" {
+		s.log("tunnel listening on %s (spoof/%s carrier)", s.cfg.Listen, s.cfg.SpoofCarrier)
+	} else {
+		s.log("tunnel listening on %s (%s)", s.cfg.Listen, s.cfg.Transport)
+	}
 
 	mux := isMuxTransport(s.cfg.Transport)
 	for _, fw := range s.cfg.Forwards {
@@ -876,7 +897,7 @@ func (s *Server) Run() error {
 		}
 		if sess, ok := c.(*kcp.UDPSession); ok {
 			if s.cfg.Transport == "spoof" {
-				tuneKCPMtu(sess, 1200)
+				tuneKCPMtu(sess, carrierMTU(s.cfg.SpoofCarrier))
 			} else {
 				tuneKCP(sess)
 			}
@@ -1242,7 +1263,7 @@ func label(fw Forward) string {
 
 type Client struct {
 	next uint32 // round-robin index into cfg.Servers
-	cfg *Config
+	cfg  *Config
 }
 
 func (c *Client) log(format string, v ...interface{}) { log.Printf(format, v...) }
@@ -1325,11 +1346,11 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 		if err != nil {
 			return nil, fmt.Errorf("spoof_source: %w", err)
 		}
-		sess, err := spoofDial(bind, srcs, peer, c.cfg.Token, c.cfg.FECData, c.cfg.FECParity)
+		sess, err := spoofDial(bind, c.cfg.SpoofCarrier, srcs, peer, c.cfg.Token, c.cfg.FECData, c.cfg.FECParity)
 		if err != nil {
 			return nil, err
 		}
-		tuneKCPMtu(sess, 1200)
+		tuneKCPMtu(sess, carrierMTU(c.cfg.SpoofCarrier))
 		raw = sess
 	} else {
 		tconn, err := net.DialTimeout("tcp", addr, 15*time.Second)

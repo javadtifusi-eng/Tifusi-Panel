@@ -23,6 +23,7 @@ import {
   type TunnelTestResult,
   type TunnelTransport,
   type CdnProvider,
+  type SpoofCarrier,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import CdnTuner from '../components/CdnTuner'
@@ -102,6 +103,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [domain, setDomain] = useState('')
   const [path, setPath] = useState('')
   const [spoofSourceIp, setSpoofSourceIp] = useState('')
+  const [spoofCarrier, setSpoofCarrier] = useState<SpoofCarrier>('udp')
   const [connectionCount, setConnectionCount] = useState('8')
   const [forwards, setForwards] = useState<TunnelForward[]>([])
   const [tunerFor, setTunerFor] = useState<Tunnel | null>(null)
@@ -151,6 +153,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setDomain('')
     setPath('')
     setSpoofSourceIp('')
+    setSpoofCarrier('udp')
     setConnectionCount('8')
     setForwards([])
     setUseCdn(false)
@@ -176,6 +179,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setDomain(tunnel.domain ?? '')
     setPath(tunnel.path ?? '')
     setSpoofSourceIp(tunnel.spoof_source ?? '')
+    setSpoofCarrier((tunnel.spoof_carrier as SpoofCarrier) || 'udp')
     setConnectionCount(String(tunnel.connection_count))
     setForwards(tunnel.forwards)
     setUseCdn(!!tunnel.cdn_host)
@@ -219,6 +223,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         domain: domain || null,
         path: path || null,
         spoof_source: transport === 'spoof' ? spoofSourceIp.trim() || null : null,
+        spoof_carrier: transport === 'spoof' ? spoofCarrier : null,
         connection_count: parseInt(connectionCount, 10) || 8,
         forwards,
         cdn_provider: useCdn ? cdnProvider : null,
@@ -960,12 +965,24 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   />
                   <small className="muted">{t.tunnelsPage.spoofSourceHint}</small>
                 </Field>
+                <Field label={t.tunnelsPage.spoofCarrierLabel}>
+                  <select className="input" value={spoofCarrier} onChange={(e) => setSpoofCarrier(e.target.value as SpoofCarrier)}>
+                    {(['udp', 'icmp', 'tcp'] as SpoofCarrier[]).map((c) => (
+                      <option key={c} value={c}>
+                        {t.tunnelsPage.spoofCarrierNames[c]}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="muted">{t.tunnelsPage.spoofCarrierHint}</small>
+                </Field>
               </div>
             )}
 
-            <Field label={t.tunnelsPage.connectionCountLabel}>
-              <input className="input" type="number" min="1" max="256" value={connectionCount} onChange={(e) => setConnectionCount(e.target.value)} />
-            </Field>
+            {transport !== 'spoof' && (
+              <Field label={t.tunnelsPage.connectionCountLabel}>
+                <input className="input" type="number" min="1" max="256" value={connectionCount} onChange={(e) => setConnectionCount(e.target.value)} />
+              </Field>
+            )}
 
             <div className="form-section">
               <div className="flex items-center justify-between gap-2">

@@ -678,6 +678,8 @@ export async function deleteNode(id: number): Promise<void> {
 export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp' | 'spoof'
 export type TunnelStatus = 'pending' | 'connected' | 'error'
 export type CdnProvider = 'arvan' | 'cloudflare'
+/** L4 protocol the spoof transport's forged packets ride on. */
+export type SpoofCarrier = 'udp' | 'icmp' | 'tcp'
 
 export interface TunnelForward {
   name: string
@@ -700,6 +702,7 @@ export interface Tunnel {
   domain: string | null
   path: string | null
   spoof_source: string | null
+  spoof_carrier: SpoofCarrier | null
   connection_count: number
   forwards: TunnelForward[]
   cdn_provider: CdnProvider | null
@@ -763,6 +766,7 @@ export type TunnelPayload = {
   domain?: string | null
   path?: string | null
   spoof_source?: string | null
+  spoof_carrier?: SpoofCarrier | null
   connection_count?: number
   forwards?: TunnelForward[]
   cdn_provider?: CdnProvider | null

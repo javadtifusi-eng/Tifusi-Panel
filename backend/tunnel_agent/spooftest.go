@@ -136,14 +136,21 @@ func newSpoofSender() (*spoofSender, error) {
 	return &spoofSender{fd: fd}, nil
 }
 
+// sendPacket writes an already-assembled IPv4 packet (source IP forged and
+// all, since the socket was opened with IP_HDRINCL) out to dstIP. Every
+// carrier ultimately reaches the wire through here.
+func (s *spoofSender) sendPacket(pkt []byte, dstIP net.IP) error {
+	var addr syscall.SockaddrInet4
+	copy(addr.Addr[:], dstIP.To4())
+	return syscall.Sendto(s.fd, pkt, 0, &addr)
+}
+
 func (s *spoofSender) send(srcIP, dstIP net.IP, srcPort, dstPort uint16, payload []byte) error {
 	pkt, err := buildSpoofedUDP(srcIP, dstIP, srcPort, dstPort, payload)
 	if err != nil {
 		return err
 	}
-	var addr syscall.SockaddrInet4
-	copy(addr.Addr[:], dstIP.To4())
-	return syscall.Sendto(s.fd, pkt, 0, &addr)
+	return s.sendPacket(pkt, dstIP)
 }
 
 func (s *spoofSender) close() { syscall.Close(s.fd) }
