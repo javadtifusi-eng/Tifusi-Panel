@@ -140,6 +140,15 @@ type Config struct {
 	// outbound spoofed packets are aimed at. On the server this is the
 	// foreign side's real address; on the client it is the same as Server.
 	Peer string `json:"peer,omitempty"`
+	// FECData/FECParity, "udp" and "spoof" transports only: forward error
+	// correction. For every FECData data packets, FECParity redundant packets
+	// are sent, so up to FECParity lost packets in that group are rebuilt
+	// without a retransmit - the difference between a usable and an unusable
+	// tunnel under the packet loss Iran's throttling produces. Both ends must
+	// match; they do, because applyDefaults sets the same values on each.
+	// 0 disables FEC.
+	FECData   int `json:"fec_data,omitempty"`
+	FECParity int `json:"fec_parity,omitempty"`
 }
 
 func (c *Config) applyDefaults() {
@@ -169,6 +178,12 @@ func (c *Config) applyDefaults() {
 	if c.Panel != nil && c.Panel.Listen == "" {
 		c.Panel.Listen = "0.0.0.0:9443"
 	}
+	if (c.Transport == "udp" || c.Transport == "spoof") && c.FECData == 0 && c.FECParity == 0 {
+		// ~30% redundancy: rebuilds up to 3 lost packets in every 10 without a
+		// round-trip. A safe default both ends agree on when the panel does not
+		// set it explicitly.
+		c.FECData, c.FECParity = 10, 3
+	}
 }
 
 func (c *Config) validate() error {
@@ -191,10 +206,10 @@ func (c *Config) validate() error {
 	case "tcp", "tls", "ws", "wss", "tcpmux", "wsmux", "wssmux", "udp":
 	case "spoof":
 		if c.SpoofSource == "" {
-			return errors.New("spoof transport needs \"spoof_source\" (the forged source IP)")
+			return errors.New("spoof transport needs \"spoof_source\" (the forged source IP, list, range or CIDR)")
 		}
-		if net.ParseIP(c.SpoofSource).To4() == nil {
-			return fmt.Errorf("spoof_source must be an IPv4 address, got %q", c.SpoofSource)
+		if _, err := parseSpoofSources(c.SpoofSource); err != nil {
+			return fmt.Errorf("spoof_source: %w", err)
 		}
 		peer := c.Peer
 		if peer == "" && c.Mode == "client" {
@@ -374,12 +389,17 @@ func acmeTLSConfig(domain string) *tls.Config {
 // multi-connection pool doesn't stall on one slow link, and stream mode so
 // Read/Write behave like a plain byte stream instead of preserving message
 // boundaries - required since fconn's framing already does that itself.
-func tuneKCP(sess *kcp.UDPSession) {
+func tuneKCP(sess *kcp.UDPSession) { tuneKCPMtu(sess, 1350) }
+
+// tuneKCPMtu is tuneKCP with an explicit MTU. The spoof transport uses a
+// smaller one so that after the AEAD wrapper's nonce, tag and random padding
+// the datagram still fits inside a normal 1500-byte path without fragmenting.
+func tuneKCPMtu(sess *kcp.UDPSession, mtu int) {
 	sess.SetStreamMode(true)
 	sess.SetWriteDelay(false)
 	sess.SetNoDelay(1, 10, 2, 1)
 	sess.SetWindowSize(1024, 1024)
-	sess.SetMtu(1350)
+	sess.SetMtu(mtu)
 	sess.SetACKNoDelay(true)
 }
 
@@ -782,7 +802,11 @@ func (l nodelayListener) Accept() (net.Conn, error) {
 func (s *Server) Run() error {
 	var ln net.Listener
 	if s.cfg.Transport == "udp" {
-		kln, err := kcp.ListenWithOptions(s.cfg.Listen, nil, 0, 0)
+		block, err := newKCPBlock(s.cfg.Token)
+		if err != nil {
+			return fmt.Errorf("udp crypto: %w", err)
+		}
+		kln, err := kcp.ListenWithOptions(s.cfg.Listen, block, s.cfg.FECData, s.cfg.FECParity)
 		if err != nil {
 			return fmt.Errorf("cannot listen on %s: %w", s.cfg.Listen, err)
 		}
@@ -792,7 +816,11 @@ func (s *Server) Run() error {
 		if err != nil {
 			return fmt.Errorf("spoof peer %q: %w", s.cfg.Peer, err)
 		}
-		sln, err := spoofListen(s.cfg.Listen, net.ParseIP(s.cfg.SpoofSource), peer)
+		srcs, err := parseSpoofSources(s.cfg.SpoofSource)
+		if err != nil {
+			return fmt.Errorf("spoof_source: %w", err)
+		}
+		sln, err := spoofListen(s.cfg.Listen, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity)
 		if err != nil {
 			return err
 		}
@@ -847,7 +875,11 @@ func (s *Server) Run() error {
 			return err
 		}
 		if sess, ok := c.(*kcp.UDPSession); ok {
-			tuneKCP(sess)
+			if s.cfg.Transport == "spoof" {
+				tuneKCPMtu(sess, 1200)
+			} else {
+				tuneKCP(sess)
+			}
 		}
 		go s.acceptTunnel(c)
 	}
@@ -1266,7 +1298,11 @@ func (c *Client) connect(role string) (*fconn, error) {
 func (c *Client) connectTo(addr, role string) (*fconn, error) {
 	var raw net.Conn
 	if c.cfg.Transport == "udp" {
-		sess, err := kcp.DialWithOptions(addr, nil, 0, 0)
+		block, err := newKCPBlock(c.cfg.Token)
+		if err != nil {
+			return nil, fmt.Errorf("udp crypto: %w", err)
+		}
+		sess, err := kcp.DialWithOptions(addr, block, c.cfg.FECData, c.cfg.FECParity)
 		if err != nil {
 			return nil, err
 		}
@@ -1285,11 +1321,15 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 		if bind == "" {
 			bind = "0.0.0.0:0"
 		}
-		sess, err := spoofDial(bind, net.ParseIP(c.cfg.SpoofSource), peer)
+		srcs, err := parseSpoofSources(c.cfg.SpoofSource)
+		if err != nil {
+			return nil, fmt.Errorf("spoof_source: %w", err)
+		}
+		sess, err := spoofDial(bind, srcs, peer, c.cfg.Token, c.cfg.FECData, c.cfg.FECParity)
 		if err != nil {
 			return nil, err
 		}
-		tuneKCP(sess)
+		tuneKCPMtu(sess, 1200)
 		raw = sess
 	} else {
 		tconn, err := net.DialTimeout("tcp", addr, 15*time.Second)

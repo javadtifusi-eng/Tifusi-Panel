@@ -26,7 +26,9 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	kcp "github.com/xtaci/kcp-go/v5"
@@ -38,11 +40,12 @@ import (
 // always reports the configured peer, so a forged inbound source can never
 // confuse the KCP session above it.
 type spoofPacketConn struct {
-	rx      *net.UDPConn // plain listener: receives packets sent to our real IP
-	sender  *spoofSender // raw socket: sends with a forged source
-	spoofIP net.IP       // forged source IP stamped on every outbound packet
-	peer    *net.UDPAddr // the other side's REAL ip:port (KCP's stable peer)
-	sport   uint16       // UDP source port stamped on outbound packets
+	rx       *net.UDPConn // plain listener: receives packets sent to our real IP
+	sender   *spoofSender // raw socket: sends with a forged source
+	spoofIPs []net.IP     // forged source pool; rotated per packet
+	rr       uint32       // round-robin cursor over spoofIPs
+	peer     *net.UDPAddr // the other side's REAL ip:port (KCP's stable peer)
+	sport    uint16       // UDP source port stamped on outbound packets
 
 	closeOnce sync.Once
 }
@@ -50,7 +53,10 @@ type spoofPacketConn struct {
 // newSpoofPacketConn binds a UDP listener on listenAddr (our real address) and
 // opens the raw sender. spoofIP is the forged source; peer is the other side's
 // real ip:port that outbound packets are aimed at.
-func newSpoofPacketConn(listenAddr string, spoofIP net.IP, peer *net.UDPAddr) (*spoofPacketConn, error) {
+func newSpoofPacketConn(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr) (*spoofPacketConn, error) {
+	if len(spoofIPs) == 0 {
+		return nil, errNoSpoofSources
+	}
 	la, err := net.ResolveUDPAddr("udp4", listenAddr)
 	if err != nil {
 		return nil, fmt.Errorf("spoof: resolve listen %q: %w", listenAddr, err)
@@ -70,12 +76,16 @@ func newSpoofPacketConn(listenAddr string, spoofIP net.IP, peer *net.UDPAddr) (*
 			sport = uint16(a.Port)
 		}
 	}
+	pool := make([]net.IP, len(spoofIPs))
+	for i, ip := range spoofIPs {
+		pool[i] = ip.To4()
+	}
 	return &spoofPacketConn{
-		rx:      rx,
-		sender:  sender,
-		spoofIP: spoofIP.To4(),
-		peer:    peer,
-		sport:   sport,
+		rx:       rx,
+		sender:   sender,
+		spoofIPs: pool,
+		peer:     peer,
+		sport:    sport,
 	}, nil
 }
 
@@ -93,7 +103,14 @@ func (c *spoofPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 // argument is ignored: this conn only ever talks to its one configured peer,
 // which is what KCP hands back after ReadFrom.
 func (c *spoofPacketConn) WriteTo(p []byte, _ net.Addr) (int, error) {
-	if err := c.sender.send(c.spoofIP, c.peer.IP, c.sport, uint16(c.peer.Port), p); err != nil {
+	// Rotate the forged source across the pool so a single address the filter
+	// later drops does not take the whole tunnel down with it.
+	src := c.spoofIPs[0]
+	if len(c.spoofIPs) > 1 {
+		n := atomic.AddUint32(&c.rr, 1)
+		src = c.spoofIPs[int(n)%len(c.spoofIPs)]
+	}
+	if err := c.sender.send(src, c.peer.IP, c.sport, uint16(c.peer.Port), p); err != nil {
 		return 0, err
 	}
 	return len(p), nil
@@ -115,14 +132,21 @@ func (c *spoofPacketConn) SetWriteDeadline(t time.Time) error { return c.rx.SetW
 // spoofListen is the server (Iran) side: it wraps a spoof packet conn in a KCP
 // listener so the rest of the tunnel treats it exactly like the "udp"
 // transport.
-func spoofListen(listenAddr string, spoofIP net.IP, peer *net.UDPAddr) (net.Listener, error) {
-	pc, err := newSpoofPacketConn(listenAddr, spoofIP, peer)
+func spoofListen(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (net.Listener, error) {
+	pc, err := newSpoofPacketConn(listenAddr, spoofIPs, peer)
 	if err != nil {
 		return nil, err
 	}
-	ln, err := kcp.ServeConn(nil, 0, 0, pc)
+	obf, err := newObfPacketConn(pc, token)
 	if err != nil {
 		pc.Close()
+		return nil, err
+	}
+	// AEAD already encrypts and authenticates, so KCP's own crypto slot stays
+	// nil; FEC is still applied for loss resilience under throttling.
+	ln, err := kcp.ServeConn(nil, fecData, fecParity, obf)
+	if err != nil {
+		obf.Close()
 		return nil, err
 	}
 	return ln, nil
@@ -130,15 +154,51 @@ func spoofListen(listenAddr string, spoofIP net.IP, peer *net.UDPAddr) (net.List
 
 // spoofDial is the client (foreign) side: it wraps a spoof packet conn in a
 // single KCP session aimed at the peer.
-func spoofDial(listenAddr string, spoofIP net.IP, peer *net.UDPAddr) (*kcp.UDPSession, error) {
-	pc, err := newSpoofPacketConn(listenAddr, spoofIP, peer)
+func spoofDial(listenAddr string, spoofIPs []net.IP, peer *net.UDPAddr, token string, fecData, fecParity int) (*kcp.UDPSession, error) {
+	pc, err := newSpoofPacketConn(listenAddr, spoofIPs, peer)
 	if err != nil {
 		return nil, err
 	}
-	sess, err := kcp.NewConn2(peer, nil, 0, 0, pc)
+	obf, err := newObfPacketConn(pc, token)
 	if err != nil {
 		pc.Close()
 		return nil, err
 	}
+	sess, err := kcp.NewConn2(peer, nil, fecData, fecParity, obf)
+	if err != nil {
+		obf.Close()
+		return nil, err
+	}
 	return sess, nil
+}
+
+// parseSpoofSources expands "spoof_source" into the forged-source pool. It
+// accepts a comma- or space-separated mix of single IPs, ranges (a-b) and
+// CIDRs, reusing the same expander the spooftest command uses, and caps the
+// pool so a huge CIDR can never balloon memory.
+func parseSpoofSources(spec string) ([]net.IP, error) {
+	const maxPool = 256
+	var out []net.IP
+	seen := map[string]bool{}
+	for _, part := range strings.FieldsFunc(spec, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' }) {
+		ips, err := expandIPs(part)
+		if err != nil {
+			return nil, err
+		}
+		for _, ip := range ips {
+			key := ip.String()
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, ip)
+			if len(out) > maxPool {
+				return nil, fmt.Errorf("spoof source pool exceeds %d addresses", maxPool)
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil, errNoSpoofSources
+	}
+	return out, nil
 }

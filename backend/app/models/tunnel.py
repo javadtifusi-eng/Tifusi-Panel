@@ -73,7 +73,7 @@ class Tunnel(Base):
     # Only meaningful for ws/wss/wsmux/wssmux.
     path: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Only meaningful for the "spoof" transport: the forged source IPv4 both
+    # Only meaningful for the "spoof" transport: the forged source IPv4(s) both
     # sides stamp on their outbound packets so they pass L3 egress filtering
     # during national-internet mode. It must be an address the filter
     # allow-lists — measured first with the spooftest probe. Each side sends
