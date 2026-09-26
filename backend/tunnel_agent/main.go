@@ -479,6 +479,22 @@ func acmeTLSConfig(domain string) *tls.Config {
 // boundaries - required since fconn's framing already does that itself.
 func tuneKCP(sess *kcp.UDPSession) { tuneKCPMtu(sess, 1350) }
 
+// kcpSockBuf is the UDP socket buffer for KCP. The kernel default (~200 KB)
+// overflows within milliseconds at tunnel speeds over a 70 ms+ path, and
+// every overflowed datagram costs a KCP retransmit. The kernel caps it at
+// net.core.rmem_max/wmem_max, which install.sh raises.
+const kcpSockBuf = 8 << 20
+
+type bufferSetter interface {
+	SetReadBuffer(int) error
+	SetWriteBuffer(int) error
+}
+
+func growKCPBuffers(b bufferSetter) {
+	b.SetReadBuffer(kcpSockBuf)
+	b.SetWriteBuffer(kcpSockBuf)
+}
+
 // tuneKCPMtu is tuneKCP with an explicit MTU. The spoof transport uses a
 // smaller one so that after the AEAD wrapper's nonce, tag and random padding
 // the datagram still fits inside a normal 1500-byte path without fragmenting.
@@ -937,6 +953,7 @@ func (s *Server) Run() error {
 		if err != nil {
 			return fmt.Errorf("cannot listen on %s: %w", s.cfg.Listen, err)
 		}
+		growKCPBuffers(kln)
 		ln = kln
 	} else if s.cfg.Transport == "spoof" {
 		peer, err := net.ResolveUDPAddr("udp4", s.cfg.Peer)
@@ -1468,6 +1485,7 @@ func (c *Client) connectCarrier(car Carrier, addr, role string) (*fconn, error) 
 			return nil, err
 		}
 		tuneKCP(sess)
+		growKCPBuffers(sess)
 		raw = sess
 	} else if car.Transport == "spoof" {
 		peerStr := c.cfg.Peer

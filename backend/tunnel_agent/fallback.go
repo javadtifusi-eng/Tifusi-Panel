@@ -98,6 +98,7 @@ func (s *Server) listenCarrier(car Carrier, primary bool) (net.Listener, error) 
 		if err != nil {
 			return nil, fmt.Errorf("cannot listen on %s: %w", car.Listen, err)
 		}
+		growKCPBuffers(kln)
 		return kln, nil
 	}
 	rawLn, err := net.Listen("tcp", car.Listen)
