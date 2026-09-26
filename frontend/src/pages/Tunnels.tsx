@@ -145,6 +145,32 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     if (createSignal > 0) openNew()
   }, [createSignal])
 
+  // Live view: re-test every tunnel in the background so the map and each
+  // card show the current state without pressing the test button.
+  useEffect(() => {
+    let stop = false
+    async function tick() {
+      const res = await listTunnels().catch(() => null)
+      if (stop || !res) return
+      const results = await Promise.all(res.tunnels.map((tu) => testTunnel(tu.id).then((r) => [tu.id, r] as const).catch(() => null)))
+      if (stop) return
+      setTestResults((prev) => {
+        const next = { ...prev }
+        for (const x of results) if (x) next[x[0]] = x[1]
+        return next
+      })
+      await refresh()
+    }
+    tick()
+    const timer = window.setInterval(() => {
+      if (!document.hidden) tick()
+    }, 15000)
+    return () => {
+      stop = true
+      window.clearInterval(timer)
+    }
+  }, [])
+
   function openNew() {
     resetForm()
     setShowForm(true)
@@ -930,21 +956,9 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                         {recommendResult && i === 0 ? '★ ' : ''}
                         {tn.pickName[tr] ?? t.tunnelsPage.transportLabels[tr]}
                       </b>
-                      <small>{tn.pickTag[tr] ?? tn.pickLegacy}</small>
                     </button>
                   ))
                 })()}
-                <button
-                  type="button"
-                  className="tr-card spoof"
-                  onClick={() => {
-                    setShowForm(false)
-                    openSpoof()
-                  }}
-                >
-                  <b>IP Spoofing</b>
-                  <small>{tn.pickSpoof}</small>
-                </button>
               </div>
             </div>
 
@@ -1038,12 +1052,16 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
 
             {transport === 'spoof' && (
               <div className="form-section">
-                <h4 style={{ margin: 0 }}>{t.tunnelsPage.spoofCarrierLabel}</h4>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 style={{ margin: 0 }}>{t.tunnelsPage.spoofCarrierLabel}</h4>
+                  <button type="button" className="btn" onClick={openSpoof}>
+                    {tn.spoofTestBtn}
+                  </button>
+                </div>
                 <div className="tr-pick carrier-pick">
                   {(['auto', 'udp', 'icmp', 'tcp'] as SpoofCarrier[]).map((c) => (
                     <button key={c} type="button" onClick={() => setSpoofCarrier(c)} aria-pressed={spoofCarrier === c} className="tr-card">
                       <b className="en">{c === 'auto' ? t.tunnelsPage.spoofCarrierAuto : c.toUpperCase()}</b>
-                      <small>{t.tunnelsPage.spoofCarrierTags[c]}</small>
                     </button>
                   ))}
                 </div>
