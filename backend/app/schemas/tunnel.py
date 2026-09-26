@@ -31,6 +31,7 @@ class TunnelCreate(BaseModel):
     spoof_source: str | None = Field(default=None, max_length=64)
     spoof_carrier: SpoofCarrier | None = None
     spoof_stealth: bool | None = None
+    hamrang_quic: bool | None = None
     connection_count: int = Field(default=8, ge=1, le=256)
     forwards: list[TunnelForward] = []
     cdn_provider: CdnProvider | None = None
@@ -54,6 +55,7 @@ class TunnelUpdate(BaseModel):
     spoof_source: str | None = Field(default=None, max_length=64)
     spoof_carrier: SpoofCarrier | None = None
     spoof_stealth: bool | None = None
+    hamrang_quic: bool | None = None
     connection_count: int | None = Field(default=None, ge=1, le=256)
     forwards: list[TunnelForward] | None = None
     cdn_provider: CdnProvider | None = None
@@ -81,6 +83,7 @@ class TunnelResponse(BaseModel):
     spoof_source: str | None = None
     spoof_carrier: str | None = None
     spoof_stealth: bool | None = None
+    hamrang_quic: bool | None = None
     connection_count: int
     forwards: list[TunnelForward]
     cdn_provider: str | None = None
@@ -143,21 +146,77 @@ class TunnelRecommendRequest(BaseModel):
     foreign_port: int | None = Field(default=None, ge=1, le=65535)
 
 
+SpoofTestDirection = Literal["iran_to_foreign", "foreign_to_iran"]
+
+
 class SpoofTestRequest(BaseModel):
     foreign_node_id: int | None = None
     foreign_address: str | None = Field(default=None, max_length=255)
+    # Required only for the foreign_to_iran direction, where the Iran server is
+    # the receiver the foreign side aims its forged packets at.
+    iran_address: str | None = Field(default=None, max_length=255)
     port: int = Field(default=443, ge=1, le=65535)
     spoof_ip: str = Field(min_length=1, max_length=64)
+    # Which egress to measure. iran_to_foreign checks whether the Iran
+    # datacenter lets a forged source out (the usual precondition);
+    # foreign_to_iran checks the same for the foreign datacenter, since the
+    # tunnel forges a source in BOTH directions.
+    direction: SpoofTestDirection = "iran_to_foreign"
 
 
 class SpoofTestCommands(BaseModel):
-    """The two ready-to-run commands for a spoof-ability check: paste
-    `foreign_recv_command` on the foreign server first, then
-    `iran_send_command` on the Iran server within its listen window. The
-    foreign server's output says which forged sources actually arrived."""
+    """Two ready-to-run commands for a spoof-ability check. Run
+    `recv_command` on the `recv_on` server first, then `send_command` on the
+    `send_on` server within its listen window; the receiver's output says
+    which forged sources actually arrived. recv_on/send_on are "iran" or
+    "foreign" so the UI can label which box each command belongs on."""
 
-    foreign_recv_command: str
-    iran_send_command: str
+    recv_command: str
+    send_command: str
+    recv_on: str
+    send_on: str
+
+
+class DiscoverSourcesRequest(BaseModel):
+    """Ask for the commands that sweep every curated domestic candidate at
+    once, to learn which forged sources actually egress a datacenter. Like
+    SpoofTestRequest but with no spoof_ip — the candidate list is built
+    server-side from a vetted set, so the admin need not know any IP."""
+
+    foreign_node_id: int | None = None
+    foreign_address: str | None = Field(default=None, max_length=255)
+    iran_address: str | None = Field(default=None, max_length=255)
+    port: int = Field(default=443, ge=1, le=65535)
+    direction: SpoofTestDirection = "iran_to_foreign"
+
+
+class DiscoverCandidate(BaseModel):
+    ip: str
+    # The network the IP represents, or None when it arrived but is not one of
+    # the curated candidates (e.g. a NAT rewrote the source).
+    label: str | None = None
+
+
+class DiscoverCommands(SpoofTestCommands):
+    """The spoof-test commands, but sweeping the whole candidate set, plus the
+    candidate list the UI shows so the admin sees what is being probed."""
+
+    candidates: list[DiscoverCandidate]
+    seconds: int
+
+
+class ParseDiscoveryRequest(BaseModel):
+    # The raw text the admin pastes back from the receiver command.
+    output: str = Field(min_length=1, max_length=65536)
+
+
+class DiscoveryResult(BaseModel):
+    """Which forged sources made it through, labelled where known, plus a
+    ready-to-paste comma list for the tunnel's spoof_source pool (idea #3:
+    the tunnel rotates packets across every source in that pool)."""
+
+    sources: list[DiscoverCandidate]
+    spoof_source: str
 
 
 class TunnelRecommendResult(BaseModel):

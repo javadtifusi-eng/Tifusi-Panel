@@ -11,10 +11,15 @@ import {
   listTunnels,
   recommendTunnelTransport,
   spoofTestCommands,
+  discoverSourcesCommands,
+  parseDiscoveredSources,
   testTunnel,
   updateTunnel,
   type Node,
   type SpoofTestCommands,
+  type SpoofTestDirection,
+  type DiscoverCommands,
+  type DiscoveryResult,
   type Tunnel,
   type TunnelConfig,
   type TunnelForward,
@@ -85,11 +90,18 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [spoofSource, setSpoofSource] = useState<ForeignSource>('node')
   const [spoofNodeId, setSpoofNodeId] = useState<number | null>(null)
   const [spoofForeign, setSpoofForeign] = useState('')
+  const [spoofIran, setSpoofIran] = useState('')
+  const [spoofDirection, setSpoofDirection] = useState<SpoofTestDirection>('iran_to_foreign')
   const [spoofPort, setSpoofPort] = useState('443')
   const [spoofIp, setSpoofIp] = useState('')
   const [spoofBusy, setSpoofBusy] = useState(false)
   const [spoofError, setSpoofError] = useState<string | null>(null)
   const [spoofCmds, setSpoofCmds] = useState<SpoofTestCommands | null>(null)
+  const [spoofMode, setSpoofMode] = useState<'manual' | 'discover'>('manual')
+  const [discCmds, setDiscCmds] = useState<DiscoverCommands | null>(null)
+  const [discOutput, setDiscOutput] = useState('')
+  const [discResult, setDiscResult] = useState<DiscoveryResult | null>(null)
+  const [discBusy, setDiscBusy] = useState(false)
 
   const [name, setName] = useState('')
   const [iranAddress, setIranAddress] = useState('')
@@ -105,6 +117,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [spoofSourceIp, setSpoofSourceIp] = useState('')
   const [spoofCarrier, setSpoofCarrier] = useState<SpoofCarrier>('auto')
   const [spoofStealth, setSpoofStealth] = useState(true)
+  const [hamrangQuic, setHamrangQuic] = useState(false)
   const [connectionCount, setConnectionCount] = useState('8')
   const [forwards, setForwards] = useState<TunnelForward[]>([])
   const [tunerFor, setTunerFor] = useState<Tunnel | null>(null)
@@ -156,6 +169,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofSourceIp('')
     setSpoofCarrier('auto')
     setSpoofStealth(true)
+    setHamrangQuic(false)
     setConnectionCount('8')
     setForwards([])
     setUseCdn(false)
@@ -183,6 +197,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofSourceIp(tunnel.spoof_source ?? '')
     setSpoofCarrier((tunnel.spoof_carrier as SpoofCarrier) || 'auto')
     setSpoofStealth(tunnel.spoof_stealth ?? true)
+    setHamrangQuic(tunnel.hamrang_quic ?? false)
     setConnectionCount(String(tunnel.connection_count))
     setForwards(tunnel.forwards)
     setUseCdn(!!tunnel.cdn_host)
@@ -211,6 +226,10 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       setFormError(t.tunnelsPage.spoofSourceRequired)
       return
     }
+    if (transport === 'hamrang' && !sni.trim()) {
+      setFormError(tn.hamrangSniRequired)
+      return
+    }
     setSubmitting(true)
     setFormError(null)
     try {
@@ -228,6 +247,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         spoof_source: transport === 'spoof' ? spoofSourceIp.trim() || null : null,
         spoof_carrier: transport === 'spoof' ? spoofCarrier : null,
         spoof_stealth: transport === 'spoof' ? spoofStealth : null,
+        hamrang_quic: transport === 'hamrang' ? hamrangQuic : null,
         connection_count: parseInt(connectionCount, 10) || 8,
         forwards,
         cdn_provider: useCdn ? cdnProvider : null,
@@ -354,8 +374,14 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofForeign('')
     setSpoofPort('443')
     setSpoofIp('')
+    setSpoofIran('')
+    setSpoofDirection('iran_to_foreign')
     setSpoofCmds(null)
     setSpoofError(null)
+    setSpoofMode('manual')
+    setDiscCmds(null)
+    setDiscOutput('')
+    setDiscResult(null)
     setShowSpoof(true)
   }
 
@@ -365,14 +391,20 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       setSpoofError(tn.spoofNeedInputs)
       return
     }
+    if (spoofDirection === 'foreign_to_iran' && !spoofIran.trim()) {
+      setSpoofError(tn.spoofNeedIran)
+      return
+    }
     setSpoofBusy(true)
     setSpoofError(null)
     try {
       const cmds = await spoofTestCommands({
         foreign_node_id: spoofSource === 'node' ? spoofNodeId : null,
         foreign_address: spoofSource === 'address' ? spoofForeign : null,
+        iran_address: spoofDirection === 'foreign_to_iran' ? spoofIran.trim() : null,
         port: parseInt(spoofPort, 10) || 443,
         spoof_ip: spoofIp,
+        direction: spoofDirection,
       })
       setSpoofCmds(cmds)
     } catch (err) {
@@ -380,6 +412,59 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     } finally {
       setSpoofBusy(false)
     }
+  }
+
+  async function handleDiscoverGenerate() {
+    if (spoofSource === 'node' ? spoofNodeId == null : !spoofForeign) {
+      setSpoofError(tn.spoofNeedInputs)
+      return
+    }
+    if (spoofDirection === 'foreign_to_iran' && !spoofIran.trim()) {
+      setSpoofError(tn.spoofNeedIran)
+      return
+    }
+    setDiscBusy(true)
+    setSpoofError(null)
+    setDiscResult(null)
+    try {
+      const cmds = await discoverSourcesCommands({
+        foreign_node_id: spoofSource === 'node' ? spoofNodeId : null,
+        foreign_address: spoofSource === 'address' ? spoofForeign : null,
+        iran_address: spoofDirection === 'foreign_to_iran' ? spoofIran.trim() : null,
+        port: parseInt(spoofPort, 10) || 443,
+        direction: spoofDirection,
+      })
+      setDiscCmds(cmds)
+    } catch (err) {
+      setSpoofError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setDiscBusy(false)
+    }
+  }
+
+  async function handleParseDiscovery() {
+    if (!discOutput.trim()) return
+    setDiscBusy(true)
+    setSpoofError(null)
+    try {
+      const res = await parseDiscoveredSources(discOutput)
+      setDiscResult(res)
+    } catch (err) {
+      setSpoofError(err instanceof ApiError ? err.message : t.common.genericError)
+    } finally {
+      setDiscBusy(false)
+    }
+  }
+
+  function useDiscoveredPool(pool: string) {
+    setTransport('spoof')
+    setSpoofSourceIp(pool)
+    setSpoofCarrier('auto')
+    setSpoofStealth(true)
+    setHamrangQuic(false)
+    setShowSpoof(false)
+    setShowForm(true)
+    say(tn.spoofDiscUsed)
   }
 
   function updateForward(idx: number, patch: Partial<TunnelForward>) {
@@ -867,6 +952,15 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   <b>IP Spoofing</b>
                   <small>{tn.pickSpoof}</small>
                 </button>
+                <button
+                  type="button"
+                  className="tr-card hamrang"
+                  aria-pressed={transport === 'hamrang'}
+                  onClick={() => setTransport('hamrang')}
+                >
+                  <b>Hamrang</b>
+                  <small>{tn.pickHamrang}</small>
+                </button>
               </div>
             </div>
 
@@ -938,23 +1032,34 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
             </div>
             )}
 
-            {!useCdn && transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
+            {!useCdn && transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux' || transport === 'hamrang') && (
               <div className="form-grid">
-                {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
-                  <>
-                    <Field label={t.tunnelsPage.sniLabel}>
-                      <input className="input ltr" value={sni} onChange={(e) => setSni(e.target.value)} placeholder="www.bing.com" />
-                    </Field>
-                    <Field label={t.tunnelsPage.domainLabel}>
-                      <input className="input ltr" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="vpn.example.com" />
-                    </Field>
-                  </>
+                {(transport === 'tls' || transport === 'wss' || transport === 'wssmux' || transport === 'hamrang') && (
+                  <Field label={transport === 'hamrang' ? tn.hamrangSniLabel : t.tunnelsPage.sniLabel} wide={transport === 'hamrang'}>
+                    <input className="input ltr" value={sni} onChange={(e) => setSni(e.target.value)} placeholder={transport === 'hamrang' ? 'www.digikala.com' : 'www.bing.com'} required={transport === 'hamrang'} />
+                    {transport === 'hamrang' && <small className="muted">{tn.hamrangSniHint}</small>}
+                  </Field>
                 )}
-                {(transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
+                {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
+                  <Field label={t.tunnelsPage.domainLabel}>
+                    <input className="input ltr" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="vpn.example.com" />
+                  </Field>
+                )}
+                {(transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux' || transport === 'hamrang') && (
                   <Field label={t.tunnelsPage.pathLabel}>
                     <input className="input ltr" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/tunnel" />
                   </Field>
                 )}
+              </div>
+            )}
+
+            {transport === 'hamrang' && (
+              <div className="form-section">
+                <label className="sh-check">
+                  <input id="tunnel-hamrang-quic" type="checkbox" checked={hamrangQuic} onChange={(e) => setHamrangQuic(e.target.checked)} />
+                  <b>{tn.hamrangQuicToggle}</b>
+                </label>
+                <small className="muted">{tn.hamrangQuicHint}</small>
               </div>
             )}
 
@@ -1053,6 +1158,28 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         >
           <form onSubmit={handleSpoofGenerate} className="flex flex-col gap-3.5">
             <div className="form-section">
+              <h4>{tn.spoofModeLabel}</h4>
+              <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
+                {(['manual', 'discover'] as const).map((m) => (
+                  <button key={m} type="button" aria-pressed={spoofMode === m} onClick={() => { setSpoofMode(m); setSpoofError(null) }}>
+                    {tn.spoofModeNames[m]}
+                  </button>
+                ))}
+              </div>
+              <small className="muted">{tn.spoofModeHint[spoofMode]}</small>
+            </div>
+            <div className="form-section">
+              <h4>{tn.spoofDirectionLabel}</h4>
+              <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
+                {(['iran_to_foreign', 'foreign_to_iran'] as SpoofTestDirection[]).map((d) => (
+                  <button key={d} type="button" aria-pressed={spoofDirection === d} onClick={() => { setSpoofDirection(d); setSpoofCmds(null) }}>
+                    {tn.spoofDirectionNames[d]}
+                  </button>
+                ))}
+              </div>
+              <small className="muted">{tn.spoofDirectionHint[spoofDirection]}</small>
+            </div>
+            <div className="form-section">
               <h4>{t.tunnelsPage.foreignSourceLabel}</h4>
               <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
                 {(['node', 'address'] as ForeignSource[]).map((src) => (
@@ -1080,37 +1207,55 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   <input className="input ltr" value={spoofForeign} onChange={(e) => setSpoofForeign(e.target.value)} placeholder="5.6.7.8" />
                 </Field>
               )}
+              {spoofDirection === 'foreign_to_iran' && (
+                <Field label={tn.spoofIranLabel}>
+                  <input className="input ltr" value={spoofIran} onChange={(e) => setSpoofIran(e.target.value)} placeholder="1.2.3.4" />
+                </Field>
+              )}
               <Field label={tn.spoofPortLabel}>
                 <input className="input" type="number" min="1" max="65535" value={spoofPort} onChange={(e) => setSpoofPort(e.target.value)} />
               </Field>
-              <Field label={tn.spoofIpLabel} wide>
-                <input className="input ltr" value={spoofIp} onChange={(e) => setSpoofIp(e.target.value)} placeholder="1.2.3.4 · 1.2.3.0/24 · 1.2.3.4-1.2.3.9" required />
-              </Field>
+              {spoofMode === 'manual' && (
+                <Field label={tn.spoofIpLabel} wide>
+                  <input className="input ltr" value={spoofIp} onChange={(e) => setSpoofIp(e.target.value)} placeholder="1.2.3.4 · 1.2.3.0/24 · 1.2.3.4-1.2.3.9" required={spoofMode === 'manual'} />
+                </Field>
+              )}
             </div>
-            <div className="hint" style={{ margin: 0 }}>{tn.spoofIpHint}</div>
-            <button type="submit" className="btn primary" disabled={spoofBusy}>
-              {spoofBusy ? t.common.saving : tn.spoofGenerate}
-            </button>
+            {spoofMode === 'manual' ? (
+              <>
+                <div className="hint" style={{ margin: 0 }}>{tn.spoofIpHint}</div>
+                <button type="submit" className="btn primary" disabled={spoofBusy}>
+                  {spoofBusy ? t.common.saving : tn.spoofGenerate}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="hint" style={{ margin: 0 }}>{tn.spoofDiscHint}</div>
+                <button type="button" className="btn primary" disabled={discBusy} onClick={handleDiscoverGenerate}>
+                  {discBusy ? t.common.saving : tn.spoofDiscGenerate}
+                </button>
+              </>
+            )}
             {spoofError && <div className="tf-alert">{spoofError}</div>}
           </form>
 
-          {spoofCmds && (
+          {spoofMode === 'manual' && spoofCmds && (
             <div className="flex flex-col gap-3" style={{ marginTop: 16 }}>
               <ol className="tf-spoof-steps">
                 <li>
-                  <b>{tn.spoofStep1}</b>
+                  <b>{tn.spoofStepRecv(tn.spoofServerNames[spoofCmds.recv_on])}</b>
                   <div className="tf-linkrow">
-                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{spoofCmds.foreign_recv_command}</code>
-                    <button type="button" className="btn solid" onClick={() => copy(spoofCmds.foreign_recv_command)}>
+                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{spoofCmds.recv_command}</code>
+                    <button type="button" className="btn solid" onClick={() => copy(spoofCmds.recv_command)}>
                       <IconCopy size={13} />
                     </button>
                   </div>
                 </li>
                 <li>
-                  <b>{tn.spoofStep2}</b>
+                  <b>{tn.spoofStepSend(tn.spoofServerNames[spoofCmds.send_on])}</b>
                   <div className="tf-linkrow">
-                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{spoofCmds.iran_send_command}</code>
-                    <button type="button" className="btn solid" onClick={() => copy(spoofCmds.iran_send_command)}>
+                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{spoofCmds.send_command}</code>
+                    <button type="button" className="btn solid" onClick={() => copy(spoofCmds.send_command)}>
                       <IconCopy size={13} />
                     </button>
                   </div>
@@ -1120,6 +1265,69 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   <div className="hint" style={{ margin: 0 }}>{tn.spoofStep3Hint}</div>
                 </li>
               </ol>
+            </div>
+          )}
+
+          {spoofMode === 'discover' && discCmds && (
+            <div className="flex flex-col gap-3" style={{ marginTop: 16 }}>
+              <ol className="tf-spoof-steps">
+                <li>
+                  <b>{tn.spoofStepRecv(tn.spoofServerNames[discCmds.recv_on])}</b>
+                  <div className="tf-linkrow">
+                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{discCmds.recv_command}</code>
+                    <button type="button" className="btn solid" onClick={() => copy(discCmds.recv_command)}>
+                      <IconCopy size={13} />
+                    </button>
+                  </div>
+                </li>
+                <li>
+                  <b>{tn.spoofStepSend(tn.spoofServerNames[discCmds.send_on])}</b>
+                  <div className="tf-linkrow">
+                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{discCmds.send_command}</code>
+                    <button type="button" className="btn solid" onClick={() => copy(discCmds.send_command)}>
+                      <IconCopy size={13} />
+                    </button>
+                  </div>
+                  <small className="muted">{tn.spoofDiscSweep(discCmds.candidates.length)}</small>
+                </li>
+                <li>
+                  <b>{tn.spoofDiscPasteLabel}</b>
+                  <textarea
+                    className="input ltr"
+                    rows={4}
+                    value={discOutput}
+                    onChange={(e) => setDiscOutput(e.target.value)}
+                    placeholder={tn.spoofDiscPastePlaceholder}
+                    style={{ fontFamily: 'monospace', fontSize: '.72rem' }}
+                  />
+                  <button type="button" className="btn primary" disabled={discBusy || !discOutput.trim()} onClick={handleParseDiscovery} style={{ marginTop: 8 }}>
+                    {discBusy ? t.common.saving : tn.spoofDiscParse}
+                  </button>
+                </li>
+              </ol>
+
+              {discResult && (
+                <div className="form-section">
+                  <h4 style={{ margin: 0 }}>{tn.spoofDiscFound(discResult.sources.length)}</h4>
+                  <ul className="tf-disc-list">
+                    {discResult.sources.map((sc) => (
+                      <li key={sc.ip}>
+                        <code className="en">{sc.ip}</code>
+                        <span className="muted">{sc.label ?? tn.spoofDiscUnknown}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="tf-linkrow">
+                    <code style={{ flex: 1, fontSize: '.72rem', overflowWrap: 'anywhere' }}>{discResult.spoof_source}</code>
+                    <button type="button" className="btn solid" onClick={() => copy(discResult.spoof_source)}>
+                      <IconCopy size={13} />
+                    </button>
+                  </div>
+                  <button type="button" className="btn primary" onClick={() => useDiscoveredPool(discResult.spoof_source)} style={{ marginTop: 8 }}>
+                    {tn.spoofDiscUse}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </Sheet>

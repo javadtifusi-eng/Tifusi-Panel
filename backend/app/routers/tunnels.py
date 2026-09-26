@@ -17,6 +17,11 @@ from app.schemas.tunnel import (
     CdnEdgeScan,
     CdnFrontScan,
     CdnSpeed,
+    DiscoverCandidate,
+    DiscoverCommands,
+    DiscoverSourcesRequest,
+    DiscoveryResult,
+    ParseDiscoveryRequest,
     SpoofTestCommands,
     SpoofTestRequest,
     TunnelConfig,
@@ -34,6 +39,7 @@ from app.tunnels.config import (
     build_iran_config,
     build_spooftest_commands,
 )
+from app.tunnels import spoof_sources
 from app.tunnels import cdn_scan
 from app.tunnels.probe import cdn_probe, recommend_transports, tcp_probe
 
@@ -163,6 +169,12 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
     _validate_foreign(payload.foreign_node_id, payload.foreign_address)
     foreign_node_id = await _resolve_foreign_node_id(payload.foreign_node_id, db)
 
+    if payload.transport == TunnelTransport.hamrang and not (payload.sni or payload.cdn_host):
+        raise HTTPException(
+            status_code=400,
+            detail="hamrang transport needs an SNI — the domestic host to mimic",
+        )
+
     tunnel = Tunnel(
         name=payload.name,
         iran_address=payload.iran_address,
@@ -177,6 +189,7 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         spoof_source=payload.spoof_source,
         spoof_carrier=payload.spoof_carrier,
         spoof_stealth=payload.spoof_stealth,
+        hamrang_quic=payload.hamrang_quic,
         connection_count=payload.connection_count,
         forwards=[f.model_dump() for f in payload.forwards],
         cdn_provider=payload.cdn_provider,
@@ -325,8 +338,77 @@ async def spooftest_commands(
     _validate_host(foreign_host)
     _validate_spoof_ip(payload.spoof_ip)
 
+    # The receiver is whichever side the forged packets are aimed at; the
+    # sender is the side whose datacenter we are testing for spoof egress.
+    if payload.direction == "foreign_to_iran":
+        if not payload.iran_address:
+            raise HTTPException(status_code=400, detail="iran_address is required for the foreign_to_iran direction")
+        _validate_host(payload.iran_address)
+        recv, send = build_spooftest_commands(payload.iran_address, payload.spoof_ip, payload.port)
+        return SpoofTestCommands(recv_command=recv, send_command=send, recv_on="iran", send_on="foreign")
+
     recv, send = build_spooftest_commands(foreign_host, payload.spoof_ip, payload.port)
-    return SpoofTestCommands(foreign_recv_command=recv, iran_send_command=send)
+    return SpoofTestCommands(recv_command=recv, send_command=send, recv_on="foreign", send_on="iran")
+
+
+@router.post("/discover-sources", response_model=DiscoverCommands)
+async def discover_sources_commands(
+    payload: DiscoverSourcesRequest, db: AsyncSession = Depends(get_db)
+) -> DiscoverCommands:
+    """Build the receiver/sender commands that sweep every curated domestic
+    candidate source at once. The admin runs the receiver on one side and the
+    sender on the other; whichever forged sources arrive are ones this
+    datacenter lets egress and the filter keeps on its allow-list — the pool
+    the tunnel should rotate across. No server is touched here."""
+    _validate_foreign(payload.foreign_node_id, payload.foreign_address)
+
+    if payload.foreign_node_id is not None:
+        node = await db.get(Node, payload.foreign_node_id)
+        if node is None:
+            raise HTTPException(status_code=400, detail="foreign_node_id not found")
+        foreign_host = node.address
+    else:
+        foreign_host = payload.foreign_address
+    _validate_host(foreign_host)
+
+    # The candidate list is built entirely from a server-side vetted set, so it
+    # is safe to place in the command unescaped (no admin input reaches it).
+    spec = spoof_sources.build_discovery_spec()
+    candidates = [
+        DiscoverCandidate(ip=ip, label=name)
+        for name, ip in spoof_sources.CANDIDATE_SOURCES.items()
+    ]
+    seconds = 60
+
+    if payload.direction == "foreign_to_iran":
+        if not payload.iran_address:
+            raise HTTPException(status_code=400, detail="iran_address is required for the foreign_to_iran direction")
+        _validate_host(payload.iran_address)
+        recv, send = build_spooftest_commands(payload.iran_address, spec, payload.port, seconds)
+        recv_on, send_on = "iran", "foreign"
+    else:
+        recv, send = build_spooftest_commands(foreign_host, spec, payload.port, seconds)
+        recv_on, send_on = "foreign", "iran"
+
+    return DiscoverCommands(
+        recv_command=recv, send_command=send, recv_on=recv_on, send_on=send_on,
+        candidates=candidates, seconds=seconds,
+    )
+
+
+@router.post("/discover-sources/parse", response_model=DiscoveryResult)
+async def parse_discovered_sources(payload: ParseDiscoveryRequest) -> DiscoveryResult:
+    """Turn the receiver command's pasted output into the list of forged
+    sources that arrived, labelled where they match a known candidate, plus a
+    ready-to-paste comma string for the tunnel's spoof_source pool."""
+    arrived = spoof_sources.parse_arrived_sources(payload.output)
+    if not arrived:
+        raise HTTPException(
+            status_code=400,
+            detail="No arrived sources found in that output — the datacenter may be dropping spoofed sources (BCP38), or the text was not the receiver's output.",
+        )
+    sources = [DiscoverCandidate(ip=ip, label=spoof_sources.label_for(ip)) for ip in arrived]
+    return DiscoveryResult(sources=sources, spoof_source=",".join(arrived))
 
 
 @router.post("/{tunnel_id}/test", response_model=TunnelTestResult)

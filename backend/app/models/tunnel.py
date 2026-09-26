@@ -20,6 +20,7 @@ class TunnelTransport(str, enum.Enum):
     wssmux = "wssmux"
     udp = "udp"
     spoof = "spoof"
+    hamrang = "hamrang"
 
 
 class TunnelStatus(str, enum.Enum):
@@ -97,6 +98,10 @@ class Tunnel(Base):
     # plain behaviour. The config builder derives the per-side peer-source pin
     # from spoof_source, so no separate column is needed.
     spoof_stealth: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Only meaningful for the "hamrang" transport: carry the camouflaged link
+    # on QUIC (UDP, HTTP/3-shaped) instead of TLS+WebSocket over TCP. NULL/false
+    # keeps the default TCP carrier.
+    hamrang_quic: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Set when the foreign side reaches the relay through a CDN. The foreign
     # side then dials cdn_host:cdn_port instead of iran_address, which stays

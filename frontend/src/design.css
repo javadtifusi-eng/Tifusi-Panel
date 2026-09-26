@@ -1488,3 +1488,10 @@ select.input { padding-block: 7px; }
 .bkd-auto small { display: block; color: var(--muted); font-size: 0.72rem; }
 .btn.bad-solid { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
 .btn.bad-solid:hover:not(:disabled) { color: #fff; filter: brightness(1.08); border-color: var(--bad); }
+
+/* Auto-discovery: the list of forged sources that arrived, with their network label. */
+.tf-disc-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tf-disc-list > li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: .8rem; }
+.tf-disc-list > li > .muted { font-size: .72rem; text-align: end; }
+
+.tr-card.hamrang { border-style: dashed; }

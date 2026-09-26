@@ -675,7 +675,7 @@ export async function deleteNode(id: number): Promise<void> {
   await authorizedFetch(`/nodes/${id}`, { method: 'DELETE' })
 }
 
-export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp' | 'spoof'
+export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp' | 'spoof' | 'hamrang'
 export type TunnelStatus = 'pending' | 'connected' | 'error'
 export type CdnProvider = 'arvan' | 'cloudflare'
 /** L4 protocol the spoof transport's forged packets ride on. */
@@ -704,6 +704,7 @@ export interface Tunnel {
   spoof_source: string | null
   spoof_carrier: SpoofCarrier | null
   spoof_stealth: boolean | null
+  hamrang_quic: boolean | null
   connection_count: number
   forwards: TunnelForward[]
   cdn_provider: CdnProvider | null
@@ -769,6 +770,7 @@ export type TunnelPayload = {
   spoof_source?: string | null
   spoof_carrier?: SpoofCarrier | null
   spoof_stealth?: boolean | null
+  hamrang_quic?: boolean | null
   connection_count?: number
   forwards?: TunnelForward[]
   cdn_provider?: CdnProvider | null
@@ -878,16 +880,56 @@ export async function cdnSpeedTest(id: number): Promise<CdnSpeed> {
   return res.json()
 }
 
+export type SpoofTestDirection = 'iran_to_foreign' | 'foreign_to_iran'
+
 export interface SpoofTestCommands {
-  foreign_recv_command: string
-  iran_send_command: string
+  recv_command: string
+  send_command: string
+  recv_on: 'iran' | 'foreign'
+  send_on: 'iran' | 'foreign'
+}
+
+export interface DiscoverCandidate {
+  ip: string
+  label: string | null
+}
+
+export interface DiscoverCommands extends SpoofTestCommands {
+  candidates: DiscoverCandidate[]
+  seconds: number
+}
+
+export interface DiscoveryResult {
+  sources: DiscoverCandidate[]
+  spoof_source: string
+}
+
+export async function discoverSourcesCommands(payload: {
+  foreign_node_id?: number | null
+  foreign_address?: string | null
+  iran_address?: string | null
+  port: number
+  direction?: SpoofTestDirection
+}): Promise<DiscoverCommands> {
+  const res = await authorizedFetch('/tunnels/discover-sources', { method: 'POST', body: JSON.stringify(payload) })
+  return res.json()
+}
+
+export async function parseDiscoveredSources(output: string): Promise<DiscoveryResult> {
+  const res = await authorizedFetch('/tunnels/discover-sources/parse', {
+    method: 'POST',
+    body: JSON.stringify({ output }),
+  })
+  return res.json()
 }
 
 export async function spoofTestCommands(payload: {
   foreign_node_id?: number | null
   foreign_address?: string | null
+  iran_address?: string | null
   port: number
   spoof_ip: string
+  direction?: SpoofTestDirection
 }): Promise<SpoofTestCommands> {
   const res = await authorizedFetch('/tunnels/spooftest', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
