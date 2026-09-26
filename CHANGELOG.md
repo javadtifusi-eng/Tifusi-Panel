@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Tunnel engine
+- **Link test between the two servers.** `tifusi-tunnel linktest serve` on one server and `linktest run` on the other measure the tunnel's own path: UDP loss, round-trip time and jitter, and TCP handshake success and time, then suggest a transport (`tcpmux` on a clean path, `udp` with FEC when UDP is lossy or jittery or TCP fails).
 - **Real client IP through a tunnel (PROXY protocol v2).** A TCP forward can pass the user's real address to the foreign service with a PROXY v2 header, so the Xray device limit, which tells devices apart by address, no longer sees every user behind the relay as one device. Tick **Real IP (PROXY)** on the forward and set `acceptProxyProtocol` on the Xray inbound it reaches.
 - **ICMPv6 spoof carrier.** The spoof tunnel can carry its packets as ICMPv6 Echo Replies inside IPv4 (protocol 58). A firewall that shuts IPv6 down often leaves ICMPv6 alone, and a rule written for ICMP doesn't match it.
 - **A separate carrier per direction.** A spoof tunnel can send one way on one carrier and back on another — say TCP from Iran and ICMPv6 back — since a filter often treats the two directions differently. The tunnel form has a **Return carrier** next to the carrier, and the panel sets each side as the mirror of the other.

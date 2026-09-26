@@ -1870,6 +1870,10 @@ func main() {
 		runSpoofTest(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "linktest" {
+		runLinkTest(os.Args[2:])
+		return
+	}
 
 	cfgPath := flag.String("config", "/etc/tifusi/config.json", "path to the configuration file")
 	showVersion := flag.Bool("version", false, "print version and exit")

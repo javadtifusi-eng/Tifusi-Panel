@@ -66,6 +66,10 @@ With the CDN option ticked the form also raises the connection count from 8 to 1
 
 Before the tunnel exists, **Recommend best transport** probes both servers and reports reachability and latency to each, then ranks the transports. The ranking reflects what can honestly be measured from outside the restricted network; it cannot predict how a particular filter will treat each transport, so test the chosen one after installation.
 
+### Link test
+
+**Recommend best transport** probes each server from outside. To measure the path the tunnel itself will use, run the link test between the two servers: `tifusi-tunnel linktest serve --port 8443` on the Iran server, then `tifusi-tunnel linktest run --to <iran-ip> --port 8443` on the foreign one. It sends timestamped UDP probes and times TCP handshakes, then prints UDP loss, round-trip time (min/avg/p95/max) and jitter, how many TCP handshakes succeeded, and a suggested transport: `tcpmux` on a clean path, `udp` (KCP with FEC) when UDP loss or jitter is high or TCP handshakes fail. Use a port that is open on the Iran server and not already in use.
+
 ## Installing and testing
 
 1. Open the tunnel and copy the install command for each side.
