@@ -85,7 +85,7 @@ func newMuxSession(f *fconn) *muxSession {
 		f:           f,
 		streams:     make(map[uint32]*muxStream),
 		pending:     make(map[uint32]chan error),
-		readTimeout: 60 * time.Second,
+		readTimeout: 35 * time.Second, // two missed 15s heartbeats
 	}
 }
 

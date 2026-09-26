@@ -196,7 +196,7 @@ def _apply_health(node: Node, health: dict) -> None:
         node.last_error = f"{' and '.join(broken)} reported not running"
 
 
-async def sync_node(node: Node, db: AsyncSession) -> dict:
+async def sync_node(node: Node, db: AsyncSession, only: set[str] | None = None) -> dict:
     """Pushes the current config to one node and records what happened on
     it. Shared by the admin-triggered /sync endpoint and the periodic
     traffic job (app/traffic/sync.py), which re-syncs every connected node
@@ -235,15 +235,18 @@ async def sync_node(node: Node, db: AsyncSession) -> dict:
         # API key and every pushed user secret/PSK against passive
         # sniffing, which plain HTTP never did.
         async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
-            resp = await client.post(f"{base_url}/config", json=xray_payload, headers=headers)
-            resp.raise_for_status()
-            if ipsec_payload is not None:
+            # only: push just these services (each endpoint restarts only its
+            # own), so reviving one that died doesn't cut off the others.
+            if only is None or "xray" in only:
+                resp = await client.post(f"{base_url}/config", json=xray_payload, headers=headers)
+                resp.raise_for_status()
+            if ipsec_payload is not None and (only is None or "ipsec" in only):
                 ipsec_resp = await client.post(f"{base_url}/ipsec-config", json=ipsec_payload, headers=headers)
                 ipsec_resp.raise_for_status()
-            if hysteria_payload is not None:
+            if hysteria_payload is not None and (only is None or "hysteria" in only):
                 hy_resp = await client.post(f"{base_url}/hysteria-config", json=hysteria_payload, headers=headers)
                 hy_resp.raise_for_status()
-            if wireguard_payload is not None:
+            if wireguard_payload is not None and (only is None or "wireguard" in only):
                 wg_resp = await client.post(f"{base_url}/wireguard-config", json=wireguard_payload, headers=headers)
                 wg_resp.raise_for_status()
             health_resp = await client.get(f"{base_url}/health", headers=headers)
@@ -340,24 +343,24 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
         return
 
     _apply_health(node, health)
-    # Reachable, but nothing it's assigned is running: an agent that came back
-    # empty (a recreated container keeps no config), which otherwise stayed down
-    # until someone clicked sync. Only when *everything* is down — a push
-    # restarts every service, so doing it while one is still serving would cut
-    # that one off on every health check.
-    assigned = [
-        (health.get(key) or {}).get("running", False)
+    # Reachable, but something it's assigned isn't running: an agent that came
+    # back empty (a recreated container keeps no config), or one service that
+    # didn't come back with the rest. Push just the services that are down;
+    # each endpoint restarts only its own service, so the ones still serving
+    # are left alone.
+    down = {
+        key
         for key, slot in (
             ("xray", node.core_id),
             ("ipsec", node.ipsec_core_id),
             ("hysteria", node.hysteria_core_id),
             ("wireguard", node.wireguard_core_id),
         )
-        if slot is not None
-    ]
-    if assigned and not any(assigned):
+        if slot is not None and not (health.get(key) or {}).get("running", False)
+    }
+    if down:
         try:
-            await sync_node(node, db)
+            await sync_node(node, db, only=down)
         except Exception:
             pass
     await db.commit()

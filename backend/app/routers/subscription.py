@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.cores.deployed import live_hosts
 from app.groups.access import hosts_for_user
 from app.links.generator import (
     build_ipsec_configs_for_user,
@@ -15,7 +16,7 @@ from app.links.generator import (
     build_subscription_content,
     build_wireguard_conf,
 )
-from app.models.host import Host, HostProtocol
+from app.models.host import HostProtocol
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
@@ -150,7 +151,7 @@ async def _moved_to_subscription_host(request: Request, db: AsyncSession) -> Red
 
 
 async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession) -> str:
-    hosts = list((await db.execute(select(Host))).scalars().all())
+    hosts = await live_hosts(db)
     allowed_hosts = hosts_for_user(user, hosts)
     # The customer-facing base, which can be a different domain from the one the
     # admin reaches the panel on — see PanelSetting.subscription_url.
@@ -195,7 +196,7 @@ async def get_subscription(
     await _enforce_device_limit(user, hwid, db)
     await _activate_if_on_hold(user, db)
 
-    hosts = list((await db.execute(select(Host))).scalars().all())
+    hosts = await live_hosts(db)
     allowed_hosts = hosts_for_user(user, hosts)
 
     # A real browser opening this URL by hand sends `Accept: text/html,...`
@@ -258,7 +259,7 @@ async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> 
     remote-ID/username/password into Settings > VPN by hand."""
     user = await user_or_404(secret, db)
 
-    hosts = list((await db.execute(select(Host))).scalars().all())
+    hosts = await live_hosts(db)
     allowed_hosts = hosts_for_user(user, hosts)
     host = next((h for h in allowed_hosts if h.protocol == HostProtocol.ikev2), None)
     if host is None:
@@ -276,7 +277,7 @@ async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> 
 async def get_wireguard_conf(secret: str, db: AsyncSession = Depends(get_db)) -> Response:
     """The user's WireGuard tunnel as a file for the official WireGuard apps."""
     user = await user_or_404(secret, db)
-    hosts = list((await db.execute(select(Host))).scalars().all())
+    hosts = await live_hosts(db)
     host = next((h for h in hosts_for_user(user, hosts) if h.protocol == HostProtocol.wireguard), None)
     content = build_wireguard_conf(user, host) if host is not None else None
     if content is None:
@@ -296,7 +297,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     await _enforce_device_limit(user, hwid, db)
     await _activate_if_on_hold(user, db)
 
-    hosts = list((await db.execute(select(Host))).scalars().all())
+    hosts = await live_hosts(db)
     allowed_hosts = hosts_for_user(user, hosts)
     # The customer-facing base, which can be a different domain from the one the
     # admin reaches the panel on — see PanelSetting.subscription_url.

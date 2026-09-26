@@ -7,11 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_permission
+from app.cores.deployed import live_hosts
 from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_ipsec_configs_for_user, build_links_for_user
 from app.models.admin import Admin
 from app.models.app_report import AppReport
-from app.models.host import Host
 from app.models.user import ProxyUser, UserStatus
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
@@ -409,7 +409,7 @@ async def get_user_links(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     user = await _get_user_or_404(user_id, admin, db)
-    hosts = list((await db.execute(select(Host))).scalars().all())
+    hosts = await live_hosts(db)
     allowed_hosts = hosts_for_user(user, hosts)
     # The customer-facing base, which can be a different domain from the one the
     # admin reaches the panel on — see PanelSetting.subscription_url.

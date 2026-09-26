@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cores.deployed import ensure_core_hosts
 from app.cores.resolve import (
     resolve_hysteria_core_id,
     resolve_ipsec_core_id,
     resolve_wireguard_core_id,
     resolve_xray_core_id,
 )
-from app.database import get_db
+from app.database import async_session, get_db
 from app.dependencies import require_permission
 from app.models.node import Node
 from app.models.tunnel import Tunnel
@@ -26,7 +27,9 @@ async def list_nodes(db: AsyncSession = Depends(get_db)) -> NodeList:
 
 
 @router.post("", response_model=NodeResponse, status_code=201)
-async def create_node(payload: NodeCreate, db: AsyncSession = Depends(get_db)) -> Node:
+async def create_node(
+    payload: NodeCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)
+) -> Node:
     node = Node(
         name=payload.name,
         address=payload.address,
@@ -38,9 +41,25 @@ async def create_node(payload: NodeCreate, db: AsyncSession = Depends(get_db)) -
     node.hysteria_core_id = await resolve_hysteria_core_id(payload.hysteria_core_id, db)
     node.wireguard_core_id = await resolve_wireguard_core_id(payload.wireguard_core_id, db)
     db.add(node)
+    await db.flush()
+    await ensure_core_hosts(node, db)
     await db.commit()
     await db.refresh(node)
+    background_tasks.add_task(_sync_in_background, node.id)
     return node
+
+
+async def _sync_in_background(node_id: int) -> None:
+    """Pushes a node's new core assignment right away instead of leaving the
+    old services running until someone clicks sync. Own session: the
+    request's is closed by the time background tasks run."""
+    async with async_session() as db:
+        node = await db.get(Node, node_id)
+        if node is not None:
+            try:
+                await sync_node(node, db)
+            except Exception:
+                pass
 
 
 async def _get_node_or_404(node_id: int, db: AsyncSession) -> Node:
@@ -56,7 +75,9 @@ async def get_node(node_id: int, db: AsyncSession = Depends(get_db)) -> Node:
 
 
 @router.put("/{node_id}", response_model=NodeResponse)
-async def update_node(node_id: int, payload: NodeUpdate, db: AsyncSession = Depends(get_db)) -> Node:
+async def update_node(
+    node_id: int, payload: NodeUpdate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)
+) -> Node:
     node = await _get_node_or_404(node_id, db)
 
     for field, value in payload.model_dump(
@@ -73,9 +94,13 @@ async def update_node(node_id: int, payload: NodeUpdate, db: AsyncSession = Depe
     if "wireguard_core_id" in payload.model_fields_set:
         node.wireguard_core_id = await resolve_wireguard_core_id(payload.wireguard_core_id, db)
 
+    slots = {"core_id", "ipsec_core_id", "hysteria_core_id", "wireguard_core_id"}
     db.add(node)
+    await ensure_core_hosts(node, db)
     await db.commit()
     await db.refresh(node)
+    if slots & payload.model_fields_set:
+        background_tasks.add_task(_sync_in_background, node.id)
     return node
 
 

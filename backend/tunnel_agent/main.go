@@ -1580,7 +1580,10 @@ func (c *Client) controlLoop() {
 		statusLinkUp()
 		backoff = time.Second
 		for {
-			f.SetReadDeadline(time.Now().Add(60 * time.Second))
+			// The server pings every ~15s. A udp/spoof link gets no RST when
+			// the server restarts, so this deadline is how long a restart on
+			// the Iran side leaves the tunnel down: two missed pings.
+			f.SetReadDeadline(time.Now().Add(35 * time.Second))
 			t, _, err := f.recv()
 			if err != nil {
 				break
@@ -1625,7 +1628,9 @@ func (c *Client) dataWorker() {
 // serveIdle returns true when the connection was claimed for a real session.
 func (c *Client) serveIdle(f *fconn) bool {
 	for {
-		f.SetReadDeadline(time.Now().Add(90 * time.Second))
+		// Pinged every ~20s by the server; two missed pings means it's gone
+		// (e.g. restarted, which a udp link never hears about).
+		f.SetReadDeadline(time.Now().Add(50 * time.Second))
 		t, p, err := f.recv()
 		if err != nil {
 			return false
