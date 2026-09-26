@@ -286,6 +286,18 @@ async def update_user(
     for field, value in updates.items():
         setattr(user, field, value)
 
+    # A user cut off for running out of traffic is never deleted; they stay
+    # disconnected until the admin gives them room again. Raising or removing
+    # data_limit is then enough to bring them back — no separate "activate"
+    # step. An explicit status change in the same request (e.g. disabling)
+    # still wins.
+    if (
+        user.status == UserStatus.limited
+        and updates.get("status", UserStatus.limited) == UserStatus.limited
+        and (not user.data_limit or user.used_traffic < user.data_limit)
+    ):
+        user.status = UserStatus.active
+
     new_groups = await resolve_groups(payload.group_ids, db)
     if new_groups is not None:
         user.groups = new_groups
