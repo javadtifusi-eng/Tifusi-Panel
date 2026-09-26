@@ -311,7 +311,7 @@ def build_ipsec_configs_for_user(
             "certificate": host.core.ikev2_certificate if host.core else None,
             # Tap-to-install iOS/macOS profile (Connect On Demand included) —
             # an alternative to typing the fields above into Settings > VPN.
-            "mobileconfig_url": f"{base_url}sub/{user.secret}/ikev2.mobileconfig",
+            "mobileconfig_url": f"{base_url}sub/{user.secret}/ikev2.mobileconfig?host={host.id}",
         }
         for host in hosts
         if host.protocol == HostProtocol.ikev2

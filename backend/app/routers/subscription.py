@@ -253,19 +253,22 @@ async def reset_subscription_secret(
 
 
 @router.get("/sub/{secret}/ikev2.mobileconfig")
-async def get_ikev2_profile(secret: str, db: AsyncSession = Depends(get_db)) -> Response:
+async def get_ikev2_profile(secret: str, host: int | None = None, db: AsyncSession = Depends(get_db)) -> Response:
     """A tap-to-install iOS/macOS profile — same secret-as-credential model
     as the main subscription link — so IKEv2 users skip typing server/
     remote-ID/username/password into Settings > VPN by hand."""
     user = await user_or_404(secret, db)
 
     hosts = await live_hosts(db)
-    allowed_hosts = hosts_for_user(user, hosts)
-    host = next((h for h in allowed_hosts if h.protocol == HostProtocol.ikev2), None)
-    if host is None:
+    allowed_hosts = [h for h in hosts_for_user(user, hosts) if h.protocol == HostProtocol.ikev2]
+    # ?host= picks one IKEv2 host (each gets its own install button); without
+    # it, the first one, as before.
+    chosen = next((h for h in allowed_hosts if h.id == host), None) if host is not None else None
+    chosen = chosen or (allowed_hosts[0] if allowed_hosts else None)
+    if chosen is None:
         raise HTTPException(status_code=404, detail="No IKEv2 host available for this user")
 
-    content = build_ikev2_mobileconfig(user, host)
+    content = build_ikev2_mobileconfig(user, chosen)
     return Response(
         content=content,
         media_type="application/x-apple-aspen-config",

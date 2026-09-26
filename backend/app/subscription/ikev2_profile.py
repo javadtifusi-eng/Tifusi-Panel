@@ -59,11 +59,11 @@ def _uuid_for(*parts: str) -> str:
 
 def build_ikev2_mobileconfig(user: ProxyUser, host: Host) -> str:
     remote_id = (host.core.ikev2_remote_id if host.core else None) or host.address
-    # Connect by the same name the cert/AUTH round validates, not necessarily
-    # the raw host.address on file (may just be the underlying IP) — avoids
-    # relying on RemoteAddress/RemoteIdentifier mismatch behaving correctly
-    # on every client.
-    remote_address = remote_id or host.address
+    # Connect to the host's own address and validate the certificate name
+    # separately: a host served through a tunnel points at the Iran server's
+    # address while the certificate still names the foreign server, so using
+    # the certificate name here would bypass the tunnel entirely.
+    remote_address = host.address or remote_id
     vpn_uuid = _uuid_for("vpn", str(host.id), str(user.id))
     profile_uuid = _uuid_for("profile", str(host.id), str(user.id))
     display_name = escape(f"{host.remark} ({user.username})")
