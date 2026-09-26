@@ -802,6 +802,45 @@ func isLocalIP(ip net.IP) bool {
 // once source and destination addresses no longer collide. Falling back
 // to a second loopback address keeps this working on boxes with only
 // 127.0.0.1 configured.
+// localUDPConn talks to a UDP service on this same box from a fixed source
+// address. It is unconnected on purpose: a service bound to 0.0.0.0 (xray's
+// WireGuard, for one) answers from whichever local address the kernel picks
+// for our source, not from the address we sent to, and a connected socket
+// silently drops every such reply. Replies are accepted from the target's
+// port on any local address.
+type localUDPConn struct {
+	*net.UDPConn
+	target *net.UDPAddr
+}
+
+func dialLocalUDP(src net.IP, target string) (net.Conn, error) {
+	raddr, err := net.ResolveUDPAddr("udp", target)
+	if err != nil {
+		return nil, err
+	}
+	pc, err := net.ListenUDP("udp", &net.UDPAddr{IP: src})
+	if err != nil {
+		return nil, err
+	}
+	return &localUDPConn{UDPConn: pc, target: raddr}, nil
+}
+
+func (c *localUDPConn) Write(b []byte) (int, error) { return c.WriteToUDP(b, c.target) }
+
+func (c *localUDPConn) Read(b []byte) (int, error) {
+	for {
+		n, from, err := c.ReadFromUDP(b)
+		if err != nil {
+			return n, err
+		}
+		if from.Port == c.target.Port && (from.IP.Equal(c.target.IP) || from.IP.IsLoopback() || isLocalIP(from.IP)) {
+			return n, nil
+		}
+	}
+}
+
+func (c *localUDPConn) RemoteAddr() net.Addr { return c.target }
+
 func distinctLocalAddr(target net.IP) net.IP {
 	if ifaces, err := net.Interfaces(); err == nil {
 		for _, ifi := range ifaces {
@@ -1653,12 +1692,16 @@ func (c *Client) handleUDP(f *fconn, req dialReq) {
 	// 127.0.0.1) avoids that ambiguity, whether the target is a loopback
 	// address or one of this machine's own real interface addresses -
 	// without touching genuinely remote forwards.
-	if host, _, err := net.SplitHostPort(req.Target); err == nil {
+	var target net.Conn
+	var err error
+	if host, _, herr := net.SplitHostPort(req.Target); herr == nil {
 		if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || isLocalIP(ip)) {
-			d.LocalAddr = &net.UDPAddr{IP: distinctLocalAddr(ip)}
+			target, err = dialLocalUDP(distinctLocalAddr(ip), req.Target)
 		}
 	}
-	target, err := d.Dial("udp", req.Target)
+	if target == nil && err == nil {
+		target, err = d.Dial("udp", req.Target)
+	}
 	if err != nil {
 		f.send(frmDialErr, []byte(err.Error()))
 		return
