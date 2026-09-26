@@ -48,7 +48,7 @@ func isMuxTransport(t string) bool {
 	// configured peer, and kcp's listener keys sessions by peer address, so
 	// a second KCP session would replace the first. All streams therefore
 	// share a single KCP session (applyDefaults pins mux_con=1).
-	case "tcpmux", "wsmux", "wssmux", "spoof", "hamrang":
+	case "tcpmux", "wsmux", "wssmux", "spoof":
 		return true
 	}
 	return false

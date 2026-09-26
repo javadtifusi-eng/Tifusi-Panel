@@ -117,7 +117,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [spoofSourceIp, setSpoofSourceIp] = useState('')
   const [spoofCarrier, setSpoofCarrier] = useState<SpoofCarrier>('auto')
   const [spoofStealth, setSpoofStealth] = useState(true)
-  const [hamrangQuic, setHamrangQuic] = useState(false)
   const [connectionCount, setConnectionCount] = useState('8')
   const [forwards, setForwards] = useState<TunnelForward[]>([])
   const [tunerFor, setTunerFor] = useState<Tunnel | null>(null)
@@ -169,7 +168,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofSourceIp('')
     setSpoofCarrier('auto')
     setSpoofStealth(true)
-    setHamrangQuic(false)
     setConnectionCount('8')
     setForwards([])
     setUseCdn(false)
@@ -197,7 +195,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofSourceIp(tunnel.spoof_source ?? '')
     setSpoofCarrier((tunnel.spoof_carrier as SpoofCarrier) || 'auto')
     setSpoofStealth(tunnel.spoof_stealth ?? true)
-    setHamrangQuic(tunnel.hamrang_quic ?? false)
     setConnectionCount(String(tunnel.connection_count))
     setForwards(tunnel.forwards)
     setUseCdn(!!tunnel.cdn_host)
@@ -226,10 +223,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       setFormError(t.tunnelsPage.spoofSourceRequired)
       return
     }
-    if (transport === 'hamrang' && !sni.trim()) {
-      setFormError(tn.hamrangSniRequired)
-      return
-    }
     setSubmitting(true)
     setFormError(null)
     try {
@@ -247,7 +240,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         spoof_source: transport === 'spoof' ? spoofSourceIp.trim() || null : null,
         spoof_carrier: transport === 'spoof' ? spoofCarrier : null,
         spoof_stealth: transport === 'spoof' ? spoofStealth : null,
-        hamrang_quic: transport === 'hamrang' ? hamrangQuic : null,
         connection_count: parseInt(connectionCount, 10) || 8,
         forwards,
         cdn_provider: useCdn ? cdnProvider : null,
@@ -461,7 +453,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofSourceIp(pool)
     setSpoofCarrier('auto')
     setSpoofStealth(true)
-    setHamrangQuic(false)
     setShowSpoof(false)
     setShowForm(true)
     say(tn.spoofDiscUsed)
@@ -952,15 +943,6 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   <b>IP Spoofing</b>
                   <small>{tn.pickSpoof}</small>
                 </button>
-                <button
-                  type="button"
-                  className="tr-card hamrang"
-                  aria-pressed={transport === 'hamrang'}
-                  onClick={() => setTransport('hamrang')}
-                >
-                  <b>Hamrang</b>
-                  <small>{tn.pickHamrang}</small>
-                </button>
               </div>
             </div>
 
@@ -1032,12 +1014,11 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
             </div>
             )}
 
-            {!useCdn && transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux' || transport === 'hamrang') && (
+            {!useCdn && transport && (transport === 'tls' || transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
               <div className="form-grid">
-                {(transport === 'tls' || transport === 'wss' || transport === 'wssmux' || transport === 'hamrang') && (
-                  <Field label={transport === 'hamrang' ? tn.hamrangSniLabel : t.tunnelsPage.sniLabel} wide={transport === 'hamrang'}>
-                    <input className="input ltr" value={sni} onChange={(e) => setSni(e.target.value)} placeholder={transport === 'hamrang' ? 'www.digikala.com' : 'www.bing.com'} required={transport === 'hamrang'} />
-                    {transport === 'hamrang' && <small className="muted">{tn.hamrangSniHint}</small>}
+                {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
+                  <Field label={t.tunnelsPage.sniLabel}>
+                    <input className="input ltr" value={sni} onChange={(e) => setSni(e.target.value)} placeholder="www.bing.com" />
                   </Field>
                 )}
                 {(transport === 'tls' || transport === 'wss' || transport === 'wssmux') && (
@@ -1045,21 +1026,11 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     <input className="input ltr" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="vpn.example.com" />
                   </Field>
                 )}
-                {(transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux' || transport === 'hamrang') && (
+                {(transport === 'ws' || transport === 'wss' || transport === 'wsmux' || transport === 'wssmux') && (
                   <Field label={t.tunnelsPage.pathLabel}>
                     <input className="input ltr" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/tunnel" />
                   </Field>
                 )}
-              </div>
-            )}
-
-            {transport === 'hamrang' && (
-              <div className="form-section">
-                <label className="sh-check">
-                  <input id="tunnel-hamrang-quic" type="checkbox" checked={hamrangQuic} onChange={(e) => setHamrangQuic(e.target.checked)} />
-                  <b>{tn.hamrangQuicToggle}</b>
-                </label>
-                <small className="muted">{tn.hamrangQuicHint}</small>
               </div>
             )}
 

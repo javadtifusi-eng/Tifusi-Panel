@@ -20,7 +20,7 @@ _BINARY_RELEASE_URL = (
     "https://github.com/javadtifusi-eng/Tifusi-Panel/releases/download/tunnel-agent"
 )
 
-_MUX_TRANSPORTS = {TunnelTransport.tcpmux, TunnelTransport.wsmux, TunnelTransport.wssmux, TunnelTransport.hamrang}
+_MUX_TRANSPORTS = {TunnelTransport.tcpmux, TunnelTransport.wsmux, TunnelTransport.wssmux}
 
 
 def build_iran_config(tunnel: Tunnel) -> dict:
@@ -52,9 +52,6 @@ def build_iran_config(tunnel: Tunnel) -> dict:
             config["spoof_peer_src"] = tunnel.spoof_source
         if tunnel.foreign_address:
             config["peer"] = f"{tunnel.foreign_address}:{tunnel.iran_port}"
-    if tunnel.transport == TunnelTransport.hamrang and tunnel.hamrang_quic:
-        # QUIC carrier (UDP, HTTP/3-shaped) instead of TLS+WebSocket over TCP.
-        config["hamrang_quic"] = True
     config["forwards"] = [
         {
             "name": f["name"],
@@ -107,10 +104,6 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
         config["mux_con"] = tunnel.connection_count
     else:
         config["pool"] = tunnel.connection_count
-    if tunnel.transport == TunnelTransport.hamrang and tunnel.hamrang_quic:
-        # Additive flag: hamrang stays a mux transport (mux_con above); this
-        # only swaps its TCP+TLS+WS carrier for QUIC. Both ends must match.
-        config["hamrang_quic"] = True
     return config
 
 

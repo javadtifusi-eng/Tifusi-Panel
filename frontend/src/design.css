@@ -1494,4 +1494,3 @@ select.input { padding-block: 7px; }
 .tf-disc-list > li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: .8rem; }
 .tf-disc-list > li > .muted { font-size: .72rem; text-align: end; }
 
-.tr-card.hamrang { border-style: dashed; }

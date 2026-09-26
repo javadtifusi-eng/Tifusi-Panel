@@ -169,12 +169,6 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
     _validate_foreign(payload.foreign_node_id, payload.foreign_address)
     foreign_node_id = await _resolve_foreign_node_id(payload.foreign_node_id, db)
 
-    if payload.transport == TunnelTransport.hamrang and not (payload.sni or payload.cdn_host):
-        raise HTTPException(
-            status_code=400,
-            detail="hamrang transport needs an SNI — the domestic host to mimic",
-        )
-
     tunnel = Tunnel(
         name=payload.name,
         iran_address=payload.iran_address,
@@ -189,7 +183,6 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         spoof_source=payload.spoof_source,
         spoof_carrier=payload.spoof_carrier,
         spoof_stealth=payload.spoof_stealth,
-        hamrang_quic=payload.hamrang_quic,
         connection_count=payload.connection_count,
         forwards=[f.model_dump() for f in payload.forwards],
         cdn_provider=payload.cdn_provider,

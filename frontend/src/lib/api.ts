@@ -675,7 +675,7 @@ export async function deleteNode(id: number): Promise<void> {
   await authorizedFetch(`/nodes/${id}`, { method: 'DELETE' })
 }
 
-export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp' | 'spoof' | 'hamrang'
+export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' | 'wssmux' | 'udp' | 'spoof'
 export type TunnelStatus = 'pending' | 'connected' | 'error'
 export type CdnProvider = 'arvan' | 'cloudflare'
 /** L4 protocol the spoof transport's forged packets ride on. */
@@ -704,7 +704,6 @@ export interface Tunnel {
   spoof_source: string | null
   spoof_carrier: SpoofCarrier | null
   spoof_stealth: boolean | null
-  hamrang_quic: boolean | null
   connection_count: number
   forwards: TunnelForward[]
   cdn_provider: CdnProvider | null
@@ -770,7 +769,6 @@ export type TunnelPayload = {
   spoof_source?: string | null
   spoof_carrier?: SpoofCarrier | null
   spoof_stealth?: boolean | null
-  hamrang_quic?: boolean | null
   connection_count?: number
   forwards?: TunnelForward[]
   cdn_provider?: CdnProvider | null
