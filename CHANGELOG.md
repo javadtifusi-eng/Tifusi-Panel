@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Tunnel engine
+- **ICMPv6 spoof carrier.** The spoof tunnel can carry its packets as ICMPv6 Echo Replies inside IPv4 (protocol 58). A firewall that shuts IPv6 down often leaves ICMPv6 alone, and a rule written for ICMP doesn't match it.
+- **A separate carrier per direction.** A spoof tunnel can send one way on one carrier and back on another — say TCP from Iran and ICMPv6 back — since a filter often treats the two directions differently. The tunnel form has a **Return carrier** next to the carrier, and the panel sets each side as the mirror of the other.
+- **Spoof test over every protocol, with loss per source.** The test probes over UDP, ICMP, ICMPv6 or TCP instead of UDP only, and the receiver reports how many of each forged source's probes arrived and its packet loss. A **Max acceptable packet loss** cap marks the rest as unusable, and on the command line `--out` writes the usable sources as the other side's spoof list.
+- **IKEv2 through a tunnel gets traffic.** The relay delivered IKEv2 to `127.0.0.1` on the foreign server, so the server saw every phone as `127.0.0.2` and never sent it the encrypted replies: phones connected but had no internet. UDP 500 and 4500 now go to the foreign server's own address. Re-run the relay install command of an existing IKEv2 tunnel to pick this up.
+
 ## v1.4.2 — 2026-09-19
 
 ### Tunnel engine

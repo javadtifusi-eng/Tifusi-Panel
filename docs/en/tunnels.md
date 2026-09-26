@@ -76,9 +76,30 @@ Before the tunnel exists, **Recommend best transport** probes both servers and r
 
 Some tunnel types depend on the relay's datacenter allowing packets with a forged source address to leave its network. The **IP Spoofing** card in the transport picker generates two commands, one for each server, that check this before any such tunnel is built. Nothing runs on the servers until the commands are executed there.
 
+- **Protocol.** The probes can ride UDP, ICMP, ICMPv6 or TCP. A datacenter or filter can drop forged UDP yet pass another protocol, so test each one you might use. All but UDP need root on the receiving server too.
+- **Direction.** The tunnel forges a source both ways, so run the test in both directions: Iran → foreign and foreign → Iran.
+- **Loss per source.** The receiver lists every forged source that arrived with how many of its probes got through, for example `5/5 packets  loss 0%`. With **Max acceptable packet loss** set, a source over it is marked `x` and not counted as usable.
+
+On the command line the same test is `tifusi-tunnel spooftest recv|send --proto udp|icmp|icmpv6|tcp`; `recv --max-loss N --out file` writes the usable sources to a file, one per line, ready to use as the spoof source list on the **other** side.
+
+## Spoof tunnels
+
+A spoof tunnel stamps a forged source address on every packet, so it passes a filter that allow-lists source and destination addresses. Both datacenters must let forged packets out — check with the spoof test first.
+
+| Setting | Purpose |
+| --- | --- |
+| Spoof source | The forged address, or a list, range (`a-b`) or CIDR to rotate across per packet. |
+| Carrier | What the forged packets look like on the wire: UDP, ICMP (Echo Reply), ICMPv6 (Echo Reply inside IPv4, protocol 58) or TCP (PSH\|ACK segments). **Auto** tries each and settles on one that works. |
+| Return carrier | Optional. The carrier for foreign → Iran when it should differ from the one above, which then covers Iran → foreign only — for example TCP out and ICMPv6 back, since a filter often treats the two directions differently. The panel sets each side as the mirror of the other. Not available with **Auto**. |
+| Advanced stealth | Randomises TTL, DSCP and source port and accepts only the configured forged source. |
+
+ICMPv6 is worth trying when ICMP is blocked: a firewall that shuts IPv6 down often leaves ICMPv6 alone, and a rule written for ICMP doesn't match it.
+
 ## Tunnels and IKEv2 or L2TP
 
 For native IKEv2 or L2TP through a tunnel, forward UDP 500 and 4500 from the relay to the foreign server, and UDP 1701 as well for L2TP clients without IPsec. The host published to users then points at the relay's address.
+
+The relay delivers IKEv2 (UDP 500 and 4500) to the foreign server's own address rather than `127.0.0.1`, so the tunnel needs its foreign side set (a node or an address). Delivered to loopback, the server would see every phone as `127.0.0.2` and could never send it the encrypted replies: the phone connects but gets no traffic. A tunnel installed before this change keeps the old target until its relay install command is run again.
 
 ---
 
