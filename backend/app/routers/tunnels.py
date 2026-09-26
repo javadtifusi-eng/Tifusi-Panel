@@ -428,6 +428,24 @@ async def _live_tunnel_status(tunnel: Tunnel, db: AsyncSession) -> dict | None:
     return resp.json()
 
 
+@router.get("/{tunnel_id}/throughput")
+async def tunnel_throughput(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    """Lightweight live counters for the tunnel card's traffic graph: the
+    running byte totals the foreign agent reports. The frontend polls this a
+    few times a second and turns the deltas into an up/down rate. Cheap enough
+    to poll: one loopback read on the node, no probing."""
+    tunnel = await _get_tunnel_or_404(tunnel_id, db)
+    live = await _live_tunnel_status(tunnel, db)
+    if not live or not live.get("running"):
+        return {"live": False, "links": 0, "rx_bytes": 0, "tx_bytes": 0}
+    return {
+        "live": live.get("links", 0) > 0,
+        "links": live.get("links", 0),
+        "rx_bytes": live.get("rx_bytes", 0),
+        "tx_bytes": live.get("tx_bytes", 0),
+    }
+
+
 @router.post("/{tunnel_id}/test", response_model=TunnelTestResult)
 async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> TunnelTestResult:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)

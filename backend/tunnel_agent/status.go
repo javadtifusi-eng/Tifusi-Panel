@@ -21,11 +21,19 @@ const defaultStatusListen = "127.0.0.1:18461"
 
 var tunnelStatus struct {
 	links int32 // live control/mux links (client: to the server; server: from clients)
+	rx    int64 // bytes carried from the far side toward the local target
+	tx    int64 // bytes carried from the local target toward the far side
 
 	mu      sync.Mutex
 	lastUp  time.Time
 	lastErr string
 }
+
+// statusRx/statusTx add to the running byte counters the panel polls to draw
+// live throughput. They are called on the tunnel's data path, so they must
+// stay cheap - a single atomic add.
+func statusRx(n int) { atomic.AddInt64(&tunnelStatus.rx, int64(n)) }
+func statusTx(n int) { atomic.AddInt64(&tunnelStatus.tx, int64(n)) }
 
 func statusLinkUp() {
 	atomic.AddInt32(&tunnelStatus.links, 1)
@@ -49,6 +57,8 @@ type statusReply struct {
 	Server    string `json:"server,omitempty"`
 	Listen    string `json:"listen,omitempty"`
 	Links     int32  `json:"links"`
+	RxBytes   int64  `json:"rx_bytes"`
+	TxBytes   int64  `json:"tx_bytes"`
 	LastUp    string `json:"last_up,omitempty"`
 	LastError string `json:"last_error,omitempty"`
 }
@@ -70,6 +80,8 @@ func runStatus(cfg *Config) {
 			Server:    cfg.Server,
 			Listen:    cfg.Listen,
 			Links:     atomic.LoadInt32(&tunnelStatus.links),
+			RxBytes:   atomic.LoadInt64(&tunnelStatus.rx),
+			TxBytes:   atomic.LoadInt64(&tunnelStatus.tx),
 			LastError: tunnelStatus.lastErr,
 		}
 		if !tunnelStatus.lastUp.IsZero() {

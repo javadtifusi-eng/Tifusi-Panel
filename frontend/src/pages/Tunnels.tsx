@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { IconCopy, IconPlus } from '../components/icons'
 import { Empty, Field, Sheet, useReducedMotion, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
@@ -14,6 +14,7 @@ import {
   discoverSourcesCommands,
   parseDiscoveredSources,
   testTunnel,
+  tunnelThroughput,
   updateTunnel,
   type Node,
   type SpoofTestCommands,
@@ -61,6 +62,87 @@ type StepState = 'wait' | 'now' | 'done' | 'fail' | 'skip'
 
 function stepFor(reachable: boolean | null): StepState {
   return reachable === null ? 'skip' : reachable ? 'done' : 'fail'
+}
+
+function fmtRate(bps: number): string {
+  if (bps < 1024) return `${Math.round(bps)} B/s`
+  if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(0)} KB/s`
+  return `${(bps / (1024 * 1024)).toFixed(2)} MB/s`
+}
+
+// LiveTraffic polls the tunnel's byte counters ~1/s and draws a rolling
+// up/down throughput graph, so a connected tunnel visibly breathes instead of
+// showing a static label.
+function LiveTraffic({ id, active, labels }: { id: number; active: boolean; labels: { up: string; down: string; live: string; idle: string } }) {
+  const N = 40
+  const [down, setDown] = useState<number[]>(() => Array(N).fill(0))
+  const [up, setUp] = useState<number[]>(() => Array(N).fill(0))
+  const [rate, setRate] = useState<{ d: number; u: number; live: boolean }>({ d: 0, u: 0, live: false })
+  const prev = useRef<{ rx: number; tx: number; t: number } | null>(null)
+
+  useEffect(() => {
+    if (!active) return
+    let stop = false
+    async function tick() {
+      const r = await tunnelThroughput(id).catch(() => null)
+      if (stop) return
+      const now = performance.now()
+      if (r && prev.current) {
+        const dt = (now - prev.current.t) / 1000
+        if (dt > 0) {
+          const d = Math.max(0, (r.rx_bytes - prev.current.rx) / dt)
+          const u = Math.max(0, (r.tx_bytes - prev.current.tx) / dt)
+          setDown((a) => [...a.slice(1), d])
+          setUp((a) => [...a.slice(1), u])
+          setRate({ d, u, live: r.live })
+        }
+      }
+      if (r) prev.current = { rx: r.rx_bytes, tx: r.tx_bytes, t: now }
+    }
+    tick()
+    const timer = window.setInterval(() => {
+      if (!document.hidden) tick()
+    }, 1000)
+    return () => {
+      stop = true
+      window.clearInterval(timer)
+    }
+  }, [id, active])
+
+  const W = 240
+  const H = 46
+  const peak = Math.max(1024, ...down, ...up)
+  const path = (arr: number[]) => {
+    const step = W / (N - 1)
+    return arr.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(H - (v / peak) * (H - 4) - 2).toFixed(1)}`).join(' ')
+  }
+  const area = (arr: number[]) => `${path(arr)} L${W},${H} L0,${H} Z`
+
+  return (
+    <div className="tf-livetraffic" dir="ltr">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="tf-livechart" aria-hidden="true">
+        <defs>
+          <linearGradient id={`gd${id}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor="#22c55e" stopOpacity=".35" />
+            <stop offset="1" stopColor="#22c55e" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id={`gu${id}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor="#f97316" stopOpacity=".3" />
+            <stop offset="1" stopColor="#f97316" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area(down)} fill={`url(#gd${id})`} />
+        <path d={path(down)} fill="none" stroke="#22c55e" strokeWidth="1.6" />
+        <path d={area(up)} fill={`url(#gu${id})`} />
+        <path d={path(up)} fill="none" stroke="#f97316" strokeWidth="1.6" />
+      </svg>
+      <div className="tf-liverates en">
+        <span style={{ color: '#22c55e' }}>↓ {fmtRate(rate.d)}</span>
+        <span style={{ color: '#f97316' }}>↑ {fmtRate(rate.u)}</span>
+        <span className={`tf-livedot ${rate.live ? 'on' : ''}`}>{rate.live ? labels.live : labels.idle}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function TunnelsPage({ createSignal = 0 }: { createSignal?: number } = {}) {
@@ -795,6 +877,9 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                       {tn.checked} <b>{checkedAgo(tunnel)}</b>
                     </span>
                   </div>
+                  {tunnel.status === 'connected' && (
+                    <LiveTraffic id={tunnel.id} active={tunnel.status === 'connected'} labels={{ up: tn.liveUp, down: tn.liveDown, live: tn.liveOn, idle: tn.liveIdle }} />
+                  )}
                   {tunnel.last_error && tunnel.status === 'error' && <p className="alert">{tunnel.last_error}</p>}
                   {tunnelSteps && (
                     <ol className="steps">

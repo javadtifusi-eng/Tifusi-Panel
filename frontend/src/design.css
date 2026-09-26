@@ -1494,3 +1494,12 @@ select.input { padding-block: 7px; }
 .tf-disc-list > li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: .8rem; }
 .tf-disc-list > li > .muted { font-size: .72rem; text-align: end; }
 
+
+/* live per-tunnel traffic graph on the route card */
+.tf-livetraffic { margin-top: 8px; border-radius: 12px; background: color-mix(in srgb, var(--panel) 60%, transparent); border: 1px solid var(--border); padding: 6px 8px; }
+.tf-livechart { display: block; width: 100%; height: 46px; }
+.tf-liverates { display: flex; align-items: center; gap: 12px; font-size: 0.7rem; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.tf-liverates .tf-livedot { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.tf-liverates .tf-livedot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.tf-liverates .tf-livedot.on { color: var(--ok); }
+.tf-liverates .tf-livedot.on::before { background: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 70%, transparent); animation: tf-ping 1.6s cubic-bezier(0,0,0.2,1) infinite; }

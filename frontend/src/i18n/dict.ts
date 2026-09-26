@@ -1273,6 +1273,7 @@ export const dict = {
       tunnels: {
         iranEntry: 'iran entry',
         mapHint: 'روی هر سرور روی نقشه برو تا جزئیاتش اینجا بیاید.',
+        liveUp: 'ارسال', liveDown: 'دریافت', liveOn: 'زنده', liveIdle: 'بی‌ترافیک',
         forwardsTitle: 'پورت‌های فوروارد',
         legendUp: 'متصل',
         legendDown: 'قطع',
@@ -2825,6 +2826,7 @@ export const dict = {
       tunnels: {
         iranEntry: 'iran entry',
         mapHint: 'Hover a server on the map to see its details here.',
+        liveUp: 'up', liveDown: 'down', liveOn: 'live', liveIdle: 'idle',
         forwardsTitle: 'Forwarded ports',
         legendUp: 'Connected',
         legendDown: 'Down',

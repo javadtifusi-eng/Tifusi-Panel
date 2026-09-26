@@ -771,14 +771,14 @@ type closeWriter interface {
 func joinStreams(a net.Conn, ar io.Reader, b net.Conn, brd io.Reader) {
 	done := make(chan struct{}, 2)
 	go func() {
-		io.Copy(a, brd)
+		io.Copy(&countWriter{a, statusRx}, brd)
 		if cw, ok := a.(closeWriter); ok {
 			cw.CloseWrite()
 		}
 		done <- struct{}{}
 	}()
 	go func() {
-		io.Copy(b, ar)
+		io.Copy(&countWriter{b, statusTx}, ar)
 		if cw, ok := b.(closeWriter); ok {
 			cw.CloseWrite()
 		}
@@ -791,6 +791,21 @@ func joinStreams(a net.Conn, ar io.Reader, b net.Conn, brd io.Reader) {
 	}
 	a.Close()
 	b.Close()
+}
+
+// countWriter tallies bytes into a status counter as they are copied, so the
+// panel can draw live throughput without touching every call site.
+type countWriter struct {
+	w     io.Writer
+	count func(int)
+}
+
+func (c *countWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	if n > 0 {
+		c.count(n)
+	}
+	return n, err
 }
 
 func genToken() string {
@@ -1779,6 +1794,7 @@ func (c *Client) handleUDP(f *fconn, req dialReq) {
 			if err := f.send(frmUDP, buf[:n]); err != nil {
 				return
 			}
+			statusTx(n)
 		}
 	}()
 
@@ -1795,6 +1811,7 @@ loop:
 			if _, err := target.Write(p); err != nil {
 				break loop
 			}
+			statusRx(len(p))
 		case frmPing:
 			f.send(frmPong, nil)
 		}

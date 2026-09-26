@@ -807,6 +807,18 @@ export async function testTunnel(id: number): Promise<TunnelTestResult> {
   return res.json()
 }
 
+export interface TunnelThroughput {
+  live: boolean
+  links: number
+  rx_bytes: number
+  tx_bytes: number
+}
+
+export async function tunnelThroughput(id: number): Promise<TunnelThroughput> {
+  const res = await authorizedFetch(`/tunnels/${id}/throughput`)
+  return res.json()
+}
+
 export async function recommendTunnelTransport(payload: {
   iran_address: string
   iran_port: number

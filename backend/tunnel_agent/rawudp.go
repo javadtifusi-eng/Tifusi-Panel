@@ -141,6 +141,7 @@ func (r *rawServer) readLoop() {
 			p.mu.Unlock()
 			if f != nil {
 				f.pc.WriteTo(buf[1:n], f.client)
+				statusRx(n - 1)
 			}
 		case rawBye:
 			// The foreign socket is gone: forget it now so the next packet of
@@ -190,6 +191,7 @@ func (r *rawServer) send(f *rawFlow, payload []byte) {
 	}
 	pkt = append(pkt, payload...)
 	r.conn.WriteToUDP(pkt, p.addr)
+	statusTx(len(payload))
 }
 
 // reap drops stale idle sockets and ends flows that went silent.
@@ -385,6 +387,7 @@ func (c *Client) rawSocket(addr string) bool {
 							return
 						}
 						conn.Write(out[:1+m])
+						statusTx(m)
 					}
 				}(t)
 			}
@@ -395,6 +398,7 @@ func (c *Client) rawSocket(addr string) bool {
 		}
 		if target != nil {
 			target.Write(payload)
+			statusRx(len(payload))
 		}
 	}
 }
