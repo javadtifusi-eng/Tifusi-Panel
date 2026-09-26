@@ -250,7 +250,8 @@ async def delete_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> N
 @router.get("/{tunnel_id}/config", response_model=TunnelConfig)
 async def get_tunnel_config(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> TunnelConfig:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)
-    iran_config = build_iran_config(tunnel)
+    foreign = await _foreign_probe_target(tunnel, db)
+    iran_config = build_iran_config(tunnel, foreign[0] if foreign else None)
     foreign_config = build_foreign_config(tunnel)
     return TunnelConfig(
         iran_config=iran_config,

@@ -23,7 +23,7 @@ _BINARY_RELEASE_URL = (
 _MUX_TRANSPORTS = {TunnelTransport.tcpmux, TunnelTransport.wsmux, TunnelTransport.wssmux}
 
 
-def build_iran_config(tunnel: Tunnel) -> dict:
+def build_iran_config(tunnel: Tunnel, foreign_host: str | None = None) -> dict:
     config: dict = {
         "mode": "server",
         "listen": f"0.0.0.0:{tunnel.iran_port}",
@@ -60,11 +60,23 @@ def build_iran_config(tunnel: Tunnel) -> dict:
             "name": f["name"],
             "listen": f"0.0.0.0:{f['listen_port']}",
             "net": f["net"],
-            "target": f"127.0.0.1:{f['target_port']}",
+            "target": f"{_forward_target_host(f, foreign_host)}:{f['target_port']}",
         }
         for f in tunnel.forwards
     ]
     return config
+
+
+_IKE_PORTS = {500, 4500}
+
+
+def _forward_target_host(forward: dict, foreign_host: str | None) -> str:
+    # IKEv2 must not be delivered to loopback: charon would see the client as
+    # 127.0.0.2, and the kernel never sends the ESP replies of a forwarded
+    # packet to a 127/8 address, so the phone connects but gets no traffic.
+    if forward["net"] == "udp" and int(forward["target_port"]) in _IKE_PORTS and foreign_host:
+        return foreign_host
+    return "127.0.0.1"
 
 
 def build_foreign_config(tunnel: Tunnel) -> dict:
