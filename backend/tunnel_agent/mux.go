@@ -240,6 +240,10 @@ func (ms *muxSession) teardown() {
 // OpenStream is called by the server to ask the foreign side to dial a
 // forward's target over a fresh logical stream on this physical connection.
 func (ms *muxSession) OpenStream(netKind, target string) (*muxStream, error) {
+	return ms.openStreamReq(dialReq{Net: netKind, Target: target})
+}
+
+func (ms *muxSession) openStreamReq(dr dialReq) (*muxStream, error) {
 	id := atomic.AddUint32(&ms.nextID, 1)
 	st := ms.registerStream(id)
 
@@ -248,7 +252,7 @@ func (ms *muxSession) OpenStream(netKind, target string) (*muxStream, error) {
 	ms.pending[id] = waitCh
 	ms.pendingMu.Unlock()
 
-	req, _ := json.Marshal(dialReq{Net: netKind, Target: target})
+	req, _ := json.Marshal(dr)
 	payload := append(u32(id), req...)
 	if err := ms.f.send(frmMuxOpen, payload); err != nil {
 		ms.pendingMu.Lock()
@@ -556,6 +560,7 @@ func (c *Client) muxWorker() {
 		}
 		f, err := c.connect("mux")
 		if err != nil {
+			c.noteLinkFailure()
 			c.log("mux link: %v (retrying in %s)", err, backoff)
 			c.advanceSpoofCarrier() // auto only; no-op otherwise
 			time.Sleep(backoff)
@@ -564,7 +569,8 @@ func (c *Client) muxWorker() {
 			}
 			continue
 		}
-		c.log("mux link established with %s", c.target())
+		c.log("mux link established with %s", c.linkTarget())
+		c.noteLinkUp()
 		backoff = time.Second
 
 		up := time.Now()
@@ -584,6 +590,7 @@ func (c *Client) muxWorker() {
 		// threshold sits above readTimeout so a genuine failure always rotates.
 		if time.Since(up) < 60*time.Second {
 			c.advanceSpoofCarrier()
+			c.noteLinkFailure()
 		}
 		c.log("mux link lost, reconnecting")
 		time.Sleep(2 * time.Second)
@@ -594,6 +601,10 @@ func (c *Client) acceptMuxStream(ms *muxSession, id uint32, req dialReq) {
 	st := ms.registerStream(id)
 	switch req.Net {
 	case "udp":
+		if req.Group != "" {
+			c.serveMuxUDPGroup(ms, st, req)
+			return
+		}
 		c.serveMuxUDP(ms, st, req)
 	default:
 		c.serveMuxTCP(ms, st, req)

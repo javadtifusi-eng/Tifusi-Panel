@@ -113,7 +113,7 @@ func TestStealthDecorateAndPin(t *testing.T) {
 		t.Errorf("nil opts srcPort = %d, want the default 443", p)
 	}
 
-	st := &spoofOpts{stealth: true, peerSrc: net.ParseIP("5.6.7.8").To4()}
+	st := &spoofOpts{stealth: true, peerSrcs: newPeerSrcs([]net.IP{net.ParseIP("5.6.7.8")})}
 
 	// A random high source port, never the fixed default, always in range.
 	for i := 0; i < 200; i++ {
@@ -145,5 +145,44 @@ func TestStealthDecorateAndPin(t *testing.T) {
 	}
 	if st.allowSrc(net.ParseIP("5.6.7.9").To4()) {
 		t.Error("non-pinned source should be rejected")
+	}
+}
+
+func TestSpoofOptsSessionStable(t *testing.T) {
+	s := (&spoofOpts{stealth: true}).session()
+	if s.ttl == 0 || s.sport < 1024 {
+		t.Fatalf("session did not draw stealth values: %+v", s)
+	}
+	first := s.srcPort(443)
+	pkt1, pkt2 := make([]byte, 20), make([]byte, 20)
+	pkt1[0], pkt2[0] = 0x45, 0x45
+	s.decorate(pkt1)
+	for i := 0; i < 50; i++ {
+		if p := s.srcPort(443); p != first {
+			t.Fatalf("srcPort changed within a session: %d then %d", first, p)
+		}
+		s.decorate(pkt2)
+		if pkt2[8] != pkt1[8] || pkt2[1] != pkt1[1] {
+			t.Fatalf("TTL/DSCP changed within a session")
+		}
+	}
+	if (*spoofOpts)(nil).session() != nil {
+		t.Error("nil opts session should stay nil")
+	}
+}
+
+func TestSpoofOptsPeerPool(t *testing.T) {
+	ips, err := parseSpoofSources("5.6.7.8, 10.0.0.0/30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := &spoofOpts{peerSrcs: newPeerSrcs(ips)}
+	for _, a := range []string{"5.6.7.8", "10.0.0.2"} {
+		if !o.allowSrc(net.ParseIP(a)) {
+			t.Errorf("%s should pass the pool pin", a)
+		}
+	}
+	if o.allowSrc(net.ParseIP("10.0.0.9")) {
+		t.Error("10.0.0.9 is outside the pool and must be dropped")
 	}
 }

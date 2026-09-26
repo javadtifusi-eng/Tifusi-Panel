@@ -18,6 +18,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
@@ -117,16 +118,25 @@ type Config struct {
 	Servers []string `json:"servers,omitempty"`
 	// client only: WebSocket Host header when it differs from SNI (domain
 	// fronting through a CDN: SNI names another site, Host names ours).
-	Host      string       `json:"host,omitempty"`
-	Transport string       `json:"transport"` // tcp | tls | ws | wss | tcpmux | wsmux | wssmux | udp
-	Token     string       `json:"token"`
-	SNI       string       `json:"sni"`     // TLS server name / certificate CN
-	Path      string       `json:"path"`    // HTTP path used by ws/wss/wsmux/wssmux
-	Pool      int          `json:"pool"`    // client only: idle tunnel connections kept warm (non-mux transports)
-	MuxCon    int          `json:"mux_con"` // client only: physical connections kept open (mux transports)
-	Forwards  []Forward    `json:"forwards"`
-	Verbose   bool         `json:"verbose"`
-	Panel     *PanelConfig `json:"panel,omitempty"`
+	Host      string    `json:"host,omitempty"`
+	Transport string    `json:"transport"` // tcp | tls | ws | wss | tcpmux | wsmux | wssmux | udp
+	Token     string    `json:"token"`
+	SNI       string    `json:"sni"`     // TLS server name / certificate CN
+	Path      string    `json:"path"`    // HTTP path used by ws/wss/wsmux/wssmux
+	Pool      int       `json:"pool"`    // client only: idle tunnel connections kept warm (non-mux transports)
+	MuxCon    int       `json:"mux_con"` // client only: physical connections kept open (mux transports)
+	Forwards  []Forward `json:"forwards"`
+	// UDPStripe, server only, tcpmux/wsmux/wssmux: spread each UDP flow
+	// across every physical connection instead of pinning it to one, for
+	// links shaped per connection. The foreign side needs a build that
+	// understands striped streams (stripe.go); it needs no setting itself.
+	UDPStripe bool `json:"udp_stripe,omitempty"`
+	// Fallback, mux transports only: further carriers tried in order when
+	// the primary stops getting through (see fallback.go). On the server
+	// each entry adds a listener; on the client each names where to dial.
+	Fallback []Carrier    `json:"fallback,omitempty"`
+	Verbose  bool         `json:"verbose"`
+	Panel    *PanelConfig `json:"panel,omitempty"`
 	// Domain, server only: when set, a tls/wss/wssmux listener requests a
 	// real certificate from Let's Encrypt for this domain (via ACME
 	// HTTP-01, needs port 80 reachable) instead of generating a
@@ -176,12 +186,13 @@ type Config struct {
 // nil when nothing optional is set, which every carrier treats as plain
 // defaults.
 func (c *Config) spoofOptions() *spoofOpts {
-	if !c.SpoofStealth && c.SpoofPeerSrc == "" {
-		return nil
-	}
-	o := &spoofOpts{stealth: c.SpoofStealth}
+	sum := sha256.Sum256([]byte("tifusi-icmp-id|" + c.Token))
+	o := &spoofOpts{stealth: c.SpoofStealth, icmpID: binary.BigEndian.Uint16(sum[:2])}
 	if c.SpoofPeerSrc != "" {
-		o.peerSrc = net.ParseIP(c.SpoofPeerSrc).To4()
+		// Validated in check(), so a parse error cannot happen here.
+		if ips, err := parseSpoofSources(c.SpoofPeerSrc); err == nil {
+			o.peerSrcs = newPeerSrcs(ips)
+		}
 	}
 	return o
 }
@@ -219,6 +230,14 @@ func (c *Config) applyDefaults() {
 			c.Forwards[i].Net = "tcp"
 		}
 	}
+	for i := range c.Fallback {
+		if c.Fallback[i].SNI == "" {
+			c.Fallback[i].SNI = c.SNI
+		}
+		if c.Fallback[i].Path == "" {
+			c.Fallback[i].Path = c.Path
+		}
+	}
 	if c.Panel != nil && c.Panel.Listen == "" {
 		c.Panel.Listen = "0.0.0.0:9443"
 	}
@@ -230,7 +249,7 @@ func (c *Config) applyDefaults() {
 		// transport (see isMuxTransport), so it always runs one mux link.
 		c.MuxCon = 1
 	}
-	if (c.Transport == "udp" || c.Transport == "spoof") && c.FECData == 0 && c.FECParity == 0 {
+	if (c.Transport == "udp" || c.Transport == "spoof" || c.hasUDPFallback()) && c.FECData == 0 && c.FECParity == 0 {
 		// ~30% redundancy: rebuilds up to 3 lost packets in every 10 without a
 		// round-trip. A safe default both ends agree on when the panel does not
 		// set it explicitly.
@@ -263,6 +282,11 @@ func (c *Config) validate() error {
 		if _, err := parseSpoofSources(c.SpoofSource); err != nil {
 			return fmt.Errorf("spoof_source: %w", err)
 		}
+		if c.SpoofPeerSrc != "" {
+			if _, err := parseSpoofSources(c.SpoofPeerSrc); err != nil {
+				return fmt.Errorf("spoof_peer_src: %w", err)
+			}
+		}
 		peer := c.Peer
 		if peer == "" && c.Mode == "client" {
 			peer = c.Server
@@ -278,6 +302,9 @@ func (c *Config) validate() error {
 		}
 	default:
 		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux, udp or spoof, got %q", c.Transport)
+	}
+	if err := c.validateFallback(); err != nil {
+		return err
 	}
 	if len(c.Token) < 8 {
 		return errors.New("token must be at least 8 characters")
@@ -365,6 +392,9 @@ func (f *fconn) recv() (byte, []byte, error) {
 type dialReq struct {
 	Net    string `json:"net"`
 	Target string `json:"target"`
+	// Group, striped UDP forwards only: streams sharing it are joined onto
+	// one UDP socket to Target on the foreign side (see stripe.go).
+	Group string `json:"group,omitempty"`
 }
 
 type hello struct {
@@ -886,24 +916,9 @@ func (s *Server) Run() error {
 		}
 		ln = sln
 	} else {
-		rawLn, err := net.Listen("tcp", s.cfg.Listen)
-		if err != nil {
-			return fmt.Errorf("cannot listen on %s: %w", s.cfg.Listen, err)
-		}
-		ln = net.Listener(nodelayListener{rawLn})
-		if s.cfg.Transport == "tls" || s.cfg.Transport == "wss" || s.cfg.Transport == "wssmux" {
-			var tc *tls.Config
-			if s.cfg.Domain != "" {
-				tc = acmeTLSConfig(s.cfg.Domain)
-				s.log("requesting a real certificate from Let's Encrypt for %s", s.cfg.Domain)
-			} else {
-				var err error
-				tc, err = tlsServerConfig(s.cfg.SNI)
-				if err != nil {
-					return err
-				}
-			}
-			ln = tls.NewListener(ln, tc)
+		var err error
+		if ln, err = s.listenCarrier(s.cfg.primaryCarrier(), true); err != nil {
+			return err
 		}
 	}
 	if s.cfg.Transport == "spoof" {
@@ -911,6 +926,8 @@ func (s *Server) Run() error {
 	} else {
 		s.log("tunnel listening on %s (%s)", s.cfg.Listen, s.cfg.Transport)
 	}
+
+	s.startFallbackListeners()
 
 	mux := isMuxTransport(s.cfg.Transport)
 	for _, fw := range s.cfg.Forwards {
@@ -920,6 +937,8 @@ func (s *Server) Run() error {
 			go s.serveTCPForwardMux(fw)
 		case fw.Net == "tcp":
 			go s.serveTCPForward(fw)
+		case fw.Net == "udp" && mux && s.cfg.UDPStripe:
+			go s.serveUDPForwardStripe(fw)
 		case fw.Net == "udp" && mux:
 			go s.serveUDPForwardMux(fw)
 		case fw.Net == "udp":
@@ -929,6 +948,10 @@ func (s *Server) Run() error {
 		}
 	}
 
+	return s.acceptLoop(ln, s.cfg.primaryCarrier())
+}
+
+func (s *Server) acceptLoop(ln net.Listener, car Carrier) error {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -939,23 +962,23 @@ func (s *Server) Run() error {
 			return err
 		}
 		if sess, ok := c.(*kcp.UDPSession); ok {
-			if s.cfg.Transport == "spoof" {
+			if car.Transport == "spoof" {
 				tuneKCPMtu(sess, s.cfg.spoofMTU(s.cfg.SpoofCarrier))
 			} else {
 				tuneKCP(sess)
 			}
 		}
-		go s.acceptTunnel(c)
+		go s.acceptTunnel(c, car)
 	}
 }
 
-func (s *Server) acceptTunnel(raw net.Conn) {
+func (s *Server) acceptTunnel(raw net.Conn, car Carrier) {
 	raw.SetDeadline(time.Now().Add(20 * time.Second))
 	br := bufio.NewReaderSize(raw, 32*1024)
 	var conn net.Conn = raw
 
-	if s.cfg.Transport == "ws" || s.cfg.Transport == "wss" || s.cfg.Transport == "wsmux" || s.cfg.Transport == "wssmux" {
-		if err := serverUpgrade(raw, br, s.cfg.Path); err != nil {
+	if isWSTransport(car.Transport) {
+		if err := serverUpgrade(raw, br, car.Path); err != nil {
 			if s.cfg.Verbose {
 				s.log("handshake from %s failed: %v", raw.RemoteAddr(), err)
 			}
@@ -1305,6 +1328,7 @@ func label(fw Forward) string {
 // ---------------------------------------------------------------- client
 
 type Client struct {
+	fb       fallbackState
 	next     uint32 // round-robin index into cfg.Servers
 	spoofIdx uint32 // auto mode: cursor into autoCarriers for the next dial
 	cfg      *Config
@@ -1335,6 +1359,7 @@ func (c *Client) advanceSpoofCarrier() {
 func (c *Client) Run() error {
 	if isMuxTransport(c.cfg.Transport) {
 		c.log("connecting to %s (%s), mux_con=%d", c.target(), c.cfg.Transport, c.cfg.MuxCon)
+		c.startFallback()
 		for i := 0; i < c.cfg.MuxCon; i++ {
 			go c.muxWorker()
 			time.Sleep(50 * time.Millisecond)
@@ -1361,6 +1386,9 @@ func (c *Client) target() string {
 // each call starts at the next edge (spreading connections across them)
 // and falls through to the others if that one fails.
 func (c *Client) connect(role string) (*fconn, error) {
+	if car, idx := c.currentCarrier(); idx > 0 {
+		return c.connectCarrier(car, car.Server, role)
+	}
 	if len(c.cfg.Servers) == 0 {
 		return c.connectTo(c.cfg.Server, role)
 	}
@@ -1381,8 +1409,12 @@ func (c *Client) connect(role string) (*fconn, error) {
 }
 
 func (c *Client) connectTo(addr, role string) (*fconn, error) {
+	return c.connectCarrier(c.cfg.primaryCarrier(), addr, role)
+}
+
+func (c *Client) connectCarrier(car Carrier, addr, role string) (*fconn, error) {
 	var raw net.Conn
-	if c.cfg.Transport == "udp" {
+	if car.Transport == "udp" {
 		block, err := newKCPBlock(c.cfg.Token)
 		if err != nil {
 			return nil, fmt.Errorf("udp crypto: %w", err)
@@ -1393,7 +1425,7 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 		}
 		tuneKCP(sess)
 		raw = sess
-	} else if c.cfg.Transport == "spoof" {
+	} else if car.Transport == "spoof" {
 		peerStr := c.cfg.Peer
 		if peerStr == "" {
 			peerStr = addr
@@ -1415,7 +1447,7 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 		if err != nil {
 			return nil, err
 		}
-		tuneKCPMtu(sess, c.cfg.spoofMTU(carrier))
+		tuneKCPMtu(sess, c.cfg.spoofMTU(c.cfg.SpoofCarrier))
 		raw = sess
 	} else {
 		tconn, err := net.DialTimeout("tcp", addr, 15*time.Second)
@@ -1431,9 +1463,9 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 	}
 	raw.SetDeadline(time.Now().Add(20 * time.Second))
 
-	if c.cfg.Transport == "tls" || c.cfg.Transport == "wss" || c.cfg.Transport == "wssmux" {
+	if isTLSTransport(car.Transport) {
 		tconn := tls.Client(raw, &tls.Config{
-			ServerName: c.cfg.SNI,
+			ServerName: car.SNI,
 			// the tunnel is authenticated by the shared token; the certificate
 			// on the Iran side is self-signed on every start
 			InsecureSkipVerify: true,
@@ -1449,12 +1481,12 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 	br := bufio.NewReaderSize(raw, 32*1024)
 	var conn net.Conn = raw
 
-	if c.cfg.Transport == "ws" || c.cfg.Transport == "wss" || c.cfg.Transport == "wsmux" || c.cfg.Transport == "wssmux" {
+	if isWSTransport(car.Transport) {
 		host := c.cfg.Host
-		if host == "" {
-			host = c.cfg.SNI
+		if host == "" || car.Transport != c.cfg.Transport {
+			host = car.SNI
 		}
-		if err := clientUpgrade(raw, br, host, c.cfg.Path); err != nil {
+		if err := clientUpgrade(raw, br, host, car.Path); err != nil {
 			raw.Close()
 			return nil, err
 		}

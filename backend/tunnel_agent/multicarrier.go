@@ -156,7 +156,7 @@ func (m *multiCarrierConn) ReadFrom(p []byte) (int, net.Addr, error) {
 func (m *multiCarrierConn) WriteTo(p []byte, _ net.Addr) (int, error) {
 	src := m.spoofIPs[0]
 	if len(m.spoofIPs) > 1 {
-		n := atomic.AddUint32(&m.rr, 1)
+		n := atomic.AddUint32(&m.rr, 1) - 1
 		src = m.spoofIPs[int(n)%len(m.spoofIPs)]
 	}
 	car := m.carriers[int(atomic.LoadInt32(&m.last))]

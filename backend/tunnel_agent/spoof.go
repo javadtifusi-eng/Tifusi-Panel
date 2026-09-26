@@ -97,7 +97,7 @@ func (c *spoofPacketConn) WriteTo(p []byte, _ net.Addr) (int, error) {
 	// later drops does not take the whole tunnel down with it.
 	src := c.spoofIPs[0]
 	if len(c.spoofIPs) > 1 {
-		n := atomic.AddUint32(&c.rr, 1)
+		n := atomic.AddUint32(&c.rr, 1) - 1
 		src = c.spoofIPs[int(n)%len(c.spoofIPs)]
 	}
 	pkt, err := c.car.frame(src, p)

@@ -61,15 +61,25 @@ var errIPv4Only = errors.New("spoof carrier only supports IPv4 addresses")
 // nil *spoofOpts means "all defaults, nothing extra", so callers that don't
 // care can pass nil.
 type spoofOpts struct {
-	// stealth randomises the outbound packet's fingerprint: a per-packet TTL
-	// drawn from common values, a random DSCP, and a random L4 source port.
-	// It only changes how our own packets look on the wire, so the peer needs
-	// no matching setting to read them.
+	// stealth randomises the outbound packet's fingerprint: a TTL drawn from
+	// common values, a random DSCP, and a random L4 source port. They are
+	// drawn once per session (see session) and then held, because a real
+	// flow keeps them constant and per-packet changes are a giveaway. It only
+	// changes how our own packets look, so the peer needs no matching setting.
 	stealth bool
-	// peerSrc, when set, is the one forged source address inbound packets are
+	// peerSrcs, when set, are the forged source addresses inbound packets are
 	// allowed to carry; anything else is dropped before the cipher sees it.
-	// It mirrors the far side's spoof_source and tightens the receive filter.
-	peerSrc net.IP
+	// It mirrors the far side's spoof_source pool and tightens the filter.
+	peerSrcs map[[4]byte]bool
+	// icmpID tags our ICMP Echo packets. It is derived from the token so each
+	// tunnel has its own instead of one constant every install shares. Zero
+	// means icmpTunnelID.
+	icmpID uint16
+
+	// Per-session stealth values, filled in by session().
+	ttl   byte
+	tos   byte
+	sport uint16
 }
 
 // stealthTTLs are the initial TTLs a fresh packet most commonly leaves a host
@@ -78,11 +88,39 @@ var stealthTTLs = [3]byte{64, 128, 255}
 
 func (o *spoofOpts) on() bool { return o != nil && o.stealth }
 
-// srcPort returns the L4 source port to stamp: a random high port when stealth
-// is on, otherwise the fixed default the carrier normally uses.
+// session returns a copy of o with the stealth values drawn once, for one
+// carrier's lifetime. A reconnect opens a new carrier and so a new look.
+func (o *spoofOpts) session() *spoofOpts {
+	if o == nil {
+		return nil
+	}
+	cp := *o
+	if cp.stealth {
+		var b [4]byte
+		rand.Read(b[:])
+		cp.ttl = stealthTTLs[int(b[0])%len(stealthTTLs)]
+		cp.tos = b[1] & 0xFC // DSCP in the top 6 bits, ECN left 0
+		cp.sport = 1024 + binary.BigEndian.Uint16(b[2:4])%64512
+	}
+	return &cp
+}
+
+// icmp returns the ICMP Echo id this tunnel uses.
+func (o *spoofOpts) icmp() uint16 {
+	if o == nil || o.icmpID == 0 {
+		return icmpTunnelID
+	}
+	return o.icmpID
+}
+
+// srcPort returns the L4 source port to stamp: the session's random high port
+// when stealth is on, otherwise the fixed default the carrier normally uses.
 func (o *spoofOpts) srcPort(def uint16) uint16 {
 	if !o.on() {
 		return def
+	}
+	if o.sport != 0 {
+		return o.sport
 	}
 	var b [2]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -99,10 +137,14 @@ func (o *spoofOpts) decorate(pkt []byte) {
 	if !o.on() || len(pkt) < 20 {
 		return
 	}
-	var b [2]byte
-	rand.Read(b[:])
-	pkt[8] = stealthTTLs[int(b[0])%len(stealthTTLs)] // TTL
-	pkt[1] = b[1] & 0xFC                             // DSCP in the top 6 bits, ECN left 0
+	ttl, tos := o.ttl, o.tos
+	if ttl == 0 {
+		var b [2]byte
+		rand.Read(b[:])
+		ttl, tos = stealthTTLs[int(b[0])%len(stealthTTLs)], b[1]&0xFC
+	}
+	pkt[8] = ttl
+	pkt[1] = tos
 	binary.BigEndian.PutUint16(pkt[10:12], 0)
 	binary.BigEndian.PutUint16(pkt[10:12], onesComplementSum(pkt[0:20]))
 }
@@ -110,10 +152,29 @@ func (o *spoofOpts) decorate(pkt []byte) {
 // allowSrc reports whether an inbound packet from forged source src passes the
 // peer-source pin. With no pin configured every source is allowed.
 func (o *spoofOpts) allowSrc(src net.IP) bool {
-	if o == nil || o.peerSrc == nil {
+	if o == nil || len(o.peerSrcs) == 0 {
 		return true
 	}
-	return o.peerSrc.Equal(src)
+	v4 := src.To4()
+	if v4 == nil {
+		return false
+	}
+	var k [4]byte
+	copy(k[:], v4)
+	return o.peerSrcs[k]
+}
+
+// newPeerSrcs turns a parsed source pool into the allowSrc lookup set.
+func newPeerSrcs(ips []net.IP) map[[4]byte]bool {
+	m := make(map[[4]byte]bool, len(ips))
+	for _, ip := range ips {
+		if v4 := ip.To4(); v4 != nil {
+			var k [4]byte
+			copy(k[:], v4)
+			m[k] = true
+		}
+	}
+	return m
 }
 
 // validSpoofCarrier reports whether name is a carrier we implement. An empty
@@ -165,6 +226,7 @@ func newSpoofCarrier(name, listenAddr string, peer *net.UDPAddr, opts *spoofOpts
 	if err != nil {
 		return nil, fmt.Errorf("spoof: resolve listen %q: %w", listenAddr, err)
 	}
+	opts = opts.session()
 	switch name {
 	case "", carrierUDP:
 		return newUDPCarrier(la, peer, opts)
@@ -273,7 +335,7 @@ func newICMPCarrier(_ uint16, peer *net.UDPAddr, opts *spoofOpts) (*icmpCarrier,
 	if err != nil {
 		return nil, err
 	}
-	return &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: icmpTunnelID, peer: peer, opts: opts}, nil
+	return &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: opts.icmp(), peer: peer, opts: opts}, nil
 }
 
 func (c *icmpCarrier) readPayload(p []byte) (int, error) {
@@ -379,6 +441,9 @@ func (c *tcpCarrier) readPayload(p []byte) (int, error) {
 		if len(payload) == 0 { // bare ACK / handshake noise, nothing to carry
 			continue
 		}
+		// Acknowledge what the peer sent, so our segments carry a moving ack
+		// like a real established connection instead of a frozen one.
+		atomic.StoreUint32(&c.ack, binary.BigEndian.Uint32(tcp[4:8])+uint32(len(payload)))
 		return copy(p, payload), nil
 	}
 }
@@ -413,6 +478,13 @@ func (c *tcpCarrier) close() error {
 // tunnel still works, just noisier, so a failure is logged, not fatal.
 func (c *tcpCarrier) installRSTDrop() {
 	rule := []string{"-p", "tcp", "--sport", strconv.Itoa(int(c.port)), "--tcp-flags", "RST", "RST", "-j", "DROP"}
+	// A crash or SIGKILL skips close(), leaving the rule behind; clear any
+	// leftovers first so restarts don't stack duplicates.
+	for i := 0; i < 32; i++ {
+		if exec.Command("iptables", append([]string{"-D", "OUTPUT"}, rule...)...).Run() != nil {
+			break
+		}
+	}
 	if out, err := exec.Command("iptables", append([]string{"-I", "OUTPUT"}, rule...)...).CombinedOutput(); err != nil {
 		log.Printf("spoof tcp carrier: could not install RST-drop rule (kernel RSTs will leak to the forged source): %v: %s", err, out)
 		return
