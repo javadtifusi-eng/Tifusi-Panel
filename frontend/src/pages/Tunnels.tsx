@@ -213,6 +213,10 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
       setFormError(t.tunnelsPage.noNeedForeign)
       return
     }
+    if (forwards.length === 0) {
+      setFormError(t.tunnelsPage.forwardRequired)
+      return
+    }
     // Half-filled rows used to be dropped on save, so the admin walked away
     // believing a port was forwarded when nothing had been stored.
     if (forwards.some((f) => !f.name || !f.listen_port || !f.target_port)) {
@@ -228,7 +232,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     try {
       const payload = {
         name,
-        iran_address: iranAddress,
+        iran_address: iranAddress.trim(),
         iran_port: parseInt(iranPort, 10),
         foreign_node_id: foreignSource === 'node' ? foreignNodeId : null,
         foreign_address: foreignSource === 'address' ? foreignAddress : null,

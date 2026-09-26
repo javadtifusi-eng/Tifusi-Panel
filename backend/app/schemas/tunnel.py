@@ -18,6 +18,10 @@ class TunnelForward(BaseModel):
 
 
 class TunnelCreate(BaseModel):
+    # A stray space pasted with an address ends up in the agent config as
+    # "1.2.3.4 :8443", which the foreign side can't resolve.
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     name: str = Field(min_length=1, max_length=100)
     iran_address: str = Field(min_length=1, max_length=255)
     iran_port: int = Field(default=8443, ge=1, le=65535)
@@ -32,7 +36,8 @@ class TunnelCreate(BaseModel):
     spoof_carrier: SpoofCarrier | None = None
     spoof_stealth: bool | None = None
     connection_count: int = Field(default=8, ge=1, le=256)
-    forwards: list[TunnelForward] = []
+    # The Iran side refuses to start without a forward, so catch it here.
+    forwards: list[TunnelForward] = Field(min_length=1)
     cdn_provider: CdnProvider | None = None
     cdn_host: str | None = Field(default=None, max_length=255)
     cdn_port: int | None = Field(default=None, ge=1, le=65535)
@@ -41,6 +46,8 @@ class TunnelCreate(BaseModel):
 
 
 class TunnelUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     name: str | None = Field(default=None, min_length=1, max_length=100)
     iran_address: str | None = Field(default=None, min_length=1, max_length=255)
     iran_port: int | None = Field(default=None, ge=1, le=65535)
@@ -55,7 +62,7 @@ class TunnelUpdate(BaseModel):
     spoof_carrier: SpoofCarrier | None = None
     spoof_stealth: bool | None = None
     connection_count: int | None = Field(default=None, ge=1, le=256)
-    forwards: list[TunnelForward] | None = None
+    forwards: list[TunnelForward] | None = Field(default=None, min_length=1)
     cdn_provider: CdnProvider | None = None
     cdn_host: str | None = Field(default=None, max_length=255)
     cdn_port: int | None = Field(default=None, ge=1, le=65535)
