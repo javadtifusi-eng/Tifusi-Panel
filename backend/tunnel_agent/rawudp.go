@@ -24,6 +24,7 @@ const (
 	rawHello  = 0x00 // client -> server: token, register/keep alive
 	rawTarget = 0x01 // server -> client: len(1) target payload
 	rawData   = 0x02 // either way: payload
+	rawBye    = 0x03 // client -> server: this socket is closing, drop it
 
 	rawIdle      = 120 * time.Second // flow closed after this long silent
 	rawKeepalive = 10 * time.Second
@@ -141,6 +142,13 @@ func (r *rawServer) readLoop() {
 			if f != nil {
 				f.pc.WriteTo(buf[1:n], f.client)
 			}
+		case rawBye:
+			// The foreign socket is gone: forget it now so the next packet of
+			// its flow claims a live socket instead of vanishing until reap.
+			if p != nil {
+				delete(r.peers, key)
+			}
+			r.mu.Unlock()
 		default:
 			r.mu.Unlock()
 		}
@@ -281,12 +289,12 @@ func (c *Client) runRaw() {
 	}
 }
 
-// rawWorker keeps one idle socket registered; once a flow claims it, it
-// starts its replacement and serves the flow until it goes silent.
+// rawWorker keeps one idle socket registered. When a flow claims it, the
+// socket starts its own replacement right away (so the pool never runs dry)
+// and this worker ends with the flow.
 func (c *Client) rawWorker(addr string) {
 	for {
 		if c.rawSocket(addr) {
-			go c.rawWorker(addr)
 			return
 		}
 		time.Sleep(2 * time.Second)
@@ -331,11 +339,14 @@ func (c *Client) rawSocket(addr string) bool {
 		mu.Lock()
 		busy := target != nil
 		mu.Unlock()
-		wait := rawStale
+		// An idle socket waits as long as it takes: the Iran side only sends
+		// once a flow claims it, and a socket that timed out and reopened on
+		// a new port would leave the Iran side handing out a dead address.
 		if busy {
-			wait = rawIdle
+			conn.SetReadDeadline(time.Now().Add(rawIdle))
+		} else {
+			conn.SetReadDeadline(time.Time{})
 		}
-		conn.SetReadDeadline(time.Now().Add(wait))
 		n, err := conn.Read(buf)
 		if err != nil {
 			mu.Lock()
@@ -343,6 +354,9 @@ func (c *Client) rawSocket(addr string) bool {
 				target.Close()
 			}
 			mu.Unlock()
+			if busy {
+				conn.Write([]byte{rawBye})
+			}
 			return busy
 		}
 		var payload []byte
@@ -359,6 +373,7 @@ func (c *Client) rawSocket(addr string) bool {
 				mu.Lock()
 				target = t
 				mu.Unlock()
+				go c.rawWorker(addr) // replace this socket in the idle pool now
 				go func(t net.Conn) {
 					out := make([]byte, 65536)
 					out[0] = rawData
