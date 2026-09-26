@@ -862,6 +862,16 @@ func (c *localUDPConn) Read(b []byte) (int, error) {
 func (c *localUDPConn) RemoteAddr() net.Addr { return c.target }
 
 func distinctLocalAddr(target net.IP) net.IP {
+	// A loopback target must keep a loopback source: the kernel drops a packet
+	// aimed at 127.0.0.0/8 that carries a non-loopback source (martian), so a
+	// real NIC address here would make every reply silently fail. 127.0.0.2
+	// (or .1 when the target is .2) is distinct yet still on lo.
+	if target.IsLoopback() {
+		if target.Equal(net.ParseIP("127.0.0.1")) {
+			return net.ParseIP("127.0.0.2")
+		}
+		return net.ParseIP("127.0.0.1")
+	}
 	if ifaces, err := net.Interfaces(); err == nil {
 		for _, ifi := range ifaces {
 			// Point-to-point interfaces (tun/wg/ppp/veth...) route their
