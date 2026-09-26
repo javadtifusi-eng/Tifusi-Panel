@@ -52,9 +52,6 @@ def build_iran_config(tunnel: Tunnel) -> dict:
             config["spoof_peer_src"] = tunnel.spoof_source
         if tunnel.foreign_address:
             config["peer"] = f"{tunnel.foreign_address}:{tunnel.iran_port}"
-    if tunnel.transport == TunnelTransport.udp:
-        # UDP forwards cross the raw relay (tunnel port + 1), not KCP.
-        config["udp_raw"] = True
     config["forwards"] = [
         {
             "name": f["name"],
@@ -107,8 +104,6 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
         config["mux_con"] = tunnel.connection_count
     else:
         config["pool"] = tunnel.connection_count
-    if tunnel.transport == TunnelTransport.udp:
-        config["udp_raw"] = True
     return config
 
 
