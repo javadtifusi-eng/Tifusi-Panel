@@ -186,3 +186,45 @@ func TestSpoofOptsPeerPool(t *testing.T) {
 		t.Error("10.0.0.9 is outside the pool and must be dropped")
 	}
 }
+
+func TestSplitCarrierPair(t *testing.T) {
+	cases := []struct{ name, tx, rx string }{
+		{"tcp", "tcp", "tcp"},
+		{"tcp>icmpv6", "tcp", "icmpv6"},
+		{"", "", ""},
+	}
+	for _, c := range cases {
+		if tx, rx := splitCarrierPair(c.name); tx != c.tx || rx != c.rx {
+			t.Errorf("splitCarrierPair(%q) = %q, %q", c.name, tx, rx)
+		}
+	}
+	if got := carrierPair("udp", "udp"); got != "udp" {
+		t.Errorf("carrierPair(udp, udp) = %q", got)
+	}
+	if got := carrierPair("udp", ""); got != "udp" {
+		t.Errorf("carrierPair(udp, \"\") = %q", got)
+	}
+	if got := carrierPair("tcp", "icmpv6"); got != "tcp>icmpv6" {
+		t.Errorf("carrierPair(tcp, icmpv6) = %q", got)
+	}
+	// A pair with tcp on either side gets tcp's smaller MTU.
+	if carrierMTU("icmpv6>tcp") != carrierMTU(carrierTCP) || carrierMTU("udp>icmpv6") != carrierMTU(carrierUDP) {
+		t.Error("carrierMTU ignores one side of a pair")
+	}
+}
+
+func TestBuildSpoofedEchoICMPv6(t *testing.T) {
+	pkt, err := buildSpoofedEcho(ipProtoICMPv6, 129, net.ParseIP("5.6.7.8"), net.ParseIP("1.1.1.1"), 7, 9, []byte("hi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkt[9] != ipProtoICMPv6 || pkt[20] != 129 {
+		t.Fatalf("proto %d type %d, want 58/129", pkt[9], pkt[20])
+	}
+	if s := onesComplementSum(pkt[0:20]); s != 0 {
+		t.Errorf("IP header checksum invalid: %#x", s)
+	}
+	if s := onesComplementSum(pkt[20:]); s != 0 {
+		t.Errorf("echo checksum invalid: %#x", s)
+	}
+}

@@ -14,12 +14,19 @@ package main
 //            that rate-limit or drop UDP still pass ICMP, and an echo *reply*
 //            (not request) never makes the receiving kernel generate traffic
 //            of its own. RX is a raw ICMP socket.
+//   - icmpv6 — like icmp, but the IPv4 packet claims protocol 58 and carries an
+//            ICMPv6 Echo Reply. A firewall that shuts IPv6 down often leaves
+//            ICMPv6 itself alone, and a rule written for ICMP (protocol 1)
+//            doesn't match it. RX is a raw protocol-58 socket.
 //   - tcp  — the payload rides inside forged TCP segments flagged PSH|ACK, so
 //            to a stateless middlebox the flow looks like an ordinary
 //            established TCP connection rather than the UDP that DPI most
 //            readily throttles. RX is a raw TCP socket; the kernel's stray
 //            RSTs (aimed at the forged source anyway) are suppressed with an
 //            iptables rule while the tunnel is up.
+//
+// Each direction can use its own carrier: "tcp>icmpv6" sends on tcp and
+// receives on icmpv6, and the far side is configured the other way round.
 //
 // The reliability, ordering, encryption and traffic-shape padding all sit
 // ABOVE this layer (KCP + obfPacketConn), so a carrier only has to (a) frame a
@@ -38,6 +45,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -45,10 +53,17 @@ import (
 
 // Supported carriers for the spoof transport.
 const (
-	carrierUDP  = "udp"
-	carrierICMP = "icmp"
-	carrierTCP  = "tcp"
+	carrierUDP    = "udp"
+	carrierICMP   = "icmp"
+	carrierICMPv6 = "icmpv6"
+	carrierTCP    = "tcp"
+
+	// carrierPairSep joins a send and a receive carrier into one name.
+	carrierPairSep = ">"
 )
+
+// ipProtoICMPv6 is ICMPv6's IP protocol number, stamped in an IPv4 header.
+const ipProtoICMPv6 = 58
 
 // icmpTunnelID tags our ICMP Echo packets so the raw socket, which sees every
 // ICMP packet on the host (real pings included), can cheaply skip anything
@@ -181,7 +196,7 @@ func newPeerSrcs(ips []net.IP) map[[4]byte]bool {
 // name is treated as the udp default by the caller, so it is not accepted here.
 func validSpoofCarrier(name string) bool {
 	switch name {
-	case carrierUDP, carrierICMP, carrierTCP, carrierAuto:
+	case carrierUDP, carrierICMP, carrierICMPv6, carrierTCP, carrierAuto:
 		return true
 	default:
 		return false
@@ -195,11 +210,32 @@ func validSpoofCarrier(name string) bool {
 func carrierMTU(name string) int {
 	// auto may land on the TCP carrier, so it must use TCP's smaller budget
 	// for every carrier — a fixed MTU that both ends agree on regardless of
-	// which carrier a given packet rides.
-	if name == carrierTCP || name == carrierAuto {
-		return 1180
+	// which carrier a given packet rides. A split pair takes the smaller of
+	// its two, so both ends agree on it too.
+	tx, rx := splitCarrierPair(name)
+	for _, c := range []string{tx, rx} {
+		if c == carrierTCP || c == carrierAuto {
+			return 1180
+		}
 	}
 	return 1200
+}
+
+// splitCarrierPair splits "tx>rx" into its send and receive carriers; a plain
+// name is both.
+func splitCarrierPair(name string) (tx, rx string) {
+	if i := strings.Index(name, carrierPairSep); i >= 0 {
+		return name[:i], name[i+len(carrierPairSep):]
+	}
+	return name, name
+}
+
+// carrierPair is the name for sending on tx and receiving on rx.
+func carrierPair(tx, rx string) string {
+	if rx == "" || rx == tx {
+		return tx
+	}
+	return tx + carrierPairSep + rx
 }
 
 // spoofCarrier frames one tunnel payload into a forged IPv4 packet and reads
@@ -227,17 +263,70 @@ func newSpoofCarrier(name, listenAddr string, peer *net.UDPAddr, opts *spoofOpts
 		return nil, fmt.Errorf("spoof: resolve listen %q: %w", listenAddr, err)
 	}
 	opts = opts.session()
+	if tx, rx := splitCarrierPair(name); tx != rx {
+		return newSplitCarrier(tx, rx, la, peer, opts)
+	}
+	return openCarrier(name, la, peer, opts)
+}
+
+func openCarrier(name string, la, peer *net.UDPAddr, opts *spoofOpts) (spoofCarrier, error) {
 	switch name {
 	case "", carrierUDP:
 		return newUDPCarrier(la, peer, opts)
 	case carrierICMP:
 		return newICMPCarrier(uint16(la.Port), peer, opts)
+	case carrierICMPv6:
+		return newICMPv6Carrier(peer, opts)
 	case carrierTCP:
 		return newTCPCarrier(uint16(la.Port), peer, opts)
 	default:
 		return nil, fmt.Errorf("unknown spoof carrier %q", name)
 	}
 }
+
+// ------------------------------------------------------------- split carrier
+
+// splitCarrier sends on one carrier and receives on another. The send side's
+// own receive socket is closed straight away: framing needs none of it, and a
+// raw socket nobody reads would still be handed a copy of every packet.
+type splitCarrier struct {
+	tx spoofCarrier
+	rx spoofCarrier
+}
+
+func newSplitCarrier(tx, rx string, la, peer *net.UDPAddr, opts *spoofOpts) (spoofCarrier, error) {
+	if tx == carrierAuto || rx == carrierAuto {
+		return nil, errors.New("auto can't be one side of a split carrier")
+	}
+	rxCar, err := openCarrier(rx, la, peer, opts)
+	if err != nil {
+		return nil, err
+	}
+	// The send side never binds: a UDP one would clash with a UDP receive side
+	// on the same port, and none of them reads anything here.
+	txLA := &net.UDPAddr{IP: la.IP, Port: 0}
+	if tx != carrierUDP {
+		txLA = la // tcp stamps its port on outbound segments
+	}
+	txCar, err := openCarrier(tx, txLA, peer, opts)
+	if err != nil {
+		rxCar.close()
+		return nil, err
+	}
+	if u, ok := txCar.(*udpCarrier); ok {
+		u.sport = uint16(la.Port) // send from our real port, like a plain udp carrier
+	}
+	txCar.close()
+	return &splitCarrier{tx: txCar, rx: rxCar}, nil
+}
+
+func (c *splitCarrier) readPayload(p []byte) (int, error) { return c.rx.readPayload(p) }
+func (c *splitCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
+	return c.tx.frame(src, payload)
+}
+func (c *splitCarrier) setReadDeadline(t time.Time) error { return c.rx.setReadDeadline(t) }
+func (c *splitCarrier) localAddr() net.Addr               { return c.rx.localAddr() }
+func (c *splitCarrier) close() error                      { return c.rx.close() }
 
 // ---------------------------------------------------------------- udp carrier
 
@@ -322,20 +411,33 @@ func ipHeaderLen(pkt []byte) int {
 // --------------------------------------------------------------- icmp carrier
 
 type icmpCarrier struct {
-	rx   *os.File
-	rbuf []byte
-	id   uint16
-	seq  uint32
-	peer *net.UDPAddr
-	opts *spoofOpts
+	rx       *os.File
+	rbuf     []byte
+	id       uint16
+	seq      uint32
+	peer     *net.UDPAddr
+	opts     *spoofOpts
+	proto    byte // IPPROTO_ICMP, or ipProtoICMPv6 for the icmpv6 carrier
+	echoType byte // the Echo Reply type in that protocol: 0, or 129 for ICMPv6
 }
 
 func newICMPCarrier(_ uint16, peer *net.UDPAddr, opts *spoofOpts) (*icmpCarrier, error) {
-	rx, err := openRawRecv(syscall.IPPROTO_ICMP)
+	return newEchoCarrier(syscall.IPPROTO_ICMP, 0, peer, opts)
+}
+
+// newICMPv6Carrier carries the payload in ICMPv6 Echo Replies inside IPv4.
+// No IPv4 handler exists for protocol 58, but the kernel hands such packets to
+// a raw socket for it, and while one is open it sends no Protocol Unreachable.
+func newICMPv6Carrier(peer *net.UDPAddr, opts *spoofOpts) (*icmpCarrier, error) {
+	return newEchoCarrier(ipProtoICMPv6, 129, peer, opts)
+}
+
+func newEchoCarrier(proto, echoType byte, peer *net.UDPAddr, opts *spoofOpts) (*icmpCarrier, error) {
+	rx, err := openRawRecv(int(proto))
 	if err != nil {
 		return nil, err
 	}
-	return &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: opts.icmp(), peer: peer, opts: opts}, nil
+	return &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: opts.icmp(), peer: peer, opts: opts, proto: proto, echoType: echoType}, nil
 }
 
 func (c *icmpCarrier) readPayload(p []byte) (int, error) {
@@ -352,9 +454,9 @@ func (c *icmpCarrier) readPayload(p []byte) (int, error) {
 			continue
 		}
 		icmp := c.rbuf[ihl:n]
-		// Echo Reply (type 0, code 0) carrying our tunnel id; skip everything
-		// else, real pings and unrelated ICMP included.
-		if icmp[0] != 0 || icmp[1] != 0 {
+		// Echo Reply (code 0) carrying our tunnel id; skip everything else,
+		// real pings and unrelated ICMP included.
+		if icmp[0] != c.echoType || icmp[1] != 0 {
 			continue
 		}
 		if binary.BigEndian.Uint16(icmp[4:6]) != c.id {
@@ -367,7 +469,7 @@ func (c *icmpCarrier) readPayload(p []byte) (int, error) {
 
 func (c *icmpCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
 	seq := uint16(atomic.AddUint32(&c.seq, 1))
-	pkt, err := buildSpoofedICMP(src, c.peer.IP, c.id, seq, payload)
+	pkt, err := buildSpoofedEcho(c.proto, c.echoType, src, c.peer.IP, c.id, seq, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -515,6 +617,14 @@ func randU32() uint32 {
 // buildSpoofedICMP assembles a forged-source IPv4 packet whose ICMP body is an
 // Echo Reply (type 0) carrying payload after the 8-byte ICMP header.
 func buildSpoofedICMP(srcIP, dstIP net.IP, id, seq uint16, payload []byte) ([]byte, error) {
+	return buildSpoofedEcho(syscall.IPPROTO_ICMP, 0, srcIP, dstIP, id, seq, payload)
+}
+
+// buildSpoofedEcho assembles a forged-source IPv4 packet of protocol proto
+// whose body is an Echo message of type echoType carrying payload after the
+// 8-byte header: ICMP (1, type 0) or ICMPv6 (58, type 129). ICMPv6 has no
+// pseudo-header defined over IPv4, so both are checksummed over the body.
+func buildSpoofedEcho(proto, echoType byte, srcIP, dstIP net.IP, id, seq uint16, payload []byte) ([]byte, error) {
 	src, dst := srcIP.To4(), dstIP.To4()
 	if src == nil || dst == nil {
 		return nil, errIPv4Only
@@ -526,13 +636,13 @@ func buildSpoofedICMP(srcIP, dstIP net.IP, id, seq uint16, payload []byte) ([]by
 	pkt[0] = 0x45
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(total))
 	pkt[8] = 64
-	pkt[9] = syscall.IPPROTO_ICMP
+	pkt[9] = proto
 	copy(pkt[12:16], src)
 	copy(pkt[16:20], dst)
 	binary.BigEndian.PutUint16(pkt[10:12], onesComplementSum(pkt[0:ipHdrLen]))
 
 	icmp := pkt[ipHdrLen:]
-	icmp[0] = 0 // type: Echo Reply
+	icmp[0] = echoType
 	icmp[1] = 0 // code
 	binary.BigEndian.PutUint16(icmp[4:6], id)
 	binary.BigEndian.PutUint16(icmp[6:8], seq)

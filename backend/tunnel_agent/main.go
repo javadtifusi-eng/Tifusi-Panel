@@ -161,6 +161,12 @@ type Config struct {
 	// one that works while the server listens on all of them. Both ends must
 	// match; the panel sets the same value on each.
 	SpoofCarrier string `json:"spoof_carrier,omitempty"`
+	// SpoofRecvCarrier, "spoof" transport only: the carrier this side receives
+	// on, when it differs from the one it sends on (SpoofCarrier). The far
+	// side is set the other way round, so each direction can pick whatever
+	// its filter lets through — say tcp one way and icmpv6 the other. Empty
+	// means the same as SpoofCarrier. Not with "auto".
+	SpoofRecvCarrier string `json:"spoof_recv_carrier,omitempty"`
 	// SpoofStealth, "spoof" transport only: randomise each outbound packet's
 	// fingerprint — TTL drawn from {64,128,255}, a random DSCP, and a random
 	// high source port — so the flow has no fixed shape to match on. It only
@@ -202,6 +208,12 @@ func (c *Config) spoofOptions() *spoofOpts {
 		}
 	}
 	return o
+}
+
+// spoofCarriers is the carrier name the spoof transport opens: SpoofCarrier,
+// or "send>receive" when this side receives on a different one.
+func (c *Config) spoofCarriers() string {
+	return carrierPair(c.SpoofCarrier, c.SpoofRecvCarrier)
 }
 
 // spoofMTU is the KCP MTU for the spoof transport: the explicit override when
@@ -305,7 +317,15 @@ func (c *Config) validate() error {
 			return fmt.Errorf("spoof peer %q is not a valid ip:port: %w", peer, err)
 		}
 		if c.SpoofCarrier != "" && !validSpoofCarrier(c.SpoofCarrier) {
-			return fmt.Errorf("spoof_carrier must be udp, icmp or tcp, got %q", c.SpoofCarrier)
+			return fmt.Errorf("spoof_carrier must be udp, icmp, icmpv6, tcp or auto, got %q", c.SpoofCarrier)
+		}
+		if c.SpoofRecvCarrier != "" {
+			if !validSpoofCarrier(c.SpoofRecvCarrier) || c.SpoofRecvCarrier == carrierAuto {
+				return fmt.Errorf("spoof_recv_carrier must be udp, icmp, icmpv6 or tcp, got %q", c.SpoofRecvCarrier)
+			}
+			if c.SpoofCarrier == carrierAuto {
+				return errors.New("spoof_recv_carrier can't be combined with spoof_carrier \"auto\"")
+			}
 		}
 	default:
 		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux, udp or spoof, got %q", c.Transport)
@@ -997,7 +1017,7 @@ func (s *Server) Run() error {
 		if s.cfg.SpoofCarrier == carrierAuto {
 			sln, err = spoofListenAuto(s.cfg.Listen, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity, s.cfg.spoofOptions())
 		} else {
-			sln, err = spoofListen(s.cfg.Listen, s.cfg.SpoofCarrier, srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity, s.cfg.spoofOptions())
+			sln, err = spoofListen(s.cfg.Listen, s.cfg.spoofCarriers(), srcs, peer, s.cfg.Token, s.cfg.FECData, s.cfg.FECParity, s.cfg.spoofOptions())
 		}
 		if err != nil {
 			return err
@@ -1010,7 +1030,7 @@ func (s *Server) Run() error {
 		}
 	}
 	if s.cfg.Transport == "spoof" {
-		s.log("tunnel listening on %s (spoof/%s carrier)", s.cfg.Listen, s.cfg.SpoofCarrier)
+		s.log("tunnel listening on %s (spoof/%s carrier)", s.cfg.Listen, s.cfg.spoofCarriers())
 	} else {
 		s.log("tunnel listening on %s (%s)", s.cfg.Listen, s.cfg.Transport)
 	}
@@ -1061,7 +1081,7 @@ func (s *Server) acceptLoop(ln net.Listener, car Carrier) error {
 		}
 		if sess, ok := c.(*kcp.UDPSession); ok {
 			if car.Transport == "spoof" {
-				tuneKCPMtu(sess, s.cfg.spoofMTU(s.cfg.SpoofCarrier))
+				tuneKCPMtu(sess, s.cfg.spoofMTU(s.cfg.spoofCarriers()))
 			} else {
 				tuneKCP(sess)
 			}
@@ -1441,7 +1461,7 @@ func (c *Client) log(format string, v ...interface{}) { log.Printf(format, v...)
 // configured carrier.
 func (c *Client) spoofCarrier() string {
 	if c.cfg.SpoofCarrier != carrierAuto {
-		return c.cfg.SpoofCarrier
+		return c.cfg.spoofCarriers()
 	}
 	i := atomic.LoadUint32(&c.spoofIdx)
 	return autoCarriers[int(i)%len(autoCarriers)]
@@ -1551,7 +1571,7 @@ func (c *Client) connectCarrier(car Carrier, addr, role string) (*fconn, error) 
 		if err != nil {
 			return nil, err
 		}
-		tuneKCPMtu(sess, c.cfg.spoofMTU(c.cfg.SpoofCarrier))
+		tuneKCPMtu(sess, c.cfg.spoofMTU(c.cfg.spoofCarriers()))
 		raw = sess
 	} else {
 		tconn, err := net.DialTimeout("tcp", addr, 15*time.Second)

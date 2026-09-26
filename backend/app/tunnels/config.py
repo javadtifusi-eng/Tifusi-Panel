@@ -45,6 +45,9 @@ def build_iran_config(tunnel: Tunnel, foreign_host: str | None = None) -> dict:
         # the foreign side's real address (its listener stays on iran_port).
         config["spoof_source"] = tunnel.spoof_source
         config["spoof_carrier"] = tunnel.spoof_carrier or "udp"
+        # The Iran side sends Iran -> foreign and hears back on the return one.
+        if tunnel.spoof_carrier_back and tunnel.spoof_carrier_back != config["spoof_carrier"]:
+            config["spoof_recv_carrier"] = tunnel.spoof_carrier_back
         if tunnel.spoof_stealth:
             # Both ends share one forged source in the panel, so the pin the
             # far side must match is simply that same address.
@@ -109,6 +112,10 @@ def build_foreign_config(tunnel: Tunnel) -> dict:
         # the Iran side's spoofed packets reach it; peer is the Iran address.
         config["spoof_source"] = tunnel.spoof_source
         config["spoof_carrier"] = tunnel.spoof_carrier or "udp"
+        # The foreign side is the mirror image: it sends on the return carrier.
+        if tunnel.spoof_carrier_back and tunnel.spoof_carrier_back != config["spoof_carrier"]:
+            config["spoof_recv_carrier"] = config["spoof_carrier"]
+            config["spoof_carrier"] = tunnel.spoof_carrier_back
         if tunnel.spoof_stealth:
             config["spoof_stealth"] = True
             config["spoof_peer_src"] = tunnel.spoof_source

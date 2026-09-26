@@ -31,6 +31,7 @@ import {
   type TunnelTransport,
   type CdnProvider,
   type SpoofCarrier,
+  type SpoofCarrierBack,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import CdnTuner from '../components/CdnTuner'
@@ -205,6 +206,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [path, setPath] = useState('')
   const [spoofSourceIp, setSpoofSourceIp] = useState('')
   const [spoofCarrier, setSpoofCarrier] = useState<SpoofCarrier>('auto')
+  // '' = the return direction uses spoofCarrier too.
+  const [spoofCarrierBack, setSpoofCarrierBack] = useState<SpoofCarrierBack | ''>('')
   const [spoofStealth, setSpoofStealth] = useState(true)
   const [connectionCount, setConnectionCount] = useState('8')
   const [forwards, setForwards] = useState<TunnelForward[]>([])
@@ -282,6 +285,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setPath('')
     setSpoofSourceIp('')
     setSpoofCarrier('auto')
+    setSpoofCarrierBack('')
     setSpoofStealth(true)
     setConnectionCount('8')
     setForwards([])
@@ -309,6 +313,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setPath(tunnel.path ?? '')
     setSpoofSourceIp(tunnel.spoof_source ?? '')
     setSpoofCarrier((tunnel.spoof_carrier as SpoofCarrier) || 'auto')
+    setSpoofCarrierBack(tunnel.spoof_carrier_back || '')
     setSpoofStealth(tunnel.spoof_stealth ?? true)
     setConnectionCount(String(tunnel.connection_count))
     setForwards(tunnel.forwards)
@@ -358,6 +363,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         path: path || null,
         spoof_source: transport === 'spoof' ? spoofSourceIp.trim() || null : null,
         spoof_carrier: transport === 'spoof' ? spoofCarrier : null,
+        spoof_carrier_back: transport === 'spoof' && spoofCarrier !== 'auto' && spoofCarrierBack && spoofCarrierBack !== spoofCarrier ? spoofCarrierBack : null,
         spoof_stealth: transport === 'spoof' ? spoofStealth : null,
         connection_count: parseInt(connectionCount, 10) || 8,
         forwards,
@@ -577,6 +583,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setTransport('spoof')
     setSpoofSourceIp(pool)
     setSpoofCarrier('auto')
+    setSpoofCarrierBack('')
     setSpoofStealth(true)
     setShowSpoof(false)
     setShowForm(true)
@@ -875,7 +882,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   </div>
                   <div className="facts-line">
                     <span>
-                      {t.tunnelsPage.transportLabel} <b className="en">{t.tunnelsPage.transportLabels[tunnel.transport]}{tunnel.transport === 'spoof' ? ` · ${(tunnel.spoof_carrier || 'udp').toUpperCase()}` : ''}</b>
+                      {t.tunnelsPage.transportLabel} <b className="en">{t.tunnelsPage.transportLabels[tunnel.transport]}{tunnel.transport === 'spoof' ? ` · ${(tunnel.spoof_carrier || 'udp').toUpperCase()}${tunnel.spoof_carrier_back ? ` / ${tunnel.spoof_carrier_back.toUpperCase()}` : ''}` : ''}</b>
                     </span>
                     <span>
                       {tn.ports}{' '}
@@ -1162,12 +1169,23 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   </button>
                 </div>
                 <div className="tr-pick carrier-pick">
-                  {(['auto', 'udp', 'icmp', 'tcp'] as SpoofCarrier[]).map((c) => (
+                  {(['auto', 'udp', 'icmp', 'icmpv6', 'tcp'] as SpoofCarrier[]).map((c) => (
                     <button key={c} type="button" onClick={() => setSpoofCarrier(c)} aria-pressed={spoofCarrier === c} className="tr-card">
                       <b className="en">{c === 'auto' ? t.tunnelsPage.spoofCarrierAuto : c.toUpperCase()}</b>
                     </button>
                   ))}
                 </div>
+                {spoofCarrier !== 'auto' && (
+                  <Field label={t.tunnelsPage.spoofCarrierBackLabel}>
+                    <select className="input" value={spoofCarrierBack} onChange={(e) => setSpoofCarrierBack(e.target.value as SpoofCarrierBack | '')}>
+                      <option value="">{t.tunnelsPage.spoofCarrierBackSame}</option>
+                      {(['udp', 'icmp', 'icmpv6', 'tcp'] as SpoofCarrierBack[]).filter((c) => c !== spoofCarrier).map((c) => (
+                        <option key={c} value={c}>{c.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {spoofCarrier !== 'auto' && <small className="muted">{t.tunnelsPage.spoofCarrierBackHint}</small>}
                 <label className="sh-check">
                   <input id="tunnel-spoof-stealth" type="checkbox" checked={spoofStealth} onChange={(e) => setSpoofStealth(e.target.checked)} />
                   <b>{t.tunnelsPage.spoofStealthToggle}</b>
@@ -1276,7 +1294,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
             <div className="form-section">
               <h4>{tn.spoofProtocolLabel}</h4>
               <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
-                {(['udp', 'icmp', 'tcp'] as SpoofTestProtocol[]).map((p) => (
+                {(['udp', 'icmp', 'icmpv6', 'tcp'] as SpoofTestProtocol[]).map((p) => (
                   <button key={p} type="button" aria-pressed={spoofProtocol === p} onClick={() => { setSpoofProtocol(p); setSpoofCmds(null); setDiscCmds(null) }}>
                     {p.toUpperCase()}
                   </button>

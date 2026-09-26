@@ -44,12 +44,15 @@ const (
 // The protocols a probe can be carried on. A datacenter or the national
 // filter can treat them differently, so each is worth measuring on its own.
 const (
-	probeUDP  = "udp"
-	probeICMP = "icmp"
-	probeTCP  = "tcp"
+	probeUDP    = "udp"
+	probeICMP   = "icmp"
+	probeICMPv6 = "icmpv6"
+	probeTCP    = "tcp"
 )
 
-func validProbeProto(p string) bool { return p == probeUDP || p == probeICMP || p == probeTCP }
+func validProbeProto(p string) bool {
+	return p == probeUDP || p == probeICMP || p == probeICMPv6 || p == probeTCP
+}
 
 func buildProbePayload(claimedSrc net.IP, seq uint32, sent uint16) []byte {
 	p := make([]byte, spoofPayloadLen)
@@ -182,6 +185,8 @@ func buildProbePacket(proto string, srcIP, dstIP net.IP, srcPort, dstPort uint16
 	switch proto {
 	case probeICMP:
 		return buildSpoofedICMP(srcIP, dstIP, spoofTestICMPID, uint16(seq), payload)
+	case probeICMPv6:
+		return buildSpoofedEcho(ipProtoICMPv6, 129, srcIP, dstIP, spoofTestICMPID, uint16(seq), payload)
 	case probeTCP:
 		return buildSpoofedTCP(srcIP, dstIP, srcPort, dstPort, seq, randU32(), payload)
 	default:
@@ -283,15 +288,15 @@ func runSpoofTest(args []string) {
 
 func spoofTestUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest recv --port 443 [--proto udp|icmp|tcp] [--seconds 20] [--max-loss 100] [--out file]")
-	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest send --to <receiver-ip> --port 443 --spoof <ip|a-b|cidr|list> [--proto udp|icmp|tcp] [--count 3] [--interval 50ms] [--sport 40000]")
+	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest recv --port 443 [--proto udp|icmp|icmpv6|tcp] [--seconds 20] [--max-loss 100] [--out file]")
+	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest send --to <receiver-ip> --port 443 --spoof <ip|a-b|cidr|list> [--proto udp|icmp|icmpv6|tcp] [--count 3] [--interval 50ms] [--sport 40000]")
 }
 
 func spoofTestSend(args []string) {
 	fs := flag.NewFlagSet("spooftest send", flag.ExitOnError)
 	to := fs.String("to", "", "receiver's real IP")
-	port := fs.Int("port", 443, "receiver port (udp/tcp; ignored for icmp)")
-	proto := fs.String("proto", probeUDP, "protocol to carry the probes on: udp, icmp or tcp")
+	port := fs.Int("port", 443, "receiver port (udp/tcp; ignored for icmp/icmpv6)")
+	proto := fs.String("proto", probeUDP, "protocol to carry the probes on: udp, icmp, icmpv6 or tcp")
 	spoof := fs.String("spoof", "", "forged source: IP, range (a-b), CIDR, or comma-separated list")
 	count := fs.Int("count", 3, "packets per forged source")
 	sport := fs.Int("sport", 40000, "source port to put in forged packets (udp/tcp)")
@@ -299,7 +304,7 @@ func spoofTestSend(args []string) {
 	fs.Parse(args)
 
 	if !validProbeProto(*proto) {
-		fmt.Fprintln(os.Stderr, "spooftest send: --proto must be udp, icmp or tcp")
+		fmt.Fprintln(os.Stderr, "spooftest send: --proto must be udp, icmp, icmpv6 or tcp")
 		os.Exit(2)
 	}
 	if *count < 1 || *count > 65535 {
@@ -396,8 +401,12 @@ func rawProbePayload(proto string, port uint16, pkt []byte) []byte {
 	}
 	body := pkt[ihl:]
 	switch proto {
-	case probeICMP:
-		if len(body) < 8 || body[0] != 0 { // Echo Reply
+	case probeICMP, probeICMPv6:
+		echoReply := byte(0)
+		if proto == probeICMPv6 {
+			echoReply = 129
+		}
+		if len(body) < 8 || body[0] != echoReply {
 			return nil
 		}
 		return body[8:]
@@ -418,6 +427,12 @@ func openProbeReader(proto string, port int) (probeReader, error) {
 	switch proto {
 	case probeICMP:
 		f, err := openRawRecv(syscall.IPPROTO_ICMP)
+		if err != nil {
+			return nil, err
+		}
+		return rawProbeReader{f: f, proto: proto}, nil
+	case probeICMPv6:
+		f, err := openRawRecv(ipProtoICMPv6)
 		if err != nil {
 			return nil, err
 		}
@@ -458,15 +473,15 @@ func (s probeStat) loss() float64 {
 
 func spoofTestRecv(args []string) {
 	fs := flag.NewFlagSet("spooftest recv", flag.ExitOnError)
-	port := fs.Int("port", 443, "port to listen on (udp/tcp; ignored for icmp)")
-	proto := fs.String("proto", probeUDP, "protocol the sender uses: udp, icmp or tcp")
+	port := fs.Int("port", 443, "port to listen on (udp/tcp; ignored for icmp/icmpv6)")
+	proto := fs.String("proto", probeUDP, "protocol the sender uses: udp, icmp, icmpv6 or tcp")
 	seconds := fs.Int("seconds", 20, "how long to listen")
 	maxLoss := fs.Float64("max-loss", 100, "only count a source as usable at or below this packet loss (%)")
 	out := fs.String("out", "", "write the usable sources to this file, one per line (the other side's spoof list)")
 	fs.Parse(args)
 
 	if !validProbeProto(*proto) {
-		fmt.Fprintln(os.Stderr, "spooftest recv: --proto must be udp, icmp or tcp")
+		fmt.Fprintln(os.Stderr, "spooftest recv: --proto must be udp, icmp, icmpv6 or tcp")
 		os.Exit(2)
 	}
 	reader, err := openProbeReader(*proto, *port)
@@ -477,8 +492,8 @@ func spoofTestRecv(args []string) {
 	defer reader.close()
 
 	where := fmt.Sprintf("%s/%d", *proto, *port)
-	if *proto == probeICMP {
-		where = probeICMP
+	if *proto == probeICMP || *proto == probeICMPv6 {
+		where = *proto
 	}
 	fmt.Printf("listening on %s for %ds — start the sender now\n", where, *seconds)
 	deadline := time.Now().Add(time.Duration(*seconds) * time.Second)

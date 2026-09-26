@@ -83,7 +83,7 @@ func TestParseProbePayloadOldSender(t *testing.T) {
 
 func TestProbePacketsRoundTrip(t *testing.T) {
 	src, dst := net.ParseIP("5.6.7.8"), net.ParseIP("1.1.1.1")
-	for _, proto := range []string{probeICMP, probeTCP} {
+	for _, proto := range []string{probeICMP, probeICMPv6, probeTCP} {
 		payload := buildProbePayload(src, 9, 4)
 		pkt, err := buildProbePacket(proto, src, dst, 40000, 443, 9, payload)
 		if err != nil {
@@ -116,5 +116,20 @@ func TestProbeStatLoss(t *testing.T) {
 		if got := c.s.loss(); got != c.want {
 			t.Errorf("%+v.loss() = %v, want %v", c.s, got, c.want)
 		}
+	}
+}
+
+func TestICMPv6ProbeIsProtocol58(t *testing.T) {
+	src, dst := net.ParseIP("5.6.7.8"), net.ParseIP("1.1.1.1")
+	pkt, err := buildProbePacket(probeICMPv6, src, dst, 0, 0, 1, buildProbePayload(src, 1, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkt[9] != ipProtoICMPv6 || pkt[20] != 129 {
+		t.Errorf("icmpv6 probe: proto %d type %d, want 58/129", pkt[9], pkt[20])
+	}
+	// An ICMP (v4) reader must not take it, nor an ICMPv6 reader a v4 one.
+	if rawProbePayload(probeICMP, 0, pkt) != nil {
+		t.Error("icmp reader accepted an icmpv6 probe")
 	}
 }

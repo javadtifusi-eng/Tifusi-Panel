@@ -679,7 +679,9 @@ export type TunnelTransport = 'tcp' | 'tls' | 'ws' | 'wss' | 'tcpmux' | 'wsmux' 
 export type TunnelStatus = 'pending' | 'connected' | 'error'
 export type CdnProvider = 'arvan' | 'cloudflare'
 /** L4 protocol the spoof transport's forged packets ride on. */
-export type SpoofCarrier = 'auto' | 'udp' | 'icmp' | 'tcp'
+export type SpoofCarrier = 'auto' | 'udp' | 'icmp' | 'icmpv6' | 'tcp'
+// The foreign -> Iran carrier when it differs; auto can't be split.
+export type SpoofCarrierBack = Exclude<SpoofCarrier, 'auto'>
 
 export interface TunnelForward {
   name: string
@@ -703,6 +705,7 @@ export interface Tunnel {
   path: string | null
   spoof_source: string | null
   spoof_carrier: SpoofCarrier | null
+  spoof_carrier_back: SpoofCarrierBack | null
   spoof_stealth: boolean | null
   connection_count: number
   forwards: TunnelForward[]
@@ -768,6 +771,7 @@ export type TunnelPayload = {
   path?: string | null
   spoof_source?: string | null
   spoof_carrier?: SpoofCarrier | null
+  spoof_carrier_back?: SpoofCarrierBack | null
   spoof_stealth?: boolean | null
   connection_count?: number
   forwards?: TunnelForward[]
@@ -891,7 +895,7 @@ export async function cdnSpeedTest(id: number): Promise<CdnSpeed> {
 }
 
 export type SpoofTestDirection = 'iran_to_foreign' | 'foreign_to_iran'
-export type SpoofTestProtocol = 'udp' | 'icmp' | 'tcp'
+export type SpoofTestProtocol = 'udp' | 'icmp' | 'icmpv6' | 'tcp'
 
 export interface SpoofTestCommands {
   recv_command: string

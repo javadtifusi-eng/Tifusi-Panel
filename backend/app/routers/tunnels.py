@@ -150,6 +150,11 @@ async def _resolve_foreign_node_id(node_id: int | None, db: AsyncSession) -> int
     return node_id
 
 
+def _validate_spoof_carriers(tunnel: Tunnel) -> None:
+    if tunnel.spoof_carrier_back and tunnel.spoof_carrier == "auto":
+        raise HTTPException(status_code=400, detail="A separate return carrier can't be combined with the auto carrier")
+
+
 def _validate_foreign(foreign_node_id: int | None, foreign_address: str | None) -> None:
     if not foreign_node_id and not foreign_address:
         raise HTTPException(
@@ -182,6 +187,7 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         path=payload.path,
         spoof_source=payload.spoof_source,
         spoof_carrier=payload.spoof_carrier,
+        spoof_carrier_back=payload.spoof_carrier_back,
         spoof_stealth=payload.spoof_stealth,
         connection_count=payload.connection_count,
         forwards=[f.model_dump() for f in payload.forwards],
@@ -191,6 +197,7 @@ async def create_tunnel(payload: TunnelCreate, db: AsyncSession = Depends(get_db
         cdn_ips=payload.cdn_ips,
         cdn_front=payload.cdn_front,
     )
+    _validate_spoof_carriers(tunnel)
     _apply_cdn(tunnel)
     db.add(tunnel)
     await db.commit()
@@ -230,6 +237,7 @@ async def update_tunnel(tunnel_id: int, payload: TunnelUpdate, db: AsyncSession 
         raise HTTPException(status_code=400, detail="This tunnel is in a Connection Shield group, which can't health-check udp")
 
     _validate_foreign(tunnel.foreign_node_id, tunnel.foreign_address)
+    _validate_spoof_carriers(tunnel)
     _apply_cdn(tunnel)
 
     db.add(tunnel)

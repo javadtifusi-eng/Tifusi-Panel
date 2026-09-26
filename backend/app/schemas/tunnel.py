@@ -7,7 +7,9 @@ from app.models.tunnel import TunnelStatus, TunnelTransport
 
 ForwardNet = Literal["tcp", "udp"]
 CdnProvider = Literal["arvan", "cloudflare"]
-SpoofCarrier = Literal["auto", "udp", "icmp", "tcp"]
+SpoofCarrier = Literal["auto", "udp", "icmp", "icmpv6", "tcp"]
+# The foreign -> Iran carrier, when it differs; auto can't be split.
+SpoofCarrierBack = Literal["udp", "icmp", "icmpv6", "tcp"]
 
 
 class TunnelForward(BaseModel):
@@ -34,6 +36,7 @@ class TunnelCreate(BaseModel):
     path: str | None = Field(default=None, max_length=255)
     spoof_source: str | None = Field(default=None, max_length=64)
     spoof_carrier: SpoofCarrier | None = None
+    spoof_carrier_back: SpoofCarrierBack | None = None
     spoof_stealth: bool | None = None
     connection_count: int = Field(default=8, ge=1, le=256)
     # The Iran side refuses to start without a forward, so catch it here.
@@ -60,6 +63,7 @@ class TunnelUpdate(BaseModel):
     path: str | None = Field(default=None, max_length=255)
     spoof_source: str | None = Field(default=None, max_length=64)
     spoof_carrier: SpoofCarrier | None = None
+    spoof_carrier_back: SpoofCarrierBack | None = None
     spoof_stealth: bool | None = None
     connection_count: int | None = Field(default=None, ge=1, le=256)
     forwards: list[TunnelForward] | None = Field(default=None, min_length=1)
@@ -87,6 +91,7 @@ class TunnelResponse(BaseModel):
     path: str | None
     spoof_source: str | None = None
     spoof_carrier: str | None = None
+    spoof_carrier_back: str | None = None
     spoof_stealth: bool | None = None
     connection_count: int
     forwards: list[TunnelForward]
@@ -153,7 +158,7 @@ class TunnelRecommendRequest(BaseModel):
 SpoofTestDirection = Literal["iran_to_foreign", "foreign_to_iran"]
 # What the probes are carried on: a datacenter or the national filter can drop
 # forged UDP yet pass forged ICMP or TCP, so each is worth measuring.
-SpoofTestProtocol = Literal["udp", "icmp", "tcp"]
+SpoofTestProtocol = Literal["udp", "icmp", "icmpv6", "tcp"]
 
 
 class SpoofTestRequest(BaseModel):
