@@ -651,7 +651,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   <g key={tu.id}>
                     <path id={`tfw${tu.id}`} className="wire-base" d={d} />
                     <path className="wire-beam" d={d} style={{ animationDelay: `${-(tu.id % 5) * 0.6}s` }} />
-                    {!reduce && (
+                    {(
                       <circle className="packet" r={3.2}>
                         <animateMotion dur={`${2.6 + (tu.id % 3) * 0.5}s`} repeatCount="indefinite" path={d} />
                       </circle>
@@ -681,7 +681,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     onPointerEnter={() => setFocusKey(e.key)}
                     onFocus={() => setFocusKey(e.key)}
                   >
-                    {up && !reduce && (
+                    {up && (
                       <g className="orbit" style={{ transformOrigin: `${e.x}px ${e.y}px` }}>
                         <circle cx={e.x} cy={e.y - 44} r={3} />
                         <circle cx={e.x + 40} cy={e.y} r={2.4} />
@@ -709,7 +709,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   onPointerEnter={() => setFocusKey(e.key)}
                   onFocus={() => setFocusKey(e.key)}
                 >
-                  {!reduce && list.some((tu) => tu.status === 'connected') && (
+                  {list.some((tu) => tu.status === 'connected') && (
                     <circle className="hub-pulse" cx={e.x} cy={e.y} r={34} strokeWidth={1.5} />
                   )}
                   <circle className="disc" cx={e.x} cy={e.y} r={34} style={{ stroke: 'rgb(249 115 22 / .55)' }} />
