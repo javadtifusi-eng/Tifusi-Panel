@@ -100,13 +100,50 @@ action_uninstall() {
   exit 0
 }
 
+action_update() {
+  container_exists || { err "No node agent is installed on this server."; return; }
+  local key port
+  key="$(docker inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+    | sed -n 's/^TIFUSI_NODE_API_KEY=//p' | head -1)"
+  port="$(agent_port)"
+  if [ -z "$key" ] || [ -z "$port" ]; then
+    err "Couldn't read the node's port/API key from the running agent; update cancelled."
+    return
+  fi
+
+  info "Downloading the latest node agent..."
+  if ! docker pull "$IMAGE_REMOTE" >/dev/null; then
+    err "Couldn't download the new version; the current agent keeps running."
+    return
+  fi
+  # Keep the image that is running now, so a bad release can be rolled back
+  # by re-tagging tifusi-node-agent:previous and recreating the container.
+  docker tag "$IMAGE_LOCAL" "${IMAGE_LOCAL}:previous" >/dev/null 2>&1 || true
+  docker tag "$IMAGE_REMOTE" "$IMAGE_LOCAL"
+
+  # Same container layout install-node.sh creates, so an updated node is
+  # identical to a freshly installed one; only the port and key carry over.
+  local extra=()
+  [ -d /lib/modules ] && extra+=(-v /lib/modules:/lib/modules:ro)
+  [ -e /dev/ppp ] && extra+=(--device=/dev/ppp:/dev/ppp)
+  [ -d /opt/tifusi-panel/certs ] && extra+=(-v /opt/tifusi-panel/certs:/certs:ro)
+
+  info "Restarting the node agent on the new version (connected users reconnect on their own)..."
+  docker rm -f "$CONTAINER" >/dev/null
+  docker run -d --name "$CONTAINER" --restart unless-stopped \
+    --network host --cap-add=NET_ADMIN --cap-add=NET_RAW --ulimit nofile=1048576:1048576 "${extra[@]}" \
+    -e "TIFUSI_NODE_API_KEY=${key}" -e "AGENT_PORT=${port}" "$IMAGE_LOCAL" >/dev/null
+  info "Updated. The panel re-sends this node's settings on its next check (within a minute)."
+}
+
 menu() {
   banner
   printf '\n%s  What would you like to do?%s\n\n' "$C_CYAN" "$C_RESET"
   printf '  %s1)%s Show node status\n' "$C_GREEN" "$C_RESET"
   printf '  %s2)%s View live logs\n' "$C_GREEN" "$C_RESET"
   printf '  %s3)%s Restart the node agent\n' "$C_GREEN" "$C_RESET"
-  printf '  %s4)%s Uninstall the node completely\n' "$C_GREEN" "$C_RESET"
+  printf '  %s4)%s Update the node agent to the latest version\n' "$C_GREEN" "$C_RESET"
+  printf '  %s5)%s Uninstall the node completely\n' "$C_GREEN" "$C_RESET"
   printf '  %s0)%s Exit\n\n' "$C_GRAY" "$C_RESET"
   read -r -p "$(printf '%sEnter your choice: %s' "$C_GREEN" "$C_RESET")" choice
   echo
@@ -114,7 +151,8 @@ menu() {
     1) action_status ;;
     2) action_logs ;;
     3) action_restart ;;
-    4) action_uninstall ;;
+    4) action_update ;;
+    5) action_uninstall ;;
     0) exit 0 ;;
     *) warn "Invalid choice." ;;
   esac
@@ -126,6 +164,7 @@ case "${1:-}" in
   status) action_status ;;
   logs) action_logs ;;
   restart) action_restart ;;
+  update) action_update ;;
   uninstall) action_uninstall ;;
   "")
     while true; do
