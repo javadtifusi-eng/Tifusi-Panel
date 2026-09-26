@@ -181,8 +181,12 @@ type Config struct {
 	// tunnel under the packet loss Iran's throttling produces. Both ends must
 	// match; they do, because applyDefaults sets the same values on each.
 	// 0 disables FEC.
-	FECData   int `json:"fec_data,omitempty"`
-	FECParity int `json:"fec_parity,omitempty"`
+	// UDPRaw, "udp" transport only: carry udp forwards over the raw relay
+	// on tunnel port + 1 (rawudp.go) instead of inside KCP. Both ends must
+	// match; the panel sets it on each.
+	UDPRaw    bool `json:"udp_raw,omitempty"`
+	FECData   int  `json:"fec_data,omitempty"`
+	FECParity int  `json:"fec_parity,omitempty"`
 }
 
 // spoofOptions builds the shared carrier options from the config. It returns
@@ -988,10 +992,20 @@ func (s *Server) Run() error {
 
 	s.startFallbackListeners()
 
+	var raw *rawServer
+	if s.cfg.UDPRaw && s.cfg.Transport == "udp" {
+		var err error
+		if raw, err = s.startRaw(); err != nil {
+			return fmt.Errorf("raw udp relay: %w", err)
+		}
+	}
+
 	mux := isMuxTransport(s.cfg.Transport)
 	for _, fw := range s.cfg.Forwards {
 		fw := fw
 		switch {
+		case fw.Net == "udp" && raw != nil:
+			go s.serveUDPForwardRaw(raw, fw)
 		case fw.Net == "tcp" && mux:
 			go s.serveTCPForwardMux(fw)
 		case fw.Net == "tcp":
@@ -1428,6 +1442,9 @@ func (c *Client) Run() error {
 		select {} // run until the service is stopped
 	}
 	c.log("connecting to %s (%s), pool=%d", c.target(), c.cfg.Transport, c.cfg.Pool)
+	if c.cfg.UDPRaw && c.cfg.Transport == "udp" {
+		c.runRaw()
+	}
 	go c.controlLoop()
 	for i := 0; i < c.cfg.Pool; i++ {
 		go c.dataWorker()
