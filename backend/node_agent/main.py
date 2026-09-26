@@ -370,6 +370,21 @@ async def hysteria_auth(payload: dict) -> dict:
         return {"ok": False}
 
 
+@app.get("/tunnel-status")
+async def tunnel_status(x_node_api_key: str | None = Header(default=None)) -> dict:
+    """What the Tifusi tunnel on this host reports on its loopback status
+    endpoint (tunnel_agent/status.go). The agent shares the host network, so
+    127.0.0.1 is the host's. running=False when no tunnel answers there."""
+    _check_key(x_node_api_key)
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:18461/status", timeout=3) as resp:
+            return {"running": True, **json.loads(resp.read())}
+    except Exception as exc:  # noqa: BLE001 - any failure means "not answering"
+        return {"running": False, "error": str(exc)[:200]}
+
+
 @app.post("/wireguard-config")
 async def apply_wireguard_config(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
     """Fourth service slot: WireGuard, run as its own Xray process."""

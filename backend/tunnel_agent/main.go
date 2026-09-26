@@ -137,6 +137,9 @@ type Config struct {
 	Fallback []Carrier    `json:"fallback,omitempty"`
 	Verbose  bool         `json:"verbose"`
 	Panel    *PanelConfig `json:"panel,omitempty"`
+	// StatusListen: loopback address of the status endpoint (status.go).
+	// Empty uses 127.0.0.1:18461; "off" disables it.
+	StatusListen string `json:"status_listen,omitempty"`
 	// Domain, server only: when set, a tls/wss/wssmux listener requests a
 	// real certificate from Let's Encrypt for this domain (via ACME
 	// HTTP-01, needs port 80 reachable) instead of generating a
@@ -1071,8 +1074,10 @@ func (s *Server) handleControl(f *fconn) {
 	n := s.controls
 	s.mu.Unlock()
 	s.log("client connected from %s (active control links: %d)", f.RemoteAddr(), n)
+	statusLinkUp()
 
 	defer func() {
+		statusLinkDown()
 		f.Close()
 		s.mu.Lock()
 		s.controls--
@@ -1524,6 +1529,7 @@ func (c *Client) controlLoop() {
 	for {
 		f, err := c.connect("control")
 		if err != nil {
+			statusLinkError(err)
 			c.log("control link: %v (retrying in %s)", err, backoff)
 			time.Sleep(backoff)
 			if backoff < 30*time.Second {
@@ -1532,6 +1538,7 @@ func (c *Client) controlLoop() {
 			continue
 		}
 		c.log("control link established with %s", c.target())
+		statusLinkUp()
 		backoff = time.Second
 		for {
 			f.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -1546,6 +1553,7 @@ func (c *Client) controlLoop() {
 			}
 		}
 		f.Close()
+		statusLinkDown()
 		c.log("control link lost, reconnecting")
 		time.Sleep(2 * time.Second)
 	}
@@ -1760,6 +1768,8 @@ func main() {
 	if cfg.Panel != nil && cfg.Panel.Enabled {
 		go runPanel(cfg, *cfgPath)
 	}
+
+	go runStatus(cfg)
 
 	if cfg.Mode == "server" {
 		s := &Server{cfg: cfg, pool: make(chan *dataConn, 512)}

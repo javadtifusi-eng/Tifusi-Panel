@@ -383,6 +383,8 @@ func (s *Server) handleMux(f *fconn) {
 	s.muxSessions = append(s.muxSessions, ms)
 	s.muxMu.Unlock()
 	s.log("mux client connected from %s", f.RemoteAddr())
+	statusLinkUp()
+	defer statusLinkDown()
 
 	go ms.heartbeat()
 	ms.serve(true, nil) // server never receives frmMuxOpen
@@ -560,6 +562,7 @@ func (c *Client) muxWorker() {
 		}
 		f, err := c.connect("mux")
 		if err != nil {
+			statusLinkError(err)
 			c.noteLinkFailure()
 			c.log("mux link: %v (retrying in %s)", err, backoff)
 			c.advanceSpoofCarrier() // auto only; no-op otherwise
@@ -571,6 +574,7 @@ func (c *Client) muxWorker() {
 		}
 		c.log("mux link established with %s", c.linkTarget())
 		c.noteLinkUp()
+		statusLinkUp()
 		backoff = time.Second
 
 		up := time.Now()
@@ -583,6 +587,7 @@ func (c *Client) muxWorker() {
 		ms.serve(false, func(id uint32, req dialReq) {
 			c.acceptMuxStream(ms, id, req)
 		})
+		statusLinkDown()
 
 		// A link that never carried traffic long points at a carrier the path
 		// is now dropping, so move to the next one; a link that stayed up well

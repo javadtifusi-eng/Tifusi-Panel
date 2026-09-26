@@ -404,6 +404,30 @@ async def parse_discovered_sources(payload: ParseDiscoveryRequest) -> DiscoveryR
     return DiscoveryResult(sources=sources, spoof_source=",".join(arrived))
 
 
+async def _live_tunnel_status(tunnel: Tunnel, db: AsyncSession) -> dict | None:
+    """The tunnel's own status as reported on its foreign server, when that
+    server is a panel node whose agent can read it. None means it can't be
+    asked (not a node, unreachable, or an agent too old to know the route),
+    and the test falls back to port probes."""
+    if tunnel.foreign_node_id is None:
+        return None
+    node = await db.get(Node, tunnel.foreign_node_id)
+    if node is None:
+        return None
+    try:
+        # verify=False: the node's certificate is self-signed (node_agent/tls.py).
+        async with httpx.AsyncClient(timeout=8, verify=False) as client:
+            resp = await client.get(
+                f"https://{node.address}:{node.port}/tunnel-status",
+                headers={"X-Node-Api-Key": node.api_key},
+            )
+    except httpx.HTTPError:
+        return None
+    if resp.status_code != 200:
+        return None
+    return resp.json()
+
+
 @router.post("/{tunnel_id}/test", response_model=TunnelTestResult)
 async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> TunnelTestResult:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)
@@ -436,22 +460,43 @@ async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> Tun
             cdn_reachable, cdn_latency, cdn_error = await cdn_probe(tunnel.cdn_host, tunnel.cdn_port or 443, tunnel.path or "/")
 
     tunnel.last_checked_at = datetime.now(timezone.utc)
-    unreachable = [
-        side
-        for side, ok in (("Iran side", iran_reachable), ("foreign side", foreign_reachable), ("CDN path", cdn_reachable))
-        if ok is False
-    ]
-    if unreachable:
-        tunnel.status = TunnelStatus.error
-        tunnel.last_error = cdn_error if unreachable == ["CDN path"] and cdn_error else f"{' and '.join(unreachable)} not reachable"
-    elif iran_reachable and foreign_reachable:
-        tunnel.status = TunnelStatus.connected
-        tunnel.last_error = None
+    live = await _live_tunnel_status(tunnel, db)
+    if live is not None:
+        # The foreign side's own report beats any port probe: it knows
+        # whether its links to the Iran side are actually up, udp included.
+        expected = build_foreign_config(tunnel)["server"]
+        if not live.get("running"):
+            tunnel.status = TunnelStatus.error
+            tunnel.last_error = "Tunnel is not running on the foreign server"
+        elif live.get("mode") != "client" or (live.get("server") and live["server"] != expected):
+            tunnel.status = TunnelStatus.error
+            tunnel.last_error = f"The foreign server runs a different tunnel (server {live.get('server') or live.get('listen')}) — reinstall this one there"
+        elif live.get("links", 0) > 0:
+            iran_reachable = True
+            tunnel.status = TunnelStatus.connected
+            tunnel.last_error = None
+        else:
+            iran_reachable = False
+            tunnel.status = TunnelStatus.error
+            reason = live.get("last_error")
+            tunnel.last_error = f"Foreign side can't reach the Iran side{': ' + reason if reason else ''}"
     else:
-        # Nothing failed, but a side was skipped — "untested" is the honest
-        # verdict, not "connected".
-        tunnel.status = TunnelStatus.pending
-        tunnel.last_error = None
+        unreachable = [
+            side
+            for side, ok in (("Iran side", iran_reachable), ("foreign side", foreign_reachable), ("CDN path", cdn_reachable))
+            if ok is False
+        ]
+        if unreachable:
+            tunnel.status = TunnelStatus.error
+            tunnel.last_error = cdn_error if unreachable == ["CDN path"] and cdn_error else f"{' and '.join(unreachable)} not reachable"
+        elif iran_reachable and foreign_reachable:
+            tunnel.status = TunnelStatus.connected
+            tunnel.last_error = None
+        else:
+            # Nothing failed, but a side was skipped — "untested" is the honest
+            # verdict, not "connected".
+            tunnel.status = TunnelStatus.pending
+            tunnel.last_error = None
 
     await db.commit()
 

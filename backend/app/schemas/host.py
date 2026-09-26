@@ -6,6 +6,8 @@ from app.models.host import HostProtocol, HostSecurity
 
 
 class HostCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     remark: str = Field(min_length=1, max_length=100)
     address: str = Field(min_length=1, max_length=255)
     protocol: HostProtocol
@@ -37,6 +39,8 @@ class HostCreate(BaseModel):
 
 
 class HostUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     remark: str | None = Field(default=None, min_length=1, max_length=100)
     address: str | None = Field(default=None, min_length=1, max_length=255)
     group_ids: list[int] | None = None
