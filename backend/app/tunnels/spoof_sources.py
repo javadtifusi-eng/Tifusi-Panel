@@ -62,12 +62,15 @@ def label_for(ip: str) -> str | None:
     return None
 
 
-_ARRIVED = re.compile(r"^\s*(\d{1,3}(?:\.\d{1,3}){3})\s+\(\d+\s+packets?\)", re.MULTILINE)
+_ARRIVED = re.compile(
+    r"^\s*(\d{1,3}(?:\.\d{1,3}){3})\s+(?:\(\d+\s+packets?\)|\d+(?:/\d+)?\s+packets?\b)", re.MULTILINE
+)
 
 
 def parse_arrived_sources(receiver_output: str) -> list[str]:
     """Pulls the addresses that actually arrived out of a discovery receiver's
-    output (lines like `  2.144.0.1  (3 packets)`), de-duplicated and only
+    output (lines like `  2.144.0.1  (3 packets)` or `  2.144.0.1  3/3 packets  loss 0%`;
+    a source over the loss cap is marked `x` and skipped), de-duplicated and only
     keeping syntactically valid IPv4 — so pasted noise can't inject anything.
     """
     out: list[str] = []

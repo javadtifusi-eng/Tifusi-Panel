@@ -338,10 +338,10 @@ async def spooftest_commands(
         if not payload.iran_address:
             raise HTTPException(status_code=400, detail="iran_address is required for the foreign_to_iran direction")
         _validate_host(payload.iran_address)
-        recv, send = build_spooftest_commands(payload.iran_address, payload.spoof_ip, payload.port)
+        recv, send = build_spooftest_commands(payload.iran_address, payload.spoof_ip, payload.port, protocol=payload.protocol, max_loss=payload.max_loss)
         return SpoofTestCommands(recv_command=recv, send_command=send, recv_on="iran", send_on="foreign")
 
-    recv, send = build_spooftest_commands(foreign_host, payload.spoof_ip, payload.port)
+    recv, send = build_spooftest_commands(foreign_host, payload.spoof_ip, payload.port, protocol=payload.protocol, max_loss=payload.max_loss)
     return SpoofTestCommands(recv_command=recv, send_command=send, recv_on="foreign", send_on="iran")
 
 
@@ -378,10 +378,10 @@ async def discover_sources_commands(
         if not payload.iran_address:
             raise HTTPException(status_code=400, detail="iran_address is required for the foreign_to_iran direction")
         _validate_host(payload.iran_address)
-        recv, send = build_spooftest_commands(payload.iran_address, spec, payload.port, seconds)
+        recv, send = build_spooftest_commands(payload.iran_address, spec, payload.port, seconds, payload.protocol, payload.max_loss)
         recv_on, send_on = "iran", "foreign"
     else:
-        recv, send = build_spooftest_commands(foreign_host, spec, payload.port, seconds)
+        recv, send = build_spooftest_commands(foreign_host, spec, payload.port, seconds, payload.protocol, payload.max_loss)
         recv_on, send_on = "foreign", "iran"
 
     return DiscoverCommands(

@@ -137,7 +137,12 @@ def _download_binary_snippet() -> str:
 
 
 def build_spooftest_commands(
-    foreign_host: str, spoof_ip: str, port: int, seconds: int = 60
+    foreign_host: str,
+    spoof_ip: str,
+    port: int,
+    seconds: int = 60,
+    protocol: str = "udp",
+    max_loss: int = 100,
 ) -> tuple[str, str]:
     """The two copy-paste commands that measure whether the Iran server's
     datacenter lets a packet leave with a forged source IP (the L3 filtering
@@ -146,12 +151,18 @@ def build_spooftest_commands(
     validated foreign_host/spoof_ip so neither can inject shell syntax.
     """
     prefix = _download_binary_snippet()
-    recv = f"{prefix} && /tmp/tifusi-tunnel spooftest recv --port {port} --seconds {seconds}"
+    # Flags only when not the default, so the commands stay what they were for
+    # a plain UDP test.
+    proto = f" --proto {protocol}" if protocol != "udp" else ""
+    loss = f" --max-loss {max_loss}" if max_loss < 100 else ""
+    # ICMP and TCP probes are read off a raw socket, which needs root too.
+    recv_sudo = '$([ "$(id -u)" = 0 ] || echo sudo) ' if protocol != "udp" else ""
+    recv = f"{prefix} && {recv_sudo}/tmp/tifusi-tunnel spooftest recv --port {port} --seconds {seconds}{proto}{loss}"
     send = (
         # Raw sockets need root; sudo only when not already root, since minimal
         # servers that log in as root often have no sudo at all.
         f'{prefix} && $([ "$(id -u)" = 0 ] || echo sudo) /tmp/tifusi-tunnel spooftest send '
-        f"--to {foreign_host} --port {port} --spoof {spoof_ip}"
+        f"--to {foreign_host} --port {port} --spoof {spoof_ip}{proto}"
     )
     return recv, send
 

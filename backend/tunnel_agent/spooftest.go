@@ -24,33 +24,55 @@ import (
 	"net"
 	"os"
 	"sort"
-	"sync"
+	"strings"
 	"syscall"
 	"time"
 )
 
 // spoofMagic tags our probe payload so a listener never confuses unrelated
-// UDP noise on the port for a probe. Layout: magic(4) | claimedSrc(4) | seq(4).
+// noise for a probe. Layout: magic(4) | claimedSrc(4) | seq(4) | sent(2),
+// where sent is how many probes the sender sends per forged source, so the
+// receiver can work out each source's loss without being told separately.
 var spoofMagic = [4]byte{'T', 'F', 'S', 'P'}
 
-const spoofPayloadLen = 12
+const (
+	spoofPayloadLen = 14
+	// A sender from before the per-source count sent only the first 12 bytes.
+	spoofPayloadMinLen = 12
+)
 
-func buildProbePayload(claimedSrc net.IP, seq uint32) []byte {
+// The protocols a probe can be carried on. A datacenter or the national
+// filter can treat them differently, so each is worth measuring on its own.
+const (
+	probeUDP  = "udp"
+	probeICMP = "icmp"
+	probeTCP  = "tcp"
+)
+
+func validProbeProto(p string) bool { return p == probeUDP || p == probeICMP || p == probeTCP }
+
+func buildProbePayload(claimedSrc net.IP, seq uint32, sent uint16) []byte {
 	p := make([]byte, spoofPayloadLen)
 	copy(p[0:4], spoofMagic[:])
 	copy(p[4:8], claimedSrc.To4())
 	binary.BigEndian.PutUint32(p[8:12], seq)
+	binary.BigEndian.PutUint16(p[12:14], sent)
 	return p
 }
 
-func parseProbePayload(p []byte) (claimedSrc net.IP, seq uint32, ok bool) {
-	if len(p) < spoofPayloadLen {
-		return nil, 0, false
+// parseProbePayload returns sent = 0 for a probe from an older sender, which
+// didn't say how many it sent.
+func parseProbePayload(p []byte) (claimedSrc net.IP, seq uint32, sent uint16, ok bool) {
+	if len(p) < spoofPayloadMinLen {
+		return nil, 0, 0, false
 	}
 	if [4]byte{p[0], p[1], p[2], p[3]} != spoofMagic {
-		return nil, 0, false
+		return nil, 0, 0, false
 	}
-	return net.IPv4(p[4], p[5], p[6], p[7]), binary.BigEndian.Uint32(p[8:12]), true
+	if len(p) >= spoofPayloadLen {
+		sent = binary.BigEndian.Uint16(p[12:14])
+	}
+	return net.IPv4(p[4], p[5], p[6], p[7]), binary.BigEndian.Uint32(p[8:12]), sent, true
 }
 
 // onesComplementSum is the checksum used by both the IP and UDP headers:
@@ -153,6 +175,24 @@ func (s *spoofSender) send(srcIP, dstIP net.IP, srcPort, dstPort uint16, payload
 	return s.sendPacket(pkt, dstIP)
 }
 
+// buildProbePacket wraps one probe payload in the chosen protocol. ICMP goes
+// as an Echo Reply and TCP as a PSH|ACK segment, the same shapes the tunnel's
+// icmp and tcp carriers use, so a pass here means those carriers would pass.
+func buildProbePacket(proto string, srcIP, dstIP net.IP, srcPort, dstPort uint16, seq uint32, payload []byte) ([]byte, error) {
+	switch proto {
+	case probeICMP:
+		return buildSpoofedICMP(srcIP, dstIP, spoofTestICMPID, uint16(seq), payload)
+	case probeTCP:
+		return buildSpoofedTCP(srcIP, dstIP, srcPort, dstPort, seq, randU32(), payload)
+	default:
+		return buildSpoofedUDP(srcIP, dstIP, srcPort, dstPort, payload)
+	}
+}
+
+// spoofTestICMPID is the Echo id probes carry; the receiver matches on the
+// payload magic, so it only has to differ from the tunnel's own id.
+const spoofTestICMPID uint16 = 0xF5F2
+
 func (s *spoofSender) close() { syscall.Close(s.fd) }
 
 // expandIPs turns "1.2.3.4", "1.2.3.4-1.2.3.20", or "1.2.3.0/24" into the
@@ -243,20 +283,29 @@ func runSpoofTest(args []string) {
 
 func spoofTestUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest recv --port 443 [--seconds 20]")
-	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest send --to <receiver-ip> --port 443 --spoof <ip|a-b|cidr|list> [--count 3] [--interval 50ms] [--sport 40000]")
+	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest recv --port 443 [--proto udp|icmp|tcp] [--seconds 20] [--max-loss 100] [--out file]")
+	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest send --to <receiver-ip> --port 443 --spoof <ip|a-b|cidr|list> [--proto udp|icmp|tcp] [--count 3] [--interval 50ms] [--sport 40000]")
 }
 
 func spoofTestSend(args []string) {
 	fs := flag.NewFlagSet("spooftest send", flag.ExitOnError)
 	to := fs.String("to", "", "receiver's real IP")
-	port := fs.Int("port", 443, "receiver UDP port")
+	port := fs.Int("port", 443, "receiver port (udp/tcp; ignored for icmp)")
+	proto := fs.String("proto", probeUDP, "protocol to carry the probes on: udp, icmp or tcp")
 	spoof := fs.String("spoof", "", "forged source: IP, range (a-b), CIDR, or comma-separated list")
 	count := fs.Int("count", 3, "packets per forged source")
-	sport := fs.Int("sport", 40000, "UDP source port to put in forged packets")
+	sport := fs.Int("sport", 40000, "source port to put in forged packets (udp/tcp)")
 	interval := fs.Duration("interval", 50*time.Millisecond, "delay between packets")
 	fs.Parse(args)
 
+	if !validProbeProto(*proto) {
+		fmt.Fprintln(os.Stderr, "spooftest send: --proto must be udp, icmp or tcp")
+		os.Exit(2)
+	}
+	if *count < 1 || *count > 65535 {
+		fmt.Fprintln(os.Stderr, "spooftest send: --count must be 1-65535")
+		os.Exit(2)
+	}
 	dst := net.ParseIP(*to).To4()
 	if dst == nil {
 		fmt.Fprintln(os.Stderr, "spooftest send: --to must be an IPv4 address")
@@ -277,13 +326,17 @@ func spoofTestSend(args []string) {
 	}
 	defer sender.close()
 
-	fmt.Printf("sending %d forged sources x%d to %s:%d\n", len(ips), *count, *to, *port)
+	fmt.Printf("sending %d forged sources x%d over %s to %s:%d\n", len(ips), *count, *proto, *to, *port)
 	var seq uint32
 	for _, src := range ips {
 		for i := 0; i < *count; i++ {
 			seq++
-			payload := buildProbePayload(src, seq)
-			if err := sender.send(src, dst, uint16(*sport), uint16(*port), payload); err != nil {
+			payload := buildProbePayload(src, seq, uint16(*count))
+			pkt, err := buildProbePacket(*proto, src, dst, uint16(*sport), uint16(*port), seq, payload)
+			if err == nil {
+				err = sender.sendPacket(pkt, dst)
+			}
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "send from %s: %v\n", src, err)
 			}
 			time.Sleep(*interval)
@@ -292,65 +345,223 @@ func spoofTestSend(args []string) {
 	fmt.Println("done — check the receiver for which sources arrived")
 }
 
+// probeReader yields the payload of each probe that reaches this host, and
+// the source address the kernel saw it arrive from.
+type probeReader interface {
+	read(buf []byte) (payload []byte, from net.IP, err error)
+	close()
+}
+
+type udpProbeReader struct{ conn *net.UDPConn }
+
+func (r udpProbeReader) read(buf []byte) ([]byte, net.IP, error) {
+	n, from, err := r.conn.ReadFromUDP(buf)
+	if err != nil {
+		return nil, nil, err
+	}
+	return buf[:n], from.IP, nil
+}
+
+func (r udpProbeReader) close() { r.conn.Close() }
+
+// rawProbeReader reads ICMP or TCP probes off a raw socket, which gets a copy
+// of every such packet the host receives: nothing listens for a forged TCP
+// segment, and an Echo Reply nobody asked for is otherwise dropped.
+type rawProbeReader struct {
+	f     *os.File
+	proto string
+	port  uint16
+}
+
+func (r rawProbeReader) read(buf []byte) ([]byte, net.IP, error) {
+	for {
+		n, err := r.f.Read(buf)
+		if err != nil {
+			return nil, nil, err
+		}
+		if payload := rawProbePayload(r.proto, r.port, buf[:n]); payload != nil {
+			return payload, dupIP(net.IP(buf[12:16])), nil
+		}
+	}
+}
+
+func (r rawProbeReader) close() { r.f.Close() }
+
+// rawProbePayload strips the IPv4 and ICMP/TCP headers from a packet read off
+// a raw socket, or returns nil for anything that isn't a probe to us.
+func rawProbePayload(proto string, port uint16, pkt []byte) []byte {
+	ihl := ipHeaderLen(pkt)
+	if ihl == 0 || len(pkt) < ihl {
+		return nil
+	}
+	body := pkt[ihl:]
+	switch proto {
+	case probeICMP:
+		if len(body) < 8 || body[0] != 0 { // Echo Reply
+			return nil
+		}
+		return body[8:]
+	case probeTCP:
+		if len(body) < 20 || binary.BigEndian.Uint16(body[2:4]) != port {
+			return nil
+		}
+		off := int(body[12]>>4) * 4
+		if off < 20 || off > len(body) {
+			return nil
+		}
+		return body[off:]
+	}
+	return nil
+}
+
+func openProbeReader(proto string, port int) (probeReader, error) {
+	switch proto {
+	case probeICMP:
+		f, err := openRawRecv(syscall.IPPROTO_ICMP)
+		if err != nil {
+			return nil, err
+		}
+		return rawProbeReader{f: f, proto: proto}, nil
+	case probeTCP:
+		f, err := openRawRecv(syscall.IPPROTO_TCP)
+		if err != nil {
+			return nil, err
+		}
+		return rawProbeReader{f: f, proto: proto, port: uint16(port)}, nil
+	default:
+		conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: port})
+		if err != nil {
+			return nil, err
+		}
+		return udpProbeReader{conn: conn}, nil
+	}
+}
+
+// probeStat is what the receiver learned about one forged source.
+type probeStat struct {
+	got  int
+	sent int // 0 when an older sender didn't say
+}
+
+// loss is the percentage of this source's probes that never arrived, or -1
+// when the sender didn't say how many it sent.
+func (s probeStat) loss() float64 {
+	if s.sent <= 0 {
+		return -1
+	}
+	got := s.got
+	if got > s.sent { // a duplicated packet can't make loss negative
+		got = s.sent
+	}
+	return 100 * float64(s.sent-got) / float64(s.sent)
+}
+
 func spoofTestRecv(args []string) {
 	fs := flag.NewFlagSet("spooftest recv", flag.ExitOnError)
-	port := fs.Int("port", 443, "UDP port to listen on")
+	port := fs.Int("port", 443, "port to listen on (udp/tcp; ignored for icmp)")
+	proto := fs.String("proto", probeUDP, "protocol the sender uses: udp, icmp or tcp")
 	seconds := fs.Int("seconds", 20, "how long to listen")
+	maxLoss := fs.Float64("max-loss", 100, "only count a source as usable at or below this packet loss (%)")
+	out := fs.String("out", "", "write the usable sources to this file, one per line (the other side's spoof list)")
 	fs.Parse(args)
 
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: *port})
+	if !validProbeProto(*proto) {
+		fmt.Fprintln(os.Stderr, "spooftest recv: --proto must be udp, icmp or tcp")
+		os.Exit(2)
+	}
+	reader, err := openProbeReader(*proto, *port)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "spooftest recv: %v\n", err)
 		os.Exit(1)
 	}
-	defer conn.Close()
+	defer reader.close()
 
-	fmt.Printf("listening on udp/%d for %ds — start the sender now\n", *port, *seconds)
+	where := fmt.Sprintf("%s/%d", *proto, *port)
+	if *proto == probeICMP {
+		where = probeICMP
+	}
+	fmt.Printf("listening on %s for %ds — start the sender now\n", where, *seconds)
 	deadline := time.Now().Add(time.Duration(*seconds) * time.Second)
-	conn.SetReadDeadline(deadline)
 
-	type stat struct{ got int }
-	var mu sync.Mutex
-	seen := map[string]*stat{}
-	buf := make([]byte, 2048)
-	for {
-		n, from, err := conn.ReadFromUDP(buf)
+	seen := map[string]*probeStat{}
+	buf := make([]byte, 65535)
+	for time.Now().Before(deadline) {
+		switch r := reader.(type) {
+		case udpProbeReader:
+			r.conn.SetReadDeadline(deadline)
+		case rawProbeReader:
+			r.f.SetReadDeadline(deadline)
+		}
+		payload, from, err := reader.read(buf)
 		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				break
+			}
 			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				break
 			}
 			continue
 		}
-		claimed, _, ok := parseProbePayload(buf[:n])
+		claimed, _, sent, ok := parseProbePayload(payload)
 		if !ok {
 			continue
 		}
-		mu.Lock()
 		s := seen[claimed.String()]
 		if s == nil {
-			s = &stat{}
+			s = &probeStat{}
 			seen[claimed.String()] = s
 		}
 		s.got++
-		mu.Unlock()
+		if int(sent) > s.sent {
+			s.sent = int(sent)
+		}
 		// The forged source the kernel reports (from) should equal the one
 		// we baked into the payload — if a NAT rewrote it, they differ.
-		if !from.IP.Equal(claimed) {
-			fmt.Printf("  note: claimed %s but kernel saw %s (a NAT rewrote the source)\n", claimed, from.IP)
+		if !from.Equal(claimed) {
+			fmt.Printf("  note: claimed %s but kernel saw %s (a NAT rewrote the source)\n", claimed, from)
 		}
 	}
 
 	if len(seen) == 0 {
-		fmt.Println("no forged packets arrived — this datacenter is dropping spoofed sources (BCP38)")
+		fmt.Printf("no forged packets arrived over %s — this path drops spoofed sources (BCP38)\n", *proto)
 		return
 	}
 	arrived := make([]string, 0, len(seen))
 	for ip := range seen {
 		arrived = append(arrived, ip)
 	}
-	sort.Strings(arrived)
-	fmt.Printf("%d forged sources made it through:\n", len(arrived))
+	sort.Slice(arrived, func(i, j int) bool {
+		return ipToU32(net.ParseIP(arrived[i])) < ipToU32(net.ParseIP(arrived[j]))
+	})
+	var usable []string
+	fmt.Printf("%d forged sources made it through over %s:\n", len(arrived), *proto)
 	for _, ip := range arrived {
-		fmt.Printf("  %s  (%d packets)\n", ip, seen[ip].got)
+		s := *seen[ip]
+		loss := s.loss()
+		ok := loss <= *maxLoss
+		if ok {
+			usable = append(usable, ip)
+		}
+		mark := " "
+		if !ok {
+			mark = "x"
+		}
+		if loss < 0 {
+			fmt.Printf(" %s %-15s  %d packets\n", mark, ip, s.got)
+		} else {
+			fmt.Printf(" %s %-15s  %d/%d packets  loss %.0f%%\n", mark, ip, min(s.got, s.sent), s.sent, loss)
+		}
+	}
+	fmt.Printf("%d usable at max loss %.0f%%\n", len(usable), *maxLoss)
+	if *out != "" {
+		data := strings.Join(usable, "\n")
+		if data != "" {
+			data += "\n"
+		}
+		if err := os.WriteFile(*out, []byte(data), 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "spooftest recv: write %s: %v\n", *out, err)
+			os.Exit(1)
+		}
+		fmt.Printf("wrote %s — use it as the spoof list on the OTHER side\n", *out)
 	}
 }

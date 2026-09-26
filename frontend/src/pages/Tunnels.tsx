@@ -19,6 +19,7 @@ import {
   type Node,
   type SpoofTestCommands,
   type SpoofTestDirection,
+  type SpoofTestProtocol,
   type DiscoverCommands,
   type DiscoveryResult,
   type Tunnel,
@@ -145,6 +146,12 @@ function LiveTraffic({ id, active, labels }: { id: number; active: boolean; labe
   )
 }
 
+// A blank or out-of-range loss cap means no cap, like the receiver's default.
+function spoofMaxLossValue(v: string): number {
+  const n = parseInt(v, 10)
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 100
+}
+
 export default function TunnelsPage({ createSignal = 0 }: { createSignal?: number } = {}) {
   const { t } = useLang()
   const tn = t.ui.tunnels
@@ -172,6 +179,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
   const [spoofForeign, setSpoofForeign] = useState('')
   const [spoofIran, setSpoofIran] = useState('')
   const [spoofDirection, setSpoofDirection] = useState<SpoofTestDirection>('iran_to_foreign')
+  const [spoofProtocol, setSpoofProtocol] = useState<SpoofTestProtocol>('udp')
+  const [spoofMaxLoss, setSpoofMaxLoss] = useState('100')
   const [spoofPort, setSpoofPort] = useState('443')
   const [spoofIp, setSpoofIp] = useState('')
   const [spoofBusy, setSpoofBusy] = useState(false)
@@ -478,6 +487,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
     setSpoofIp('')
     setSpoofIran('')
     setSpoofDirection('iran_to_foreign')
+    setSpoofProtocol('udp')
+    setSpoofMaxLoss('100')
     setSpoofCmds(null)
     setSpoofError(null)
     setSpoofMode('manual')
@@ -507,6 +518,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         port: parseInt(spoofPort, 10) || 443,
         spoof_ip: spoofIp,
         direction: spoofDirection,
+        protocol: spoofProtocol,
+        max_loss: spoofMaxLossValue(spoofMaxLoss),
       })
       setSpoofCmds(cmds)
     } catch (err) {
@@ -535,6 +548,8 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
         iran_address: spoofDirection === 'foreign_to_iran' ? spoofIran.trim() : null,
         port: parseInt(spoofPort, 10) || 443,
         direction: spoofDirection,
+        protocol: spoofProtocol,
+        max_loss: spoofMaxLossValue(spoofMaxLoss),
       })
       setDiscCmds(cmds)
     } catch (err) {
@@ -1257,6 +1272,20 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                 ))}
               </div>
               <small className="muted">{tn.spoofDirectionHint[spoofDirection]}</small>
+            </div>
+            <div className="form-section">
+              <h4>{tn.spoofProtocolLabel}</h4>
+              <div className="tf-seg" style={{ alignSelf: 'flex-start' }}>
+                {(['udp', 'icmp', 'tcp'] as SpoofTestProtocol[]).map((p) => (
+                  <button key={p} type="button" aria-pressed={spoofProtocol === p} onClick={() => { setSpoofProtocol(p); setSpoofCmds(null); setDiscCmds(null) }}>
+                    {p.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <small className="muted">{tn.spoofProtocolHint}</small>
+              <Field label={tn.spoofMaxLossLabel}>
+                <input className="input" type="number" min={0} max={100} value={spoofMaxLoss} onChange={(e) => { setSpoofMaxLoss(e.target.value); setSpoofCmds(null); setDiscCmds(null) }} />
+              </Field>
             </div>
             <div className="form-section">
               <h4>{t.tunnelsPage.foreignSourceLabel}</h4>

@@ -151,6 +151,9 @@ class TunnelRecommendRequest(BaseModel):
 
 
 SpoofTestDirection = Literal["iran_to_foreign", "foreign_to_iran"]
+# What the probes are carried on: a datacenter or the national filter can drop
+# forged UDP yet pass forged ICMP or TCP, so each is worth measuring.
+SpoofTestProtocol = Literal["udp", "icmp", "tcp"]
 
 
 class SpoofTestRequest(BaseModel):
@@ -166,6 +169,9 @@ class SpoofTestRequest(BaseModel):
     # foreign_to_iran checks the same for the foreign datacenter, since the
     # tunnel forges a source in BOTH directions.
     direction: SpoofTestDirection = "iran_to_foreign"
+    protocol: SpoofTestProtocol = "udp"
+    # A source whose probes lose more than this (%) isn't reported as usable.
+    max_loss: int = Field(default=100, ge=0, le=100)
 
 
 class SpoofTestCommands(BaseModel):
@@ -192,6 +198,9 @@ class DiscoverSourcesRequest(BaseModel):
     iran_address: str | None = Field(default=None, max_length=255)
     port: int = Field(default=443, ge=1, le=65535)
     direction: SpoofTestDirection = "iran_to_foreign"
+    protocol: SpoofTestProtocol = "udp"
+    # A source whose probes lose more than this (%) isn't reported as usable.
+    max_loss: int = Field(default=100, ge=0, le=100)
 
 
 class DiscoverCandidate(BaseModel):

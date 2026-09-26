@@ -891,6 +891,7 @@ export async function cdnSpeedTest(id: number): Promise<CdnSpeed> {
 }
 
 export type SpoofTestDirection = 'iran_to_foreign' | 'foreign_to_iran'
+export type SpoofTestProtocol = 'udp' | 'icmp' | 'tcp'
 
 export interface SpoofTestCommands {
   recv_command: string
@@ -920,6 +921,8 @@ export async function discoverSourcesCommands(payload: {
   iran_address?: string | null
   port: number
   direction?: SpoofTestDirection
+  protocol?: SpoofTestProtocol
+  max_loss?: number
 }): Promise<DiscoverCommands> {
   const res = await authorizedFetch('/tunnels/discover-sources', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()
@@ -940,6 +943,8 @@ export async function spoofTestCommands(payload: {
   port: number
   spoof_ip: string
   direction?: SpoofTestDirection
+  protocol?: SpoofTestProtocol
+  max_loss?: number
 }): Promise<SpoofTestCommands> {
   const res = await authorizedFetch('/tunnels/spooftest', { method: 'POST', body: JSON.stringify(payload) })
   return res.json()

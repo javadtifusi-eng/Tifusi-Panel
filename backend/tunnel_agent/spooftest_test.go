@@ -41,7 +41,7 @@ func TestExpandIPs(t *testing.T) {
 func TestBuildSpoofedUDPWellFormed(t *testing.T) {
 	src := net.ParseIP("8.8.8.8")
 	dst := net.ParseIP("1.1.1.1")
-	payload := buildProbePayload(src, 42)
+	payload := buildProbePayload(src, 42, 5)
 	pkt, err := buildSpoofedUDP(src, dst, 40000, 443, payload)
 	if err != nil {
 		t.Fatal(err)
@@ -66,8 +66,55 @@ func TestBuildSpoofedUDPWellFormed(t *testing.T) {
 	}
 
 	// The payload round-trips through the parser.
-	claimed, seq, ok := parseProbePayload(pkt[28:])
-	if !ok || claimed.String() != "8.8.8.8" || seq != 42 {
-		t.Errorf("parseProbePayload = (%v, %d, %v), want (8.8.8.8, 42, true)", claimed, seq, ok)
+	claimed, seq, sent, ok := parseProbePayload(pkt[28:])
+	if !ok || claimed.String() != "8.8.8.8" || seq != 42 || sent != 5 {
+		t.Errorf("parseProbePayload = (%v, %d, %d, %v), want (8.8.8.8, 42, 5, true)", claimed, seq, sent, ok)
+	}
+}
+
+func TestParseProbePayloadOldSender(t *testing.T) {
+	// A 12-byte probe from a sender without the per-source count still parses.
+	p := buildProbePayload(net.ParseIP("1.2.3.4"), 7, 3)[:spoofPayloadMinLen]
+	claimed, seq, sent, ok := parseProbePayload(p)
+	if !ok || claimed.String() != "1.2.3.4" || seq != 7 || sent != 0 {
+		t.Errorf("parseProbePayload(old) = (%v, %d, %d, %v)", claimed, seq, sent, ok)
+	}
+}
+
+func TestProbePacketsRoundTrip(t *testing.T) {
+	src, dst := net.ParseIP("5.6.7.8"), net.ParseIP("1.1.1.1")
+	for _, proto := range []string{probeICMP, probeTCP} {
+		payload := buildProbePayload(src, 9, 4)
+		pkt, err := buildProbePacket(proto, src, dst, 40000, 443, 9, payload)
+		if err != nil {
+			t.Fatalf("%s: %v", proto, err)
+		}
+		got := rawProbePayload(proto, 443, pkt)
+		claimed, seq, sent, ok := parseProbePayload(got)
+		if !ok || claimed.String() != "5.6.7.8" || seq != 9 || sent != 4 {
+			t.Errorf("%s round trip = (%v, %d, %d, %v)", proto, claimed, seq, sent, ok)
+		}
+	}
+	// A TCP probe to another port isn't ours.
+	pkt, _ := buildProbePacket(probeTCP, src, dst, 40000, 8443, 1, buildProbePayload(src, 1, 1))
+	if rawProbePayload(probeTCP, 443, pkt) != nil {
+		t.Error("tcp probe to another port was accepted")
+	}
+}
+
+func TestProbeStatLoss(t *testing.T) {
+	cases := []struct {
+		s    probeStat
+		want float64
+	}{
+		{probeStat{got: 3, sent: 3}, 0},
+		{probeStat{got: 1, sent: 4}, 75},
+		{probeStat{got: 5, sent: 4}, 0}, // duplicates never go negative
+		{probeStat{got: 2, sent: 0}, -1},
+	}
+	for _, c := range cases {
+		if got := c.s.loss(); got != c.want {
+			t.Errorf("%+v.loss() = %v, want %v", c.s, got, c.want)
+		}
 	}
 }
