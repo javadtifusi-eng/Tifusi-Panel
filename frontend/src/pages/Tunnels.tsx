@@ -743,7 +743,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                   </div>
                   <div>
                     <span>{t.tunnelsPage.status.connected}</span>
-                    <b className="en">
+                    <b className="en" style={{ color: focusedUp ? 'var(--ok)' : undefined }}>
                       {focusedUp} / {focusedTunnels.length}
                     </b>
                   </div>
@@ -756,22 +756,25 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     <b className="en">{focusedTunnels.reduce((s, tu) => s + tu.forwards.length, 0)}</b>
                   </div>
                 </div>
-                <div className="hint" style={{ margin: 0 }}>
-                  {tn.mapHint}
-                </div>
+                {(() => {
+                  const liveOne = focusedTunnels.find((tu) => tu.status === 'connected')
+                  return liveOne ? (
+                    <LiveTraffic id={liveOne.id} active labels={{ up: tn.liveUp, down: tn.liveDown, live: tn.liveOn, idle: tn.liveIdle }} />
+                  ) : null
+                })()}
               </>
             )}
             <div className="map-legend">
               <span>
-                <i style={{ background: 'linear-gradient(90deg,#f97316,#fde68a)' }} />
+                <i style={{ background: 'var(--ok)' }} />
                 {tn.legendUp}
               </span>
               <span>
-                <i style={{ background: 'repeating-linear-gradient(90deg,#ef4444 0 4px,transparent 4px 9px)' }} />
+                <i style={{ background: 'var(--bad)' }} />
                 {tn.legendDown}
               </span>
               <span>
-                <i style={{ background: 'repeating-linear-gradient(90deg,#5c5c5c 0 2px,transparent 2px 8px)' }} />
+                <i style={{ background: 'var(--muted)' }} />
                 {tn.legendWait}
               </span>
             </div>
