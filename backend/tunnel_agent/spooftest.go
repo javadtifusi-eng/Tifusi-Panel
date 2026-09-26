@@ -244,14 +244,14 @@ func runSpoofTest(args []string) {
 func spoofTestUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest recv --port 443 [--seconds 20]")
-	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest send --to <receiver-ip> --port 443 --spoof <ip|a-b|cidr> [--count 3] [--interval 50ms] [--sport 40000]")
+	fmt.Fprintln(os.Stderr, "  tifusi-tunnel spooftest send --to <receiver-ip> --port 443 --spoof <ip|a-b|cidr|list> [--count 3] [--interval 50ms] [--sport 40000]")
 }
 
 func spoofTestSend(args []string) {
 	fs := flag.NewFlagSet("spooftest send", flag.ExitOnError)
 	to := fs.String("to", "", "receiver's real IP")
 	port := fs.Int("port", 443, "receiver UDP port")
-	spoof := fs.String("spoof", "", "forged source IP, range (a-b) or CIDR")
+	spoof := fs.String("spoof", "", "forged source: IP, range (a-b), CIDR, or comma-separated list")
 	count := fs.Int("count", 3, "packets per forged source")
 	sport := fs.Int("sport", 40000, "UDP source port to put in forged packets")
 	interval := fs.Duration("interval", 50*time.Millisecond, "delay between packets")
@@ -262,7 +262,9 @@ func spoofTestSend(args []string) {
 		fmt.Fprintln(os.Stderr, "spooftest send: --to must be an IPv4 address")
 		os.Exit(2)
 	}
-	ips, err := expandIPs(*spoof)
+	// parseSpoofSources (not expandIPs) so a discovery run can sweep a whole
+	// comma-separated candidate list in one pass, not just one ip/range/CIDR.
+	ips, err := parseSpoofSources(*spoof)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "spooftest send: %v\n", err)
 		os.Exit(2)
