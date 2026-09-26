@@ -170,7 +170,14 @@ type Config struct {
 	// 0 disables FEC.
 	FECData   int `json:"fec_data,omitempty"`
 	FECParity int `json:"fec_parity,omitempty"`
+	// HamrangQUIC, "hamrang" transport only: carry the camouflage link on
+	// QUIC (UDP, "h3" ALPN — looks like HTTP/3) instead of TLS+WebSocket over
+	// TCP. Both ends must match; the panel sets the same value on each.
+	HamrangQUIC bool `json:"hamrang_quic,omitempty"`
 }
+
+// hamrangQUIC reports whether this config runs Hamrang over QUIC.
+func (c *Config) hamrangQUIC() bool { return c.Transport == transportHamrang && c.HamrangQUIC }
 
 // spoofOptions builds the shared carrier options from the config. It returns
 // nil when nothing optional is set, which every carrier treats as plain
@@ -256,6 +263,10 @@ func (c *Config) validate() error {
 	}
 	switch c.Transport {
 	case "tcp", "tls", "ws", "wss", "tcpmux", "wsmux", "wssmux", "udp":
+	case transportHamrang:
+		if c.SNI == "" {
+			return errors.New("hamrang transport needs \"sni\" (the domestic camouflage host to mimic)")
+		}
 	case "spoof":
 		if c.SpoofSource == "" {
 			return errors.New("spoof transport needs \"spoof_source\" (the forged source IP, list, range or CIDR)")
@@ -277,7 +288,7 @@ func (c *Config) validate() error {
 			return fmt.Errorf("spoof_carrier must be udp, icmp or tcp, got %q", c.SpoofCarrier)
 		}
 	default:
-		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux, udp or spoof, got %q", c.Transport)
+		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux, udp, spoof or hamrang, got %q", c.Transport)
 	}
 	if len(c.Token) < 8 {
 		return errors.New("token must be at least 8 characters")
@@ -885,13 +896,19 @@ func (s *Server) Run() error {
 			return err
 		}
 		ln = sln
+	} else if s.cfg.hamrangQUIC() {
+		qln, err := hamrangListenQUIC(s.cfg.Listen, s.cfg.SNI)
+		if err != nil {
+			return fmt.Errorf("cannot listen on %s (quic): %w", s.cfg.Listen, err)
+		}
+		ln = qln
 	} else {
 		rawLn, err := net.Listen("tcp", s.cfg.Listen)
 		if err != nil {
 			return fmt.Errorf("cannot listen on %s: %w", s.cfg.Listen, err)
 		}
 		ln = net.Listener(nodelayListener{rawLn})
-		if s.cfg.Transport == "tls" || s.cfg.Transport == "wss" || s.cfg.Transport == "wssmux" {
+		if isTLSTransport(s.cfg.Transport) {
 			var tc *tls.Config
 			if s.cfg.Domain != "" {
 				tc = acmeTLSConfig(s.cfg.Domain)
@@ -908,6 +925,8 @@ func (s *Server) Run() error {
 	}
 	if s.cfg.Transport == "spoof" {
 		s.log("tunnel listening on %s (spoof/%s carrier)", s.cfg.Listen, s.cfg.SpoofCarrier)
+	} else if s.cfg.hamrangQUIC() {
+		s.log("tunnel listening on %s (hamrang/quic, sni %s)", s.cfg.Listen, s.cfg.SNI)
 	} else {
 		s.log("tunnel listening on %s (%s)", s.cfg.Listen, s.cfg.Transport)
 	}
@@ -954,7 +973,7 @@ func (s *Server) acceptTunnel(raw net.Conn) {
 	br := bufio.NewReaderSize(raw, 32*1024)
 	var conn net.Conn = raw
 
-	if s.cfg.Transport == "ws" || s.cfg.Transport == "wss" || s.cfg.Transport == "wsmux" || s.cfg.Transport == "wssmux" {
+	if isWSTransport(s.cfg.Transport) && !s.cfg.hamrangQUIC() {
 		if err := serverUpgrade(raw, br, s.cfg.Path); err != nil {
 			if s.cfg.Verbose {
 				s.log("handshake from %s failed: %v", raw.RemoteAddr(), err)
@@ -1417,6 +1436,12 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 		}
 		tuneKCPMtu(sess, c.cfg.spoofMTU(carrier))
 		raw = sess
+	} else if c.cfg.hamrangQUIC() {
+		qconn, err := hamrangDialQUIC(addr, c.cfg.SNI, 15*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		raw = qconn
 	} else {
 		tconn, err := net.DialTimeout("tcp", addr, 15*time.Second)
 		if err != nil {
@@ -1431,7 +1456,15 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 	}
 	raw.SetDeadline(time.Now().Add(20 * time.Second))
 
-	if c.cfg.Transport == "tls" || c.cfg.Transport == "wss" || c.cfg.Transport == "wssmux" {
+	if c.cfg.Transport == transportHamrang && !c.cfg.HamrangQUIC {
+		// Hamrang: browser-fingerprinted (uTLS) handshake to the camouflage SNI.
+		tconn, err := hamrangClientTLS(raw, c.cfg.SNI, 15*time.Second)
+		if err != nil {
+			raw.Close()
+			return nil, err
+		}
+		raw = tconn
+	} else if c.cfg.Transport == "tls" || c.cfg.Transport == "wss" || c.cfg.Transport == "wssmux" {
 		tconn := tls.Client(raw, &tls.Config{
 			ServerName: c.cfg.SNI,
 			// the tunnel is authenticated by the shared token; the certificate
@@ -1449,7 +1482,7 @@ func (c *Client) connectTo(addr, role string) (*fconn, error) {
 	br := bufio.NewReaderSize(raw, 32*1024)
 	var conn net.Conn = raw
 
-	if c.cfg.Transport == "ws" || c.cfg.Transport == "wss" || c.cfg.Transport == "wsmux" || c.cfg.Transport == "wssmux" {
+	if isWSTransport(c.cfg.Transport) && !c.cfg.hamrangQUIC() {
 		host := c.cfg.Host
 		if host == "" {
 			host = c.cfg.SNI
