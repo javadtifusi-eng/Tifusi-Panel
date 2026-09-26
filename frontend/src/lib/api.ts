@@ -688,6 +688,7 @@ export interface TunnelForward {
   listen_port: number
   net: 'tcp' | 'udp'
   target_port: number
+  proxy_protocol?: boolean
 }
 
 export interface Tunnel {

@@ -72,6 +72,12 @@ Before the tunnel exists, **Recommend best transport** probes both servers and r
 2. Run the relay command on the relay server and the foreign command on the foreign server.
 3. Select **Test connection**. The panel checks that it can reach the relay server, the foreign server and the tunnel's public port, and records the tunnel as `connected` or `error` with the latency and time of the check. A `udp` tunnel cannot be checked from outside; its service log is read on the relay server with `journalctl -u tifusi`.
 
+## Real client IP (PROXY protocol)
+
+Behind a tunnel every connection reaches the foreign service from the tunnel itself, so a device limit that tells devices apart by address sees one device for all of a user's phones. Tick **Real IP (PROXY)** on a TCP forward and the foreign side opens each connection to the target with a PROXY protocol v2 header carrying the user's real address and port.
+
+The target must expect the header: in Xray, set `"acceptProxyProtocol": true` in the inbound's `streamSettings.sockopt` (or `tcpSettings`/`wsSettings`). A service that isn't expecting it reads the header as garbage and the connection fails, so give the tunnel its own inbound on a separate port rather than turning it on for an inbound direct users also reach. UDP forwards can't carry it; IKEv2 and L2TP limits count sessions per user and don't need it.
+
 ## Spoof test
 
 Some tunnel types depend on the relay's datacenter allowing packets with a forged source address to leave its network. The **IP Spoofing** card in the transport picker generates two commands, one for each server, that check this before any such tunnel is built. Nothing runs on the servers until the commands are executed there.

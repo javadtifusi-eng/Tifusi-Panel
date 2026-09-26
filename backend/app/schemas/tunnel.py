@@ -17,6 +17,17 @@ class TunnelForward(BaseModel):
     listen_port: int = Field(ge=1, le=65535)
     net: ForwardNet
     target_port: int = Field(ge=1, le=65535)
+    # tcp only: send the user's real address to the target with a PROXY
+    # protocol v2 header, so a device limit by address works behind the relay.
+    # The target must expect it (acceptProxyProtocol in Xray).
+    proxy_protocol: bool = False
+
+    @field_validator("proxy_protocol")
+    @classmethod
+    def _tcp_only(cls, v: bool, info):
+        if v and info.data.get("net") != "tcp":
+            raise ValueError("proxy_protocol only applies to tcp forwards")
+        return v
 
 
 class TunnelCreate(BaseModel):

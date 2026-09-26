@@ -96,6 +96,10 @@ type Forward struct {
 	Listen string `json:"listen"` // public address on the Iran server, e.g. 0.0.0.0:1194
 	Net    string `json:"net"`    // tcp | udp
 	Target string `json:"target"` // resolved ON THE FOREIGN SERVER, e.g. 127.0.0.1:1194
+	// ProxyProtocol, tcp forwards only: open each connection to Target with a
+	// PROXY protocol v2 header carrying the user's real address (see
+	// proxyproto.go). Target must expect it.
+	ProxyProtocol bool `json:"proxy_protocol,omitempty"`
 }
 
 // PanelConfig turns on the optional web admin panel, served over its own
@@ -285,6 +289,11 @@ func (c *Config) validate() error {
 		if len(c.Forwards) == 0 {
 			return errors.New("server mode needs at least one entry in \"forwards\"")
 		}
+		for _, fw := range c.Forwards {
+			if fw.ProxyProtocol && fw.Net != "tcp" {
+				return fmt.Errorf("forward %s: proxy_protocol only applies to tcp forwards", fw.Listen)
+			}
+		}
 	case "client":
 		if c.Server == "" {
 			return errors.New("client mode needs \"server\"")
@@ -422,6 +431,10 @@ type dialReq struct {
 	// Group, striped UDP forwards only: streams sharing it are joined onto
 	// one UDP socket to Target on the foreign side (see stripe.go).
 	Group string `json:"group,omitempty"`
+	// Src and Dst, tcp forwards with proxy_protocol only: the user's address
+	// and the one they connected to on the Iran side, for the PROXY header.
+	Src string `json:"src,omitempty"`
+	Dst string `json:"dst,omitempty"`
 }
 
 type hello struct {
@@ -1283,12 +1296,13 @@ func (s *Server) claim() *dataConn {
 }
 
 // open claims a connection and asks the far side to dial the target.
-func (s *Server) open(fw Forward) (*fconn, error) {
+func (s *Server) open(fw Forward, user net.Conn) (*fconn, error) {
 	d := s.claim()
 	if d == nil {
 		return nil, errors.New("no tunnel connection available (is the foreign server running?)")
 	}
-	req, _ := json.Marshal(dialReq{Net: fw.Net, Target: fw.Target})
+	src, dst := proxyAddrs(fw, user)
+	req, _ := json.Marshal(dialReq{Net: fw.Net, Target: fw.Target, Src: src, Dst: dst})
 	if err := d.f.send(frmDial, req); err != nil {
 		d.f.Close()
 		return nil, err
@@ -1321,7 +1335,7 @@ func (s *Server) serveTCPForward(fw Forward) {
 			continue
 		}
 		go func(c net.Conn) {
-			f, err := s.open(fw)
+			f, err := s.open(fw, c)
 			if err != nil {
 				s.log("tcp %s: %v", fw.Listen, err)
 				c.Close()
@@ -1383,7 +1397,7 @@ func (s *Server) serveUDPForward(fw Forward) {
 		mu.Unlock()
 
 		if sess == nil {
-			f, err := s.open(fw)
+			f, err := s.open(fw, nil)
 			if err != nil {
 				s.log("udp %s: %v", fw.Listen, err)
 				continue
@@ -1753,6 +1767,11 @@ func (c *Client) handleTCP(f *fconn, req dialReq) {
 	}
 	if tc, ok := target.(*net.TCPConn); ok {
 		tc.SetNoDelay(true)
+	}
+	if err := writeProxyHeader(target, req); err != nil {
+		target.Close()
+		f.send(frmDialErr, []byte("proxy protocol: "+err.Error()))
+		return
 	}
 	if err := f.send(frmDialOK, nil); err != nil {
 		target.Close()

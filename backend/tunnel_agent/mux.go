@@ -417,12 +417,13 @@ func (s *Server) pickMuxSession() *muxSession {
 	return live[s.muxRR]
 }
 
-func (s *Server) openMux(fw Forward) (*muxStream, error) {
+func (s *Server) openMux(fw Forward, user net.Conn) (*muxStream, error) {
 	ms := s.pickMuxSession()
 	if ms == nil {
 		return nil, errors.New("no mux tunnel connection available (is the foreign server running?)")
 	}
-	return ms.OpenStream(fw.Net, fw.Target)
+	src, dst := proxyAddrs(fw, user)
+	return ms.openStreamReq(dialReq{Net: fw.Net, Target: fw.Target, Src: src, Dst: dst})
 }
 
 func (s *Server) serveTCPForwardMux(fw Forward) {
@@ -439,7 +440,7 @@ func (s *Server) serveTCPForwardMux(fw Forward) {
 			continue
 		}
 		go func(c net.Conn) {
-			st, err := s.openMux(fw)
+			st, err := s.openMux(fw, c)
 			if err != nil {
 				s.log("tcp %s: %v", fw.Listen, err)
 				c.Close()
@@ -500,7 +501,7 @@ func (s *Server) serveUDPForwardMux(fw Forward) {
 		mu.Unlock()
 
 		if sess == nil {
-			st, err := s.openMux(fw)
+			st, err := s.openMux(fw, nil)
 			if err != nil {
 				s.log("udp %s: %v", fw.Listen, err)
 				continue
@@ -625,6 +626,12 @@ func (c *Client) serveMuxTCP(ms *muxSession, st *muxStream, req dialReq) {
 	}
 	if tc, ok := target.(*net.TCPConn); ok {
 		tc.SetNoDelay(true)
+	}
+	if err := writeProxyHeader(target, req); err != nil {
+		target.Close()
+		ms.f.send(frmMuxOpenErr, append(u32(st.id), []byte("proxy protocol: "+err.Error())...))
+		ms.dropStream(st.id)
+		return
 	}
 	if err := ms.f.send(frmMuxOpenOK, u32(st.id)); err != nil {
 		target.Close()

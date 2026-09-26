@@ -64,6 +64,8 @@ def build_iran_config(tunnel: Tunnel, foreign_host: str | None = None) -> dict:
             "listen": f"0.0.0.0:{f['listen_port']}",
             "net": f["net"],
             "target": f"{_forward_target_host(f, foreign_host)}:{f['target_port']}",
+            # Only when on, so a forward without it keeps its exact old config.
+            **({"proxy_protocol": True} if f.get("proxy_protocol") and f["net"] == "tcp" else {}),
         }
         for f in tunnel.forwards
     ]

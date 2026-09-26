@@ -1232,7 +1232,7 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     onChange={(e) => updateForward(idx, { listen_port: parseInt(e.target.value, 10) || 0 })}
                     placeholder={t.tunnelsPage.forwardListenPortLabel}
                   />
-                  <select className="input" style={{ flex: '0 1 90px', width: 'auto' }} value={fwd.net} onChange={(e) => updateForward(idx, { net: e.target.value as 'tcp' | 'udp' })}>
+                  <select className="input" style={{ flex: '0 1 90px', width: 'auto' }} value={fwd.net} onChange={(e) => updateForward(idx, { net: e.target.value as 'tcp' | 'udp', ...(e.target.value === 'udp' ? { proxy_protocol: false } : {}) })}>
                     <option value="tcp">TCP</option>
                     <option value="udp">UDP</option>
                   </select>
@@ -1244,11 +1244,18 @@ export default function TunnelsPage({ createSignal = 0 }: { createSignal?: numbe
                     onChange={(e) => updateForward(idx, { target_port: parseInt(e.target.value, 10) || 0 })}
                     placeholder={t.tunnelsPage.forwardTargetPortLabel}
                   />
+                  {fwd.net === 'tcp' && (
+                    <label className="sh-check" title={t.tunnelsPage.forwardProxyProtocolHint}>
+                      <input type="checkbox" checked={!!fwd.proxy_protocol} onChange={(e) => updateForward(idx, { proxy_protocol: e.target.checked })} />
+                      <b>{t.tunnelsPage.forwardProxyProtocol}</b>
+                    </label>
+                  )}
                   <button type="button" onClick={() => setForwards((fs) => fs.filter((_, i) => i !== idx))} className="btn danger">
                     {t.tunnelsPage.removeForward}
                   </button>
                 </div>
               ))}
+              {forwards.some((f) => f.proxy_protocol) && <small className="muted">{t.tunnelsPage.forwardProxyProtocolHint}</small>}
             </div>
 
             {formError && <div className="tf-alert">{formError}</div>}
