@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption,
 # 10.66.0.0/16: 10.66.0.1 is the server, users start at 10.66.0.2.
 SUBNET_PREFIX = "10.66"
 SERVER_ADDRESS = f"{SUBNET_PREFIX}.0.1"
-DEFAULT_MTU = 1420
+DEFAULT_MTU = 1280
 DEFAULT_PORT = 4500
 
 
