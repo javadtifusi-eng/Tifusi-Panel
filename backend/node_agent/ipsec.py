@@ -335,9 +335,7 @@ def _swanctl_conf(
         "    children {\n"
         "      net {\n"
         "        local_ts = 0.0.0.0/0,::/0\n"
-        # CBC before GCM: older Samsung kernels accept an AES-GCM child SA
-        # but never send a packet through it, and every client offers CBC.
-        "        esp_proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384,"
+        "        esp_proposals = aes256gcm16-prfsha384-ecp384,aes256-sha256-modp2048,aes128-sha256-modp2048,"
         "aes256-sha256-ecp256,aes128-sha256-ecp256,aes256-sha256-modp3072,aes128-sha256-modp3072,"
         "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha256,aes128-sha256,aes256-sha1,aes128-sha1,default\n"
         "      }\n"
