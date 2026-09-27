@@ -321,9 +321,12 @@ def _swanctl_conf(
         # ecp256 and the modp3072 entries are for Samsung phones: some offer
         # only ecp256, which `default` lacks, and others then fell through to
         # `default` and got PRF_AES128_XCBC, whose EAP MSK AUTH they compute
-        # wrongly ("verification of AUTH payload with EAP MSK failed").
+        # wrongly ("verification of AUTH payload with EAP MSK failed"). Those
+        # phones offer only PRF_HMAC_SHA1 and PRF_AES128_XCBC, so the prfsha1
+        # entries keep them off XCBC; clients with a SHA-2 PRF match earlier.
         "    proposals = aes256-sha256-modp4096,aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384,"
         "aes256-sha256-ecp256,aes128-sha256-ecp256,aes256-sha256-modp3072,aes128-sha256-modp3072,"
+        "aes256-sha256-prfsha1-modp4096,aes256-sha256-prfsha1-modp3072,aes256-sha256-prfsha1-modp2048,"
         "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha1-modp1024,default\n"
         "    local_addrs = %any\n"
         "    remote_addrs = %any\n"
