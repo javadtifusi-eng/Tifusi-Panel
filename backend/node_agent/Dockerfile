@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 5.9.14 setup (same proposals, same send_cert=always/fragmentation=yes,
 # same cert, same client) connects immediately — something about 6.x's
 # wire-level construction of that message trips a filter 5.9.x doesn't.
+# --enable-openssl adds the ECP groups (ecp256/384): some Samsung phones offer
+# only ecp256 for IKE, and without this plugin charon has no ECP at all.
 ARG STRONGSWAN_VERSION=5.9.14
 RUN curl -fsSL -o /tmp/strongswan.tar.bz2 \
       "https://download.strongswan.org/strongswan-${STRONGSWAN_VERSION}.tar.bz2" \
@@ -29,6 +31,7 @@ RUN curl -fsSL -o /tmp/strongswan.tar.bz2 \
     && cd /tmp/strongswan-src \
     && ./configure --prefix=/usr --sysconfdir=/etc \
          --enable-eap-mschapv2 --enable-eap-identity --enable-md4 \
+         --enable-openssl \
          --enable-swanctl --enable-vici \
     && make -j"$(nproc)" \
     && make DESTDIR=/build install
