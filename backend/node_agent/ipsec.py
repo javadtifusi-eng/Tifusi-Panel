@@ -318,7 +318,12 @@ def _swanctl_conf(
         # answered INVALID_KE_PAYLOAD and every Android handshake needed an
         # extra round trip. charon only ever picks a group the client
         # offered, so iOS (which offers only group 14) still gets modp2048.
+        # ecp256 and the modp3072 entries are for Samsung phones: some offer
+        # only ecp256, which `default` lacks, and others then fell through to
+        # `default` and got PRF_AES128_XCBC, whose EAP MSK AUTH they compute
+        # wrongly ("verification of AUTH payload with EAP MSK failed").
         "    proposals = aes256-sha256-modp4096,aes256-sha256-modp2048,aes128-sha256-modp2048,aes256gcm16-prfsha384-ecp384,"
+        "aes256-sha256-ecp256,aes128-sha256-ecp256,aes256-sha256-modp3072,aes128-sha256-modp3072,"
         "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha1-modp1024,default\n"
         "    local_addrs = %any\n"
         "    remote_addrs = %any\n"
@@ -328,6 +333,7 @@ def _swanctl_conf(
         "      net {\n"
         "        local_ts = 0.0.0.0/0,::/0\n"
         "        esp_proposals = aes256gcm16-prfsha384-ecp384,aes256-sha256-modp2048,aes128-sha256-modp2048,"
+        "aes256-sha256-ecp256,aes128-sha256-ecp256,aes256-sha256-modp3072,aes128-sha256-modp3072,"
         "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha256,aes128-sha256,aes256-sha1,aes128-sha1,default\n"
         "      }\n"
         "    }\n"
