@@ -28,6 +28,10 @@
 </p>
 
 <p align="center">
+  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/fa/"><b>📖 مستندات</b></a>
+</p>
+
+<p align="center">
   <img src="docs/brand/gb.png" height="14" alt="" /> <a href="README.md">English</a> &nbsp;·&nbsp; <img src="docs/brand/ir.png" height="14" alt="" /> <b>فارسی</b> &nbsp;·&nbsp; <img src="docs/brand/ru.png" height="14" alt="" /> <a href="README.ru.md">Русский</a>
 </p>
 
@@ -42,7 +46,7 @@
 <p align="center">
   <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="داشبورد و هاست‌های تیفوسی پنل" />
   <br /><br />
-  <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="هسته‌ها و تانل‌های تیفوسی پنل" />
+  <img src="website/src/assets/shots/tunnels-fa.webp" width="100%" alt="بخش تانل‌ها: نقشه‌ی زنده و ترافیک هر تانل" />
 </p>
 
 <div dir="rtl">

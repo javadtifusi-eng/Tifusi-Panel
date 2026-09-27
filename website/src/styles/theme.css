@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap');
+
+:root {
+  --sl-font: 'Vazirmatn', system-ui, sans-serif;
+  --sl-color-accent-low: #3a1a05;
+  --sl-color-accent: #f97316;
+  --sl-color-accent-high: #fed7aa;
+}
+:root[data-theme='dark'] {
+  --sl-color-black: #0b0b0b;
+  --sl-color-gray-6: #161616;
+  --sl-color-gray-5: #262626;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #ffedd5;
+  --sl-color-accent: #c2410c;
+  --sl-color-accent-high: #7c2d12;
+}
+.hero img { filter: drop-shadow(0 0 48px rgb(249 115 22 / 0.35)); }
+.sl-markdown-content img { border-radius: 14px; border: 1px solid var(--sl-color-gray-5); }
+pre.mermaid { background: transparent; border: 0; display: flex; justify-content: center; direction: ltr; }
+.install { direction: ltr; }
+.shot-caption { text-align: center; color: var(--sl-color-gray-3); font-size: var(--sl-text-sm); }

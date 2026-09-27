@@ -26,6 +26,10 @@
 </p>
 
 <p align="center">
+  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><b>📖 Документация</b></a>
+</p>
+
+<p align="center">
   <img src="docs/brand/gb.png" height="14" alt="" /> <a href="README.md">English</a> &nbsp;·&nbsp; <img src="docs/brand/ir.png" height="14" alt="" /> <a href="README.fa.md">فارسی</a> &nbsp;·&nbsp; <img src="docs/brand/ru.png" height="14" alt="" /> <b>Русский</b>
 </p>
 
@@ -36,7 +40,7 @@ Tifusi Panel — самостоятельно размещаемая плоск�
 <p align="center">
   <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="Дашборд и хосты Tifusi Panel" />
   <br /><br />
-  <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="Ядра и туннели Tifusi Panel" />
+  <img src="website/src/assets/shots/tunnels-en.webp" width="100%" alt="Страница туннелей: живая карта и трафик каждого туннеля" />
 </p>
 
 ## Что нового в v1.3

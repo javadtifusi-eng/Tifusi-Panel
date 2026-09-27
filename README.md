@@ -28,6 +28,10 @@
 </p>
 
 <p align="center">
+  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><b>📖 Documentation</b></a>
+</p>
+
+<p align="center">
   <img src="docs/brand/gb.png" height="14" alt="" /> <b>English</b> &nbsp;·&nbsp; <img src="docs/brand/ir.png" height="14" alt="" /> <a href="README.fa.md">فارسی</a> &nbsp;·&nbsp; <img src="docs/brand/ru.png" height="14" alt="" /> <a href="README.ru.md">Русский</a>
 </p>
 
@@ -38,7 +42,7 @@ Tifusi Panel manages users, access policy and server configuration from one dash
 <p align="center">
   <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="Tifusi Panel dashboard and hosts" />
   <br /><br />
-  <img src="docs/screenshots/live-cores-tunnels.svg" width="100%" alt="Tifusi Panel cores and tunnels" />
+  <img src="website/src/assets/shots/tunnels-en.webp" width="100%" alt="Tunnels page: live map and traffic for each tunnel" />
 </p>
 
 ## ✨ Highlights
