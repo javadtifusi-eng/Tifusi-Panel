@@ -37,7 +37,7 @@ import { copyToClipboard } from '../lib/clipboard'
 import CdnTuner from '../components/CdnTuner'
 import { parseServerDate } from '../lib/format'
 
-const PICK: TunnelTransport[] = ['tcp', 'tcpmux', 'udp', 'ws', 'wss', 'wsmux', 'wssmux', 'tls', 'spoof']
+const PICK: TunnelTransport[] = ['tcp', 'tcpmux', 'tcpstealth', 'udp', 'ws', 'wss', 'wsmux', 'wssmux', 'tls', 'spoof']
 const PILL: Record<TunnelStatus, string> = { connected: 'ok live', pending: 'idle', error: 'bad' }
 // The HTTPS ports Cloudflare proxies; it reaches the relay on the same one.
 const CF_PORTS = [443, 2053, 2083, 2087, 2096, 8443]

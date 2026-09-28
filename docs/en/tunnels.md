@@ -29,11 +29,12 @@ A token is generated automatically for each tunnel.
 
 ### Transports
 
-The form offers three:
+The form offers four:
 
 | Transport | Use |
 | --- | --- |
 | **TCP Mux** (`tcpmux`) | Fastest; the foreign server connects straight to the relay. |
+| **TCP + Stealth** (`tcpstealth`) | TCP Mux with every byte encrypted and randomly padded, so the link has no clear-text handshake or fixed packet sizes for DPI to match. The relay stays silent to anything that isn't the tunnel, so a probe learns nothing. |
 | **WSS Mux** (`wssmux`) | WebSocket over TLS. The most filter-resistant, and the only one a CDN carries. |
 | **UDP (KCP)** (`udp`) | For links where TCP is disrupted. |
 

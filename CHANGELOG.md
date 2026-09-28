@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Tunnel engine
+- **TCP + Stealth transport (`tcpstealth`).** TCP Mux with every byte on the wire encrypted (ChaCha20-Poly1305, keyed from the tunnel token and a random salt per connection) and randomly padded, heavier on the first chunks so the handshake has no fixed size. Plain TCP Mux sends its hello, token included, in clear text. The relay never answers first; a connection that fails authentication, replays a recorded handshake or carries a stale timestamp is held open and silent for a random while, so an active probe learns nothing. Both servers need the new agent build; re-run each side's install command.
 - **Link test between the two servers.** `tifusi-tunnel linktest serve` on one server and `linktest run` on the other measure the tunnel's own path: UDP loss, round-trip time and jitter, and TCP handshake success and time, then suggest a transport (`tcpmux` on a clean path, `udp` with FEC when UDP is lossy or jittery or TCP fails).
 - **Real client IP through a tunnel (PROXY protocol v2).** A TCP forward can pass the user's real address to the foreign service with a PROXY v2 header, so the Xray device limit, which tells devices apart by address, no longer sees every user behind the relay as one device. Tick **Real IP (PROXY)** on the forward and set `acceptProxyProtocol` on the Xray inbound it reaches.
 - **ICMPv6 spoof carrier.** The spoof tunnel can carry its packets as ICMPv6 Echo Replies inside IPv4 (protocol 58). A firewall that shuts IPv6 down often leaves ICMPv6 alone, and a rule written for ICMP doesn't match it.

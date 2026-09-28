@@ -1,4 +1,4 @@
-// Multiplexed transports (tcpmux, wsmux, wssmux)
+// Multiplexed transports (tcpmux, tcpstealth, wsmux, wssmux)
 //
 // The plain transports (tcp/tls/ws/wss) open one physical connection per
 // forwarded TCP session or UDP flow, taken from a pool of connections the
@@ -48,7 +48,7 @@ func isMuxTransport(t string) bool {
 	// configured peer, and kcp's listener keys sessions by peer address, so
 	// a second KCP session would replace the first. All streams therefore
 	// share a single KCP session (applyDefaults pins mux_con=1).
-	case "tcpmux", "wsmux", "wssmux", "spoof":
+	case "tcpmux", "tcpstealth", "wsmux", "wssmux", "spoof":
 		return true
 	}
 	return false

@@ -20,7 +20,7 @@ _BINARY_RELEASE_URL = (
     "https://github.com/javadtifusi-eng/Tifusi-Panel/releases/download/tunnel-agent"
 )
 
-_MUX_TRANSPORTS = {TunnelTransport.tcpmux, TunnelTransport.wsmux, TunnelTransport.wssmux}
+_MUX_TRANSPORTS = {TunnelTransport.tcpmux, TunnelTransport.tcpstealth, TunnelTransport.wsmux, TunnelTransport.wssmux}
 
 
 def build_iran_config(tunnel: Tunnel, foreign_host: str | None = None) -> dict:

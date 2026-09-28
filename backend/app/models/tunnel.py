@@ -16,6 +16,7 @@ class TunnelTransport(str, enum.Enum):
     ws = "ws"
     wss = "wss"
     tcpmux = "tcpmux"
+    tcpstealth = "tcpstealth"
     wsmux = "wsmux"
     wssmux = "wssmux"
     udp = "udp"

@@ -26,7 +26,7 @@ import (
 
 // Carrier is one way to reach the tunnel server.
 type Carrier struct {
-	Transport string `json:"transport"`        // tcp | tls | ws | wss | tcpmux | wsmux | wssmux | udp
+	Transport string `json:"transport"`        // tcp | tls | ws | wss | tcpmux | tcpstealth | wsmux | wssmux | udp
 	Listen    string `json:"listen,omitempty"` // server: where this carrier listens
 	Server    string `json:"server,omitempty"` // client: ip:port to dial for it
 	SNI       string `json:"sni,omitempty"`    // defaults to the top-level sni
@@ -66,13 +66,13 @@ func (c *Config) validateFallback() error {
 		return nil
 	}
 	if !isMuxTransport(c.Transport) || c.Transport == "spoof" {
-		return errors.New("fallback needs a mux primary transport (tcpmux, wsmux or wssmux)")
+		return errors.New("fallback needs a mux primary transport (tcpmux, tcpstealth, wsmux or wssmux)")
 	}
 	for i, f := range c.Fallback {
 		switch f.Transport {
-		case "tcp", "tls", "ws", "wss", "tcpmux", "wsmux", "wssmux", "udp":
+		case "tcp", "tls", "ws", "wss", "tcpmux", "tcpstealth", "wsmux", "wssmux", "udp":
 		default:
-			return fmt.Errorf("fallback[%d]: transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux or udp, got %q", i, f.Transport)
+			return fmt.Errorf("fallback[%d]: transport must be tcp, tls, ws, wss, tcpmux, tcpstealth, wsmux, wssmux or udp, got %q", i, f.Transport)
 		}
 		if c.Mode == "server" && f.Listen == "" {
 			return fmt.Errorf("fallback[%d]: server mode needs \"listen\"", i)
@@ -106,6 +106,9 @@ func (s *Server) listenCarrier(car Carrier, primary bool) (net.Listener, error) 
 		return nil, fmt.Errorf("cannot listen on %s: %w", car.Listen, err)
 	}
 	ln := net.Listener(nodelayListener{rawLn})
+	if car.Transport == "tcpstealth" {
+		return stealthListener{Listener: ln, token: s.cfg.Token}, nil
+	}
 	if isTLSTransport(car.Transport) {
 		if primary && s.cfg.Domain != "" {
 			s.log("requesting a real certificate from Let's Encrypt for %s", s.cfg.Domain)

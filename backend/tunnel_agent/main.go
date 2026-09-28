@@ -123,7 +123,7 @@ type Config struct {
 	// client only: WebSocket Host header when it differs from SNI (domain
 	// fronting through a CDN: SNI names another site, Host names ours).
 	Host      string    `json:"host,omitempty"`
-	Transport string    `json:"transport"` // tcp | tls | ws | wss | tcpmux | wsmux | wssmux | udp
+	Transport string    `json:"transport"` // tcp | tls | ws | wss | tcpmux | tcpstealth | wsmux | wssmux | udp
 	Token     string    `json:"token"`
 	SNI       string    `json:"sni"`     // TLS server name / certificate CN
 	Path      string    `json:"path"`    // HTTP path used by ws/wss/wsmux/wssmux
@@ -302,7 +302,7 @@ func (c *Config) validate() error {
 		return fmt.Errorf("mode must be \"server\" or \"client\", got %q", c.Mode)
 	}
 	switch c.Transport {
-	case "tcp", "tls", "ws", "wss", "tcpmux", "wsmux", "wssmux", "udp":
+	case "tcp", "tls", "ws", "wss", "tcpmux", "tcpstealth", "wsmux", "wssmux", "udp":
 	case "spoof":
 		if c.SpoofSource == "" {
 			return errors.New("spoof transport needs \"spoof_source\" (the forged source IP, list, range or CIDR)")
@@ -337,7 +337,7 @@ func (c *Config) validate() error {
 			}
 		}
 	default:
-		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, wsmux, wssmux, udp or spoof, got %q", c.Transport)
+		return fmt.Errorf("transport must be tcp, tls, ws, wss, tcpmux, tcpstealth, wsmux, wssmux, udp or spoof, got %q", c.Transport)
 	}
 	if err := c.validateFallback(); err != nil {
 		return err
@@ -1614,6 +1614,9 @@ func (c *Client) connectCarrier(car Carrier, addr, role string) (*fconn, error) 
 			return nil, err
 		}
 		raw = tconn
+	}
+	if car.Transport == "tcpstealth" {
+		raw = newStealthConn(raw, c.cfg.Token, false)
 	}
 
 	br := bufio.NewReaderSize(raw, 32*1024)
