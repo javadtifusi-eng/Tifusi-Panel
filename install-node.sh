@@ -415,6 +415,13 @@ EXTRA_DOCKER_ARGS=(--cap-add=NET_ADMIN --cap-add=NET_RAW)
 # Every proxied connection holds two sockets in Xray; Docker's default limit
 # of 1024 open files stalls a busy node once a few hundred are open.
 EXTRA_DOCKER_ARGS+=(--ulimit nofile=1048576:1048576)
+# Docker's default json-file driver never rotates: Xray's error log on a busy
+# node grows until it fills the host's root filesystem, and a full disk is not
+# just a dead node — sshd still accepts the connection but the session dies the
+# moment PAM tries to write, locking the operator out of the server entirely.
+# 10MB x 3 caps the node at 30MB. To reclaim space on a node installed before
+# this: truncate -s 0 /var/lib/docker/containers/*/*-json.log
+EXTRA_DOCKER_ARGS+=(--log-opt max-size=10m --log-opt max-file=3)
 if [ -d /lib/modules ]; then
   EXTRA_DOCKER_ARGS+=(-v /lib/modules:/lib/modules:ro)
 fi
