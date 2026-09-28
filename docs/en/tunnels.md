@@ -106,6 +106,8 @@ A spoof tunnel stamps a forged source address on every packet, so it passes a fi
 
 ICMPv6 is worth trying when ICMP is blocked: a firewall that shuts IPv6 down often leaves ICMPv6 alone, and a rule written for ICMP doesn't match it.
 
+The TCP, ICMP and ICMPv6 carriers add their own iptables rules while the tunnel is up and remove them when it stops. The server's firewall would otherwise call an Echo Reply that answers no request, or a TCP segment with no handshake, INVALID and drop it (ufw does by default), so these packets skip connection tracking and are accepted. The TCP carrier also drops the kernel's reset replies to the forged sources, only bare resets, so a real TCP service on the same port keeps its own.
+
 ## Tunnels and IKEv2 or L2TP
 
 For native IKEv2 or L2TP through a tunnel, forward UDP 500 and 4500 from the relay to the foreign server, and UDP 1701 as well for L2TP clients without IPsec. The host published to users then points at the relay's address.

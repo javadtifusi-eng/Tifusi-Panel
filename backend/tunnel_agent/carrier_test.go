@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/binary"
 	"net"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidSpoofCarrier(t *testing.T) {
@@ -88,7 +90,21 @@ func TestBuildSpoofedTCPWellFormed(t *testing.T) {
 	if tcp[13] != 0x18 {
 		t.Errorf("TCP flags = %#x, want 0x18 (PSH|ACK)", tcp[13])
 	}
-	if got := string(tcp[20:]); got != string(payload) {
+	// Shaped like an established Linux connection: DF, a real-looking window
+	// and the timestamp option, not the fixed 0xFFFF/no-options tell.
+	if pkt[6]&0x40 == 0 {
+		t.Error("DF bit not set")
+	}
+	if w := binary.BigEndian.Uint16(tcp[14:16]); w == 0xffff {
+		t.Errorf("TCP window = %#x, want a scaled-looking value", w)
+	}
+	if off := int(tcp[12]>>4) * 4; off != 32 {
+		t.Fatalf("TCP data offset = %d, want 32 (header + timestamp option)", off)
+	}
+	if _, ok := tcpTSval(tcp[20:32]); !ok {
+		t.Error("TCP timestamp option missing")
+	}
+	if got := string(tcp[32:]); got != string(payload) {
 		t.Errorf("TCP payload = %q, want %q", got, payload)
 	}
 
@@ -226,5 +242,64 @@ func TestBuildSpoofedEchoICMPv6(t *testing.T) {
 	}
 	if s := onesComplementSum(pkt[20:]); s != 0 {
 		t.Errorf("echo checksum invalid: %#x", s)
+	}
+}
+
+func TestTCPCarrierPerSourceFlows(t *testing.T) {
+	peer := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 8443}
+	c := &tcpCarrier{port: 443, peer: peer, start: time.Now(), flows: map[[4]byte]*tcpFlow{}}
+	a, b := net.ParseIP("8.8.8.8"), net.ParseIP("9.9.9.9")
+	seqOf := func(src net.IP, n int) (uint32, uint16) {
+		pkt, err := c.frame(src, make([]byte, n))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return binary.BigEndian.Uint32(pkt[24:28]), binary.BigEndian.Uint16(pkt[4:6])
+	}
+	a1, aID1 := seqOf(a, 100)
+	b1, _ := seqOf(b, 50)
+	a2, aID2 := seqOf(a, 10)
+	b2, _ := seqOf(b, 10)
+	// Traffic on one forged source must not move another's sequence space.
+	if a2-a1 != 100 || b2-b1 != 50 {
+		t.Errorf("per-source seq advanced by %d/%d, want 100/50", a2-a1, b2-b1)
+	}
+	if aID2 != aID1+1 {
+		t.Errorf("IP id went %d -> %d, want +1 within one flow", aID1, aID2)
+	}
+}
+
+func TestTCPTSval(t *testing.T) {
+	opts := []byte{1, 1, 8, 10, 0, 0, 0, 42, 0, 0, 0, 7}
+	if v, ok := tcpTSval(opts); !ok || v != 42 {
+		t.Errorf("tcpTSval = %d,%v, want 42,true", v, ok)
+	}
+	for _, bad := range [][]byte{nil, {1, 1}, {8, 10, 0}, {2, 0, 8, 10}, {0, 8, 10, 0, 0, 0, 1, 0, 0, 0, 0}} {
+		if _, ok := tcpTSval(bad); ok {
+			t.Errorf("tcpTSval(%v) found a timestamp", bad)
+		}
+	}
+}
+
+func TestTCPCarrierRSTRuleSparesRealResets(t *testing.T) {
+	peer := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 8443}
+	opts := &spoofOpts{peerSrcs: newPeerSrcs([]net.IP{net.ParseIP("9.9.9.9"), net.ParseIP("8.8.8.8")})}
+	c := &tcpCarrier{port: 443, peer: peer, opts: opts}
+	var rst, notrack string
+	for _, r := range c.fwRules() {
+		if r.table == "" && r.chain == "OUTPUT" {
+			rst = r.String()
+		}
+		if r.table == "raw" && r.chain == "PREROUTING" {
+			notrack = r.String()
+		}
+	}
+	// A real service's own resets carry ACK; only bare RSTs aimed at the
+	// pinned sources are ours to drop.
+	if !strings.Contains(rst, "--tcp-flags RST,ACK RST") || !strings.Contains(rst, "-d 8.8.8.8,9.9.9.9") {
+		t.Errorf("RST rule = %q", rst)
+	}
+	if !strings.Contains(notrack, "-s 8.8.8.8,9.9.9.9 -p tcp --dport 443 -j NOTRACK") {
+		t.Errorf("NOTRACK rule = %q", notrack)
 	}
 }
