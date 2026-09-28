@@ -1,23 +1,59 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap');
 
-:root {
-  --sl-font: 'Vazirmatn', system-ui, sans-serif;
-  --sl-color-accent-low: #3a1a05;
-  --sl-color-accent: #f97316;
-  --sl-color-accent-high: #fed7aa;
-}
+/* Dark-only site with Tifusi's blue and green. */
+:root,
 :root[data-theme='dark'] {
-  --sl-color-black: #0b0b0b;
-  --sl-color-gray-6: #161616;
-  --sl-color-gray-5: #262626;
+  color-scheme: dark;
+  --sl-font: 'Vazirmatn', system-ui, sans-serif;
+  --sl-color-accent-low: #12263b;
+  --sl-color-accent: #5ea8f2;
+  --sl-color-accent-high: #cfe5fb;
+  --sl-color-green: #4cc38a;
+  --sl-color-black: #0e1216;
+  --sl-color-gray-6: #151b21;
+  --sl-color-gray-5: #26303a;
+  --sl-text-body: 0.9375rem;
+  --sl-text-h1: 1.75rem;
+  --sl-text-h2: 1.375rem;
+  --sl-text-h3: 1.15rem;
+  --sl-text-h4: 1.05rem;
+  --sl-line-height: 1.7;
 }
-:root[data-theme='light'] {
-  --sl-color-accent-low: #ffedd5;
-  --sl-color-accent: #c2410c;
-  --sl-color-accent-high: #7c2d12;
-}
-.hero img { filter: drop-shadow(0 0 48px rgb(249 115 22 / 0.35)); }
+h1, h2, h3, h4, .sl-markdown-content :is(h1, h2, h3, h4) { font-weight: 600; }
+.hero h1 { font-size: clamp(1.75rem, 6vw, 2.5rem); font-weight: 700; }
+.hero .tagline { font-size: 1rem; }
+.hero img { filter: drop-shadow(0 0 40px rgb(94 168 242 / 0.3)); }
 .sl-markdown-content img { border-radius: 14px; border: 1px solid var(--sl-color-gray-5); }
 pre.mermaid { background: transparent; border: 0; display: flex; justify-content: center; direction: ltr; }
 .install { direction: ltr; }
 .shot-caption { text-align: center; color: var(--sl-color-gray-3); font-size: var(--sl-text-sm); }
+
+/* Section cards on the home page. */
+#sections { scroll-margin-top: calc(var(--sl-nav-height) + 1rem); }
+.guide-cards { display: grid; grid-template-columns: 1fr; gap: 0.625rem; margin-top: 1rem; }
+@media (min-width: 40rem) { .guide-cards { grid-template-columns: 1fr 1fr; } }
+.guide-card {
+  display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem;
+  background: var(--sl-color-gray-6); border: 1px solid var(--sl-color-gray-5); border-radius: 12px;
+  color: var(--sl-color-white); text-decoration: none; transition: border-color 0.15s, transform 0.15s;
+}
+.guide-card:hover { border-color: var(--sl-color-accent); }
+.guide-card:active { transform: scale(0.985); }
+.guide-card .emo {
+  flex: none; width: 2.5rem; height: 2.5rem; display: grid; place-items: center;
+  font-size: 1.35rem; background: var(--sl-color-accent-low); border-radius: 10px;
+}
+.guide-card .txt { display: flex; flex-direction: column; min-width: 0; }
+.guide-card b { font-weight: 600; font-size: 0.9375rem; }
+.guide-card .txt span { color: var(--sl-color-gray-3); font-size: 0.84rem; line-height: 1.55; }
+.guide-card .arrow { margin-inline-start: auto; color: var(--sl-color-gray-3); font-size: 1.1rem; }
+[dir='rtl'] .guide-card .arrow { transform: scaleX(-1); }
+
+/* Link back to the cards at the top of each guide. */
+.back-to-guides {
+  display: inline-block; margin-bottom: 0.75rem; padding: 0.3rem 0.85rem; font-size: 0.85rem;
+  color: var(--sl-color-white); text-decoration: none;
+  border: 1px solid var(--sl-color-gray-5); border-radius: 999px; background: var(--sl-color-gray-6);
+}
+.back-to-guides:hover { border-color: var(--sl-color-accent); }
+@media (prefers-reduced-motion: reduce) { .guide-card { transition: none; } }

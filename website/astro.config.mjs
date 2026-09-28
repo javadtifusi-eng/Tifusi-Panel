@@ -23,6 +23,12 @@ export default defineConfig({
       },
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/javadtifusi-eng/Tifusi-Panel' }, { icon: 'telegram', label: 'Telegram', href: 'https://t.me/javadheydeari' }],
       customCss: ['./src/styles/theme.css'],
+      components: {
+        Header: './src/components/Header.astro',
+        ThemeProvider: './src/components/DarkTheme.astro',
+        ThemeSelect: './src/components/Empty.astro',
+        PageTitle: './src/components/PageTitle.astro',
+      },
       head: [
         { tag: 'script', attrs: { type: 'module' }, content: "if (document.querySelector('pre.mermaid')) { const m = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default; m.initialize({ startOnLoad: false, theme: document.documentElement.dataset.theme === 'light' ? 'default' : 'dark' }); await m.run({ querySelector: 'pre.mermaid' }) }" },
       ],

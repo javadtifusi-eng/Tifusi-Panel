@@ -1,0 +1,8 @@
+---
+// "All sections" link above each guide, replacing the sidebar.
+const lang = Astro.locals.starlightRoute.locale ?? 'fa'
+const home = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/${lang}/#sections`
+const isGuide = Astro.locals.starlightRoute.id.includes('/guides/')
+---
+
+{isGuide && <a class="back-to-guides" href={home}>{lang === 'fa' ? '→ همه‌ی بخش‌ها' : '← All sections'}</a>}

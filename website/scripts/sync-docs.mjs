@@ -40,7 +40,7 @@ function convert(src, lang, slug) {
     body = `${body.slice(0, i)}\n\n${inserts[slug](lang)}${body.slice(i)}`
   }
   if (slug === 'tunnels') body = body.replace(/(\n## [^\n]*CDN[^\n]*\n)/, `$1\n${cdnShot(lang)}\n`)
-  return `---\ntitle: ${JSON.stringify(title)}\n---\n\n${body}\n`
+  return `---\ntitle: ${JSON.stringify(title)}\ntemplate: splash\n---\n\n${body}\n`
 }
 
 for (const lang of ['fa', 'en']) {
