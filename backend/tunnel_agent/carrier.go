@@ -25,6 +25,12 @@ package main
 //            RSTs (aimed at the forged source anyway) are suppressed with an
 //            iptables rule while the tunnel is up.
 //
+// The kernel's firewall sees our packets too, and to conntrack an Echo Reply
+// with no request or a mid-stream TCP segment with no handshake is INVALID,
+// which ufw and most hardened rulesets drop before a raw socket ever gets a
+// copy. So each raw carrier exempts its own traffic from conntrack and accepts
+// it in INPUT for as long as it is open (see fwRule).
+//
 // Each direction can use its own carrier: "tcp>icmpv6" sends on tcp and
 // receives on icmpv6, and the far side is configured the other way round.
 //
@@ -40,12 +46,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
+	mrand "math/rand"
 	"net"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -206,7 +212,7 @@ func validSpoofCarrier(name string) bool {
 // carrierMTU is the KCP MTU to use for a given carrier so that after KCP's
 // header, the AEAD nonce+tag+padding and the carrier's own L3/L4 headers the
 // datagram still fits inside a 1500-byte path without fragmenting. TCP's header
-// is 12 bytes larger than UDP's, so it gets a little less room.
+// with its timestamp option is 24 bytes larger than UDP's, so it gets less room.
 func carrierMTU(name string) int {
 	// auto may land on the TCP carrier, so it must use TCP's smaller budget
 	// for every carrier — a fixed MTU that both ends agree on regardless of
@@ -215,7 +221,7 @@ func carrierMTU(name string) int {
 	tx, rx := splitCarrierPair(name)
 	for _, c := range []string{tx, rx} {
 		if c == carrierTCP || c == carrierAuto {
-			return 1180
+			return 1176
 		}
 	}
 	return 1200
@@ -316,8 +322,35 @@ func newSplitCarrier(tx, rx string, la, peer *net.UDPAddr, opts *spoofOpts) (spo
 	if u, ok := txCar.(*udpCarrier); ok {
 		u.sport = uint16(la.Port) // send from our real port, like a plain udp carrier
 	}
-	txCar.close()
+	sendOnly(txCar)
 	return &splitCarrier{tx: txCar, rx: rxCar}, nil
+}
+
+// sendOnly closes a carrier's receive side while keeping what sending still
+// needs: the raw carriers' outbound conntrack exemption.
+func sendOnly(c spoofCarrier) {
+	var fw *[]fwRule
+	switch c := c.(type) {
+	case *icmpCarrier:
+		c.rx.Close()
+		fw = &c.fw
+	case *tcpCarrier:
+		c.rx.Close()
+		fw = &c.fw
+	default:
+		c.close()
+		return
+	}
+	var keep, drop []fwRule
+	for _, r := range *fw {
+		if r.table == "raw" && r.chain == "OUTPUT" {
+			keep = append(keep, r)
+		} else {
+			drop = append(drop, r)
+		}
+	}
+	removeFW("spoof carrier", drop)
+	*fw = keep
 }
 
 func (c *splitCarrier) readPayload(p []byte) (int, error) { return c.rx.readPayload(p) }
@@ -326,7 +359,10 @@ func (c *splitCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
 }
 func (c *splitCarrier) setReadDeadline(t time.Time) error { return c.rx.setReadDeadline(t) }
 func (c *splitCarrier) localAddr() net.Addr               { return c.rx.localAddr() }
-func (c *splitCarrier) close() error                      { return c.rx.close() }
+func (c *splitCarrier) close() error {
+	c.tx.close() // only its outbound rules are left to remove
+	return c.rx.close()
+}
 
 // ---------------------------------------------------------------- udp carrier
 
@@ -419,6 +455,7 @@ type icmpCarrier struct {
 	opts     *spoofOpts
 	proto    byte // IPPROTO_ICMP, or ipProtoICMPv6 for the icmpv6 carrier
 	echoType byte // the Echo Reply type in that protocol: 0, or 129 for ICMPv6
+	fw       []fwRule
 }
 
 func newICMPCarrier(_ uint16, peer *net.UDPAddr, opts *spoofOpts) (*icmpCarrier, error) {
@@ -437,7 +474,32 @@ func newEchoCarrier(proto, echoType byte, peer *net.UDPAddr, opts *spoofOpts) (*
 	if err != nil {
 		return nil, err
 	}
-	return &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: opts.icmp(), peer: peer, opts: opts, proto: proto, echoType: echoType}, nil
+	c := &icmpCarrier{rx: rx, rbuf: make([]byte, 65535), id: opts.icmp(), peer: peer, opts: opts, proto: proto, echoType: echoType}
+	c.fw = installFW("spoof "+c.name()+" carrier", c.fwRules())
+	return c, nil
+}
+
+func (c *icmpCarrier) name() string {
+	if c.proto == ipProtoICMPv6 {
+		return carrierICMPv6
+	}
+	return carrierICMP
+}
+
+// fwRules keeps conntrack away from our Echo Replies, which it would call
+// INVALID for answering no request. Nothing else on an IPv4 host speaks
+// protocol 58, so icmpv6 matches on that alone; icmp is narrowed to our Echo
+// id where the u32 match exists (the id is the 16 bits after the checksum).
+func (c *icmpCarrier) fwRules() []fwRule {
+	match := []string{"-p", strconv.Itoa(ipProtoICMPv6)}
+	if c.proto != ipProtoICMPv6 {
+		match = []string{"-p", "icmp", "--icmp-type", "echo-reply"}
+		if iptablesHasU32() {
+			match = append(match, "-m", "u32", "--u32", fmt.Sprintf("0>>22&0x3C@4>>16=0x%04X", c.id))
+		}
+	}
+	out := append([]string{"-d", c.peer.IP.String()}, match...)
+	return passRules(match, out, c.opts.peerList())
 }
 
 func (c *icmpCarrier) readPayload(p []byte) (int, error) {
@@ -479,7 +541,12 @@ func (c *icmpCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
 
 func (c *icmpCarrier) setReadDeadline(t time.Time) error { return c.rx.SetReadDeadline(t) }
 func (c *icmpCarrier) localAddr() net.Addr               { return icmpAddr{} }
-func (c *icmpCarrier) close() error                      { return c.rx.Close() }
+
+func (c *icmpCarrier) close() error {
+	removeFW("spoof "+c.name()+" carrier", c.fw)
+	c.fw = nil
+	return c.rx.Close()
+}
 
 // icmpAddr is a stand-in LocalAddr for the ICMP carrier, which has no port.
 type icmpAddr struct{}
@@ -490,14 +557,33 @@ func (icmpAddr) String() string  { return "ip4:icmp" }
 // ---------------------------------------------------------------- tcp carrier
 
 type tcpCarrier struct {
-	rx      *os.File
-	rbuf    []byte
-	port    uint16 // our port: inbound dst-port filter and outbound src port
-	peer    *net.UDPAddr
-	seq     uint32
-	ack     uint32
-	opts    *spoofOpts
-	rstRule []string // installed iptables OUTPUT rule, for cleanup on close
+	rx    *os.File
+	rbuf  []byte
+	port  uint16 // our port: inbound dst-port filter and outbound src port
+	peer  *net.UDPAddr
+	opts  *spoofOpts
+	start time.Time
+
+	// Each forged source is its own "connection" to an observer, so each gets
+	// its own sequence space, timestamps and IP ids; one counter shared across
+	// the pool would make every flow's numbers jump around.
+	mu    sync.Mutex
+	flows map[[4]byte]*tcpFlow
+
+	rcvd   uint32 // payload bytes received, which every flow's ack advances by
+	peerTS uint32 // the last TSval the peer sent, echoed back as TSecr
+
+	fw []fwRule
+}
+
+// tcpFlow is the per-forged-source state of the tcp carrier.
+type tcpFlow struct {
+	seq      uint32
+	ackBase  uint32
+	tsBase   uint32 // Linux offsets each connection's TSval by a random amount
+	peerBase uint32 // stands in for the peer's TSval until it sends one
+	ipID     uint16
+	win      uint16
 }
 
 func newTCPCarrier(port uint16, peer *net.UDPAddr, opts *spoofOpts) (*tcpCarrier, error) {
@@ -506,16 +592,36 @@ func newTCPCarrier(port uint16, peer *net.UDPAddr, opts *spoofOpts) (*tcpCarrier
 		return nil, err
 	}
 	c := &tcpCarrier{
-		rx:   rx,
-		rbuf: make([]byte, 65535),
-		port: port,
-		peer: peer,
-		seq:  randU32(),
-		ack:  randU32(),
-		opts: opts,
+		rx:    rx,
+		rbuf:  make([]byte, 65535),
+		port:  port,
+		peer:  peer,
+		opts:  opts,
+		start: time.Now(),
+		flows: map[[4]byte]*tcpFlow{},
 	}
-	c.installRSTDrop()
+	c.fw = installFW("spoof tcp carrier", c.fwRules())
 	return c, nil
+}
+
+func (c *tcpCarrier) flow(src net.IP) *tcpFlow {
+	var k [4]byte
+	copy(k[:], src.To4())
+	f := c.flows[k]
+	if f == nil {
+		f = &tcpFlow{
+			seq:      randU32(),
+			ackBase:  randU32(),
+			tsBase:   randU32(),
+			peerBase: randU32(),
+			ipID:     uint16(randU32()),
+			// A window-scaled Linux connection advertises a few hundred to a
+			// few thousand units; a fixed 0xFFFF with no scaling is a tell.
+			win: uint16(400 + randU32()%1600),
+		}
+		c.flows[k] = f
+	}
+	return f
 }
 
 func (c *tcpCarrier) readPayload(p []byte) (int, error) {
@@ -543,19 +649,61 @@ func (c *tcpCarrier) readPayload(p []byte) (int, error) {
 		if len(payload) == 0 { // bare ACK / handshake noise, nothing to carry
 			continue
 		}
+		if ts, ok := tcpTSval(tcp[20:dataOff]); ok {
+			atomic.StoreUint32(&c.peerTS, ts)
+		}
 		// Acknowledge what the peer sent, so our segments carry a moving ack
 		// like a real established connection instead of a frozen one.
-		atomic.StoreUint32(&c.ack, binary.BigEndian.Uint32(tcp[4:8])+uint32(len(payload)))
+		atomic.AddUint32(&c.rcvd, uint32(len(payload)))
 		return copy(p, payload), nil
 	}
 }
 
+// tcpTSval pulls the TSval out of a TCP options block, if it carries one.
+func tcpTSval(opts []byte) (uint32, bool) {
+	for i := 0; i < len(opts); {
+		switch opts[i] {
+		case 0:
+			return 0, false
+		case 1:
+			i++
+			continue
+		}
+		if i+1 >= len(opts) || opts[i+1] < 2 || i+int(opts[i+1]) > len(opts) {
+			return 0, false
+		}
+		if opts[i] == 8 && opts[i+1] == 10 {
+			return binary.BigEndian.Uint32(opts[i+2 : i+6]), true
+		}
+		i += int(opts[i+1])
+	}
+	return 0, false
+}
+
 func (c *tcpCarrier) frame(src net.IP, payload []byte) ([]byte, error) {
-	// Advance the sequence number by the payload length so the stream's byte
-	// counter looks consistent to a stateful observer.
-	end := atomic.AddUint32(&c.seq, uint32(len(payload)))
-	seq := end - uint32(len(payload))
-	pkt, err := buildSpoofedTCP(src, c.peer.IP, c.opts.srcPort(c.port), uint16(c.peer.Port), seq, atomic.LoadUint32(&c.ack), payload)
+	now := uint32(time.Since(c.start) / time.Millisecond)
+	c.mu.Lock()
+	f := c.flow(src)
+	seg := tcpSeg{
+		srcPort: c.opts.srcPort(c.port),
+		dstPort: uint16(c.peer.Port),
+		seq:     f.seq,
+		ack:     f.ackBase + atomic.LoadUint32(&c.rcvd),
+		ipID:    f.ipID,
+		// A real receive window drifts as the buffer fills and drains.
+		win:   f.win + uint16(mrand.Intn(32)),
+		tsVal: f.tsBase + now,
+		tsEcr: f.peerBase + now,
+	}
+	// Advance the sequence number by the payload length so the stream's
+	// byte counter looks consistent to a stateful observer.
+	f.seq += uint32(len(payload))
+	f.ipID++
+	c.mu.Unlock()
+	if ts := atomic.LoadUint32(&c.peerTS); ts != 0 {
+		seg.tsEcr = ts
+	}
+	pkt, err := buildTCPSegment(src, c.peer.IP, seg, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -567,41 +715,33 @@ func (c *tcpCarrier) setReadDeadline(t time.Time) error { return c.rx.SetReadDea
 func (c *tcpCarrier) localAddr() net.Addr               { return &net.TCPAddr{Port: int(c.port)} }
 
 func (c *tcpCarrier) close() error {
-	c.removeRSTDrop()
+	removeFW("spoof tcp carrier", c.fw)
+	c.fw = nil
 	return c.rx.Close()
 }
 
-// installRSTDrop stops the kernel leaking RST packets for our forged TCP flow.
-// Every inbound forged segment reaches a port the kernel has no socket for, so
-// it answers with an RST whose source is our real IP:port and whose
-// destination is the forged (real, allow-listed) source. Those RSTs are noise
-// aimed at an innocent address and a giveaway, so we drop them on the way out
-// while the tunnel is up. It is best-effort: on a host without iptables the
-// tunnel still works, just noisier, so a failure is logged, not fatal.
-func (c *tcpCarrier) installRSTDrop() {
-	rule := []string{"-p", "tcp", "--sport", strconv.Itoa(int(c.port)), "--tcp-flags", "RST", "RST", "-j", "DROP"}
-	// A crash or SIGKILL skips close(), leaving the rule behind; clear any
-	// leftovers first so restarts don't stack duplicates.
-	for i := 0; i < 32; i++ {
-		if exec.Command("iptables", append([]string{"-D", "OUTPUT"}, rule...)...).Run() != nil {
-			break
-		}
+// fwRules for the tcp carrier. Our inbound segments arrive mid-stream with no
+// handshake, so conntrack marks them INVALID; they are exempted from it and
+// accepted, and so are our outbound ones for the same reason.
+//
+// The kernel also has no socket for those segments, so it answers each with an
+// RST from our real IP:port to the forged (real, allow-listed) source. Those
+// RSTs are noise aimed at an innocent address and a giveaway, so they are
+// dropped on the way out. Only those: a segment carrying ACK is answered with
+// a bare RST (RFC 793), while a real service on the same port aborts its own
+// connections with RST|ACK, so matching RST without ACK leaves that service's
+// resets alone. With a peer-source pin the drop is narrowed to RSTs aimed at
+// those sources too.
+func (c *tcpCarrier) fwRules() []fwRule {
+	port := strconv.Itoa(int(c.port))
+	pin := c.opts.peerList()
+	in := []string{"-p", "tcp", "--dport", port}
+	out := []string{"-p", "tcp", "-d", c.peer.IP.String(), "--dport", strconv.Itoa(c.peer.Port)}
+	rst := []string{"-p", "tcp", "--sport", port, "--tcp-flags", "RST,ACK", "RST", "-j", "DROP"}
+	if pin != "" {
+		rst = append([]string{"-d", pin}, rst...)
 	}
-	if out, err := exec.Command("iptables", append([]string{"-I", "OUTPUT"}, rule...)...).CombinedOutput(); err != nil {
-		log.Printf("spoof tcp carrier: could not install RST-drop rule (kernel RSTs will leak to the forged source): %v: %s", err, out)
-		return
-	}
-	c.rstRule = rule
-}
-
-func (c *tcpCarrier) removeRSTDrop() {
-	if c.rstRule == nil {
-		return
-	}
-	if out, err := exec.Command("iptables", append([]string{"-D", "OUTPUT"}, c.rstRule...)...).CombinedOutput(); err != nil {
-		log.Printf("spoof tcp carrier: could not remove RST-drop rule (clean it up by hand): %v: %s", err, out)
-	}
-	c.rstRule = nil
+	return append(passRules(in, out, pin), fwRule{chain: "OUTPUT", args: rst})
 }
 
 func randU32() uint32 {
@@ -654,20 +794,47 @@ func buildSpoofedEcho(proto, echoType byte, srcIP, dstIP net.IP, id, seq uint16,
 }
 
 // buildSpoofedTCP assembles a forged-source IPv4 packet whose TCP body is a
-// PSH|ACK segment carrying payload. seq/ack are stamped so the flow reads like
-// an established connection; there is no handshake because the far side reads
-// with a raw socket, not the kernel TCP stack.
+// PSH|ACK segment carrying payload, with seq/ack as given and the rest of the
+// fingerprint (IP id, window, timestamps) drawn at random.
 func buildSpoofedTCP(srcIP, dstIP net.IP, srcPort, dstPort uint16, seq, ack uint32, payload []byte) ([]byte, error) {
+	return buildTCPSegment(srcIP, dstIP, tcpSeg{
+		srcPort: srcPort, dstPort: dstPort, seq: seq, ack: ack,
+		ipID: uint16(randU32()), win: uint16(400 + randU32()%1600),
+		tsVal: randU32(), tsEcr: randU32(),
+	}, payload)
+}
+
+// tcpSeg is everything about one forged TCP segment besides its addresses and
+// payload.
+type tcpSeg struct {
+	srcPort, dstPort uint16
+	seq, ack         uint32
+	ipID, win        uint16
+	tsVal, tsEcr     uint32
+}
+
+// tcpOptsLen is the NOP, NOP, Timestamp block every segment of an established
+// Linux connection carries.
+const tcpOptsLen = 12
+
+// buildTCPSegment assembles a forged-source IPv4 packet whose TCP body is a
+// PSH|ACK segment carrying payload. There is no handshake because the far side
+// reads with a raw socket, not the kernel TCP stack, so everything else is
+// shaped to look like the middle of an established Linux connection: DF set
+// with a moving IP id, a scaled-looking window and the timestamp option.
+func buildTCPSegment(srcIP, dstIP net.IP, seg tcpSeg, payload []byte) ([]byte, error) {
 	src, dst := srcIP.To4(), dstIP.To4()
 	if src == nil || dst == nil {
 		return nil, errIPv4Only
 	}
-	const ipHdrLen, tcpHdrLen = 20, 20
+	const ipHdrLen, tcpHdrLen = 20, 20 + tcpOptsLen
 	total := ipHdrLen + tcpHdrLen + len(payload)
 	pkt := make([]byte, total)
 
 	pkt[0] = 0x45
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(total))
+	binary.BigEndian.PutUint16(pkt[4:6], seg.ipID)
+	pkt[6] = 0x40 // DF
 	pkt[8] = 64
 	pkt[9] = syscall.IPPROTO_TCP
 	copy(pkt[12:16], src)
@@ -675,13 +842,16 @@ func buildSpoofedTCP(srcIP, dstIP net.IP, srcPort, dstPort uint16, seq, ack uint
 	binary.BigEndian.PutUint16(pkt[10:12], onesComplementSum(pkt[0:ipHdrLen]))
 
 	tcp := pkt[ipHdrLen:]
-	binary.BigEndian.PutUint16(tcp[0:2], srcPort)
-	binary.BigEndian.PutUint16(tcp[2:4], dstPort)
-	binary.BigEndian.PutUint32(tcp[4:8], seq)
-	binary.BigEndian.PutUint32(tcp[8:12], ack)
-	tcp[12] = 5 << 4 // data offset: 5 32-bit words, no options
-	tcp[13] = 0x18   // flags: PSH | ACK
-	binary.BigEndian.PutUint16(tcp[14:16], 0xffff)
+	binary.BigEndian.PutUint16(tcp[0:2], seg.srcPort)
+	binary.BigEndian.PutUint16(tcp[2:4], seg.dstPort)
+	binary.BigEndian.PutUint32(tcp[4:8], seg.seq)
+	binary.BigEndian.PutUint32(tcp[8:12], seg.ack)
+	tcp[12] = tcpHdrLen / 4 << 4
+	tcp[13] = 0x18 // flags: PSH | ACK
+	binary.BigEndian.PutUint16(tcp[14:16], seg.win)
+	tcp[20], tcp[21], tcp[22], tcp[23] = 1, 1, 8, 10 // NOP, NOP, Timestamp
+	binary.BigEndian.PutUint32(tcp[24:28], seg.tsVal)
+	binary.BigEndian.PutUint32(tcp[28:32], seg.tsEcr)
 	copy(tcp[tcpHdrLen:], payload)
 
 	// TCP checksum covers a pseudo-header (src, dst, proto, tcp length) plus
