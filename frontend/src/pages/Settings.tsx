@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import ShieldPanel, { type ShieldSummary } from '../components/ShieldPanel'
 import BackupDomains from '../components/BackupDomains'
+import TwoFactor from '../components/TwoFactor'
 import { StrengthBars, highlightJsonLines, passwordScore, toggleInSet, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
@@ -37,7 +38,7 @@ import {
 import { copyToClipboard } from '../lib/clipboard'
 import { initials, parseServerDate } from '../lib/format'
 
-type SectionId = 'url' | 'domains' | 'pass' | 'notify' | 'api' | 'tls' | 'shield' | 'admins' | 'backup' | 'danger'
+type SectionId = 'url' | 'domains' | 'pass' | 'tfa' | 'notify' | 'api' | 'tls' | 'shield' | 'admins' | 'backup' | 'danger'
 type NotifyTab = 'telegram' | 'webhook' | 'discord'
 
 // The exact text the panel sends when a node drops (app/nodes/sync.py), so the
@@ -490,6 +491,7 @@ export default function SettingsPage() {
     url: canSettings && matches('url', sp.publicUrlTitle),
     domains: canSettings && matches('domains', s.backupDomains.title),
     pass: matches('pass', sp.changePasswordTitle),
+    tfa: matches('tfa', s.tfa.title),
     notify: canSettings && matches('notify', s.notifyTitle),
     api: matches('api', sp.apiKeysTitle),
     tls: canSettings && matches('tls', sp.tlsTitle),
@@ -616,6 +618,10 @@ export default function SettingsPage() {
           flash={flash === 'domains'}
         >
           <BackupDomains />
+        </Section>
+
+        <Section id="tfa" mark="2FA" title={s.tfa.title} sub={s.tfa.sub} hidden={!visible.tfa} flash={flash === 'tfa'}>
+          <TwoFactor />
         </Section>
 
         <Section

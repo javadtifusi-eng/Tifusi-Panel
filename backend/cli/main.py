@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session, init_db
+from app.models.admin import Admin
 from app.models.node import Node
 from app.models.setup_key import SetupKey
 from app.models.tunnel import Tunnel
@@ -115,6 +116,31 @@ async def _set_public_url(url: str) -> None:
         db.add(row)
         await db.commit()
     typer.secho(f"Public URL set to {url.rstrip('/')}.", fg=typer.colors.GREEN)
+
+
+@cli.command("disable-2fa")
+def disable_two_factor(username: str = typer.Argument(..., help="The admin whose two-factor login to turn off")) -> None:
+    """Turn off two-factor login for an admin — the way back in after losing the phone and the recovery codes.
+
+    Ends that admin's open sessions too, so whoever might have the old phone is logged out.
+    """
+    asyncio.run(_disable_two_factor(username))
+
+
+async def _disable_two_factor(username: str) -> None:
+    await init_db()
+    async with async_session() as db:
+        admin = await db.scalar(select(Admin).where(Admin.username == username))
+        if admin is None:
+            typer.secho(f"No admin named {username}.", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        admin.totp_enabled = False
+        admin.totp_secret = None
+        admin.totp_last_step = None
+        admin.totp_recovery_hashes = None
+        admin.token_version = (admin.token_version or 0) + 1
+        await db.commit()
+    typer.secho(f"Two-factor login is off for {username}; their sessions were ended.", fg=typer.colors.GREEN)
 
 
 @cli.command("list-nodes")

@@ -73,7 +73,7 @@ export async function createAdmin(payload: {
   return res.json()
 }
 
-export async function login(payload: { username: string; password: string }): Promise<TokenResponse> {
+export async function login(payload: { username: string; password: string; otp?: string }): Promise<TokenResponse> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1348,6 +1348,35 @@ export async function setAdminAvatar(avatar: string | null): Promise<void> {
 
 export async function changePassword(payload: { current_password: string; new_password: string }): Promise<void> {
   await authorizedFetch('/admin/password', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export interface TwoFactorStatus {
+  enabled: boolean
+  recovery_codes_left: number
+}
+
+export interface TwoFactorSetup {
+  secret: string
+  otpauth_uri: string
+}
+
+export async function getTwoFactor(): Promise<TwoFactorStatus> {
+  const res = await authorizedFetch('/auth/2fa')
+  return res.json()
+}
+
+export async function setupTwoFactor(): Promise<TwoFactorSetup> {
+  const res = await authorizedFetch('/auth/2fa/setup', { method: 'POST' })
+  return res.json()
+}
+
+export async function enableTwoFactor(code: string): Promise<{ recovery_codes: string[] }> {
+  const res = await authorizedFetch('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ code }) })
+  return res.json()
+}
+
+export async function disableTwoFactor(password: string, code: string): Promise<void> {
+  await authorizedFetch('/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ password, code }) })
 }
 
 export interface AdminListItem {

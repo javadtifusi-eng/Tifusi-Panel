@@ -43,6 +43,14 @@ class Admin(Base):
     # the size, so it fits a MySQL TEXT column too.
     avatar: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Two-factor login with an authenticator app (app/totp.py). totp_secret is set as soon as setup starts
+    # but only asked for at login once totp_enabled is true, i.e. after the admin proved their app has it.
+    # totp_last_step refuses a code that was already used; recovery codes are stored as SHA-256 hashes.
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    totp_last_step: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    totp_recovery_hashes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

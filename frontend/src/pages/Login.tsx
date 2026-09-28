@@ -113,6 +113,8 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
   const [key, setKey] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [otp, setOtp] = useState('')
+  const [needOtp, setNeedOtp] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const [caps, setCaps] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -178,10 +180,15 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
     }
     setSubmitting(true)
     try {
-      const res = await loginApi({ username, password })
+      const res = await loginApi({ username, password, otp: needOtp ? otp : undefined })
       succeed(res.access_token)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.errorGeneric)
+      if (err instanceof ApiError && err.message === 'otp_required') {
+        // Password was right; this account also wants its authenticator code.
+        setNeedOtp(true)
+        return
+      }
+      setError(err instanceof ApiError ? (needOtp && err.status === 401 ? u.otpWrong : err.message) : t.errorGeneric)
       setShake((n) => n + 1)
     } finally {
       setSubmitting(false)
@@ -312,6 +319,30 @@ export default function Login({ onAuthenticated }: { onAuthenticated: (token: st
                   </div>
                   {caps && <div className="caps">⇪ {u.caps}</div>}
                 </div>
+                {needOtp && (
+                  <div>
+                    <label className="lbl" htmlFor="login-otp">
+                      {u.otpLabel}
+                    </label>
+                    <div className="fld">
+                      <span className="ico">
+                        <IconLock size={16} />
+                      </span>
+                      <input
+                        id="login-otp"
+                        className="input ltr"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        maxLength={32}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="hint">{u.otpHint}</div>
+                  </div>
+                )}
                 {error && (
                   <div className="tf-alert" role="alert">
                     <span>✕</span>
