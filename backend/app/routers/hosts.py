@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_permission
-from app.groups.access import resolve_groups
+from app.groups.access import offer_new_protocol, resolve_groups
 from app.models.core import Core, CoreType
 from app.models.host import CORE_LINKED_PROTOCOLS, XRAY_PROTOCOLS, Host, HostProtocol
 from app.models.inbound import Inbound
+from app.nodes.sync import resync_nodes_in_background
 from app.reality.keys import generate_reality_keypair
 from app.schemas.host import HostCreate, HostList, HostResponse, HostUpdate, RealityKeypairResponse
 
@@ -78,15 +79,20 @@ async def list_hosts(db: AsyncSession = Depends(get_db)) -> HostList:
 
 
 @router.post("", response_model=HostResponse, status_code=201)
-async def create_host(payload: HostCreate, db: AsyncSession = Depends(get_db)) -> Host:
+async def create_host(
+    payload: HostCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)
+) -> Host:
     data = payload.model_dump()
     await _validate(payload.protocol, data.get, db)
+    users_changed = await offer_new_protocol(payload.protocol, db)
 
     host = Host(**payload.model_dump(exclude={"group_ids"}))
     host.groups = await resolve_groups(payload.group_ids, db) or []
     db.add(host)
     await db.commit()
     await db.refresh(host)
+    if users_changed:
+        background_tasks.add_task(resync_nodes_in_background)
     return host
 
 

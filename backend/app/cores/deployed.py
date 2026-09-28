@@ -10,6 +10,7 @@ the next subscription update, take it off and they go away again.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.groups.access import offer_new_protocol
 from app.models.core import Core, CoreType
 from app.models.host import Host, HostProtocol
 from app.models.node import Node
@@ -61,4 +62,5 @@ async def ensure_core_hosts(node: Node, db: AsyncSession) -> None:
         address = node.address
         if core.core_type == CoreType.ikev2 and core.ikev2_remote_id:
             address = core.ikev2_remote_id
+        await offer_new_protocol(protocol, db)
         db.add(Host(remark=core.name, address=address, protocol=protocol, core_id=core.id))

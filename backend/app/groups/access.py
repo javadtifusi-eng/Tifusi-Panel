@@ -13,13 +13,16 @@ it, both in their links/subscription and as a client actually pushed to
 the node.
 
 On top of groups, a user with a protocols list only gets hosts and inbounds
-of those protocols — how a reseller picks protocols per user.
+of those protocols — how a reseller picks protocols per user. When the first
+host of a protocol appears, every user gets that protocol added (see
+offer_new_protocol), so a new core reaches existing users without editing each.
 """
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.admin import Admin
 from app.models.group import Group
 from app.models.host import XRAY_PROTOCOLS, Host
 from app.models.inbound import Inbound
@@ -34,6 +37,29 @@ def _host_group_ids(host: Host) -> set[int]:
 
 def allows_protocol(user: ProxyUser, protocol) -> bool:
     return user.protocols is None or getattr(protocol, "value", protocol) in user.protocols
+
+
+async def offer_new_protocol(protocol, db: AsyncSession) -> bool:
+    """Call before adding a host. If no host offered this protocol yet, add it
+    to every user whose protocols list lacks it — the list was picked from what
+    existed then, not to exclude something that did not exist. A reseller's
+    users only get protocols the reseller is allowed. Returns True if any user
+    changed, so the caller can resync the nodes."""
+    if await db.scalar(select(Host.id).where(Host.protocol == protocol).limit(1)) is not None:
+        return False
+    value = getattr(protocol, "value", protocol)
+    resellers = {a.id: a.protocols for a in (await db.execute(select(Admin).where(Admin.is_reseller))).scalars()}
+    changed = False
+    # JSON None can be stored as JSON null rather than SQL NULL, so filter here.
+    for user in (await db.execute(select(ProxyUser))).scalars():
+        if user.protocols is None or value in user.protocols:
+            continue
+        allowed = resellers.get(user.admin_id)
+        if user.admin_id in resellers and allowed is not None and value not in allowed:
+            continue
+        user.protocols = [*user.protocols, value]
+        changed = True
+    return changed
 
 
 def hosts_for_user(user: ProxyUser, hosts: list[Host]) -> list[Host]:
