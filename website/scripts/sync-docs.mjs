@@ -19,6 +19,23 @@ const inserts = {
     ].join('\n')
   },
 }
+// Live panel screenshots (docs/../website/src/assets/shots/<tab>-<lang>.webp).
+const panelShots = {
+  nodes: [['nodes', 'بخش نودها: وضعیت زنده‌ی نود، ترافیک روزانه و سرویس‌ها', 'Nodes: live node status, daily traffic and services']],
+  'users-and-subscriptions': [['users', 'بخش کاربران: آمار زنده، پرمصرف‌ترین‌ها و لیست کاربران', 'Users: live stats, top usage and the user list']],
+  'cores-and-hosts': [
+    ['cores', 'بخش هسته‌ها: هسته‌ها و مسیر ترافیک', 'Cores: cores and the traffic flow'],
+    ['hosts', 'بخش هاست‌ها: نقشه‌ی پروتکل‌ها و کارت هر هاست', 'Hosts: protocol map and a card for each host'],
+    ['groups', 'بخش گروه‌ها: نقشه‌ی دسترسی کاربران به هاست‌ها', 'Groups: which users reach which hosts'],
+  ],
+  resellers: [['resellers', 'بخش نمایندگان', 'Resellers']],
+  'network-health': [['overview', 'داشبورد: سلامت سیستم، فعالیت زنده و ترافیک', 'Dashboard: system health, live activity and traffic']],
+}
+for (const [slug, shots] of Object.entries(panelShots)) {
+  inserts[slug] = (lang) =>
+    shots.map(([tab, fa, en]) => `![${lang === 'fa' ? fa : en}](../../../../assets/shots/${tab}-${lang}.webp)`).join('\n\n')
+}
+
 const cdnShot = (lang) =>
   `![${lang === 'fa' ? 'تانل با عبور از ابر آروان و چک‌لیست راه‌اندازی' : 'A tunnel routed through ArvanCloud with its setup checklist'}](../../../../assets/shots/tunnel-cdn-${lang}.webp)`
 
