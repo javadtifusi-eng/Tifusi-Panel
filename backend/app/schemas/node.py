@@ -27,6 +27,7 @@ class NodeCreate(BaseModel):
     hysteria_core_id: int | None = None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None = Field(default=None, max_length=2048)
+    usage_multiplier: float = Field(default=1.0, ge=0, le=10)
 
     _clean_l2tp_egress_vless = field_validator("l2tp_egress_vless")(_clean_egress_vless)
 
@@ -41,6 +42,7 @@ class NodeUpdate(BaseModel):
     hysteria_core_id: int | None = None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None = Field(default=None, max_length=2048)
+    usage_multiplier: float | None = Field(default=None, ge=0, le=10)
 
     _clean_l2tp_egress_vless = field_validator("l2tp_egress_vless")(_clean_egress_vless)
 
@@ -59,6 +61,7 @@ class NodeResponse(BaseModel):
     hysteria_core_id: int | None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None
+    usage_multiplier: float = 1.0
     status: NodeStatus
     xray_version: str | None
     last_error: str | None

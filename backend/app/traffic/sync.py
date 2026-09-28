@@ -90,6 +90,9 @@ async def collect_traffic(db: AsyncSession) -> None:
         return
 
     deltas: dict[str, int] = {}
+    # What each user is charged: the real bytes times the node's usage multiplier. `deltas` stays the
+    # real traffic, which is what the daily and per-node snapshots record.
+    billed: dict[str, int] = {}
     node_deltas: dict[int, int] = {}
     for node in nodes:
         try:
@@ -111,9 +114,11 @@ async def collect_traffic(db: AsyncSession) -> None:
                     "uplink": merged.get("uplink", 0) + counters.get("uplink", 0),
                     "downlink": merged.get("downlink", 0) + counters.get("downlink", 0),
                 }
+        multiplier = node.usage_multiplier if node.usage_multiplier is not None else 1.0
         for username, counters in stats.items():
             delta = counters.get("uplink", 0) + counters.get("downlink", 0)
             deltas[username] = deltas.get(username, 0) + delta
+            billed[username] = billed.get(username, 0) + round(delta * multiplier)
             node_deltas[node.id] = node_deltas.get(node.id, 0) + delta
 
     if not deltas:
@@ -122,7 +127,7 @@ async def collect_traffic(db: AsyncSession) -> None:
     users = list((await db.execute(select(ProxyUser).where(ProxyUser.username.in_(deltas.keys())))).scalars().all())
     now = datetime.now(timezone.utc)
     for user in users:
-        user.used_traffic += deltas[user.username]
+        user.used_traffic += billed[user.username]
         if deltas[user.username] > 0:
             user.last_seen = now
 

@@ -2,7 +2,7 @@ import enum
 import secrets
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -63,6 +63,9 @@ class Node(Base):
     # plain-NAT behavior.
     l2tp_egress_vless: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
+    # Usage multiplier: every byte a user moves through this node counts as this many bytes against
+    # their data limit (0.5 = half price, 2 = double). The node's own traffic snapshots stay real bytes.
+    usage_multiplier: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
     status: Mapped[NodeStatus] = mapped_column(Enum(NodeStatus, native_enum=False, length=16), default=NodeStatus.pending)
     xray_version: Mapped[str | None] = mapped_column(String(XRAY_VERSION_MAX_LENGTH), nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)

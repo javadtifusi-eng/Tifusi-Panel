@@ -47,6 +47,7 @@ async def create_node(
         address=payload.address,
         port=payload.port,
         l2tp_egress_vless=payload.l2tp_egress_vless,
+        usage_multiplier=payload.usage_multiplier,
     )
     node.core_id = await resolve_xray_core_id(payload.core_id, db)
     node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
@@ -97,6 +98,8 @@ async def update_node(
     for field, value in payload.model_dump(
         exclude_unset=True, exclude={"core_id", "ipsec_core_id", "l2tp_core_id", "hysteria_core_id", "wireguard_core_id"}
     ).items():
+        if field == "usage_multiplier" and value is None:
+            continue  # null means "leave it", not "no multiplier"
         setattr(node, field, value)
 
     if "core_id" in payload.model_fields_set:

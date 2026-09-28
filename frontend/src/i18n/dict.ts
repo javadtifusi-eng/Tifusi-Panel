@@ -345,6 +345,9 @@ export const dict = {
       nameLabel: 'نام',
       addressLabel: 'آدرس سرور',
       agentPortLabel: 'پورت ایجنت',
+      multiplierLabel: 'ضریب مصرف',
+      multiplierHint:
+        'هر گیگی که کاربر از این نود مصرف کنه، ضربدر این عدد از حجمش کم می‌شه: 1 یعنی عادی، 0.5 یعنی نصف، 2 یعنی دو برابر. آمار ترافیک خود نود همون مصرف واقعی می‌مونه.',
       registerBtn: 'ثبت نود',
       colName: 'نام',
       colAddress: 'آدرس',
@@ -1907,6 +1910,9 @@ export const dict = {
       nameLabel: 'Name',
       addressLabel: 'Server Address',
       agentPortLabel: 'Agent Port',
+      multiplierLabel: 'Usage multiplier',
+      multiplierHint:
+        'Every GB a user moves through this node counts as this many GB against their data limit: 1 is normal, 0.5 is half, 2 is double. The node\'s own traffic stats stay the real bytes.',
       registerBtn: 'Register Node',
       colName: 'Name',
       colAddress: 'Address',

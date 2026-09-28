@@ -35,6 +35,11 @@ function setupCommand(node: Node): string {
   return `bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- ${node.api_key} ${node.port}`
 }
 
+// 0.5 → "0.5×", 2 → "2×" — the same shape the panel shows next to a node's name.
+function formatMultiplier(m: number): string {
+  return `${Number(m.toFixed(2))}×`
+}
+
 function code(name: string): string {
   return (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '#').toUpperCase()
 }
@@ -131,6 +136,7 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [port, setPort] = useState('')
+  const [multiplier, setMultiplier] = useState('1')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
@@ -184,6 +190,7 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
     setName('')
     setAddress('')
     setPort('')
+    setMultiplier('1')
     setFormError(null)
     setShowForm(true)
   }
@@ -193,6 +200,7 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
     setName('')
     setAddress('')
     setPort('')
+    setMultiplier('1')
     setShowForm(false)
   }
 
@@ -201,6 +209,7 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
     setName(node.name)
     setAddress(node.address)
     setPort(String(node.port))
+    setMultiplier(String(node.usage_multiplier ?? 1))
     setFormError(null)
     setShowForm(true)
   }
@@ -211,11 +220,11 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
     setFormError(null)
     try {
       if (editingId) {
-        await updateNode(editingId, { name, address, port: parseInt(port, 10) })
+        await updateNode(editingId, { name, address, port: parseInt(port, 10), usage_multiplier: parseFloat(multiplier) })
         resetForm()
         say(nd.saved)
       } else {
-        const created = await createNode({ name, address, port: parseInt(port, 10) })
+        const created = await createNode({ name, address, port: parseInt(port, 10), usage_multiplier: parseFloat(multiplier) })
         resetForm()
         setSelectedId(created.id)
         setShowCmd(true)
@@ -377,6 +386,7 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
                         <span className="u-name">
                           <b>{n.name}</b>
                           <span className="chip en">{code(n.name)}</span>
+                          {(n.usage_multiplier ?? 1) !== 1 && <span className="chip en">{formatMultiplier(n.usage_multiplier ?? 1)}</span>}
                         </span>
                         <span className="u-sub mono">
                           {n.address}:{n.port}
@@ -401,7 +411,10 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
                   {code(current.name)}
                 </span>
                 <span className="nd-title">
-                  <b>{current.name}</b>
+                  <b>
+                    {current.name}
+                    {(current.usage_multiplier ?? 1) !== 1 && <span className="chip en" style={{ marginInlineStart: 8 }}>{formatMultiplier(current.usage_multiplier ?? 1)}</span>}
+                  </b>
                   <small className="mono">
                     {current.address}:{current.port}
                   </small>
@@ -572,6 +585,10 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
             <Field label={t.nodesPage.agentPortLabel}>
               <input className="input" type="number" min="1" max="65535" value={port} onChange={(e) => setPort(e.target.value)} placeholder="62050" required />
             </Field>
+            <Field label={t.nodesPage.multiplierLabel}>
+              <input className="input ltr" type="number" min="0" max="10" step="0.1" value={multiplier} onChange={(e) => setMultiplier(e.target.value)} required />
+            </Field>
+            <div className="wide hint">{t.nodesPage.multiplierHint}</div>
             <div className="wide hint">{t.nodesPage.assignCoreHint}</div>
             {formError && <div className="wide tf-alert">{formError}</div>}
           </form>

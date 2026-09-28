@@ -472,6 +472,7 @@ export interface Node {
   hysteria_core_id: number | null
   wireguard_core_id?: number | null
   l2tp_egress_vless: string | null
+  usage_multiplier?: number
   status: NodeStatus
   xray_version: string | null
   last_error: string | null
@@ -650,6 +651,7 @@ export async function createNode(
     hysteria_core_id?: number | null
     wireguard_core_id?: number | null
     l2tp_egress_vless?: string | null
+    usage_multiplier?: number
   },
 ): Promise<Node> {
   const res = await authorizedFetch('/nodes', { method: 'POST', body: JSON.stringify(payload) })
@@ -668,6 +670,7 @@ export async function updateNode(
     hysteria_core_id: number | null
     wireguard_core_id: number | null
     l2tp_egress_vless: string | null
+    usage_multiplier: number
   }>,
 ): Promise<Node> {
   const res = await authorizedFetch(`/nodes/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
