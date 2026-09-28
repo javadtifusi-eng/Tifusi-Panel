@@ -6,15 +6,27 @@ from app.cores.deployed import ensure_core_hosts
 from app.cores.resolve import (
     resolve_hysteria_core_id,
     resolve_ipsec_core_id,
+    resolve_l2tp_core_id,
     resolve_wireguard_core_id,
     resolve_xray_core_id,
 )
 from app.database import async_session, get_db
 from app.dependencies import require_permission
+from app.models.core import Core, CoreType
 from app.models.node import Node
 from app.models.tunnel import Tunnel
 from app.nodes.sync import sync_node
 from app.schemas.node import NodeCreate, NodeList, NodeResponse, NodeSyncResult, NodeUpdate
+
+async def _check_ipsec_pair(node: Node, db: AsyncSession) -> None:
+    """The L2TP slot sits beside an IKEv2 core; two L2TP cores on one node
+    would fight over xl2tpd and UDP 1701."""
+    if node.l2tp_core_id is None or node.ipsec_core_id is None:
+        return
+    first = await db.get(Core, node.ipsec_core_id)
+    if first is not None and first.core_type == CoreType.l2tp:
+        raise HTTPException(status_code=400, detail="This node already runs L2TP in its IPsec slot; put IKEv2 there to add L2TP beside it")
+
 
 router = APIRouter(prefix="/api/nodes", tags=["nodes"], dependencies=[Depends(require_permission("nodes"))])
 
@@ -38,8 +50,10 @@ async def create_node(
     )
     node.core_id = await resolve_xray_core_id(payload.core_id, db)
     node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
+    node.l2tp_core_id = await resolve_l2tp_core_id(payload.l2tp_core_id, db)
     node.hysteria_core_id = await resolve_hysteria_core_id(payload.hysteria_core_id, db)
     node.wireguard_core_id = await resolve_wireguard_core_id(payload.wireguard_core_id, db)
+    await _check_ipsec_pair(node, db)
     db.add(node)
     await db.flush()
     await ensure_core_hosts(node, db)
@@ -81,7 +95,7 @@ async def update_node(
     node = await _get_node_or_404(node_id, db)
 
     for field, value in payload.model_dump(
-        exclude_unset=True, exclude={"core_id", "ipsec_core_id", "hysteria_core_id", "wireguard_core_id"}
+        exclude_unset=True, exclude={"core_id", "ipsec_core_id", "l2tp_core_id", "hysteria_core_id", "wireguard_core_id"}
     ).items():
         setattr(node, field, value)
 
@@ -89,12 +103,15 @@ async def update_node(
         node.core_id = await resolve_xray_core_id(payload.core_id, db)
     if "ipsec_core_id" in payload.model_fields_set:
         node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
+    if "l2tp_core_id" in payload.model_fields_set:
+        node.l2tp_core_id = await resolve_l2tp_core_id(payload.l2tp_core_id, db)
     if "hysteria_core_id" in payload.model_fields_set:
         node.hysteria_core_id = await resolve_hysteria_core_id(payload.hysteria_core_id, db)
     if "wireguard_core_id" in payload.model_fields_set:
         node.wireguard_core_id = await resolve_wireguard_core_id(payload.wireguard_core_id, db)
+    await _check_ipsec_pair(node, db)
 
-    slots = {"core_id", "ipsec_core_id", "hysteria_core_id", "wireguard_core_id"}
+    slots = {"core_id", "ipsec_core_id", "l2tp_core_id", "hysteria_core_id", "wireguard_core_id"}
     db.add(node)
     await ensure_core_hosts(node, db)
     await db.commit()

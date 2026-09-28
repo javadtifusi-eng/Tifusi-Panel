@@ -454,20 +454,24 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
   )
 }
 
-// A node runs at most one core of each kind at once, in three independent slots:
-// its Xray process, its IPsec stack, and its Hysteria2 process. Which slot a core
-// occupies follows from its type, so every place that assigns or counts asks here
-// rather than re-deriving it.
+// A node runs at most one core of each kind at once, in independent slots: its
+// Xray process, its IPsec stack, and its Hysteria2 and WireGuard processes. L2TP
+// has its own slot beside IKEv2, so old phones on L2TP and new ones on IKEv2
+// share one server. Which slot a core occupies follows from its type, so every
+// place that assigns or counts asks here rather than re-deriving it.
 const CORE_SLOT = {
   xray: 'core_id',
   ikev2: 'ipsec_core_id',
-  l2tp: 'ipsec_core_id',
+  l2tp: 'l2tp_core_id',
   hysteria2: 'hysteria_core_id',
   wireguard: 'wireguard_core_id',
-} as const satisfies Record<CoreType, 'core_id' | 'ipsec_core_id' | 'hysteria_core_id' | 'wireguard_core_id'>
+} as const satisfies Record<CoreType, 'core_id' | 'ipsec_core_id' | 'l2tp_core_id' | 'hysteria_core_id' | 'wireguard_core_id'>
 
 const slotOf = (type: CoreType) => CORE_SLOT[type]
-const coreInSlot = (node: Node, type: CoreType) => node[slotOf(type)]
+const coreInSlot = (node: Node, type: CoreType) => node[slotOf(type)] ?? null
+// An L2TP core assigned before its own slot existed still sits in the IPsec one.
+const holdsCore = (node: Node, core: Core) =>
+  node[slotOf(core.core_type)] === core.id || (core.core_type === 'l2tp' && node.ipsec_core_id === core.id)
 
 // Node chips on a core card are how "which node runs this core" gets set —
 // the core/node relationship lives here and nowhere else.
@@ -482,7 +486,9 @@ function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[];
   async function toggle(node: Node, assign: boolean) {
     setBusyId(node.id)
     try {
-      await updateNode(node.id, { [slot]: assign ? core.id : null })
+      // Unassigning an L2TP core clears whichever slot holds it.
+      const where = !assign && node.ipsec_core_id === core.id ? 'ipsec_core_id' : slot
+      await updateNode(node.id, { [where]: assign ? core.id : null })
       onChanged()
       say(assign ? t.ui.cores.assigned(node.name) : t.ui.cores.unassigned(node.name))
     } finally {
@@ -502,7 +508,7 @@ function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[];
     }
   }
 
-  const assigned = nodes.filter((n) => coreInSlot(n, core.core_type) === core.id)
+  const assigned = nodes.filter((n) => holdsCore(n, core))
 
   return (
     <>
@@ -512,7 +518,7 @@ function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[];
         </span>
         {nodes.length === 0 && <span className="hint">{t.nodesPage.noNodesYet}</span>}
         {nodes.map((n) => {
-          const here = coreInSlot(n, core.core_type) === core.id
+          const here = holdsCore(n, core)
           const elsewhere = !here && coreInSlot(n, core.core_type) != null
           return (
             <button
@@ -1121,7 +1127,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   }
 
   const byType = (type: CoreType) => (cores ?? []).filter((x) => x.core_type === type)
-  const nodesRunning = (type: CoreType) => nodes.filter((n) => byType(type).some((x) => coreInSlot(n, type) === x.id))
+  const nodesRunning = (type: CoreType) => nodes.filter((n) => byType(type).some((x) => holdsCore(n, x)))
   const shown = byType(engine)
   const codeCore = code ? cores?.find((x) => x.id === code.coreId) : undefined
   const engineSub: Record<CoreType, string> = {
@@ -1212,7 +1218,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
           const config = (core.config ?? {}) as Record<string, unknown>
           const ruleCount = Array.isArray((config.routing as { rules?: unknown[] })?.rules) ? ((config.routing as { rules: unknown[] }).rules.length as number) : 0
           const outCount = Array.isArray(config.outbounds) ? (config.outbounds as unknown[]).length : 0
-          const runningNodes = nodes.filter((n) => coreInSlot(n, core.core_type) === core.id)
+          const runningNodes = nodes.filter((n) => holdsCore(n, core))
           const coreLive = runningNodes.some((n) => n.status === 'connected')
           return (
             <div key={core.id} className="flex flex-col gap-3.5">

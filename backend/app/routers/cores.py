@@ -295,6 +295,7 @@ async def delete_core(core_id: int, db: AsyncSession = Depends(get_db)) -> None:
             or_(
                 Node.core_id == core_id,
                 Node.ipsec_core_id == core_id,
+                Node.l2tp_core_id == core_id,
                 Node.hysteria_core_id == core_id,
                 Node.wireguard_core_id == core_id,
             )

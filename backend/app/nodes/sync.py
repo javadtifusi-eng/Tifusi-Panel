@@ -166,7 +166,7 @@ def _apply_health(node: Node, health: dict) -> None:
     ipsec_health = health.get("ipsec") or {}
     hysteria_health = health.get("hysteria") or {}
     xray_ok = node.core_id is None or xray_health.get("running", False)
-    ipsec_ok = node.ipsec_core_id is None or ipsec_health.get("running", False)
+    ipsec_ok = (node.ipsec_core_id is None and node.l2tp_core_id is None) or ipsec_health.get("running", False)
     # Same rule as the other two slots: only gate on what this node is assigned.
     # An older agent that predates Hysteria2 reports no "hysteria" key at all, so
     # a node with no hysteria core keeps passing exactly as before.
@@ -209,11 +209,20 @@ async def sync_node(node: Node, db: AsyncSession, only: set[str] | None = None) 
     results have to check out for the node to count as connected."""
     xray_core = await db.get(Core, node.core_id) if node.core_id is not None else None
     ipsec_core = await db.get(Core, node.ipsec_core_id) if node.ipsec_core_id is not None else None
+    l2tp_core = await db.get(Core, node.l2tp_core_id) if node.l2tp_core_id is not None else None
     hysteria_core = await db.get(Core, node.hysteria_core_id) if node.hysteria_core_id is not None else None
     wireguard_core = await db.get(Core, node.wireguard_core_id) if node.wireguard_core_id is not None else None
 
     xray_payload = await _build_xray_payload(xray_core, db)
-    ipsec_payload = await _build_ipsec_payload(ipsec_core, node, db) if ipsec_core is not None else None
+    ipsec_cores = [await _build_ipsec_payload(c, node, db) for c in (ipsec_core, l2tp_core) if c is not None]
+    # One core keeps the original shape, so an agent older than the L2TP slot
+    # still understands it; two go together, since each push replaces the
+    # node's whole strongSwan config.
+    ipsec_payload = None
+    if len(ipsec_cores) == 1:
+        ipsec_payload = ipsec_cores[0]
+    elif ipsec_cores:
+        ipsec_payload = {"cores": ipsec_cores}
     hysteria_payload = (
         _build_hysteria_payload(hysteria_core, node, await get_public_url(db))
         if hysteria_core is not None
@@ -352,7 +361,7 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
         key
         for key, slot in (
             ("xray", node.core_id),
-            ("ipsec", node.ipsec_core_id),
+            ("ipsec", node.ipsec_core_id or node.l2tp_core_id),
             ("hysteria", node.hysteria_core_id),
             ("wireguard", node.wireguard_core_id),
         )

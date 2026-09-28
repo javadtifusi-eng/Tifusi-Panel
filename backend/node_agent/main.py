@@ -132,34 +132,32 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
     _check_key(x_node_api_key)
     global _ipsec_mode
 
-    core_type = payload.get("core_type")
-    if core_type not in ("l2tp", "ikev2"):
-        raise HTTPException(status_code=400, detail=f"Unknown core_type: {core_type!r}")
+    # Either {"cores": [...]} — every IPsec core this node runs, IKEv2 and L2TP
+    # side by side — or the older single-core shape from panels before that.
+    cores = payload.get("cores")
+    if cores is None:
+        cores = [payload]
+    for core in cores:
+        if core.get("core_type") not in ("l2tp", "ikev2"):
+            raise HTTPException(status_code=400, detail=f"Unknown core_type: {core.get('core_type')!r}")
+    core_types = sorted({c["core_type"] for c in cores})
 
     # Set before applying, not after: if this fails partway (e.g. a binary
     # genuinely missing), /health should still judge the ipsec side using
     # this mode's checks rather than silently reporting it unconfigured.
-    _ipsec_mode = core_type
-    limits.set_ipsec_limits(payload.get("users") or [])
+    _ipsec_mode = "+".join(core_types) or None
+    # One login can be on both cores; the device limit is per user, not per core.
+    merged: dict[str, dict] = {}
+    for core in cores:
+        for u in core.get("users") or []:
+            merged.setdefault(str(u.get("username")), u)
+    limits.set_ipsec_limits(list(merged.values()))
     try:
-        if core_type == "l2tp":
-            ipsec.apply_l2tp(
-                payload.get("psk") or "", payload.get("users") or [], payload.get("egress_vless")
-            )
-        else:
-            ipsec.apply_ikev2(
-                payload.get("psk") or "",
-                payload.get("remote_id"),
-                payload.get("users") or [],
-                payload.get("certificate"),
-                payload.get("certificate_key"),
-                payload.get("egress_vless"),
-                payload.get("ikev2_auth_mode") or "eap",
-            )
+        ipsec.apply_ipsec(cores)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=f"required binary not found: {exc}") from exc
 
-    return {"status": "applied", "core_type": core_type}
+    return {"status": "applied", "core_type": _ipsec_mode}
 
 
 @app.get("/health")
@@ -179,14 +177,13 @@ async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
         "version": _get_xray_version(),
     }
 
-    if _ipsec_mode == "l2tp":
-        ipsec_running = ipsec.is_ipsec_running() and ipsec.is_xl2tpd_running()
-    elif _ipsec_mode == "ikev2":
-        ipsec_running = ipsec.is_ipsec_running()
-    else:
+    modes = set((_ipsec_mode or "").split("+")) - {""}
+    if not modes:
         ipsec_running = None
+    else:
+        ipsec_running = ipsec.is_ipsec_running() and ("l2tp" not in modes or ipsec.is_xl2tpd_running())
     ipsec_state = {"mode": _ipsec_mode, "running": ipsec_running}
-    if _ipsec_mode in ("l2tp", "ikev2"):
+    if modes:
         ipsec_state["egress_running"] = ipsec.vless_egress.is_egress_running()
 
     return {"xray": xray, "ipsec": ipsec_state, "hysteria": hysteria.health(), "wireguard": wireguard.health()}

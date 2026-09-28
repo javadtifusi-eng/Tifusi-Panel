@@ -23,6 +23,7 @@ class NodeCreate(BaseModel):
     port: int = Field(default=62050, ge=1, le=65535)
     core_id: int | None = None
     ipsec_core_id: int | None = None
+    l2tp_core_id: int | None = None
     hysteria_core_id: int | None = None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None = Field(default=None, max_length=2048)
@@ -36,6 +37,7 @@ class NodeUpdate(BaseModel):
     port: int | None = Field(default=None, ge=1, le=65535)
     core_id: int | None = None
     ipsec_core_id: int | None = None
+    l2tp_core_id: int | None = None
     hysteria_core_id: int | None = None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None = Field(default=None, max_length=2048)
@@ -53,6 +55,7 @@ class NodeResponse(BaseModel):
     api_key: str
     core_id: int | None
     ipsec_core_id: int | None
+    l2tp_core_id: int | None = None
     hysteria_core_id: int | None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None

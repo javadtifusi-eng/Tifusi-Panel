@@ -298,6 +298,8 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
   const current = nodes?.find((n) => n.id === selectedId) ?? null
   const core = current?.core_id != null ? coreById.get(current.core_id) : undefined
   const ipsecCore = current?.ipsec_core_id != null ? coreById.get(current.ipsec_core_id) : undefined
+  const l2tpCore = current?.l2tp_core_id != null ? coreById.get(current.l2tp_core_id) : undefined
+  const ipsecCores = [ipsecCore, l2tpCore].filter((c): c is NonNullable<typeof c> => c != null)
   const todayBytes = traffic?.length ? traffic[traffic.length - 1].total_bytes : 0
   const totalBytes = traffic?.reduce((s, p) => s + p.total_bytes, 0) ?? 0
   const today = fmtBytes(todayBytes)
@@ -505,12 +507,12 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
                     <span className="up en">{current.xray_version ?? '—'}</span>
                   </div>
                   <div className="svc">
-                    <span className={`tf-led ${ipsecCore && current.status === 'connected' ? 'on' : ipsecCore ? 'wait' : ''}`} aria-hidden="true" />
+                    <span className={`tf-led ${ipsecCores.length && current.status === 'connected' ? 'on' : ipsecCores.length ? 'wait' : ''}`} aria-hidden="true" />
                     <span className="t">
-                      <b>{ipsecCore ? `${t.coresPage.coreTypeLabels[ipsecCore.core_type]} · ${ipsecCore.name}` : 'IKEv2 / L2TP'}</b>
-                      <small>{ipsecCore ? nd.ipsecOn : nd.noCore}</small>
+                      <b>{ipsecCores.length ? ipsecCores.map((c) => `${t.coresPage.coreTypeLabels[c.core_type]} · ${c.name}`).join(' + ') : 'IKEv2 / L2TP'}</b>
+                      <small>{ipsecCores.length ? nd.ipsecOn : nd.noCore}</small>
                     </span>
-                    <span className="up">{ipsecCore ? '✓' : '—'}</span>
+                    <span className="up">{ipsecCores.length ? '✓' : '—'}</span>
                   </div>
                   <div className="hint">{t.nodesPage.assignCoreHint}</div>
                 </div>

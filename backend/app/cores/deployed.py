@@ -26,7 +26,7 @@ _CORE_PROTOCOL = {
 async def deployed_core_ids(db: AsyncSession) -> set[int]:
     ids: set[int] = set()
     for node in (await db.execute(select(Node))).scalars():
-        for core_id in (node.core_id, node.ipsec_core_id, node.hysteria_core_id, node.wireguard_core_id):
+        for core_id in (node.core_id, node.ipsec_core_id, node.l2tp_core_id, node.hysteria_core_id, node.wireguard_core_id):
             if core_id is not None:
                 ids.add(core_id)
     return ids
@@ -50,7 +50,7 @@ async def ensure_core_hosts(node: Node, db: AsyncSession) -> None:
     core reaches users without a separate trip to the Hosts page. The address
     is the node's own (IKEv2 uses its certificate name); an admin serving it
     through a tunnel edits it to the Iran address like any other host."""
-    for core_id in (node.ipsec_core_id, node.hysteria_core_id, node.wireguard_core_id):
+    for core_id in (node.ipsec_core_id, node.l2tp_core_id, node.hysteria_core_id, node.wireguard_core_id):
         if core_id is None:
             continue
         core = await db.get(Core, core_id)

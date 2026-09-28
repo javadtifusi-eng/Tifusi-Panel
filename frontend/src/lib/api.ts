@@ -468,6 +468,7 @@ export interface Node {
   api_key: string
   core_id: number | null
   ipsec_core_id: number | null
+  l2tp_core_id?: number | null
   hysteria_core_id: number | null
   wireguard_core_id?: number | null
   l2tp_egress_vless: string | null
@@ -645,6 +646,7 @@ export async function createNode(
     port: number
     core_id?: number | null
     ipsec_core_id?: number | null
+    l2tp_core_id?: number | null
     hysteria_core_id?: number | null
     wireguard_core_id?: number | null
     l2tp_egress_vless?: string | null
@@ -662,6 +664,7 @@ export async function updateNode(
     port: number
     core_id: number | null
     ipsec_core_id: number | null
+    l2tp_core_id: number | null
     hysteria_core_id: number | null
     wireguard_core_id: number | null
     l2tp_egress_vless: string | null

@@ -12,8 +12,9 @@ Every node has two independent core slots and runs both at the same time:
 | --- | --- | --- |
 | Xray | `xray` | VLESS, VMess, Trojan, Shadowsocks |
 | IPsec | `ikev2` or `l2tp` | Native IKEv2/IPsec or L2TP/IPsec clients |
+| L2TP | `l2tp` | L2TP/IPsec clients beside an IKEv2 core in the IPsec slot |
 
-One server therefore serves proxy clients and native-VPN clients together. Panels that bind a single core to each node need a second server for the same result. Either slot may be left empty.
+With IKEv2 in the IPsec slot and an L2TP core in the L2TP slot, one server serves both at once: strongSwan loads the two connections side by side and xl2tpd runs next to it. That covers new Android phones, which dropped L2TP in Android 12 and only have IKEv2, and older phones, iPhones and Windows on L2TP. On the **Cores** page, tick the node on the L2TP core's card. One server therefore serves proxy clients and native-VPN clients together. Panels that bind a single core to each node need a second server for the same result. Either slot may be left empty.
 
 ## Adding a node
 

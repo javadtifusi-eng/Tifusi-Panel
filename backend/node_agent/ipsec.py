@@ -224,49 +224,51 @@ def _ensure_ikev2_cert(host: str, certificate: str | None = None, certificate_ke
     )
 
 
-def _swanctl_conf(
-    core_type: str,
+def _l2tp_connection(psk: str) -> tuple[str, str]:
+    """The l2tp-psk connection block and its secret. IKEv1 transport-mode
+    IPsec on udp/1701; xl2tpd + pppd carry the per-user login above it."""
+    escaped_psk = psk.replace('"', '\\"')
+    conn = (
+        "  l2tp-psk {\n"
+        "    version = 1\n"
+        "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,"
+        "aes256-sha1-modp2048,aes128-sha1-modp2048,3des-sha1-modp2048\n"
+        "    local_addrs = %any\n"
+        "    remote_addrs = %any\n"
+        "    local { auth = psk }\n"
+        "    remote { auth = psk }\n"
+        "    children {\n"
+        "      l2tp {\n"
+        "        mode = transport\n"
+        "        local_ts = dynamic[udp/l2tp]\n"
+        "        remote_ts = dynamic[udp]\n"
+        "        esp_proposals = aes256-sha1,aes128-sha1,aes256gcm16,3des-sha1\n"
+        "      }\n"
+        "    }\n"
+        "  }\n"
+    )
+    secret = f'  ike-l2tp {{ secret = "{escaped_psk}" }}\n'
+    return conn, secret
+
+
+def _ikev2_connection(
     psk: str,
     remote_id: str | None = None,
     users: list[dict] | None = None,
     ikev2_auth_mode: str = "eap",
-) -> str:
+) -> tuple[str, str, str]:
+    """The ikev2-eap connection block, the ikev2-pool block and the secrets.
+
+    Local auth is a server certificate (`local.auth = pubkey`), not the Core's
+    PSK: native iOS/Windows IKEv2 clients validate the server's identity via a
+    certificate, and their own VPN setup UI has no PSK field to offer one. Each
+    ProxyUser authenticates over EAP-MSCHAPv2 with their own username/password,
+    the same per-user login model as l2tp. local.id must be a real domain/IP —
+    both the identity a client's "Remote ID" field has to match and the cert's
+    CN/SAN (see _ensure_ikev2_cert, called by the caller before this so the cert
+    file already exists when charon loads it).
+    """
     escaped_psk = psk.replace('"', '\\"')
-    if core_type == "l2tp":
-        return (
-            "connections {\n"
-            "  l2tp-psk {\n"
-            "    version = 1\n"
-            "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,"
-            "aes256-sha1-modp2048,aes128-sha1-modp2048,3des-sha1-modp2048\n"
-            "    local_addrs = %any\n"
-            "    remote_addrs = %any\n"
-            "    local { auth = psk }\n"
-            "    remote { auth = psk }\n"
-            "    children {\n"
-            "      l2tp {\n"
-            "        mode = transport\n"
-            "        local_ts = dynamic[udp/l2tp]\n"
-            "        remote_ts = dynamic[udp]\n"
-            "        esp_proposals = aes256-sha1,aes128-sha1,aes256gcm16,3des-sha1\n"
-            "      }\n"
-            "    }\n"
-            "  }\n"
-            "}\n"
-            "secrets {\n"
-            f'  ike-l2tp {{ secret = "{escaped_psk}" }}\n'
-            "}\n"
-        )
-    # ikev2 — local auth is a server certificate (`local.auth = pubkey`),
-    # not the Core's PSK: native iOS/Windows IKEv2 clients validate the
-    # server's identity via a certificate, and their own VPN setup UI has
-    # no PSK field to offer one. Each ProxyUser authenticates to the server
-    # over EAP-MSCHAPv2 with their own username/password instead, same
-    # per-user login model as l2tp. The Core's psk field is unused here
-    # (still used above for l2tp). local.id must be a real domain/IP — it's
-    # both the identity a client's "Remote ID" field has to match, and the
-    # cert's CN/SAN (see _ensure_ikev2_cert, called by the caller before
-    # this function so the cert file already exists when charon loads it).
     host = (remote_id or "").strip()
     local_id_line = f"      id = {host}\n" if host else ""
     is_psk = ikev2_auth_mode == "psk"
@@ -298,8 +300,7 @@ def _swanctl_conf(
         remote_auth_block = "    remote {\n      auth = eap-mschapv2\n      eap_id = %any\n    }\n"
         secrets_block = _eap_secrets(users or [])
         send_cert_line = "    send_cert = always\n"
-    return (
-        "connections {\n"
+    conn = (
         "  ikev2-eap {\n"
         "    version = 2\n"
         "    unique = never\n"
@@ -342,17 +343,57 @@ def _swanctl_conf(
         "    }\n"
         f"    pools = ikev2-pool\n"
         "  }\n"
-        "}\n"
-        "pools {\n"
+    )
+    pool = (
         "  ikev2-pool {\n"
         f"    addrs = {_IKEV2_POOL}\n"
         f"    dns = {','.join(_DNS_SERVERS)}\n"
         "  }\n"
-        "}\n"
-        "secrets {\n"
-        f"{secrets_block}"
-        "}\n"
     )
+    return conn, pool, secrets_block
+
+
+def _swanctl_conf_multi(cores: list[dict]) -> str:
+    """One swanctl.conf that holds every assigned IPsec core at once, so a
+    single node can serve IKEv2 and L2TP side by side. charon keys inbound
+    negotiations by IKE version and traffic selectors, so the IKEv1 l2tp-psk
+    and IKEv2 ikev2-eap connections never collide."""
+    conns, pools, secrets = [], [], []
+    for core in cores:
+        if core.get("core_type") == "l2tp":
+            conn, secret = _l2tp_connection(core.get("psk") or "")
+            conns.append(conn)
+            secrets.append(secret)
+        elif core.get("core_type") == "ikev2":
+            conn, pool, secret = _ikev2_connection(
+                core.get("psk") or "",
+                core.get("remote_id"),
+                core.get("users") or [],
+                core.get("ikev2_auth_mode") or "eap",
+            )
+            conns.append(conn)
+            pools.append(pool)
+            secrets.append(secret)
+    pools_doc = ("pools {\n" + "".join(pools) + "}\n") if pools else ""
+    return (
+        "connections {\n" + "".join(conns) + "}\n"
+        + pools_doc
+        + "secrets {\n" + "".join(secrets) + "}\n"
+    )
+
+
+def _swanctl_conf(
+    core_type: str,
+    psk: str,
+    remote_id: str | None = None,
+    users: list[dict] | None = None,
+    ikev2_auth_mode: str = "eap",
+) -> str:
+    """Single-core swanctl.conf, kept for callers that manage one core."""
+    return _swanctl_conf_multi([{
+        "core_type": core_type, "psk": psk, "remote_id": remote_id,
+        "users": users, "ikev2_auth_mode": ikev2_auth_mode,
+    }])
 
 
 def _xl2tpd_conf() -> str:
@@ -491,18 +532,22 @@ def _restart_xl2tpd() -> None:
     _xl2tpd_process = subprocess.Popen(["xl2tpd", "-D"])
 
 
-def _load_swanctl_config(
-    core_type: str,
-    psk: str,
-    remote_id: str | None = None,
-    users: list[dict] | None = None,
-    certificate: str | None = None,
-    certificate_key: str | None = None,
-    ikev2_auth_mode: str = "eap",
-) -> None:
-    if core_type == "ikev2" and ikev2_auth_mode != "psk":
-        _ensure_ikev2_cert(remote_id or "", certificate, certificate_key)
-    _write(SWANCTL_CONF, _swanctl_conf(core_type, psk, remote_id, users, ikev2_auth_mode), mode=0o600)
+def _stop_xl2tpd() -> None:
+    global _xl2tpd_process
+    if _xl2tpd_process is not None and _xl2tpd_process.poll() is None:
+        _xl2tpd_process.terminate()
+        try:
+            _xl2tpd_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _xl2tpd_process.kill()
+    _xl2tpd_process = None
+
+
+def _load_swanctl_config(cores: list[dict]) -> None:
+    for core in cores:
+        if core.get("core_type") == "ikev2" and (core.get("ikev2_auth_mode") or "eap") != "psk":
+            _ensure_ikev2_cert(core.get("remote_id") or "", core.get("certificate"), core.get("certificate_key"))
+    _write(SWANCTL_CONF, _swanctl_conf_multi(cores), mode=0o600)
     # Every user change now triggers a sync, so a running charon only
     # reloads (swanctl --load-all below picks up conns, secrets and certs)
     # instead of restarting and dropping every connected client.
@@ -524,26 +569,58 @@ def _load_swanctl_config(
         time.sleep(1)
 
 
-def apply_l2tp(psk: str, users: list[dict], egress_vless: str | None = None) -> None:
-    _load_swanctl_config("l2tp", psk)
-    _write(XL2TPD_CONF, _xl2tpd_conf())
-    _write(PPP_OPTIONS, _ppp_options())
-    _write(CHAP_SECRETS, _chap_secrets(users), mode=0o600)
-    _ensure_forwarding_and_nat(_L2TP_SUBNET)
-    # Chained egress (see vless_egress.py) layers TPROXY rules on top of the
-    # plain NAT/FORWARD ones above, which are harmless to leave in place —
-    # TPROXY diverts matching packets before they'd ever reach them. Best
-    # effort: a bad/unreachable egress link, or a host missing some
-    # TPROXY-related tool, must never take down l2tp itself — worst case
-    # without this try/except, an exception here would skip the
-    # _restart_xl2tpd() call below entirely and silently break every l2tp
-    # user, egress or not. Traffic just falls back to the plain NAT egress
-    # already set up above.
+_SUBNETS = {"l2tp": _L2TP_SUBNET, "ikev2": _IKEV2_SUBNET}
+
+
+def apply_ipsec(cores: list[dict]) -> None:
+    """Applies every IPsec core assigned to this node — IKEv2, L2TP, or both
+    at once. One swanctl.conf holds all of them (see _swanctl_conf_multi);
+    xl2tpd runs only while an l2tp core is assigned."""
+    cores = [c for c in cores if c.get("core_type") in _SUBNETS]
+    _load_swanctl_config(cores)
+    has_l2tp = False
+    for core in cores:
+        if core["core_type"] == "l2tp":
+            has_l2tp = True
+            _write(XL2TPD_CONF, _xl2tpd_conf())
+            _write(PPP_OPTIONS, _ppp_options())
+            _write(CHAP_SECRETS, _chap_secrets(core.get("users") or []), mode=0o600)
+        elif (core.get("ikev2_auth_mode") or "eap") == "eap":
+            # swanctl --load-all only updates connection *definitions*; charon
+            # keeps every already-established IKE_SA running until it rekeys or
+            # the client reconnects. So a user the panel just removed (out of
+            # traffic, expired, deleted) would keep their live session. In EAP
+            # mode each SA carries the user's identity, so tear down any
+            # established SA whose EAP id is no longer an allowed user.
+            allowed = {str(u.get("username", "")) for u in (core.get("users") or []) if u.get("username")}
+            _terminate_disallowed_ikev2(allowed)
+        _ensure_forwarding_and_nat(_SUBNETS[core["core_type"]])
+
+    # Chained egress (see vless_egress.py) runs one shared TPROXY process, so
+    # only one core's link can be active: the first core that has one. The
+    # other subnets fall back to plain NAT egress. Best effort: a bad or
+    # unreachable egress link must never take down IPsec itself.
+    chosen = next((c for c in cores if c.get("egress_vless")), None)
     try:
-        vless_egress.apply(egress_vless, _L2TP_SUBNET)
+        if chosen is not None:
+            vless_egress.apply(chosen["egress_vless"], _SUBNETS[chosen["core_type"]])
+            for core in cores:
+                if core is not chosen:
+                    vless_egress._remove_tproxy_iptables(_SUBNETS[core["core_type"]])
+        else:
+            for core in cores:
+                vless_egress.apply(None, _SUBNETS[core["core_type"]])
     except Exception:
         pass
-    _restart_xl2tpd()
+
+    if has_l2tp:
+        _restart_xl2tpd()
+    else:
+        _stop_xl2tpd()
+
+
+def apply_l2tp(psk: str, users: list[dict], egress_vless: str | None = None) -> None:
+    apply_ipsec([{"core_type": "l2tp", "psk": psk, "users": users, "egress_vless": egress_vless}])
 
 
 def apply_ikev2(
@@ -555,26 +632,11 @@ def apply_ikev2(
     egress_vless: str | None = None,
     ikev2_auth_mode: str = "eap",
 ) -> None:
-    _load_swanctl_config("ikev2", psk, remote_id, users, certificate, certificate_key, ikev2_auth_mode)
-    # swanctl --load-all only updates connection *definitions*; charon keeps
-    # every already-established IKE_SA running until it rekeys or the client
-    # reconnects. So a user the panel just removed (out of traffic, expired,
-    # deleted) would keep their live session — reported active though their
-    # quota is gone. In EAP mode each SA carries the user's identity, so tear
-    # down any established SA whose EAP id is no longer an allowed user.
-    if ikev2_auth_mode == "eap":
-        allowed = {str(u.get("username", "")) for u in (users or []) if u.get("username")}
-        _terminate_disallowed_ikev2(allowed)
-    _ensure_forwarding_and_nat(_IKEV2_SUBNET)
-    # Chained egress (see vless_egress.py) — same mechanism apply_l2tp uses,
-    # just against the ikev2 subnet. A node's l2tp/ikev2 slot is exclusive
-    # (app/cores/resolve.py resolves it to one Core), so the two never both
-    # try to run the shared TPROXY egress process at once. Best effort: a
-    # bad/unreachable egress link must never take down ikev2 itself.
-    try:
-        vless_egress.apply(egress_vless, _IKEV2_SUBNET)
-    except Exception:
-        pass
+    apply_ipsec([{
+        "core_type": "ikev2", "psk": psk, "remote_id": remote_id, "users": users,
+        "certificate": certificate, "certificate_key": certificate_key,
+        "egress_vless": egress_vless, "ikev2_auth_mode": ikev2_auth_mode,
+    }])
 
 
 # Matchers for `swanctl --list-sas --raw`, mirroring node_agent/limits.py so

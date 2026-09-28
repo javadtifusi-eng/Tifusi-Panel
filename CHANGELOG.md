@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### IPsec
+- **L2TP beside IKEv2 on one node.** A node has a separate L2TP slot next to its IPsec one, so it can run an IKEv2 core and an L2TP core at the same time: strongSwan loads both connections into one config and xl2tpd runs beside it. New Android phones (no L2TP since Android 12) use IKEv2 while older phones, iPhones and Windows use L2TP, all on one server. On the Cores page, tick the node on the L2TP core's card. The node agent needs the new image; a node with a single IPsec core keeps receiving the same config as before.
+- **New protocols reach existing users.** Adding the first host of a protocol adds it to every user whose protocol list lacks it (a reseller's users only get what the reseller is allowed), so a new core no longer shows up only for users created afterwards.
+
 ### Tunnel engine
 - **TCP + Stealth transport (`tcpstealth`).** TCP Mux with every byte on the wire encrypted (ChaCha20-Poly1305, keyed from the tunnel token and a random salt per connection) and randomly padded, heavier on the first chunks so the handshake has no fixed size. Plain TCP Mux sends its hello, token included, in clear text. The relay never answers first; a connection that fails authentication, replays a recorded handshake or carries a stale timestamp is held open and silent for a random while, so an active probe learns nothing. Both servers need the new agent build; re-run each side's install command.
 - **Link test between the two servers.** `tifusi-tunnel linktest serve` on one server and `linktest run` on the other measure the tunnel's own path: UDP loss, round-trip time and jitter, and TCP handshake success and time, then suggest a transport (`tcpmux` on a clean path, `udp` with FEC when UDP is lossy or jittery or TCP fails).

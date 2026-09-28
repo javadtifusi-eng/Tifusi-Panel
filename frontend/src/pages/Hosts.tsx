@@ -267,7 +267,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   const liveCoreIds = new Set(
     nodes
       .filter((n) => n.status === 'connected')
-      .flatMap((n) => [n.core_id, n.ipsec_core_id, n.hysteria_core_id, n.wireguard_core_id])
+      .flatMap((n) => [n.core_id, n.ipsec_core_id, n.l2tp_core_id, n.hysteria_core_id, n.wireguard_core_id])
       .filter((id): id is number => id != null),
   )
   const coreOfInbound = new Map(cores.flatMap((c) => c.inbounds.map((i) => [i.id, c.id] as const)))

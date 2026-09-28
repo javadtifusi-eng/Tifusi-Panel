@@ -31,6 +31,11 @@ async def resolve_ipsec_core_id(core_id: int | None, db: AsyncSession) -> int | 
     return await _resolve(core_id, db, {CoreType.l2tp, CoreType.ikev2}, "l2tp/ikev2")
 
 
+async def resolve_l2tp_core_id(core_id: int | None, db: AsyncSession) -> int | None:
+    """The Node's extra L2TP slot, run beside an IKEv2 core in the IPsec slot."""
+    return await _resolve(core_id, db, {CoreType.l2tp}, "l2tp")
+
+
 async def resolve_hysteria_core_id(core_id: int | None, db: AsyncSession) -> int | None:
     """The Node's Hysteria2 slot — a third one, independent of the other two,
     because the agent runs `hysteria server` as its own subprocess beside Xray
