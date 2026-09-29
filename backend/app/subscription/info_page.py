@@ -66,6 +66,25 @@ _APPLE_SVG = (
     "</svg>"
 )
 
+# A collapsed panel below the iPhone install button. iOS never auto-installs a downloaded
+# profile — the user must open Settings and tap Install — and the most common failure is opening
+# the link inside Telegram's in-app browser (which cannot install profiles at all). Kept behind a
+# toggle so it does not clutter the page for anyone who already knows the two steps.
+_IOS_HELP = (
+    '<details class="ios-help">'
+    '<summary>📱 راهنمای نصب روی آیفون <span class="chev">▼</span></summary>'
+    '<div class="ios-guide">'
+    '<div class="g-warn">⚠️ حتماً این صفحه را در <b>Safari</b> باز کن، نه مرورگر تلگرام.</div>'
+    "<ol>"
+    "<li>دکمه‌ی «نصب مستقیم» بالا را بزن.</li>"
+    "<li>پیام «Profile Downloaded» می‌آید ← برو به <b>Settings</b>؛ بالای صفحه گزینه‌ی "
+    "<b>Profile Downloaded</b> را بزن.</li>"
+    "<li><b>Install</b> را بزن و رمز گوشی را وارد کن. تمام ✅</li>"
+    "</ol>"
+    "</div>"
+    "</details>"
+)
+
 
 def _qr_svg(value: str) -> str:
     img = qrcode.make(value, image_factory=qrcode.image.svg.SvgPathImage, box_size=8, border=2)
@@ -212,7 +231,7 @@ def build_info_page_html(
     for ike in ikev2_configs:
         body = f"""
           <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('ikev2', ike, subscription_url)}</div></div>
-          {f'<a class="mobileconfig-btn" href="{_esc(ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>' if ike.get('mobileconfig_url') else ''}
+          {f'<a class="mobileconfig-btn" href="{_esc(ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if ike.get('mobileconfig_url') else ''}
         """
         sections.append(_card(f"IKEv2 · {ike['remark']}", body))
 
@@ -317,6 +336,23 @@ def build_info_page_html(
     color: #0a0a0a; background: #f5f5f5; text-decoration: none; border-radius: 10px; padding: 9px 12px;
   }}
   .mobileconfig-btn svg {{ width: 18px; height: 18px; }}
+  .ios-help {{ margin-top: 8px; }}
+  .ios-help summary {{
+    list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+    background: transparent; border: 1px solid #2d2d2d; color: #9aa4b2;
+    border-radius: 10px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; user-select: none;
+  }}
+  .ios-help summary::-webkit-details-marker {{ display: none; }}
+  .ios-help summary .chev {{ font-size: 11px; transition: transform .2s; }}
+  .ios-help[open] summary {{ color: #7cc4ff; border-color: #1f2b3a; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }}
+  .ios-help[open] summary .chev {{ transform: rotate(180deg); }}
+  .ios-guide {{
+    background: #10151c; border: 1px solid #1f2b3a; border-top: none;
+    border-radius: 0 0 10px 10px; padding: 11px 13px; font-size: 12.5px;
+  }}
+  .ios-guide .g-warn {{ color: #f0b866; margin-bottom: 8px; }}
+  .ios-guide ol {{ margin: 0; padding-inline-start: 18px; display: grid; gap: 5px; color: #cbd5e1; }}
+  .ios-guide b {{ color: #f5f5f5; }}
   .empty {{ text-align: center; color: #8b8b8b; font-size: 13px; padding: 20px 0; }}
   .reset-btn {{
     display: block; width: 100%; background: transparent; color: #f87171; border: 1px solid rgba(248,113,113,0.3);
