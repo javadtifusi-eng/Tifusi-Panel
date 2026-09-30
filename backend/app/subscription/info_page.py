@@ -200,6 +200,7 @@ def build_info_page_html(
     links: list[str],
     ikev2_configs: list[dict],
     l2tp_configs: list[dict],
+    pptp_configs: list[dict] | None = None,
     wireguard_conf: str | None = None,
     wireguard_conf_url: str | None = None,
 ) -> str:
@@ -246,6 +247,18 @@ def build_info_page_html(
         """
         copy_text = f"Server: {l2tp['server']}\nUsername: {l2tp['username']}\nPassword: {l2tp['password']}"
         sections.append(_card(f"L2TP · {l2tp['remark']}", body, copy_text))
+
+    # No QR and no install button: PPTP is only typed into an old phone's or
+    # Windows' own VPN settings, and iOS has no PPTP to install a profile for.
+    for pptp in pptp_configs or []:
+        body = f"""
+          <div class="kv"><span>نوع</span><span class="mono">PPTP</span></div>
+          <div class="kv"><span>سرور</span><span class="mono">{_esc(pptp['server'])}</span></div>
+          <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(pptp['username'])}</span></div>
+          <div class="kv"><span>پسورد</span><span class="mono">{_esc(pptp['password'])}</span></div>
+        """
+        copy_text = f"Server: {pptp['server']}\nUsername: {pptp['username']}\nPassword: {pptp['password']}"
+        sections.append(_card(f"PPTP · {pptp['remark']}", body, copy_text))
 
     if not sections:
         sections.append('<div class="empty">هیچ سرویسی برای این اکانت تعریف نشده.</div>')

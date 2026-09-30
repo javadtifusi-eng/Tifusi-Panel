@@ -384,13 +384,19 @@ step "L2TP / IKEv2 kernel support"
 # this, since it's what registers the character device, not l2tp_ppp.
 modprobe l2tp_ppp 2>/dev/null || true
 modprobe ppp_generic 2>/dev/null || true
+# PPTP: pptpd insists on 128-bit MPPE (old Android and Windows refuse PPTP
+# without it) and uses the kernel's PPTP/GRE helper. Kept loaded across
+# reboots, since the node container cannot load modules itself.
+modprobe ppp_mppe 2>/dev/null || true
+modprobe pptp 2>/dev/null || true
+printf 'l2tp_ppp\nppp_generic\nppp_mppe\npptp\n' > /etc/modules-load.d/tifusi-ppp.conf 2>/dev/null || true
 # Some hosts' kernels create /dev/ppp via udev only, which a minimal VPS
 # image may not be running — recreate it by hand (major/minor 108:0 is
 # the kernel-assigned, unchanging device number for /dev/ppp) if loading
 # the module alone didn't produce it.
 [ -e /dev/ppp ] || mknod -m 600 /dev/ppp c 108 0 2>/dev/null || true
 if [ -e /dev/ppp ]; then
-  done_line "Loaded l2tp_ppp and ppp_generic"
+  done_line "Loaded l2tp_ppp, ppp_generic, ppp_mppe and pptp"
 else
   warn "No /dev/ppp on this kernel — Xray works, but an L2TP core on this node won't."
 fi

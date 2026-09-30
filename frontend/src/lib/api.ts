@@ -327,12 +327,20 @@ export interface L2tpConfig {
   password: string
 }
 
+export interface PptpConfig {
+  remark: string
+  server: string
+  username: string
+  password: string
+}
+
 export interface UserLinks {
   subscription_url: string
   app_code: string
   links: string[]
   ikev2_configs: Ikev2Config[]
   l2tp_configs: L2tpConfig[]
+  pptp_configs?: PptpConfig[]
 }
 
 export async function getUserLinks(id: number): Promise<UserLinks> {
@@ -340,7 +348,7 @@ export async function getUserLinks(id: number): Promise<UserLinks> {
   return res.json()
 }
 
-export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'hysteria2' | 'wireguard' | 'ikev2' | 'l2tp'
+export type HostProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks' | 'hysteria2' | 'wireguard' | 'ikev2' | 'l2tp' | 'pptp'
 export type HostSecurity = 'none' | 'tls' | 'reality'
 
 export const FINGERPRINTS = [
@@ -469,6 +477,7 @@ export interface Node {
   core_id: number | null
   ipsec_core_id: number | null
   l2tp_core_id?: number | null
+  pptp_core_id?: number | null
   hysteria_core_id: number | null
   wireguard_core_id?: number | null
   l2tp_egress_vless: string | null
@@ -661,6 +670,7 @@ export async function createNode(
     core_id?: number | null
     ipsec_core_id?: number | null
     l2tp_core_id?: number | null
+    pptp_core_id?: number | null
     hysteria_core_id?: number | null
     wireguard_core_id?: number | null
     l2tp_egress_vless?: string | null
@@ -680,6 +690,7 @@ export async function updateNode(
     core_id: number | null
     ipsec_core_id: number | null
     l2tp_core_id: number | null
+    pptp_core_id?: number | null
     hysteria_core_id: number | null
     wireguard_core_id: number | null
     l2tp_egress_vless: string | null
@@ -1134,7 +1145,7 @@ export interface Inbound {
   group_ids: number[]
 }
 
-export type CoreType = 'xray' | 'l2tp' | 'ikev2' | 'hysteria2' | 'wireguard'
+export type CoreType = 'xray' | 'l2tp' | 'ikev2' | 'pptp' | 'hysteria2' | 'wireguard'
 
 export interface Core {
   id: number

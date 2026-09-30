@@ -48,7 +48,7 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl unzip ca-certificates \
       libgmp10 libssl3 \
-      xl2tpd ppp iptables iproute2 \
+      xl2tpd pptpd ppp kmod iptables iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=strongswan-builder /build/ /

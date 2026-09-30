@@ -12,6 +12,7 @@ from app.cores.deployed import live_hosts
 from app.groups.access import hosts_for_user
 from app.links.generator import (
     build_ipsec_configs_for_user,
+    build_pptp_configs_for_user,
     build_links_for_user,
     build_subscription_content,
     build_wireguard_conf,
@@ -172,6 +173,7 @@ async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession)
         links=build_links_for_user(user, allowed_hosts),
         ikev2_configs=ikev2_configs,
         l2tp_configs=l2tp_configs,
+        pptp_configs=build_pptp_configs_for_user(user, allowed_hosts),
         wireguard_conf=wg_conf,
         wireguard_conf_url=f"{base}sub/{user.secret}/wireguard.conf" if wg_conf else None,
     )

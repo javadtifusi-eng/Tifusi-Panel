@@ -22,7 +22,7 @@ import {
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 
-const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'hysteria2', 'wireguard', 'ikev2', 'l2tp']
+const PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'hysteria2', 'wireguard', 'ikev2', 'l2tp', 'pptp']
 const XRAY_PROTOCOLS: HostProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks']
 const PLACEHOLDER_KEYS = ['username', 'protocol', 'days_left', 'expire_date', 'data_limit_gb', 'data_left_gb'] as const
 
@@ -37,6 +37,7 @@ const NODE_POS: Record<HostProtocol, [number, number]> = {
   wireguard: [50, 100],
   ikev2: [20, 100],
   l2tp: [0, 62],
+  pptp: [0, 30],
 }
 const BADGE: Record<HostProtocol, string> = {
   vless: 'VLESS',
@@ -47,6 +48,7 @@ const BADGE: Record<HostProtocol, string> = {
   wireguard: 'WG',
   ikev2: 'IKE',
   l2tp: 'L2TP',
+  pptp: 'PPTP',
 }
 // Each protocol wears one colour everywhere on this page: its node on the map, its lines, its cards.
 const PCOLOR: Record<HostProtocol, string> = {
@@ -58,8 +60,9 @@ const PCOLOR: Record<HostProtocol, string> = {
   wireguard: '#818cf8',
   ikev2: '#22c55e',
   l2tp: '#94a3b8',
+  pptp: '#a8a29e',
 }
-const MONO: Record<HostProtocol, string> = { vless: 'VL', vmess: 'VM', trojan: 'TR', shadowsocks: 'SS', hysteria2: 'HY', wireguard: 'WG', ikev2: 'IK', l2tp: 'L2' }
+const MONO: Record<HostProtocol, string> = { vless: 'VL', vmess: 'VM', trojan: 'TR', shadowsocks: 'SS', hysteria2: 'HY', wireguard: 'WG', ikev2: 'IK', l2tp: 'L2', pptp: 'PP' }
 
 function emptyForm() {
   return {
@@ -113,7 +116,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   // Hysteria2 is built on a core too now: the core carries the port and obfuscation password,
   // so the host only says where clients connect and which name they present.
   const isCoreLinked =
-    form.protocol === 'l2tp' || form.protocol === 'ikev2' || form.protocol === 'hysteria2' || form.protocol === 'wireguard'
+    form.protocol === 'l2tp' || form.protocol === 'ikev2' || form.protocol === 'pptp' || form.protocol === 'hysteria2' || form.protocol === 'wireguard'
   const isHysteria2 = form.protocol === 'hysteria2'
   const inboundsForProtocol = allInbounds.filter((i) => i.protocol === form.protocol)
   const coresForProtocol = cores.filter((c) => c.core_type === form.protocol)
@@ -267,7 +270,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   const liveCoreIds = new Set(
     nodes
       .filter((n) => n.status === 'connected')
-      .flatMap((n) => [n.core_id, n.ipsec_core_id, n.l2tp_core_id, n.hysteria_core_id, n.wireguard_core_id])
+      .flatMap((n) => [n.core_id, n.ipsec_core_id, n.l2tp_core_id, n.pptp_core_id, n.hysteria_core_id, n.wireguard_core_id])
       .filter((id): id is number => id != null),
   )
   const coreOfInbound = new Map(cores.flatMap((c) => c.inbounds.map((i) => [i.id, c.id] as const)))
@@ -318,6 +321,19 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   function passDetails(host: Host) {
     const groupsList = hostGroups(host)
     const groupText = groupsList.length ? groupsList.join('، ') : h.everyone
+    if (host.protocol === 'pptp') {
+      const core = host.core_id != null ? coreById.get(host.core_id) : undefined
+      return {
+        kind: protocolLabels.pptp,
+        pill: core ? { cls: 'ok', text: core.name } : { cls: 'warn', text: h.noCore },
+        route: host.address,
+        port: 'TCP 1723',
+        meta: [
+          [h.core, core?.name ?? '—'],
+          [h.groups, groupText],
+        ] as [string, string][],
+      }
+    }
     if (host.protocol === 'ikev2' || host.protocol === 'l2tp') {
       const core = host.core_id != null ? coreById.get(host.core_id) : undefined
       return {

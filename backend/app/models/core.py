@@ -13,6 +13,7 @@ class CoreType(str, enum.Enum):
     xray = "xray"
     l2tp = "l2tp"
     ikev2 = "ikev2"
+    pptp = "pptp"
     hysteria2 = "hysteria2"
     wireguard = "wireguard"
 

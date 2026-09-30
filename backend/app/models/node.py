@@ -43,6 +43,10 @@ class Node(Base):
     # to it, so old phones on L2TP and new ones on IKEv2 share one server.
     l2tp_core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
 
+    # PPTP for the oldest phones, run by pptpd beside xl2tpd; both are pppd
+    # underneath, so logins, accounting and device limits work the same way.
+    pptp_core_id: Mapped[int | None] = mapped_column(ForeignKey("cores.id"), nullable=True)
+
     # A third slot, for the same reason as the second: the agent runs
     # `hysteria server` as another subprocess beside Xray and the IPsec stack,
     # so one node can serve all three at once. One per node, not a list —

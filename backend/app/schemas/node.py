@@ -24,6 +24,7 @@ class NodeCreate(BaseModel):
     core_id: int | None = None
     ipsec_core_id: int | None = None
     l2tp_core_id: int | None = None
+    pptp_core_id: int | None = None
     hysteria_core_id: int | None = None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None = Field(default=None, max_length=2048)
@@ -39,6 +40,7 @@ class NodeUpdate(BaseModel):
     core_id: int | None = None
     ipsec_core_id: int | None = None
     l2tp_core_id: int | None = None
+    pptp_core_id: int | None = None
     hysteria_core_id: int | None = None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None = Field(default=None, max_length=2048)
@@ -58,6 +60,7 @@ class NodeResponse(BaseModel):
     core_id: int | None
     ipsec_core_id: int | None
     l2tp_core_id: int | None = None
+    pptp_core_id: int | None = None
     hysteria_core_id: int | None
     wireguard_core_id: int | None = None
     l2tp_egress_vless: str | None

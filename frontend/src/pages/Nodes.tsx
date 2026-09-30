@@ -308,7 +308,8 @@ export default function NodesPage({ createSignal = 0 }: { createSignal?: number 
   const core = current?.core_id != null ? coreById.get(current.core_id) : undefined
   const ipsecCore = current?.ipsec_core_id != null ? coreById.get(current.ipsec_core_id) : undefined
   const l2tpCore = current?.l2tp_core_id != null ? coreById.get(current.l2tp_core_id) : undefined
-  const ipsecCores = [ipsecCore, l2tpCore].filter((c): c is NonNullable<typeof c> => c != null)
+  const pptpCore = current?.pptp_core_id != null ? coreById.get(current.pptp_core_id) : undefined
+  const ipsecCores = [ipsecCore, l2tpCore, pptpCore].filter((c): c is NonNullable<typeof c> => c != null)
   const todayBytes = traffic?.length ? traffic[traffic.length - 1].total_bytes : 0
   const totalBytes = traffic?.reduce((s, p) => s + p.total_bytes, 0) ?? 0
   const today = fmtBytes(todayBytes)

@@ -23,12 +23,12 @@ import RealityScanner from '../components/RealityScanner'
 import InboundBuilder from '../components/InboundBuilder'
 import { copyToClipboard } from '../lib/clipboard'
 
-const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp']
+const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp', 'pptp']
 // A Record, so a core type added later cannot silently fall through to another type's label —
 // the way Hysteria2 used to show up marked "L2TP".
 // Each engine wears the colour its protocol has on the Hosts page (L2TP is slate: no yellow).
-const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', wireguard: '#818cf8', l2tp: '#94a3b8' }
-const ENGINE_MARK: Record<CoreType, string> = { xray: 'XRAY', ikev2: 'IKEv2', hysteria2: 'HY2', wireguard: 'WG', l2tp: 'L2TP' }
+const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', wireguard: '#818cf8', l2tp: '#94a3b8', pptp: '#a8a29e' }
+const ENGINE_MARK: Record<CoreType, string> = { xray: 'XRAY', ikev2: 'IKEv2', hysteria2: 'HY2', wireguard: 'WG', l2tp: 'L2TP', pptp: 'PPTP' }
 
 /** 32 hex characters, the same as the panel generates when the field is left empty. */
 function randomObfs(): string {
@@ -740,9 +740,10 @@ const CORE_SLOT = {
   xray: 'core_id',
   ikev2: 'ipsec_core_id',
   l2tp: 'l2tp_core_id',
+  pptp: 'pptp_core_id',
   hysteria2: 'hysteria_core_id',
   wireguard: 'wireguard_core_id',
-} as const satisfies Record<CoreType, 'core_id' | 'ipsec_core_id' | 'l2tp_core_id' | 'hysteria_core_id' | 'wireguard_core_id'>
+} as const satisfies Record<CoreType, 'core_id' | 'ipsec_core_id' | 'l2tp_core_id' | 'pptp_core_id' | 'hysteria_core_id' | 'wireguard_core_id'>
 
 const slotOf = (type: CoreType) => CORE_SLOT[type]
 const coreInSlot = (node: Node, type: CoreType) => node[slotOf(type)] ?? null
@@ -1413,6 +1414,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     hysteria2: c.hysteria2Sub,
     wireguard: c.wireguardSub,
     l2tp: c.l2tpSub,
+    pptp: c.pptpSub,
   }
 
   return (
@@ -1582,6 +1584,12 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                             {core.ikev2_psk && <SecretSpec label="PSK" value={core.ikev2_psk} show={c.reveal} hide={c.conceal} />}
                           </>
                         )}
+                        {core.core_type === 'pptp' && (
+                          <>
+                            <Spec label="TCP" value="1723 · GRE" tint />
+                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                          </>
+                        )}
                         {core.core_type === 'l2tp' && (
                           <>
                             <Spec label="UDP" value="500 · 1701 · 4500" tint />
@@ -1605,7 +1613,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                                 ? `QUIC · UDP ${core.hysteria2_port ?? '—'}`
                                 : core.core_type === 'wireguard'
                                   ? `UDP ${core.wireguard_port ?? '—'}`
-                                  : core.core_type === 'ikev2' ? 'UDP 500 · 4500' : 'UDP 1701',
+                                  : core.core_type === 'ikev2' ? 'UDP 500 · 4500' : core.core_type === 'pptp' ? 'TCP 1723 · GRE' : 'UDP 1701',
                             core: true,
                           },
                           { icon: <IconServer size={20} />, title: runningNodes.map((n) => n.name).join(', ') || '—', sub: c.hopNode },
@@ -1618,6 +1626,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                           ? t.coresPage.hysteria2CardHint
                           : core.core_type === 'wireguard'
                             ? t.coresPage.wireguardCardHint
+                            : core.core_type === 'pptp'
+                            ? t.coresPage.pptpCardHint
                             : core.core_type === 'l2tp'
                             ? t.hostsPage.l2tpHint
                             : core.ikev2_egress_vless

@@ -112,7 +112,7 @@ export default function UserLinksModal({ userId, username, onClose }: { userId: 
             </div>
           </div>
 
-          {data.links.length === 0 && data.ikev2_configs.length === 0 && data.l2tp_configs.length === 0 ? (
+          {data.links.length === 0 && data.ikev2_configs.length === 0 && data.l2tp_configs.length === 0 && !data.pptp_configs?.length ? (
             <div className="hint">{t.userLinksModal.noHostsForLinks}</div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -149,6 +149,15 @@ export default function UserLinksModal({ userId, username, onClose }: { userId: 
               ['Password', l2tp.password],
             ]
             return <ConfigCard key={`l2tp-${idx}`} title={`L2TP · ${l2tp.remark}`} fields={fields} text={text} copied={copied} onCopy={copy} />
+          })}
+          {(data.pptp_configs ?? []).map((pptp, idx) => {
+            const text = `Server: ${pptp.server}\nUsername: ${pptp.username}\nPassword: ${pptp.password}`
+            const fields: [string, string][] = [
+              ['Server', pptp.server],
+              ['Username', pptp.username],
+              ['Password', pptp.password],
+            ]
+            return <ConfigCard key={`pptp-${idx}`} title={`PPTP · ${pptp.remark}`} fields={fields} text={text} copied={copied} onCopy={copy} />
           })}
         </>
       )}

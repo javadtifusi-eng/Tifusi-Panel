@@ -59,6 +59,8 @@ async def _build_ipsec_payload(core: Core, node: Node, db: AsyncSession) -> dict
     user_payload = [
         {"username": u.username, "password": u.ipsec_login_password, "limit": u.hwid_limit or 0} for u in users
     ]
+    if core.core_type == CoreType.pptp:
+        return {"core_type": "pptp", "users": user_payload}
     if core.core_type == CoreType.l2tp:
         return {
             "core_type": "l2tp",
@@ -166,7 +168,9 @@ def _apply_health(node: Node, health: dict) -> None:
     ipsec_health = health.get("ipsec") or {}
     hysteria_health = health.get("hysteria") or {}
     xray_ok = node.core_id is None or xray_health.get("running", False)
-    ipsec_ok = (node.ipsec_core_id is None and node.l2tp_core_id is None) or ipsec_health.get("running", False)
+    ipsec_ok = (
+        node.ipsec_core_id is None and node.l2tp_core_id is None and node.pptp_core_id is None
+    ) or ipsec_health.get("running", False)
     # Same rule as the other two slots: only gate on what this node is assigned.
     # An older agent that predates Hysteria2 reports no "hysteria" key at all, so
     # a node with no hysteria core keeps passing exactly as before.
@@ -210,16 +214,19 @@ async def sync_node(node: Node, db: AsyncSession, only: set[str] | None = None) 
     xray_core = await db.get(Core, node.core_id) if node.core_id is not None else None
     ipsec_core = await db.get(Core, node.ipsec_core_id) if node.ipsec_core_id is not None else None
     l2tp_core = await db.get(Core, node.l2tp_core_id) if node.l2tp_core_id is not None else None
+    pptp_core = await db.get(Core, node.pptp_core_id) if node.pptp_core_id is not None else None
     hysteria_core = await db.get(Core, node.hysteria_core_id) if node.hysteria_core_id is not None else None
     wireguard_core = await db.get(Core, node.wireguard_core_id) if node.wireguard_core_id is not None else None
 
     xray_payload = await _build_xray_payload(xray_core, db)
-    ipsec_cores = [await _build_ipsec_payload(c, node, db) for c in (ipsec_core, l2tp_core) if c is not None]
+    # PPTP rides the same push: the agent runs pptpd beside xl2tpd and both
+    # read one chap-secrets, so it has to arrive with the other logins.
+    ipsec_cores = [await _build_ipsec_payload(c, node, db) for c in (ipsec_core, l2tp_core, pptp_core) if c is not None]
     # One core keeps the original shape, so an agent older than the L2TP slot
     # still understands it; two go together, since each push replaces the
     # node's whole strongSwan config.
     ipsec_payload = None
-    if len(ipsec_cores) == 1:
+    if len(ipsec_cores) == 1 and ipsec_cores[0]["core_type"] != "pptp":
         ipsec_payload = ipsec_cores[0]
     elif ipsec_cores:
         ipsec_payload = {"cores": ipsec_cores}
@@ -361,7 +368,7 @@ async def check_node_health(node: Node, db: AsyncSession) -> None:
         key
         for key, slot in (
             ("xray", node.core_id),
-            ("ipsec", node.ipsec_core_id or node.l2tp_core_id),
+            ("ipsec", node.ipsec_core_id or node.l2tp_core_id or node.pptp_core_id),
             ("hysteria", node.hysteria_core_id),
             ("wireguard", node.wireguard_core_id),
         )

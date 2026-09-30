@@ -75,6 +75,7 @@ const LIST_ROWS = 6
 const PROTOCOL_NAMES: Record<string, string> = {
   ikev2: 'IKEv2',
   l2tp: 'L2TP',
+  pptp: 'PPTP',
   vless: 'VLESS',
   vmess: 'VMess',
   trojan: 'Trojan',

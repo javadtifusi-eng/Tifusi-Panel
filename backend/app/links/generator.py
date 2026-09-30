@@ -332,3 +332,19 @@ def build_ipsec_configs_for_user(
         if host.protocol == HostProtocol.l2tp
     ]
     return ikev2_configs, l2tp_configs
+
+
+def build_pptp_configs_for_user(user: ProxyUser, hosts: list[Host]) -> list[dict]:
+    """PPTP is typed by hand into old Android/Windows VPN settings: server,
+    username, password — no secret, no certificate, and iOS has no PPTP at
+    all, so there is no profile to install."""
+    return [
+        {
+            "remark": render_remark(host, user),
+            "server": host.address,
+            "username": user.username,
+            "password": user.ipsec_login_password,
+        }
+        for host in hosts
+        if host.protocol == HostProtocol.pptp
+    ]

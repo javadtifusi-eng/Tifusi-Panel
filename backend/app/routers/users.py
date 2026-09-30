@@ -9,7 +9,7 @@ from app.database import get_db
 from app.dependencies import require_permission
 from app.cores.deployed import live_hosts
 from app.groups.access import hosts_for_user, resolve_groups
-from app.links.generator import build_ipsec_configs_for_user, build_links_for_user
+from app.links.generator import build_ipsec_configs_for_user, build_links_for_user, build_pptp_configs_for_user
 from app.models.admin import Admin
 from app.models.app_report import AppReport
 from app.models.user import ProxyUser, UserStatus
@@ -424,4 +424,5 @@ async def get_user_links(
         "links": build_links_for_user(user, allowed_hosts),
         "ikev2_configs": ikev2_configs,
         "l2tp_configs": l2tp_configs,
+        "pptp_configs": build_pptp_configs_for_user(user, allowed_hosts),
     }

@@ -17,6 +17,7 @@ class HostProtocol(str, enum.Enum):
     wireguard = "wireguard"
     ikev2 = "ikev2"
     l2tp = "l2tp"
+    pptp = "pptp"
 
 
 # Protocols Xray-core itself terminates — these are the ones backed by an
@@ -26,7 +27,7 @@ XRAY_PROTOCOLS = {HostProtocol.vless, HostProtocol.vmess, HostProtocol.trojan, H
 # Standalone servers this panel doesn't run itself — a Host just picks a
 # Core of the matching core_type, which holds the shared technical fields
 # (PSK/port) once instead of repeating them per Host.
-CORE_LINKED_PROTOCOLS = {HostProtocol.l2tp, HostProtocol.ikev2, HostProtocol.wireguard}
+CORE_LINKED_PROTOCOLS = {HostProtocol.l2tp, HostProtocol.ikev2, HostProtocol.pptp, HostProtocol.wireguard}
 
 FINGERPRINTS = (
     "chrome",

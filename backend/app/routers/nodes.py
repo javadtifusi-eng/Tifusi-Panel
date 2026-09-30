@@ -7,6 +7,7 @@ from app.cores.resolve import (
     resolve_hysteria_core_id,
     resolve_ipsec_core_id,
     resolve_l2tp_core_id,
+    resolve_pptp_core_id,
     resolve_wireguard_core_id,
     resolve_xray_core_id,
 )
@@ -52,6 +53,7 @@ async def create_node(
     node.core_id = await resolve_xray_core_id(payload.core_id, db)
     node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
     node.l2tp_core_id = await resolve_l2tp_core_id(payload.l2tp_core_id, db)
+    node.pptp_core_id = await resolve_pptp_core_id(payload.pptp_core_id, db)
     node.hysteria_core_id = await resolve_hysteria_core_id(payload.hysteria_core_id, db)
     node.wireguard_core_id = await resolve_wireguard_core_id(payload.wireguard_core_id, db)
     await _check_ipsec_pair(node, db)
@@ -96,7 +98,7 @@ async def update_node(
     node = await _get_node_or_404(node_id, db)
 
     for field, value in payload.model_dump(
-        exclude_unset=True, exclude={"core_id", "ipsec_core_id", "l2tp_core_id", "hysteria_core_id", "wireguard_core_id"}
+        exclude_unset=True, exclude={"core_id", "ipsec_core_id", "l2tp_core_id", "pptp_core_id", "hysteria_core_id", "wireguard_core_id"}
     ).items():
         if field == "usage_multiplier" and value is None:
             continue  # null means "leave it", not "no multiplier"
@@ -108,13 +110,15 @@ async def update_node(
         node.ipsec_core_id = await resolve_ipsec_core_id(payload.ipsec_core_id, db)
     if "l2tp_core_id" in payload.model_fields_set:
         node.l2tp_core_id = await resolve_l2tp_core_id(payload.l2tp_core_id, db)
+    if "pptp_core_id" in payload.model_fields_set:
+        node.pptp_core_id = await resolve_pptp_core_id(payload.pptp_core_id, db)
     if "hysteria_core_id" in payload.model_fields_set:
         node.hysteria_core_id = await resolve_hysteria_core_id(payload.hysteria_core_id, db)
     if "wireguard_core_id" in payload.model_fields_set:
         node.wireguard_core_id = await resolve_wireguard_core_id(payload.wireguard_core_id, db)
     await _check_ipsec_pair(node, db)
 
-    slots = {"core_id", "ipsec_core_id", "l2tp_core_id", "hysteria_core_id", "wireguard_core_id"}
+    slots = {"core_id", "ipsec_core_id", "l2tp_core_id", "pptp_core_id", "hysteria_core_id", "wireguard_core_id"}
     db.add(node)
     await ensure_core_hosts(node, db)
     await db.commit()

@@ -1,4 +1,4 @@
-"""Generates and applies real strongSwan/xl2tpd config for l2tp/ikev2 cores.
+"""Generates and applies real strongSwan/xl2tpd/pptpd config for l2tp/ikev2/pptp cores.
 
 Only ever touched when the panel assigns this node an l2tp or ikev2 Core —
 a plain Xray node never calls anything here.
@@ -51,6 +51,8 @@ IKEV2_CERT_BASE = "ikev2-server"
 XL2TPD_CONF = Path("/etc/xl2tpd/xl2tpd.conf")
 PPP_OPTIONS = Path("/etc/ppp/options.xl2tpd")
 CHAP_SECRETS = Path("/etc/ppp/chap-secrets")
+PPTPD_CONF = Path("/etc/pptpd.conf")
+PPTP_OPTIONS = Path("/etc/ppp/options.pptpd")
 
 # Internal-only pools — never surfaced to an end user (unlike WireGuard's
 # subnet, nothing about these needs to be typed into a client), so there's
@@ -58,6 +60,10 @@ CHAP_SECRETS = Path("/etc/ppp/chap-secrets")
 _L2TP_LOCAL_IP = "192.168.42.1"
 _L2TP_POOL = "192.168.42.10-192.168.42.250"
 _L2TP_SUBNET = "192.168.42.0/24"
+# pptpd's own range syntax: the last octet only after the dash.
+_PPTP_LOCAL_IP = "192.168.43.1"
+_PPTP_POOL = "192.168.43.10-250"
+_PPTP_SUBNET = "192.168.43.0/24"
 _IKEV2_POOL = "10.10.10.10-10.10.10.250"
 _IKEV2_SUBNET = "10.10.10.0/24"
 _DNS_SERVERS = ("8.8.8.8", "8.8.4.4")
@@ -445,14 +451,54 @@ def _ppp_options() -> str:
     return "\n".join(lines) + "\n"
 
 
-def _chap_secrets(users: list[dict]) -> str:
+def _pptpd_conf() -> str:
+    return (
+        f"option {PPTP_OPTIONS}\n"
+        f"localip {_PPTP_LOCAL_IP}\n"
+        f"remoteip {_PPTP_POOL}\n"
+    )
+
+
+def _pptp_options() -> str:
+    lines = [
+        # The chap-secrets "server" column for PPTP users, kept apart from
+        # L2TP's so each login only works on the protocols the panel allows.
+        "name tifusi-pptp",
+        "refuse-pap",
+        "refuse-chap",
+        "refuse-mschap",
+        "require-mschap-v2",
+        # Old Android and Windows refuse PPTP without MPPE, and without the
+        # kernel's ppp_mppe module pppd drops the call right after login.
+        "require-mppe-128",
+        "proxyarp",
+        "nodefaultroute",
+        "lock",
+        "nobsdcomp",
+        "novj",
+        "novjccomp",
+        "nologfd",
+        "mtu 1400",
+        "mru 1400",
+        "lcp-echo-failure 4",
+        "lcp-echo-interval 30",
+    ]
+    lines += [f"ms-dns {dns}" for dns in _DNS_SERVERS]
+    return "\n".join(lines) + "\n"
+
+
+def _chap_secrets(users_by_server: dict[str, list[dict]]) -> str:
+    """One chap-secrets for every pppd on the node: xl2tpd's (server name
+    tifusi-l2tp) and pptpd's (tifusi-pptp). pppd reads it at each login, so a
+    new or removed user needs no daemon restart."""
     lines = ["# Managed by the Tifusi node agent — edits here are overwritten on every sync."]
-    for u in users:
-        username = str(u.get("username", "")).replace('"', "")
-        password = str(u.get("password", "")).replace('"', "")
-        if not username or not password:
-            continue
-        lines.append(f'"{username}" tifusi-l2tp "{password}" *')
+    for server, users in users_by_server.items():
+        for u in users:
+            username = str(u.get("username", "")).replace('"', "")
+            password = str(u.get("password", "")).replace('"', "")
+            if not username or not password:
+                continue
+            lines.append(f'"{username}" {server} "{password}" *')
     return "\n".join(lines) + "\n"
 
 
@@ -525,6 +571,18 @@ def _restart_charon() -> None:
 _xl2tpd_process: subprocess.Popen | None = None
 
 
+def _write_if_changed(path: Path, content: str) -> bool:
+    """True when the file had to change, so a daemon that only reads it at
+    start is restarted for a real change and left alone otherwise."""
+    try:
+        if path.read_text() == content:
+            return False
+    except OSError:
+        pass
+    _write(path, content)
+    return True
+
+
 def _restart_xl2tpd() -> None:
     global _xl2tpd_process
     if _xl2tpd_process is not None and _xl2tpd_process.poll() is None:
@@ -539,6 +597,40 @@ def _restart_xl2tpd() -> None:
     # /var/run/xl2tpd/l2tp-control for reading" (confirmed live).
     Path("/var/run/xl2tpd").mkdir(parents=True, exist_ok=True)
     _xl2tpd_process = subprocess.Popen(["xl2tpd", "-D"])
+
+
+_pptpd_process: subprocess.Popen | None = None
+
+
+def _restart_pptpd() -> None:
+    global _pptpd_process
+    _stop_pptpd()
+    # MPPE, which require-mppe-128 insists on, and the kernel PPTP helper.
+    # Best effort: in a container without module rights this fails, and the
+    # host has to load them (install-node.sh does).
+    for module in ("ppp_mppe", "pptp"):
+        _run(["modprobe", module])
+    _pptpd_process = subprocess.Popen(["pptpd", "--fg", "-c", str(PPTPD_CONF)])
+
+
+def _stop_pptpd() -> None:
+    global _pptpd_process
+    if _pptpd_process is not None and _pptpd_process.poll() is None:
+        _pptpd_process.terminate()
+        try:
+            _pptpd_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _pptpd_process.kill()
+    _pptpd_process = None
+
+
+def _allow_pptp_in() -> None:
+    """TCP 1723 for the control channel and GRE (protocol 47) for the data.
+    INPUT usually accepts everything on a node, but a host firewall that
+    only knows TCP/UDP would swallow GRE and leave PPTP stuck at "verifying"."""
+    for rule in (["-p", "tcp", "--dport", "1723", "-j", "ACCEPT"], ["-p", "gre", "-j", "ACCEPT"]):
+        if _run(["iptables", "-C", "INPUT", *rule]).returncode != 0:
+            _run(["iptables", "-I", "INPUT", "1", *rule])
 
 
 def _stop_xl2tpd() -> None:
@@ -578,23 +670,37 @@ def _load_swanctl_config(cores: list[dict]) -> None:
         time.sleep(1)
 
 
-_SUBNETS = {"l2tp": _L2TP_SUBNET, "ikev2": _IKEV2_SUBNET}
+_SUBNETS = {"l2tp": _L2TP_SUBNET, "ikev2": _IKEV2_SUBNET, "pptp": _PPTP_SUBNET}
 
 
 def apply_ipsec(cores: list[dict]) -> None:
-    """Applies every IPsec core assigned to this node — IKEv2, L2TP, or both
-    at once. One swanctl.conf holds all of them (see _swanctl_conf_multi);
-    xl2tpd runs only while an l2tp core is assigned."""
+    """Applies every IPsec/PPP core assigned to this node — IKEv2, L2TP and
+    PPTP, in any combination. One swanctl.conf holds the IPsec ones (see
+    _swanctl_conf_multi); xl2tpd and pptpd run only while their core is
+    assigned, and share one chap-secrets."""
     cores = [c for c in cores if c.get("core_type") in _SUBNETS]
-    _load_swanctl_config(cores)
-    has_l2tp = False
+    ipsec_cores = [c for c in cores if c["core_type"] in ("l2tp", "ikev2")]
+    if ipsec_cores:
+        _load_swanctl_config(ipsec_cores)
+    by_type = {c["core_type"]: c for c in cores}
+    has_l2tp, has_pptp = "l2tp" in by_type, "pptp" in by_type
+    l2tp_changed = pptp_changed = False
+    if has_l2tp:
+        l2tp_changed = _write_if_changed(XL2TPD_CONF, _xl2tpd_conf())
+        l2tp_changed |= _write_if_changed(PPP_OPTIONS, _ppp_options())
+    if has_pptp:
+        pptp_changed = _write_if_changed(PPTPD_CONF, _pptpd_conf())
+        pptp_changed |= _write_if_changed(PPTP_OPTIONS, _pptp_options())
+        _allow_pptp_in()
+    if has_l2tp or has_pptp:
+        secrets = {}
+        if has_l2tp:
+            secrets["tifusi-l2tp"] = by_type["l2tp"].get("users") or []
+        if has_pptp:
+            secrets["tifusi-pptp"] = by_type["pptp"].get("users") or []
+        _write(CHAP_SECRETS, _chap_secrets(secrets), mode=0o600)
     for core in cores:
-        if core["core_type"] == "l2tp":
-            has_l2tp = True
-            _write(XL2TPD_CONF, _xl2tpd_conf())
-            _write(PPP_OPTIONS, _ppp_options())
-            _write(CHAP_SECRETS, _chap_secrets(core.get("users") or []), mode=0o600)
-        elif (core.get("ikev2_auth_mode") or "eap") == "eap":
+        if core["core_type"] == "ikev2" and (core.get("ikev2_auth_mode") or "eap") == "eap":
             # swanctl --load-all only updates connection *definitions*; charon
             # keeps every already-established IKE_SA running until it rekeys or
             # the client reconnects. So a user the panel just removed (out of
@@ -622,10 +728,19 @@ def apply_ipsec(cores: list[dict]) -> None:
     except Exception:
         pass
 
+    # Only a changed daemon config restarts xl2tpd/pptpd: every user change
+    # pushes here, and a restart hangs up every L2TP/PPTP call in progress.
+    # Users come and go through chap-secrets alone.
     if has_l2tp:
-        _restart_xl2tpd()
+        if l2tp_changed or not is_xl2tpd_running():
+            _restart_xl2tpd()
     else:
         _stop_xl2tpd()
+    if has_pptp:
+        if pptp_changed or not is_pptpd_running():
+            _restart_pptpd()
+    else:
+        _stop_pptpd()
 
 
 def apply_l2tp(psk: str, users: list[dict], egress_vless: str | None = None) -> None:
@@ -718,3 +833,7 @@ def is_ipsec_running() -> bool:
 
 def is_xl2tpd_running() -> bool:
     return _xl2tpd_process is not None and _xl2tpd_process.poll() is None
+
+
+def is_pptpd_running() -> bool:
+    return _pptpd_process is not None and _pptpd_process.poll() is None

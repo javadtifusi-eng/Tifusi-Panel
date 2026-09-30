@@ -152,7 +152,7 @@ async def apply_ipsec_config(payload: dict, x_node_api_key: str | None = Header(
     if cores is None:
         cores = [payload]
     for core in cores:
-        if core.get("core_type") not in ("l2tp", "ikev2"):
+        if core.get("core_type") not in ("l2tp", "ikev2", "pptp"):
             raise HTTPException(status_code=400, detail=f"Unknown core_type: {core.get('core_type')!r}")
     core_types = sorted({c["core_type"] for c in cores})
 
@@ -195,7 +195,11 @@ async def health(x_node_api_key: str | None = Header(default=None)) -> dict:
     if not modes:
         ipsec_running = None
     else:
-        ipsec_running = ipsec.is_ipsec_running() and ("l2tp" not in modes or ipsec.is_xl2tpd_running())
+        ipsec_running = (
+            (not modes & {"l2tp", "ikev2"} or ipsec.is_ipsec_running())
+            and ("l2tp" not in modes or ipsec.is_xl2tpd_running())
+            and ("pptp" not in modes or ipsec.is_pptpd_running())
+        )
     ipsec_state = {"mode": _ipsec_mode, "running": ipsec_running}
     if modes:
         ipsec_state["egress_running"] = ipsec.vless_egress.is_egress_running()

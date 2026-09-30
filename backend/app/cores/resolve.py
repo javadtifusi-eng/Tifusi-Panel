@@ -36,6 +36,11 @@ async def resolve_l2tp_core_id(core_id: int | None, db: AsyncSession) -> int | N
     return await _resolve(core_id, db, {CoreType.l2tp}, "l2tp")
 
 
+async def resolve_pptp_core_id(core_id: int | None, db: AsyncSession) -> int | None:
+    """The Node's PPTP slot, beside the IPsec ones: pptpd is its own daemon."""
+    return await _resolve(core_id, db, {CoreType.pptp}, "pptp")
+
+
 async def resolve_hysteria_core_id(core_id: int | None, db: AsyncSession) -> int | None:
     """The Node's Hysteria2 slot — a third one, independent of the other two,
     because the agent runs `hysteria server` as its own subprocess beside Xray
