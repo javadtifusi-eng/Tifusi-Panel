@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { describeStream, parseShareLink, ShareLinkError } from '../lib/shareLink'
 import { IconArrow, IconBolt, IconCopy, IconGlobe, IconLock, IconPlus, IconRefresh, IconServer, IconShield, IconUser } from '../components/icons'
 import { Empty, Field, Sheet, highlightJsonLines, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
@@ -186,7 +187,8 @@ const RECOMMENDED_RULES: RoutingRule[] = [
   { type: 'field', ip: ['geoip:private'], outboundTag: 'block' },
   { type: 'field', domain: ['geosite:category-ads-all'], outboundTag: 'block' },
   { type: 'field', ip: ['geoip:ir'], outboundTag: 'direct' },
-  { type: 'field', domain: ['geosite:ir'], outboundTag: 'direct' },
+  // category-ir: the official geosite.dat has no plain "ir" list.
+  { type: 'field', domain: ['geosite:category-ir'], outboundTag: 'direct' },
 ]
 const RECOMMENDED_DNS_SERVERS = ['1.1.1.1', '8.8.8.8']
 
@@ -222,16 +224,28 @@ function applyRecommendedRouting(configText: string): string {
 // string the rest of the form (and the inbound wizard above it) already
 // treats as the single source of truth - no separate state to drift out
 // of sync with a manual edit to the JSON textarea below.
+// A fallback group's "all traffic" rule: no match fields, just every network.
+// It has to stay last, or it would swallow the rules below it.
+function isDefaultRoute(r: RoutingRule): boolean {
+  return !!r.balancerTag && r.network === 'tcp,udp' && !r.domain?.length && !r.ip?.length && !r.inboundTag?.length && r.port == null
+}
+
+const BALANCER_OPTION = 'balancer:'
+
 function RoutingEditor({ configText, setConfigText, t }: { configText: string; setConfigText: (text: string) => void; t: ReturnType<typeof useLang>['t'] }) {
   const config = parseConfig(configText)
-  const routing = (config.routing as { rules?: RoutingRule[] } | undefined) ?? {}
-  const rules = Array.isArray(routing.rules) ? routing.rules : []
+  const routing = (config.routing as { rules?: RoutingRule[]; balancers?: { tag?: string }[] } | undefined) ?? {}
+  const allRules = Array.isArray(routing.rules) ? routing.rules : []
+  // Default routes belong to the fallback groups below and are edited there.
+  const rules = allRules.filter((r) => !isDefaultRoute(r))
+  const defaultRoutes = allRules.filter(isDefaultRoute)
   const outbounds = Array.isArray(config.outbounds) ? (config.outbounds as { tag?: string }[]) : []
   const outboundTags = outbounds.map((o) => o.tag).filter((tag): tag is string => !!tag)
   const tagOptions = outboundTags.length > 0 ? outboundTags : ['direct']
+  const balancerTags = (Array.isArray(routing.balancers) ? routing.balancers : []).map((b) => b.tag).filter((tag): tag is string => !!tag)
 
   function commit(nextRules: RoutingRule[]) {
-    setConfigText(JSON.stringify({ ...config, routing: { ...routing, rules: nextRules } }, null, 2))
+    setConfigText(JSON.stringify({ ...config, routing: { ...routing, rules: [...nextRules, ...defaultRoutes] } }, null, 2))
   }
   function updateRule(i: number, patch: Partial<RoutingRule>) {
     commit(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
@@ -278,10 +292,23 @@ function RoutingEditor({ configText, setConfigText, t }: { configText: string; s
           </div>
           <div style={{ flex: '0 1 120px' }}>
             <label className="lbl">{t.coresPage.ruleOutboundLabel}</label>
-            <select className="input ltr" value={r.outboundTag ?? tagOptions[0]} onChange={(e) => updateRule(i, { outboundTag: e.target.value })}>
+            <select
+              className="input ltr"
+              value={r.balancerTag ? BALANCER_OPTION + r.balancerTag : (r.outboundTag ?? tagOptions[0])}
+              onChange={(e) =>
+                e.target.value.startsWith(BALANCER_OPTION)
+                  ? updateRule(i, { balancerTag: e.target.value.slice(BALANCER_OPTION.length), outboundTag: undefined })
+                  : updateRule(i, { outboundTag: e.target.value, balancerTag: undefined })
+              }
+            >
               {tagOptions.map((tag) => (
                 <option key={tag} value={tag}>
                   {tag}
+                </option>
+              ))}
+              {balancerTags.map((tag) => (
+                <option key={BALANCER_OPTION + tag} value={BALANCER_OPTION + tag}>
+                  ⚖ {t.coresPage.balancerGroupOption}: {tag}
                 </option>
               ))}
             </select>
@@ -309,6 +336,7 @@ type OutboundEntry = {
   tag?: string
   protocol?: string
   settings?: Record<string, unknown>
+  streamSettings?: Record<string, unknown>
 }
 
 // Structured single-server fields for the protocols that actually need
@@ -354,14 +382,67 @@ function buildOutboundSettings(protocol: string | undefined, fields: { address: 
   }
 }
 
+// Edits address/port/secret in place, keeping everything else the outbound
+// carries (a VLESS flow, a Shadowsocks method, what a pasted link brought).
+function patchOutboundSettings(protocol: string | undefined, settings: Record<string, unknown>, fields: { address: string; port: string; secret: string }): Record<string, unknown> {
+  const next = JSON.parse(JSON.stringify(settings)) as Record<string, unknown>
+  const port = parseInt(fields.port, 10) || 0
+  const listKey = protocol === 'vless' || protocol === 'vmess' ? 'vnext' : 'servers'
+  const list = next[listKey] as Record<string, unknown>[] | undefined
+  const server = Array.isArray(list) ? list[0] : undefined
+  if (!server) return buildOutboundSettings(protocol, fields)
+  server.address = fields.address
+  server.port = port
+  if (listKey === 'vnext') {
+    const user = (server.users as Record<string, unknown>[] | undefined)?.[0]
+    if (!user) return buildOutboundSettings(protocol, fields)
+    user.id = fields.secret
+  } else if (protocol === 'trojan' || protocol === 'shadowsocks') {
+    server.password = fields.secret
+  }
+  return next
+}
+
+function uniqueTag(tag: string, taken: Set<string>): string {
+  if (!taken.has(tag)) return tag
+  let n = 2
+  while (taken.has(`${tag}-${n}`)) n++
+  return `${tag}-${n}`
+}
+
 // OutboundsEditor edits config.outbounds the same way RoutingEditor edits
 // config.routing.rules - reads/writes the same raw configText string.
 function OutboundsEditor({ configText, setConfigText, t }: { configText: string; setConfigText: (text: string) => void; t: ReturnType<typeof useLang>['t'] }) {
   const config = parseConfig(configText)
   const outbounds = Array.isArray(config.outbounds) ? (config.outbounds as OutboundEntry[]) : []
+  const [links, setLinks] = useState('')
+  const [linkNote, setLinkNote] = useState<{ ok: boolean; text: string } | null>(null)
 
   function commit(next: OutboundEntry[]) {
     setConfigText(JSON.stringify({ ...config, outbounds: next }, null, 2))
+  }
+  // Appended, never inserted: the first outbound is Xray's default route, and
+  // a pasted proxy must not silently take all traffic.
+  function importLinks() {
+    const lines = links.split(/\s+/).filter((l) => l.includes('://'))
+    if (lines.length === 0) return
+    const taken = new Set(outbounds.map((o) => o.tag).filter((tag): tag is string => !!tag))
+    const added: OutboundEntry[] = []
+    try {
+      lines.forEach((line, n) => {
+        const ob = parseShareLink(line, outbounds.length + n + 1)
+        ob.tag = uniqueTag(ob.tag, taken)
+        taken.add(ob.tag)
+        added.push(ob)
+      })
+    } catch (e) {
+      const code = e instanceof ShareLinkError ? e.message : 'unreadable'
+      setLinkNote({ ok: false, text: t.coresPage.importLinkErrors[code] ?? t.coresPage.importLinkErrors.unreadable })
+      return
+    }
+    commit([...outbounds, ...added])
+    setLinks('')
+    setLinkNote({ ok: true, text: t.coresPage.importLinkAdded(added.length) })
   }
   function updateOutbound(i: number, patch: Partial<OutboundEntry>) {
     commit(outbounds.map((o, idx) => (idx === i ? { ...o, ...patch } : o)))
@@ -385,6 +466,28 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
       <div className="hint" style={{ margin: 0 }}>
         {t.coresPage.outboundsHint}
       </div>
+      <div className="rule-edit" style={{ alignItems: 'flex-end' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <label className="lbl" htmlFor="outbound-links">
+            {t.coresPage.importLinkLabel}
+          </label>
+          <textarea
+            id="outbound-links"
+            className="input ltr mono"
+            rows={2}
+            value={links}
+            onChange={(e) => {
+              setLinks(e.target.value)
+              setLinkNote(null)
+            }}
+            placeholder={t.coresPage.importLinkPlaceholder}
+          />
+        </div>
+        <button type="button" className="btn" onClick={importLinks} disabled={!links.trim()}>
+          {t.coresPage.importLinkBtn}
+        </button>
+      </div>
+      {linkNote && <div className={linkNote.ok ? 'ok-text' : 'err-text'}>{linkNote.text}</div>}
       {outbounds.length === 0 && <div className="hint">{t.coresPage.noOutboundsYet}</div>}
       {outbounds.map((o, i) => {
         const needsServer = o.protocol !== 'freedom' && o.protocol !== 'blackhole'
@@ -394,10 +497,15 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
             <div style={{ flex: '0 1 120px' }}>
               <label className="lbl">{t.coresPage.outboundTagLabel}</label>
               <input className="input ltr" value={o.tag ?? ''} onChange={(e) => updateOutbound(i, { tag: e.target.value })} />
+              {o.streamSettings && (
+                <div className="hint ltr" style={{ margin: '4px 0 0' }}>
+                  {describeStream(o.streamSettings)}
+                </div>
+              )}
             </div>
             <div style={{ flex: '0 1 120px' }}>
               <label className="lbl">{t.coresPage.outboundProtocolLabel}</label>
-              <select className="input ltr" value={o.protocol ?? 'freedom'} onChange={(e) => updateOutbound(i, { protocol: e.target.value, settings: {} })}>
+              <select className="input ltr" value={o.protocol ?? 'freedom'} onChange={(e) => updateOutbound(i, { protocol: e.target.value, settings: {}, streamSettings: undefined })}>
                 {OUTBOUND_PROTOCOLS.map((p) => (
                   <option key={p} value={p}>
                     {p}
@@ -412,7 +520,7 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
                   <input
                     className="input ltr"
                     value={fields.address}
-                    onChange={(e) => updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, address: e.target.value }) })}
+                    onChange={(e) => updateOutbound(i, { settings: patchOutboundSettings(o.protocol, o.settings ?? {}, { ...fields, address: e.target.value }) })}
                   />
                 </div>
                 <div style={{ flex: '0 1 90px' }}>
@@ -421,7 +529,7 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
                     className="input ltr"
                     type="number"
                     value={fields.port}
-                    onChange={(e) => updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, port: e.target.value }) })}
+                    onChange={(e) => updateOutbound(i, { settings: patchOutboundSettings(o.protocol, o.settings ?? {}, { ...fields, port: e.target.value }) })}
                   />
                 </div>
                 {(o.protocol === 'vless' || o.protocol === 'vmess' || o.protocol === 'trojan' || o.protocol === 'shadowsocks') && (
@@ -430,7 +538,7 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
                     <input
                       className="input ltr mono"
                       value={fields.secret}
-                      onChange={(e) => updateOutbound(i, { settings: buildOutboundSettings(o.protocol, { ...fields, secret: e.target.value }) })}
+                      onChange={(e) => updateOutbound(i, { settings: patchOutboundSettings(o.protocol, o.settings ?? {}, { ...fields, secret: e.target.value }) })}
                     />
                   </div>
                 )}
@@ -450,6 +558,175 @@ function OutboundsEditor({ configText, setConfigText, t }: { configText: string;
           </div>
         )
       })}
+    </div>
+  )
+}
+
+type BalancerEntry = { tag?: string; selector?: string[]; strategy?: { type?: string }; fallbackTag?: string }
+
+const BALANCER_STRATEGIES = ['leastPing', 'random', 'roundRobin'] as const
+const DEFAULT_PROBE_URL = 'https://www.gstatic.com/generate_204'
+// Outbounds that go nowhere or straight out — grouping them makes no sense.
+const NON_PROXY_PROTOCOLS = new Set(['freedom', 'blackhole', 'dns', 'loopback'])
+const INTERNAL_OUTBOUND_TAGS = new Set(['api', 'tifusi-limit-block'])
+
+// BalancersEditor writes routing.balancers plus the observatory that keeps
+// each member's health, on the same raw configText as the editors above. The
+// observatory probes every member of every group, so a dead one is skipped
+// by leastPing (and by random/roundRobin, which also read its results).
+function BalancersEditor({ configText, setConfigText, t }: { configText: string; setConfigText: (text: string) => void; t: ReturnType<typeof useLang>['t'] }) {
+  const config = parseConfig(configText)
+  const routing = (config.routing as { rules?: RoutingRule[]; balancers?: BalancerEntry[] } | undefined) ?? {}
+  const balancers = Array.isArray(routing.balancers) ? routing.balancers : []
+  const rules = Array.isArray(routing.rules) ? routing.rules : []
+  const outbounds = Array.isArray(config.outbounds) ? (config.outbounds as OutboundEntry[]) : []
+  const proxyTags = outbounds
+    .filter((o) => o.tag && !INTERNAL_OUTBOUND_TAGS.has(o.tag) && !NON_PROXY_PROTOCOLS.has(o.protocol ?? 'freedom'))
+    .map((o) => o.tag as string)
+  const fallbackTags = outbounds.map((o) => o.tag).filter((tag): tag is string => !!tag && !INTERNAL_OUTBOUND_TAGS.has(tag))
+  const observatory = (config.observatory as Record<string, unknown> | undefined) ?? {}
+  const probeUrl = typeof observatory.probeUrl === 'string' ? observatory.probeUrl : DEFAULT_PROBE_URL
+
+  function commit(nextBalancers: BalancerEntry[], nextRules: RoutingRule[] = rules, nextProbe: string = probeUrl) {
+    const next: Record<string, unknown> = { ...config }
+    const nextRouting: Record<string, unknown> = { ...routing, rules: [...nextRules.filter((r) => !isDefaultRoute(r)), ...nextRules.filter(isDefaultRoute)] }
+    const members = [...new Set(nextBalancers.flatMap((b) => b.selector ?? []))]
+    if (nextBalancers.length > 0) {
+      nextRouting.balancers = nextBalancers
+      next.observatory = { ...observatory, subjectSelector: members, probeUrl: nextProbe || DEFAULT_PROBE_URL, probeInterval: (observatory.probeInterval as string) ?? '1m', enableConcurrency: true }
+    } else {
+      delete nextRouting.balancers
+      delete next.observatory
+    }
+    next.routing = nextRouting
+    setConfigText(JSON.stringify(next, null, 2))
+  }
+  function update(i: number, patch: Partial<BalancerEntry>) {
+    commit(balancers.map((b, idx) => (idx === i ? { ...b, ...patch } : b)))
+  }
+  function rename(i: number, tag: string) {
+    const old = balancers[i].tag
+    commit(
+      balancers.map((b, idx) => (idx === i ? { ...b, tag } : b)),
+      rules.map((r) => (old && r.balancerTag === old ? { ...r, balancerTag: tag } : r)),
+    )
+  }
+  function remove(i: number) {
+    const old = balancers[i].tag
+    commit(
+      balancers.filter((_, idx) => idx !== i),
+      rules.filter((r) => !old || r.balancerTag !== old),
+    )
+  }
+  function setDefaultRoute(i: number, on: boolean) {
+    const tag = balancers[i].tag
+    if (!tag) return
+    const others = rules.filter((r) => !isDefaultRoute(r))
+    commit(balancers, on ? [...others, { type: 'field', network: 'tcp,udp', balancerTag: tag }] : others)
+  }
+  function addGroup() {
+    const taken = new Set(balancers.map((b) => b.tag).filter((tag): tag is string => !!tag))
+    commit([...balancers, { tag: uniqueTag('group', taken), selector: proxyTags.slice(0, 2), strategy: { type: 'leastPing' } }])
+  }
+
+  return (
+    <div className="form-section">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 style={{ margin: 0 }}>{t.coresPage.balancersTitle}</h4>
+        <button type="button" onClick={addGroup} className="btn" disabled={proxyTags.length === 0}>
+          {t.coresPage.addBalancerBtn}
+        </button>
+      </div>
+      <div className="hint" style={{ margin: 0 }}>
+        {proxyTags.length === 0 ? t.coresPage.balancerNeedsOutbounds : t.coresPage.balancersHint}
+      </div>
+      {balancers.length === 0 && proxyTags.length > 0 && <div className="hint">{t.coresPage.noBalancersYet}</div>}
+      {balancers.map((b, i) => {
+        const selector = b.selector ?? []
+        const isDefault = rules.some((r) => isDefaultRoute(r) && r.balancerTag === b.tag)
+        return (
+          <div key={i} className="rule-edit" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            <div className="flex flex-wrap gap-2" style={{ alignItems: 'flex-end' }}>
+              <div style={{ flex: '0 1 140px' }}>
+                <label className="lbl" htmlFor={`balancer-tag-${i}`}>
+                  {t.coresPage.balancerTagLabel}
+                </label>
+                <input id={`balancer-tag-${i}`} className="input ltr" value={b.tag ?? ''} onChange={(e) => rename(i, e.target.value)} />
+              </div>
+              <div style={{ flex: '0 1 190px' }}>
+                <label className="lbl" htmlFor={`balancer-strategy-${i}`}>
+                  {t.coresPage.balancerStrategyLabel}
+                </label>
+                <select
+                  id={`balancer-strategy-${i}`}
+                  className="input"
+                  value={b.strategy?.type ?? 'random'}
+                  onChange={(e) => update(i, { strategy: { type: e.target.value } })}
+                >
+                  {BALANCER_STRATEGIES.map((type) => (
+                    <option key={type} value={type}>
+                      {t.coresPage.balancerStrategies[type]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: '0 1 150px' }}>
+                <label className="lbl" htmlFor={`balancer-fallback-${i}`}>
+                  {t.coresPage.balancerFallbackLabel}
+                </label>
+                <select
+                  id={`balancer-fallback-${i}`}
+                  className="input ltr"
+                  value={b.fallbackTag ?? ''}
+                  onChange={(e) => update(i, { fallbackTag: e.target.value || undefined })}
+                >
+                  <option value="">{t.coresPage.balancerNoFallback}</option>
+                  {fallbackTags.map((tag) => (
+                    <option key={tag} value={tag}>
+                      {tag}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button type="button" onClick={() => remove(i)} className="btn danger">
+                {t.common.delete}
+              </button>
+            </div>
+            <div>
+              <span className="lbl">{t.coresPage.balancerMembersLabel}</span>
+              <div className="flex flex-wrap gap-3">
+                {proxyTags.map((tag) => (
+                  <label key={tag} className="flex items-center gap-1.5 ltr" style={{ cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={selector.includes(tag)}
+                      onChange={(e) => update(i, { selector: e.target.checked ? [...selector, tag] : selector.filter((s) => s !== tag) })}
+                    />
+                    {tag}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center gap-1.5" style={{ cursor: 'pointer' }}>
+              <input type="checkbox" checked={isDefault} onChange={(e) => setDefaultRoute(i, e.target.checked)} />
+              <span>
+                {t.coresPage.balancerDefaultRoute}
+                <span className="hint" style={{ margin: 0, display: 'block' }}>
+                  {t.coresPage.balancerDefaultRouteHint}
+                </span>
+              </span>
+            </label>
+          </div>
+        )
+      })}
+      {balancers.length > 0 && (
+        <div style={{ maxWidth: 420 }}>
+          <label className="lbl" htmlFor="balancer-probe">
+            {t.coresPage.balancerProbeLabel}
+          </label>
+          <input id="balancer-probe" className="input ltr" value={probeUrl} onChange={(e) => commit(balancers, rules, e.target.value)} />
+        </div>
+      )}
     </div>
   )
 }
@@ -1464,6 +1741,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                   </div>
                   <RoutingEditor configText={form.configText} setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))} t={t} />
                   <OutboundsEditor configText={form.configText} setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))} t={t} />
+                  <BalancersEditor configText={form.configText} setConfigText={(text) => setForm((f) => ({ ...f, configText: text }))} t={t} />
                 </>
               )}
 
