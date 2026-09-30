@@ -56,6 +56,11 @@ _xray_base_rules: list[dict] = []
 _xray_ips: dict[str, dict[str, list[float]]] = {}
 # The block rules currently loaded into the running Xray.
 _xray_applied: list[dict] = []
+# Users removed from the running Xray without a restart (xray_users.py). Taking
+# a user out of an inbound only refuses their new connections; one they already
+# have open (a mux session can carry everything for hours) would keep working,
+# so their traffic is routed to the blackhole until the next restart.
+_xray_revoked: set[str] = set()
 # Bumped whenever Xray restarts, so a pass that started against the previous
 # process doesn't record its connections or its rules against the new one.
 _xray_generation = 0
@@ -98,7 +103,9 @@ def prepare_xray_config(payload: dict) -> dict:
     api = payload.get("api")
     if isinstance(api, dict):
         services = api.setdefault("services", [])
-        for service in ("RoutingService", "LoggerService"):
+        # HandlerService lets node_agent/xray_users.py add and remove users
+        # without restarting Xray.
+        for service in ("RoutingService", "LoggerService", "HandlerService"):
             if service not in services:
                 services.append(service)
     outbounds = payload.setdefault("outbounds", [])
@@ -121,8 +128,18 @@ def xray_restarted() -> None:
         XRAY_ACCESS_LOG.write_bytes(b"")
         _xray_ips.clear()
         _xray_applied = []
+        _xray_revoked.clear()
         _xray_generation += 1
         _log_offset = 0
+
+
+def xray_users_changed(revoked: set[str], restored: set[str]) -> None:
+    """Called after users were removed or added over the API. The block rule
+    for revoked users is loaded by the next enforcement pass, within
+    ENFORCE_INTERVAL_SECONDS."""
+    with _lock:
+        _xray_revoked.difference_update(restored)
+        _xray_revoked.update(revoked)
 
 
 # ---------- IKEv2 ----------
@@ -318,6 +335,9 @@ def _enforce_xray(xray_bin: str, api_addr: str) -> None:
                 del _xray_ips[username]
 
         wanted = []
+        if _xray_revoked:
+            wanted.append({"type": "field", "ruleTag": "tifusi-revoked", "user": sorted(_xray_revoked),
+                           "outboundTag": XRAY_BLOCK_OUTBOUND})
         for username in sorted(_xray_ips):
             by_arrival = sorted(_xray_ips[username].items(), key=lambda item: item[1][0])
             refused = sorted(ip for ip, _ in by_arrival[_xray_limits[username]:])

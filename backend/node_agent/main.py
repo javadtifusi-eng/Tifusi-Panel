@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan, wireguard
+from node_agent import field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan, wireguard, xray_users
 
 try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
     from node_agent import cdn_scan
@@ -108,6 +108,20 @@ async def apply_config(payload: dict, x_node_api_key: str | None = Header(defaul
 
     payload = limits.prepare_xray_config(payload)
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    # Only users changed (the usual push): add and remove them in the running
+    # Xray instead of restarting it, so nobody else is disconnected.
+    running = _process is not None and _process.poll() is None
+    if running and CONFIG_PATH.exists():
+        try:
+            diff = xray_users.user_diff(json.loads(CONFIG_PATH.read_text()), payload)
+        except (OSError, ValueError):
+            diff = None
+        if diff is not None and xray_users.apply(XRAY_BIN, STATS_API_ADDR, diff):
+            CONFIG_PATH.write_text(json.dumps(payload))
+            limits.xray_users_changed(diff.revoked(), diff.restored())
+            return {"status": "applied", "pid": _process.pid, "restarted": False}
+
     CONFIG_PATH.write_text(json.dumps(payload))
 
     if _process is not None and _process.poll() is None:
@@ -124,7 +138,7 @@ async def apply_config(payload: dict, x_node_api_key: str | None = Header(defaul
         raise HTTPException(status_code=500, detail=f"xray binary not found: {exc}") from exc
 
     _started_at = time.monotonic()
-    return {"status": "applied", "pid": _process.pid}
+    return {"status": "applied", "pid": _process.pid, "restarted": True}
 
 
 @app.post("/ipsec-config")
