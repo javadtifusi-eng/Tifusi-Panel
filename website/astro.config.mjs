@@ -3,7 +3,7 @@ import { defineConfig, passthroughImageService } from 'astro/config'
 
 const guides = [
   'installation', 'nodes', 'hysteria2', 'cores-and-hosts', 'users-and-subscriptions', 'resellers',
-  'tunnels', 'connection-shield', 'telegram-bot', 'android-app', 'network-health', 'operations',
+  'tunnels', 'connection-shield', 'telegram-bot', 'network-health', 'operations',
   'deployment', 'architecture', 'development',
 ]
 
