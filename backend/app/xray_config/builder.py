@@ -79,8 +79,13 @@ def build_xray_config(core: Core, inbounds: list[Inbound], users: list[ProxyUser
     levels = config.setdefault("policy", {}).setdefault("levels", {})
     levels.setdefault("0", {"statsUserUplink": True, "statsUserDownlink": True})
     routing_rules = config.setdefault("routing", {}).setdefault("rules", [])
-    if not any(r.get("outboundTag") == "api" for r in routing_rules):
-        routing_rules.append({"type": "field", "inboundTag": ["api"], "outboundTag": "api"})
+    # First, always: rules match top to bottom, so a catch-all above it (a
+    # fallback group's "all traffic" rule) would send the stats API's own
+    # traffic out through a proxy and traffic accounting would stop.
+    api_rules = [r for r in routing_rules if r.get("outboundTag") == "api"] or [
+        {"type": "field", "inboundTag": ["api"], "outboundTag": "api"}
+    ]
+    routing_rules[:] = api_rules + [r for r in routing_rules if r.get("outboundTag") != "api"]
     outbounds = config.setdefault("outbounds", [])
     if not any(o.get("tag") == "api" for o in outbounds):
         outbounds.append({"protocol": "freedom", "tag": "api"})

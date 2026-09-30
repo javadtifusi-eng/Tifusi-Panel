@@ -65,10 +65,13 @@ RUN curl -fsSL -o /usr/local/bin/hysteria \
       "https://github.com/apernet/hysteria/releases/download/app%2F${HYSTERIA_VERSION}/hysteria-linux-amd64" \
     && chmod +x /usr/local/bin/hysteria
 
+# geoip.dat/geosite.dat come from the same zip and sit beside the binary, where
+# Xray looks for them: without them any routing rule using geoip:/geosite:
+# (the Cores page's recommended rules) stops Xray from starting at all.
 ARG XRAY_VERSION=v26.3.27
 RUN curl -fsSL -o /tmp/xray.zip \
       "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip" \
-    && unzip -o /tmp/xray.zip -d /usr/local/bin xray \
+    && unzip -o /tmp/xray.zip -d /usr/local/bin xray geoip.dat geosite.dat \
     && chmod +x /usr/local/bin/xray \
     && rm /tmp/xray.zip
 
