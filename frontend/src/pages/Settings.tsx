@@ -34,6 +34,8 @@ import {
   type PanelSettings,
   type PermissionScope,
   type TlsStatus,
+  getVersion,
+  restartPanel,
 } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import { initials, parseServerDate } from '../lib/format'
@@ -123,6 +125,8 @@ export default function SettingsPage() {
   const [restoreOpen, setRestoreOpen] = useState(false)
   const [restoreWord, setRestoreWord] = useState('')
   const restoreInputRef = useRef<HTMLInputElement>(null)
+  const [restartOpen, setRestartOpen] = useState(false)
+  const [restartState, setRestartState] = useState<'idle' | 'waiting' | 'back' | 'slow'>('idle')
 
   const [tls, setTls] = useState<TlsStatus | null>(null)
   const [tlsMode, setTlsMode] = useState<'free' | 'upload'>('free')
@@ -501,6 +505,30 @@ export default function SettingsPage() {
     danger: canSettings && matches('danger', s.dangerTitle),
   }
   const anyVisible = Object.values(visible).some(Boolean)
+
+  // The endpoint answers first and stops the process a second later, so wait
+  // for it to go down before polling, then take the first answer as "back".
+  async function handleRestart() {
+    setRestartState('waiting')
+    try {
+      await restartPanel()
+    } catch {
+      setRestartState('idle')
+      return
+    }
+    await new Promise((r) => window.setTimeout(r, 3000))
+    for (let i = 0; i < 20; i++) {
+      try {
+        await getVersion()
+        setRestartState('back')
+        setRestartOpen(false)
+        return
+      } catch {
+        await new Promise((r) => window.setTimeout(r, 2000))
+      }
+    }
+    setRestartState('slow')
+  }
 
   const urlBase = publicUrl.trim().replace(/\/+$/, '')
   const webhookBody = JSON.stringify(
@@ -1082,6 +1110,31 @@ export default function SettingsPage() {
           flash={flash === 'danger'}
           className="danger-zone"
         >
+          <div className="dz-row">
+            <div>
+              <b>{s.restartTitle}</b>
+              <p>{s.restartNote}</p>
+              {restartState === 'waiting' && <div className="hint">{s.restarting}</div>}
+              {restartState === 'back' && <div className="ok-text">{s.restartDone}</div>}
+              {restartState === 'slow' && <div className="err-text">{s.restartSlow}</div>}
+            </div>
+            {restartOpen ? (
+              <button type="button" className="btn danger" disabled={restartState === 'waiting'} onClick={handleRestart}>
+                {restartState === 'waiting' ? s.restarting : s.restartConfirm}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setRestartState('idle')
+                  setRestartOpen(true)
+                }}
+              >
+                {s.restartBtn}
+              </button>
+            )}
+          </div>
           <div className="dz-row">
             <div>
               <b>{sp.restoreFromFile}</b>

@@ -1,5 +1,7 @@
 import asyncio
+import os
 import re
+import signal
 import time
 
 import httpx
@@ -8,7 +10,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import get_current_admin, require_permission
 from app.models.admin import Admin
 from app.resellers import protocol_catalog
 from app.version import __version__
@@ -101,3 +103,13 @@ async def system_stats() -> dict:
         "disk_total": disk.total,
         "uptime_seconds": int(time.time() - _BOOT_TIME),
     }
+
+
+@router.post("/restart", status_code=202)
+async def restart_panel(_: Admin = Depends(require_permission("settings"))) -> dict:
+    """Stops this process a second after answering, and the container's
+    restart policy (unless-stopped, see docker-compose.yml) starts it again.
+    Nodes keep running Xray and IPsec on their own, so no user is
+    disconnected; only the dashboard is away for the few seconds it takes."""
+    asyncio.get_running_loop().call_later(1.0, os.kill, os.getpid(), signal.SIGTERM)
+    return {"status": "restarting"}

@@ -1531,6 +1531,10 @@ export async function getVersion(): Promise<VersionInfo> {
   return res.json()
 }
 
+export async function restartPanel(): Promise<void> {
+  await authorizedFetch('/system/restart', { method: 'POST' })
+}
+
 export interface BackupDomainsState {
   live: string | null
   live_ok: boolean | null
