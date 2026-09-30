@@ -219,3 +219,79 @@ def _build_plist(
 </dict>
 </plist>
 """
+
+
+def build_l2tp_mobileconfig(user: ProxyUser, host: Host) -> str:
+    """The same one-tap install for an L2TP/IPsec host: server, username,
+    password and the shared secret land in Settings > VPN without the
+    customer typing four fields. OverridePrimary sends all traffic through
+    the tunnel, as the manual setup's "Send All Traffic" switch does."""
+    vpn_uuid = _uuid_for("l2tp-vpn", str(host.id), str(user.id))
+    profile_uuid = _uuid_for("l2tp-profile", str(host.id), str(user.id))
+    display_name = escape(f"{host.remark} ({user.username})")
+    psk_b64 = base64.b64encode(((host.core.l2tp_psk if host.core else None) or "").encode()).decode()
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>IPSec</key>
+            <dict>
+                <key>AuthenticationMethod</key>
+                <string>SharedSecret</string>
+                <key>SharedSecret</key>
+                <data>{psk_b64}</data>
+            </dict>
+            <key>IPv4</key>
+            <dict>
+                <key>OverridePrimary</key>
+                <integer>1</integer>
+            </dict>
+            <key>PPP</key>
+            <dict>
+                <key>AuthName</key>
+                <string>{escape(user.username)}</string>
+                <key>AuthPassword</key>
+                <string>{escape(user.ipsec_login_password)}</string>
+                <key>CommRemoteAddress</key>
+                <string>{escape(host.address)}</string>
+            </dict>
+            <key>PayloadDescription</key>
+            <string>Configures the {display_name} VPN connection</string>
+            <key>PayloadDisplayName</key>
+            <string>{display_name}</string>
+            <key>PayloadIdentifier</key>
+            <string>ir.tifusi.vpn.l2tp.{vpn_uuid}</string>
+            <key>PayloadType</key>
+            <string>com.apple.vpn.managed</string>
+            <key>PayloadUUID</key>
+            <string>{vpn_uuid}</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>UserDefinedName</key>
+            <string>{display_name}</string>
+            <key>VPNType</key>
+            <string>L2TP</string>
+        </dict>
+    </array>
+    <key>PayloadDisplayName</key>
+    <string>{display_name}</string>
+    <key>PayloadDescription</key>
+    <string>L2TP VPN profile for {escape(host.address)}</string>
+    <key>PayloadIdentifier</key>
+    <string>ir.tifusi.vpn.profile.{profile_uuid}</string>
+    <key>PayloadOrganization</key>
+    <string>Tifusi</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>{profile_uuid}</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>
+"""

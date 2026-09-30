@@ -323,6 +323,7 @@ def build_ipsec_configs_for_user(
             "psk": host.core.l2tp_psk if host.core else None,
             "username": user.username,
             "password": user.ipsec_login_password,
+            "mobileconfig_url": f"{base_url}sub/{user.secret}/l2tp.mobileconfig?host={host.id}",
         }
         for host in hosts
         if host.protocol == HostProtocol.l2tp

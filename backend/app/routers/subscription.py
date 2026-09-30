@@ -24,7 +24,7 @@ from app.settings_store import get_subscription_url
 from app.subscription.app_code import app_code_with_host
 from app.subscription import backup_domains as bd
 from app.subscription.clash import build_clash_config
-from app.subscription.ikev2_profile import build_ikev2_mobileconfig
+from app.subscription.ikev2_profile import build_ikev2_mobileconfig, build_l2tp_mobileconfig
 from app.subscription.info_page import build_info_page_html
 from app.subscription.lookup import user_by_app_code_or_404, user_or_404
 from app.subscription.singbox import build_singbox_config
@@ -276,6 +276,27 @@ async def get_ikev2_profile(secret: str, host: int | None = None, db: AsyncSessi
     )
 
 
+@router.get("/sub/{secret}/l2tp.mobileconfig")
+async def get_l2tp_profile(secret: str, host: int | None = None, db: AsyncSession = Depends(get_db)) -> Response:
+    """The L2TP counterpart of ikev2.mobileconfig: one tap instead of typing
+    server, username, password and shared secret on the iPhone."""
+    user = await user_or_404(secret, db)
+
+    hosts = await live_hosts(db)
+    allowed_hosts = [h for h in hosts_for_user(user, hosts) if h.protocol == HostProtocol.l2tp]
+    chosen = next((h for h in allowed_hosts if h.id == host), None) if host is not None else None
+    chosen = chosen or (allowed_hosts[0] if allowed_hosts else None)
+    if chosen is None:
+        raise HTTPException(status_code=404, detail="No L2TP host available for this user")
+
+    content = build_l2tp_mobileconfig(user, chosen)
+    return Response(
+        content=content,
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": 'attachment; filename="l2tp.mobileconfig"'},
+    )
+
+
 @router.get("/sub/{secret}/wireguard.conf")
 async def get_wireguard_conf(secret: str, db: AsyncSession = Depends(get_db)) -> Response:
     """The user's WireGuard tunnel as a file for the official WireGuard apps."""
@@ -307,7 +328,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     sub_url = await get_subscription_url(db)
     base = sub_url.rstrip("/") + "/" if sub_url else str(request.base_url)
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
-    for cfg in ikev2_configs:
+    for cfg in ikev2_configs + l2tp_configs:
         cfg.pop("mobileconfig_url", None)
     links = bd.rewrite_links(
         build_links_for_user(user, allowed_hosts), await bd.link_host_override(request.url.hostname, db)
