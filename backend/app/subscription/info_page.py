@@ -231,7 +231,7 @@ def build_info_page_html(
     for ike in ikev2_configs:
         body = f"""
           <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('ikev2', ike, subscription_url)}</div></div>
-          {f'<a class="mobileconfig-btn" href="{_esc(ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if ike.get('mobileconfig_url') else ''}
+          {f'<a class="mobileconfig-btn" href="{_esc(ike.get("install_url") or ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if ike.get('mobileconfig_url') else ''}
         """
         sections.append(_card(f"IKEv2 · {ike['remark']}", body))
 
@@ -242,7 +242,7 @@ def build_info_page_html(
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(l2tp['username'])}</span></div>
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(l2tp['password'])}</span></div>
           {f'<div class="kv"><span>PSK</span><span class="mono">{_esc(l2tp["psk"])}</span></div>' if l2tp.get('psk') else ''}
-          {f'<a class="mobileconfig-btn" href="{_esc(l2tp["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if l2tp.get('mobileconfig_url') else ''}
+          {f'<a class="mobileconfig-btn" href="{_esc(l2tp.get("install_url") or l2tp["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if l2tp.get('mobileconfig_url') else ''}
         """
         copy_text = f"Server: {l2tp['server']}\nUsername: {l2tp['username']}\nPassword: {l2tp['password']}"
         sections.append(_card(f"L2TP · {l2tp['remark']}", body, copy_text))
@@ -256,7 +256,7 @@ def build_info_page_html(
         if percent is not None
         else ""
     )
-    apple_url = next((c["mobileconfig_url"] for c in ikev2_configs + l2tp_configs if c.get("mobileconfig_url")), None)
+    apple_url = next((c.get("install_url") or c["mobileconfig_url"] for c in ikev2_configs + l2tp_configs if c.get("mobileconfig_url")), None)
     apple_kind = "IKEv2" if any(c.get("mobileconfig_url") for c in ikev2_configs) else "L2TP"
     apple_tile = (
         f"""

@@ -26,6 +26,7 @@ from app.subscription import backup_domains as bd
 from app.subscription.clash import build_clash_config
 from app.subscription.ikev2_profile import build_ikev2_mobileconfig, build_l2tp_mobileconfig
 from app.subscription.info_page import build_info_page_html
+from app.subscription.ios_install import build_ios_install_html
 from app.subscription.lookup import user_by_app_code_or_404, user_or_404
 from app.subscription.singbox import build_singbox_config
 
@@ -297,6 +298,19 @@ async def get_l2tp_profile(secret: str, host: int | None = None, db: AsyncSessio
     )
 
 
+@router.get("/sub/{secret}/install/{kind}")
+async def get_ios_install_page(secret: str, kind: str, host: int | None = None, db: AsyncSession = Depends(get_db)) -> Response:
+    """The address the bot's and the info page's iPhone buttons open: it moves
+    the customer from Telegram's browser into Safari, then fetches the profile
+    (see app/subscription/ios_install.py)."""
+    if kind not in ("ikev2", "l2tp"):
+        raise HTTPException(status_code=404, detail="Unknown profile type")
+    await user_or_404(secret, db)
+    profile = f"../{kind}.mobileconfig" + (f"?host={int(host)}" if host is not None else "")
+    return Response(content=build_ios_install_html(kind, profile), media_type="text/html; charset=utf-8",
+                    headers={"Cache-Control": "no-store"})
+
+
 @router.get("/sub/{secret}/wireguard.conf")
 async def get_wireguard_conf(secret: str, db: AsyncSession = Depends(get_db)) -> Response:
     """The user's WireGuard tunnel as a file for the official WireGuard apps."""
@@ -330,6 +344,7 @@ async def _app_config(user: ProxyUser, request: Request, hwid: str | None, db: A
     ikev2_configs, l2tp_configs = build_ipsec_configs_for_user(user, allowed_hosts, base)
     for cfg in ikev2_configs + l2tp_configs:
         cfg.pop("mobileconfig_url", None)
+        cfg.pop("install_url", None)
     links = bd.rewrite_links(
         build_links_for_user(user, allowed_hosts), await bd.link_host_override(request.url.hostname, db)
     )

@@ -312,6 +312,8 @@ def build_ipsec_configs_for_user(
             # Tap-to-install iOS/macOS profile (Connect On Demand included) —
             # an alternative to typing the fields above into Settings > VPN.
             "mobileconfig_url": f"{base_url}sub/{user.secret}/ikev2.mobileconfig?host={host.id}",
+            # What to hand a customer: a page that leaves Telegram for Safari first.
+            "install_url": f"{base_url}sub/{user.secret}/install/ikev2?host={host.id}",
         }
         for host in hosts
         if host.protocol == HostProtocol.ikev2
@@ -324,6 +326,7 @@ def build_ipsec_configs_for_user(
             "username": user.username,
             "password": user.ipsec_login_password,
             "mobileconfig_url": f"{base_url}sub/{user.secret}/l2tp.mobileconfig?host={host.id}",
+            "install_url": f"{base_url}sub/{user.secret}/install/l2tp?host={host.id}",
         }
         for host in hosts
         if host.protocol == HostProtocol.l2tp
