@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📱 [اپ اندروید](android-app.md) · 📶 **سلامت شبکه** · 🎛️ [مدیریت](operations.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 **سلامت شبکه** · 🎛️ [مدیریت](operations.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -18,7 +18,7 @@
 
 ## داده از کجا می‌آید
 
-اپ اندروید [Tifusi VPN](android-app.md) هر تلاش اتصال و هر دریافت ساب را به پنل گزارش می‌دهد و سلامت شبکه از همین گزارش‌ها ساخته می‌شود؛ پس فقط **کاربرهای اپ** را پوشش می‌دهد — کلاینت‌هایی مثل v2rayNG چیزی گزارش نمی‌دهند. وقتی کاربرهای اپ کم باشند، عددها یک نمونه‌اند نه کل تصویر؛ کارت‌هایی که کمتر از پنج تلاش دارند همین را می‌گویند.
+اپ اندروید هر تلاش اتصال و هر دریافت ساب را به پنل گزارش می‌دهد و سلامت شبکه از همین گزارش‌ها ساخته می‌شود؛ پس فقط **کاربرهای اپ** را پوشش می‌دهد — کلاینت‌هایی مثل v2rayNG چیزی گزارش نمی‌دهند. وقتی کاربرهای اپ کم باشند، عددها یک نمونه‌اند نه کل تصویر؛ کارت‌هایی که کمتر از پنج تلاش دارند همین را می‌گویند.
 
 اپراتور هر گزارش این‌طور پیدا می‌شود:
 
@@ -31,4 +31,4 @@
 
 ---
 
-<div dir="rtl"><sub>[→ اپ اندروید](android-app.md) · [مدیریت ←](operations.md)</sub></div>
+<div dir="rtl"><sub>[→ ربات تلگرام](telegram-bot.md) · [مدیریت ←](operations.md)</sub></div>

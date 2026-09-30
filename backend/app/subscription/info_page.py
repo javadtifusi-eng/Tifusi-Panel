@@ -14,35 +14,12 @@ caller already built the same way the admin-facing /links endpoint does.
 import base64
 import html
 import io
-import json
-import re
 from pathlib import Path
 
 import qrcode
 import qrcode.image.svg
-from cryptography import x509
-
-_PEM_CERT_RE = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.S)
-
-
-def _is_self_signed(pem_block: str) -> bool:
-    """True only for an actual self-signed cert (issuer == subject) — a
-    real CA-issued chain's last block is an intermediate, signed by some
-    other root, not itself; that only fools a naive "just check there's a
-    second block" test into treating it the same as a genuine self-signed
-    CA. Used to decide whether _import_qr_svg needs to pin anything at
-    all: a real cert needs no pinning, since every device already trusts
-    it — pinning would be pointless at best."""
-    try:
-        cert = x509.load_pem_x509_certificate(pem_block.encode())
-    except ValueError:
-        return False
-    return cert.issuer == cert.subject
 
 _ACCENT = "#f97316"
-
-# Tifusi VPN's own release, the build this panel's app code is made for.
-ANDROID_APP_URL = "https://github.com/javadtifusi-eng/Tifusi-VPN/releases/latest/download/tifusi-vpn.apk"
 
 _ASSETS = Path(__file__).resolve().parent / "assets"
 
@@ -54,7 +31,6 @@ def _data_uri(name: str) -> str:
 
 
 _MARK_URI = _data_uri("tifusi-mark.png")
-_APP_ICON_URI = _data_uri("app-icon.png")
 
 _APPLE_SVG = (
     '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">'
@@ -96,58 +72,6 @@ def _qr_svg(value: str) -> str:
     svg = svg.replace("<svg ", '<svg style="width:176px;height:176px;display:block" ', 1)
     svg = svg.replace("<path ", '<path fill="#0b1120" ', 1)
     return svg
-
-
-def _import_qr_svg(config_type: str, cfg: dict, subscription_url: str) -> str:
-    """QR-encodes an ikev2/l2tp config as a `tifusi-vpn://import?data=<b64>`
-    URI so the Tifusi Android app's importer can scan-to-import instead of
-    the user retyping four fields by hand. Documented format — keep this in
-    sync with whatever the Android app's importer expects (see
-    QrImport.kt in the Tifusi-VPN-App repo):
-        tifusi-vpn://import?data=<base64url, no padding, of this JSON>
-        {"v": 1, "type": "ikev2"|"l2tp", "server": str,
-         "remote_id": str | omitted, "username": str, "password": str,
-         "psk": str | omitted, "certificate": str | omitted}
-    `certificate` (added after v1 shipped, but kept under the same "v":1 —
-    it's optional and additive, so an older importer that doesn't know
-    about it just ignores it) is the CA cert, included ONLY when the Core's
-    certificate is actually self-signed (see _is_self_signed): that's the
-    one case a client has no other way to trust it, and IKE_AUTH fails cert
-    validation without pinning it here. A real, publicly-issued cert (e.g.
-    Let's Encrypt) needs nothing extra — every device already trusts it —
-    so this is deliberately left out for that case rather than pinning an
-    intermediate that was never meant to be handed to a client as a trust
-    anchor by itself.
-
-    Also deliberately just the CA, not the full leaf+CA bundle
-    generate_self_signed_ikev2_cert hands admins elsewhere — that bundle is
-    ~2.4 KB, and base64'd into this URI it blew past a QR code's ~2.3 KB
-    payload ceiling entirely (confirmed live: `qrcode` raised "Invalid
-    version" trying to fit it). The CA cert alone is what
-    Ikev2VpnProfile.Builder's serverRootCaCert param actually wants anyway.
-    """
-    # `sub` lets the app fetch the whole subscription (every server, the
-    # certificate chain it needs, days and data left) from any QR on this
-    # page, instead of only this one card's fields. Publicly issued certs are
-    # never embedded below, so without it a scan could not bring the
-    # certificate Android needs.
-    payload: dict = {
-        "v": 1, "type": config_type, "server": cfg["server"], "username": cfg["username"],
-        "password": cfg["password"], "sub": subscription_url,
-    }
-    if cfg.get("remote_id"):
-        payload["remote_id"] = cfg["remote_id"]
-    if cfg.get("psk"):
-        payload["psk"] = cfg["psk"]
-    if cfg.get("certificate"):
-        # The bundle is leaf-then-CA (see generate_self_signed_ikev2_cert) —
-        # the last block is always the CA regardless of how many
-        # intermediates a future admin-provided chain might add.
-        blocks = _PEM_CERT_RE.findall(cfg["certificate"])
-        if blocks and _is_self_signed(blocks[-1]):
-            payload["certificate"] = blocks[-1]
-    encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
-    return _qr_svg(f"tifusi-vpn://import?data={encoded}")
 
 
 def _esc(value: str | None) -> str:
@@ -196,7 +120,6 @@ def build_info_page_html(
     data_limit: int | None,
     expire_text: str,
     subscription_url: str,
-    app_code: str,
     links: list[str],
     ikev2_configs: list[dict],
     l2tp_configs: list[dict],
@@ -229,16 +152,23 @@ def build_info_page_html(
         """
         sections.append(_card("WireGuard", body))
 
+    # IKEv2 and L2TP are set up in the phone's own VPN settings (Android,
+    # Windows) or by the one-tap profile (iPhone), so each card lists exactly
+    # the fields those settings ask for, starting with the type to pick.
     for ike in ikev2_configs:
         body = f"""
-          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('ikev2', ike, subscription_url)}</div></div>
+          <div class="kv"><span>نوع</span><span class="mono">IKEv2/IPSec MSCHAPv2</span></div>
+          <div class="kv"><span>سرور</span><span class="mono">{_esc(ike['server'])}</span></div>
+          <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(ike['username'])}</span></div>
+          <div class="kv"><span>پسورد</span><span class="mono">{_esc(ike['password'])}</span></div>
           {f'<a class="mobileconfig-btn" href="{_esc(ike.get("install_url") or ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if ike.get('mobileconfig_url') else ''}
         """
-        sections.append(_card(f"IKEv2 · {ike['remark']}", body))
+        copy_text = f"Server: {ike['server']}\nUsername: {ike['username']}\nPassword: {ike['password']}"
+        sections.append(_card(f"IKEv2 · {ike['remark']}", body, copy_text))
 
     for l2tp in l2tp_configs:
         body = f"""
-          <div class="qr-wrap"><div class="qr-box">{_import_qr_svg('l2tp', l2tp, subscription_url)}</div></div>
+          <div class="kv"><span>نوع</span><span class="mono">L2TP/IPSec PSK</span></div>
           <div class="kv"><span>سرور</span><span class="mono">{_esc(l2tp['server'])}</span></div>
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(l2tp['username'])}</span></div>
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(l2tp['password'])}</span></div>
@@ -400,21 +330,7 @@ def build_info_page_html(
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">نصب برنامه</div>
-      <div class="tiles">
-        <a class="tile" href="{ANDROID_APP_URL}" download>
-          <span class="tile-ic"><img src="{_APP_ICON_URI}" alt=""></span>
-          <span class="tile-t"><b>Tifusi VPN برای اندروید</b><small>دانلود مستقیم برنامه</small></span>
-          <span class="tile-go">دانلود</span>
-        </a>{apple_tile}
-      </div>
-      <div class="code-row">
-        <small>کد ورود در برنامه‌ی Tifusi VPN:</small>
-        <span class="mono">{_esc(app_code)}</span>
-        <button class="copy-btn" data-copy="{_esc(app_code)}">کپی</button>
-      </div>
-    </div>
+    {f'<div class="section"><div class="section-title">نصب روی آیفون</div><div class="tiles">{apple_tile}</div></div>' if apple_tile else ''}
 
     {"".join(sections)}
 

@@ -1250,7 +1250,6 @@ function BoardBar({ pct }: { pct: number }) {
   return <i style={{ width: `${w}%` }} />
 }
 
-const VAULT_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
 function UserSheet({
   user,
@@ -1284,42 +1283,14 @@ function UserSheet({
   const { t } = useLang()
   const u = t.ui.users
   const say = useToast()
-  const reduce = useReducedMotion()
-  const [appCode, setAppCode] = useState<string | null>(null)
   const [subUrl, setSubUrl] = useState<string | null>(null)
-  const [chars, setChars] = useState('')
-  const lastScramble = useRef(0)
-  const vault = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setAppCode(null)
     setSubUrl(null)
     getUserLinks(user.id)
-      .then((l) => {
-        setAppCode(l.app_code)
-        setSubUrl(l.subscription_url)
-      })
+      .then((l) => setSubUrl(l.subscription_url))
       .catch(() => undefined)
   }, [user.id, user.secret])
-
-  function scramble() {
-    let s = ''
-    for (let i = 0; i < 1200; i++) s += VAULT_CHARS[(Math.random() * VAULT_CHARS.length) | 0]
-    setChars(s)
-  }
-
-  function onVaultMove(e: React.PointerEvent<HTMLDivElement>) {
-    const el = vault.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    el.style.setProperty('--x', `${e.clientX - r.left}px`)
-    el.style.setProperty('--y', `${e.clientY - r.top}px`)
-    const now = performance.now()
-    if (!reduce && now - lastScramble.current > 60) {
-      scramble()
-      lastScramble.current = now
-    }
-  }
 
   async function copy(text: string | null, msg: string) {
     if (text && (await copyToClipboard(text))) say(msg)
@@ -1407,33 +1378,6 @@ function UserSheet({
             <b title={user.note}>{user.note}</b>
           </div>
         ) : null}
-      </div>
-
-      <div
-        ref={vault}
-        className="tf-vault"
-        role="button"
-        tabIndex={0}
-        aria-label={u.appCode}
-        onPointerEnter={scramble}
-        onPointerMove={onVaultMove}
-        onClick={() => copy(appCode, u.appCodeCopied)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            copy(appCode, u.appCodeCopied)
-          }
-        }}
-      >
-        <div className="chars" aria-hidden="true">
-          {chars}
-        </div>
-        <div className="core">
-          <span className="orb">
-            <b>{appCode ?? '••••••'}</b>
-          </span>
-          <span>{u.appCodeHint}</span>
-        </div>
       </div>
 
       {subUrl && (

@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 📶 [Network health](network-health.md) · 🎛️ **Operations** · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ **Operations** · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Operations
 
@@ -18,7 +18,7 @@
 | `tifusi panel backup` / `tifusi panel restore` | Export or restore the database |
 | `tifusi panel uninstall` | Remove the installation |
 
-`tifusi` is a launcher shared with [Tifusi Bot](telegram-bot.md): `tifusi bot` opens the bot installer menu and `tifusi app` prints the latest [Tifusi VPN](android-app.md) release with its download link. When only one of the panel and the bot is installed on a server, `tifusi` without a subcommand opens that component, so `tifusi update` continues to work.
+`tifusi` is a launcher shared with [Tifusi Bot](telegram-bot.md): `tifusi bot` opens the bot installer menu. When only one of the panel and the bot is installed on a server, `tifusi` without a subcommand opens that component, so `tifusi update` continues to work.
 
 Node servers have their own `tifusi node` menu; see [Nodes](nodes.md#managing-a-node-server).
 

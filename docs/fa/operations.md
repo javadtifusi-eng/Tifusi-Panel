@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📱 [اپ اندروید](android-app.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ **مدیریت** · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ **مدیریت** · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -20,7 +20,7 @@
 | `tifusi panel backup` / `tifusi panel restore` | پشتیبان‌گیری یا بازیابی پایگاه داده |
 | `tifusi panel uninstall` | حذف نصب |
 
-فرمان `tifusi` یک راه‌انداز مشترک با [Tifusi Bot](telegram-bot.md) است: `tifusi bot` منوی نصب‌کننده‌ی ربات را باز می‌کند و `tifusi app` آخرین نسخه‌ی [Tifusi VPN](android-app.md) را همراه با لینک دانلود نمایش می‌دهد. اگر روی سرور تنها یکی از پنل یا ربات نصب باشد، `tifusi` بدون زیرفرمان همان را باز می‌کند؛ از این رو `tifusi update` همچنان کار می‌کند.
+فرمان `tifusi` یک راه‌انداز مشترک با [Tifusi Bot](telegram-bot.md) است: `tifusi bot` منوی نصب‌کننده‌ی ربات را باز می‌کند. اگر روی سرور تنها یکی از پنل یا ربات نصب باشد، `tifusi` بدون زیرفرمان همان را باز می‌کند؛ از این رو `tifusi update` همچنان کار می‌کند.
 
 سرورهای نود منوی `tifusi node` مخصوص خود را دارند؛ بخش [نودها](nodes.md) را ببینید.
 

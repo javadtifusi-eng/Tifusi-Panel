@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
 
 # Architecture
 
@@ -30,7 +30,7 @@ flowchart LR
 
     subgraph Clients["Clients"]
         direction TB
-        App["Tifusi VPN<br/>Android"]
+        App["Android app<br/>(legacy)"]
         XC["Xray clients<br/>v2rayNG · V2Box · sing-box · Clash"]
         Native["Native IKEv2 / L2TP<br/>iOS · Android · Windows"]
     end
@@ -90,7 +90,7 @@ sequenceDiagram
 | `frontend` | React dashboard and nginx image |
 | `install.sh`, `install-node.sh` | Panel and node installers |
 | `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi-panel` and run as `tifusi panel` |
-| `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, Tifusi Bot and the Tifusi VPN app |
+| `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, the node and Tifusi Bot |
 | `.github/workflows/build-images.yml` | Builds and publishes panel, dashboard and node images to GHCR |
 
 The dashboard is built with React 18, Vite and Tailwind CSS, localised in Persian (right-to-left) and English, with self-hosted Vazirmatn and Poppins typefaces.

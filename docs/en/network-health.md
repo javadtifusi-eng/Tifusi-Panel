@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 📶 **Network health** · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 **Network health** · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Network health
 
@@ -16,7 +16,7 @@ The range can be 6 hours, 24 hours or 7 days. The card refreshes every minute.
 
 ## Where the data comes from
 
-The [Tifusi VPN](android-app.md) Android app reports every connection attempt and subscription fetch to the panel. Network health is built from those reports, so it covers **app users only** — clients such as v2rayNG don't report anything. With few app users the numbers are a sample, not the whole picture; cards with under five attempts say so.
+The Android app reports every connection attempt and subscription fetch to the panel. Network health is built from those reports, so it covers **app users only** — clients such as v2rayNG don't report anything. With few app users the numbers are a sample, not the whole picture; cards with under five attempts say so.
 
 Each report is matched to an operator by:
 
@@ -27,4 +27,4 @@ Reports that match neither are grouped as *Unknown* — typically ones sent thro
 
 ---
 
-<sub>[← Android app](android-app.md) · [Operations →](operations.md)</sub>
+<sub>[← Telegram bot](telegram-bot.md) · [Operations →](operations.md)</sub>

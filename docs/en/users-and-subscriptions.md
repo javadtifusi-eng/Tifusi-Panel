@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 **Users** · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📱 [Android app](android-app.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 **Users** · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Users and subscriptions
 
@@ -33,11 +33,11 @@ Resetting a user's secret invalidates both the old link and the old access code.
 
 Settings holds two addresses. **Panel address** is where the admin reaches the dashboard and what the node agent calls back on; **Subscription address** is what every customer-facing link is built from, so a domain that gets shared around and filtered can be replaced without moving the dashboard. Empty falls back to the panel address. Both names must be on the TLS certificate — request one for both at once, since the panel's own SSL button takes a single domain and drops the other.
 
-Links already saved in customers' apps keep working: a fetch on the panel address is answered with a 301 to the subscription address, and `app.json` carries `subscription_url` so the Tifusi app can follow by itself. IKEv2 does not move — its Remote ID is pinned in every imported profile — so keep the panel domain resolving and on the certificate while IKEv2 users exist.
+Links already saved in customers' apps keep working: a fetch on the panel address is answered with a 301 to the subscription address, and `app.json` carries `subscription_url` so the Android app can follow by itself. IKEv2 does not move — its Remote ID is pinned in every imported profile — so keep the panel domain resolving and on the certificate while IKEv2 users exist.
 
-## Tifusi VPN profile
+## Android app profile (legacy)
 
-`GET /sub/{secret}/app.json` and `GET /code/{code}/app.json` return the user's IKEv2, L2TP and VLESS endpoints together with quota and expiry data, in the format read by the [Tifusi VPN](android-app.md) Android app. Connection results the app posts to `/app/report` are listed per user and in the dashboard activity feed.
+`GET /sub/{secret}/app.json` and `GET /code/{code}/app.json` return the user's IKEv2, L2TP and VLESS endpoints together with quota and expiry data, in the format read by the retired Android app; they stay so installed copies keep working while their users move to the phone's own VPN settings. Connection results the app posts to `/app/report` are listed per user and in the dashboard activity feed.
 
 ---
 

@@ -101,15 +101,6 @@ export default function UserLinksModal({ userId, username, onClose }: { userId: 
                 {copied === data.subscription_url ? t.common.copiedCheck : t.userLinksModal.copySubLink}
               </button>
             </div>
-            <div className="hint">{t.userLinksModal.appCodeLabel}</div>
-            <div className="tf-linkrow" style={{ width: '100%' }}>
-              <span className="mono" style={{ fontSize: '1rem', color: 'var(--amber)', textAlign: 'center', letterSpacing: '.08em' }}>
-                {data.app_code}
-              </span>
-              <button onClick={() => copy(data.app_code)} className="btn">
-                {copied === data.app_code ? t.common.copiedCheck : t.userLinksModal.copyAppCode}
-              </button>
-            </div>
           </div>
 
           {data.links.length === 0 && data.ikev2_configs.length === 0 && data.l2tp_configs.length === 0 && !data.pptp_configs?.length ? (

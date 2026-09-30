@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📱 [اپ اندروید](android-app.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 **معماری** · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 **معماری** · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -34,7 +34,7 @@ flowchart LR
 
     subgraph Clients["Clients"]
         direction TB
-        App["Tifusi VPN<br/>Android"]
+        App["Android app<br/>(legacy)"]
         XC["Xray clients<br/>v2rayNG · V2Box · sing-box · Clash"]
         Native["Native IKEv2 / L2TP<br/>iOS · Android · Windows"]
     end
@@ -102,7 +102,7 @@ sequenceDiagram
 | `frontend` | React dashboard and nginx image |
 | `install.sh`, `install-node.sh` | Panel and node installers |
 | `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi-panel` and run as `tifusi panel` |
-| `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, Tifusi Bot and the Tifusi VPN app |
+| `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, the node and Tifusi Bot |
 | `.github/workflows/build-images.yml` | Builds and publishes panel, dashboard and node images to GHCR |
 
 <div dir="rtl">

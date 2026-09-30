@@ -169,7 +169,6 @@ async def _render_info_page(user: ProxyUser, request: Request, db: AsyncSession)
         data_limit=user.data_limit,
         expire_text=user.expire.strftime("%Y-%m-%d") if user.expire else "بدون انقضا",
         subscription_url=f"{base}sub/{user.secret}",
-        app_code=app_code_with_host(user, base),
         links=build_links_for_user(user, allowed_hosts),
         ikev2_configs=ikev2_configs,
         l2tp_configs=l2tp_configs,
