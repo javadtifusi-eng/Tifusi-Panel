@@ -102,7 +102,10 @@
 const FPS = [["chrome",1],["firefox",1],["safari",1],["edge",1],["ios",0],["android",0],["randomized",0],["360",0],["qq",0]];
 const $ = (id) => document.getElementById(id);
 $("fps").innerHTML = FPS.map(([f, on]) => `<label><input type="checkbox" value="${f}" ${on ? "checked" : ""}>${f}</label>`).join("");
-try { $("sub").value = localStorage.getItem("sub") || ""; } catch (e) {}
+// The panel's "open in the probe" link passes the field test's subscription.
+const fromPanel = new URLSearchParams(location.search).get("sub");
+if (fromPanel) { $("sub").value = fromPanel; history.replaceState(null, "", "/"); }
+else { try { $("sub").value = localStorage.getItem("sub") || ""; } catch (e) {} }
 
 const mbps = (bps) => bps ? (bps * 8 / 1e6).toFixed(2) : "–";
 const cls = (bps) => !bps ? "m" : bps * 8 / 1e6 >= 2 ? "g" : bps * 8 / 1e6 >= 1 ? "w" : "b";

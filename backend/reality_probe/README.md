@@ -10,13 +10,17 @@ link into the probe's page; it dials every config through an embedded Xray
 client and times a delay check, a download and an upload through the tunnel.
 A browser cannot do this: it cannot choose the SNI or the TLS fingerprint.
 
+The panel image builds it (backend/Dockerfile) and serves the zip to admins
+from the REALITY scanner (`GET /api/reality/probe/download`), with an "open in
+the probe" link that fills the subscription in through `?sub=`.
+
 The page is served on 127.0.0.1 only and opens by itself. `PROBE_DEBUG=1`
 prints Xray's own log in the console window.
 
 ## Build
 
 ```bash
-cd tools/reality-probe
+cd backend/reality_probe
 docker run --rm -v "$PWD":/src -w /src -e CGO_ENABLED=0 -e GOOS=windows -e GOARCH=amd64 \
   golang:1.26 go build -trimpath -ldflags "-s -w" -o TifusiRealityProbe.exe .
 ```

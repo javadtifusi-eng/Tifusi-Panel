@@ -635,6 +635,19 @@ export async function stopFieldTest(nodeId: number): Promise<FieldTest> {
   return res.json()
 }
 
+export async function downloadRealityProbe(): Promise<void> {
+  const res = await authorizedFetch('/reality/probe/download')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'TifusiRealityProbe.zip'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export async function listNodes(): Promise<NodeList> {
   const res = await authorizedFetch('/nodes')
   return res.json()

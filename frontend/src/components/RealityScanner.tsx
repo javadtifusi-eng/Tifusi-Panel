@@ -7,6 +7,7 @@ import {
   getNodeRealityScan,
   getRealityWhoami,
   startFieldTest,
+  downloadRealityProbe,
   stopFieldTest,
   type FieldTest,
   type FieldTestItem,
@@ -377,6 +378,23 @@ function FieldTestPanel({ nodeId, candidates, onPick, picked }: { nodeId: number
           <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => copy('sub', test.sub_url!)}>
             {copied === 'sub' ? t.common.copiedCheck : ft.copy}
           </button>
+          <b style={{ fontSize: '0.88rem', marginTop: 6 }}>💻 {ft.probe.title}</b>
+          <span className="hint" style={{ margin: 0 }}>{ft.probe.hint}</span>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => downloadRealityProbe().catch(() => setError(ft.probe.missing))}
+            >
+              ⬇️ {ft.probe.download}
+            </button>
+            {/* The probe serves its page on this fixed loopback port and fills the
+                link in from ?sub=, so no copy and paste on the laptop. */}
+            <a className="btn" href={`http://127.0.0.1:18650/?sub=${encodeURIComponent(test.sub_url)}`} target="_blank" rel="noreferrer">
+              ↗ {ft.probe.open}
+            </a>
+          </div>
+          <span className="hint" style={{ margin: 0 }}>{ft.probe.warn}</span>
         </>
       )}
       {test && !test.active && <div className="hint" style={{ margin: 0 }}>{ft.ended}</div>}

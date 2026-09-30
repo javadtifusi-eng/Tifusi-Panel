@@ -27,7 +27,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -309,6 +309,20 @@ async def stop_field_test(node_id: int, request: Request, db: AsyncSession = Dep
     test = await _node_call(node, "DELETE", "/reality/field-test")
     _field_tokens.pop(_field.pop(node.id, ""), None)
     return _field_view(node, test, request)
+
+
+# The Windows probe (backend/reality_probe/) measures the same field-test
+# configs from the admin's laptop, once per fingerprint, upload first — the
+# number a phone speed test cannot split by fingerprint. Built into the image
+# by backend/Dockerfile; absent when running from the source tree.
+_PROBE_ZIP = Path(__file__).resolve().parents[2] / "reality_probe" / "TifusiRealityProbe.zip"
+
+
+@router.get("/probe/download")
+async def download_probe() -> FileResponse:
+    if not _PROBE_ZIP.is_file():
+        raise HTTPException(status_code=404, detail="The Windows probe is not built into this panel image")
+    return FileResponse(_PROBE_ZIP, media_type="application/zip", filename="TifusiRealityProbe.zip")
 
 
 # Imported by v2rayNG/Hiddify on the admin's phone, which has no panel
