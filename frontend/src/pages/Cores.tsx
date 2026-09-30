@@ -21,6 +21,7 @@ import {
 } from '../lib/api'
 import RealityScanner from '../components/RealityScanner'
 import InboundBuilder from '../components/InboundBuilder'
+import CoresHero from '../components/CoresHero'
 import { copyToClipboard } from '../lib/clipboard'
 
 const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp', 'pptp']
@@ -28,7 +29,6 @@ const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp
 // the way Hysteria2 used to show up marked "L2TP".
 // Each engine wears the colour its protocol has on the Hosts page (L2TP is slate: no yellow).
 const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', wireguard: '#818cf8', l2tp: '#94a3b8', pptp: '#a8a29e' }
-const ENGINE_MARK: Record<CoreType, string> = { xray: 'XRAY', ikev2: 'IKEv2', hysteria2: 'HY2', wireguard: 'WG', l2tp: 'L2TP', pptp: 'PPTP' }
 
 /** 32 hex characters, the same as the panel generates when the field is left empty. */
 function randomObfs(): string {
@@ -1405,7 +1405,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   }
 
   const byType = (type: CoreType) => (cores ?? []).filter((x) => x.core_type === type)
-  const nodesRunning = (type: CoreType) => nodes.filter((n) => byType(type).some((x) => holdsCore(n, x)))
   const shown = byType(engine)
   const codeCore = code ? cores?.find((x) => x.id === code.coreId) : undefined
   const engineSub: Record<CoreType, string> = {
@@ -1421,41 +1420,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     <div className="pg-cores" style={{ ['--ec' as string]: ENGINE_COLOR[engine] }}>
       <h1 className="sr-only">{t.coresPage.title}</h1>
 
-      <div className="engines" role="tablist" aria-label={t.coresPage.coreTypeLabel}>
-        {CORE_TYPES.map((type) => {
-          const count = byType(type).length
-          const running = nodesRunning(type)
-          return (
-            <button
-              key={type}
-              type="button"
-              role="tab"
-              aria-selected={engine === type}
-              className={`engine ${count === 0 ? 'empty-engine' : ''}`}
-              style={{ ['--ec' as string]: ENGINE_COLOR[type] }}
-              onClick={() => setEngine(type)}
-            >
-              <span className="mark">{ENGINE_MARK[type]}</span>
-              <span className="t">
-                <b>{t.coresPage.coreTypeLabels[type]}</b>
-                <small>{engineSub[type]}</small>
-                <span className="nodes">
-                  {count === 0 ? (
-                    c.notCreated
-                  ) : (
-                    <>
-                      {running.slice(0, 4).map((n) => (
-                        <span key={n.id} className={`tf-led ${n.status === 'connected' ? 'on' : n.status === 'error' ? 'err' : 'wait'}`} />
-                      ))}
-                      {c.engineCount(count, running.length)}
-                    </>
-                  )}
-                </span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
+      {cores && <CoresHero cores={cores} nodes={nodes} engine={engine} onPick={setEngine} holds={holdsCore} />}
 
       <div className="sub-head">
         <p className="tf-note" style={{ margin: 0, maxWidth: '80ch' }}>
