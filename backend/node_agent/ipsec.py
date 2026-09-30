@@ -339,6 +339,15 @@ def _ikev2_connection(
         "        esp_proposals = aes256gcm16-prfsha384-ecp384,aes256-sha256-modp2048,aes128-sha256-modp2048,"
         "aes256-sha256-ecp256,aes128-sha256-ecp256,aes256-sha256-modp3072,aes128-sha256-modp3072,"
         "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha256,aes128-sha256,aes256-sha1,aes128-sha1,default\n"
+        # The clients rekey the CHILD_SA themselves (iOS every hour, Android
+        # on its own clock), without a key exchange. When charon rekeyed
+        # first it sent a KE for PFS — the child made in IKE_AUTH has no DH
+        # group, so charon takes the first one configured above — and phones
+        # without PFS answered NO_PROPOSAL_CHOSEN, about 90 times an hour on
+        # a normal day. So charon leaves rekeying to the client and only
+        # drops a CHILD_SA nobody has rekeyed in a day.
+        "        rekey_time = 0s\n"
+        "        life_time = 24h\n"
         "      }\n"
         "    }\n"
         f"    pools = ikev2-pool\n"
