@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import field_test, hysteria, ipsec, ipsec_stats, limits, reality_scan, wireguard, xray_users
+from node_agent import hysteria, ipsec, ipsec_stats, limits, wireguard, xray_users
 
 try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
     from node_agent import cdn_scan
@@ -251,81 +251,6 @@ async def stats(x_node_api_key: str | None = Header(default=None)) -> dict:
             continue
 
     return {"users": users}
-
-
-@app.post("/reality/scan")
-async def reality_scan_start(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
-    """Starts a REALITY target scan in the background (node_agent/reality_scan.py);
-    the panel polls GET /reality/scan for progress. One scan at a time."""
-    _check_key(x_node_api_key)
-    if reality_scan.running():
-        raise HTTPException(status_code=409, detail="A scan is already running on this node")
-    reality_scan.start(
-        public_ip=payload.get("public_ip"),
-        ring=max(0, min(int(payload.get("ring", 0)), 64)),
-        exclude=[str(h) for h in payload.get("exclude") or []][:5000],
-    )
-    return reality_scan.status()
-
-
-@app.get("/reality/scan")
-async def reality_scan_status(x_node_api_key: str | None = Header(default=None)) -> dict:
-    _check_key(x_node_api_key)
-    return reality_scan.status()
-
-
-@app.delete("/reality/scan")
-async def reality_scan_stop(x_node_api_key: str | None = Header(default=None)) -> dict:
-    """Halt a running scan, keeping whatever it found so far."""
-    _check_key(x_node_api_key)
-    return reality_scan.stop()
-
-
-@app.post("/reality/prove")
-async def reality_scan_prove(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
-    """The scan's second half: run the per-fingerprint REALITY test on the
-    names the panel found to be really open from inside Iran."""
-    _check_key(x_node_api_key)
-    if reality_scan.running():
-        raise HTTPException(status_code=409, detail="A scan is already running on this node")
-    hosts = [str(h).strip().lower() for h in payload.get("hosts") or [] if str(h).strip()][:12]
-    reality_scan.prove_hosts(hosts)
-    return reality_scan.status()
-
-
-@app.post("/reality/field-test")
-async def reality_field_test_start(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
-    """Opens throwaway REALITY inbounds, one per SNI, to be tested from a phone
-    in Iran (node_agent/field_test.py). Replaces any test already running."""
-    _check_key(x_node_api_key)
-    targets = [
-        {"host": str(t.get("host") or "").strip().lower(), "dest": str(t.get("dest") or "").strip() or None,
-         "port": t["port"] if isinstance(t.get("port"), int) and 1024 <= t["port"] <= 65535 else None,
-         "label": str(t.get("label") or "")[:40] or None,
-         "transport": "xhttp" if t.get("transport") == "xhttp" else "tcp"}
-        for t in payload.get("targets") or [] if isinstance(t, dict)
-    ]
-    targets = [t for t in targets if t["host"] and len(t["host"]) <= 253 and not any(ch.isspace() for ch in t["host"])]
-    if not targets:
-        raise HTTPException(status_code=400, detail="targets are required")
-    ttl = max(300, min(int(payload.get("ttl") or 1800), 7200))
-    try:
-        return await field_test.start(targets, ttl, payload.get("public_ip"))
-    except (RuntimeError, ValueError) as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@app.get("/reality/field-test")
-async def reality_field_test_status(x_node_api_key: str | None = Header(default=None)) -> dict:
-    _check_key(x_node_api_key)
-    return await field_test.status()
-
-
-@app.delete("/reality/field-test")
-async def reality_field_test_stop(x_node_api_key: str | None = Header(default=None)) -> dict:
-    _check_key(x_node_api_key)
-    await field_test.stop()
-    return await field_test.status()
 
 
 # --- Hysteria2 --------------------------------------------------------------
