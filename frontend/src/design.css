@@ -1729,3 +1729,68 @@ select.input { padding-block: 7px; }
 .pg-cores .qb-json { margin: 0; max-height: 460px; }
 .pg-cores .qb-empty { border: 1px dashed var(--edge); border-radius: 12px; padding: 30px 16px; text-align: center; color: var(--faint); font-size: 0.8rem; }
 @media (max-width: 520px) { .pg-hosts .p-node .badge { width: 46px; height: 46px; border-radius: 14px; font-size: 0.64rem; } .pg-hosts .p-node small { font-size: 0.6rem; } .pg-hosts .c-hub { width: 64px; height: 64px; border-radius: 20px; } .pg-hosts .c-hub i { width: 38px; } .pg-hosts .c-orbit { inset: 44px; } }
+
+/* ═════════ Hosts: map variety + signal cards (after the Cowork design) ═════════ */
+/* Lines of protocols that have hosts wear their colour; live ones carry dashes outward from the logo. */
+.pg-hosts .c-line.has { stroke: var(--pc); stroke-opacity: 0.45; }
+.pg-hosts .c-flow { stroke: var(--pc); stroke-width: 2; stroke-dasharray: 3 9; stroke-linecap: round; animation: tf-hout 1.4s linear infinite; }
+@keyframes tf-hout { to { stroke-dashoffset: -24; } }
+.pg-hosts .p-node .badge { color: var(--pc); border-color: color-mix(in srgb, var(--pc) 45%, var(--edge2)); }
+.pg-hosts .p-node.zero .badge { color: var(--faint); border-color: var(--edge2); }
+.pg-hosts .p-node .cnt { background: var(--pc); }
+.pg-hosts .p-node.live .badge { border-color: var(--pc); box-shadow: 0 0 22px color-mix(in srgb, var(--pc) 30%, transparent); }
+.pg-hosts .p-node .dom { font-style: normal; font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--faint); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-hosts .c-hub { animation: tf-hub 3.5s ease-in-out infinite; }
+@keyframes tf-hub { 50% { box-shadow: 0 0 0 10px rgb(249 115 22 / 0.03), 0 0 70px rgb(249 115 22 / 0.2); } }
+
+.pg-hosts .hcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 430px), 1fr)); gap: 16px; }
+.pg-hosts .hc { --c: #4aa3ff; position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px 16px; align-items: center; padding: 20px 20px 14px; border-radius: 16px; border: 1px solid var(--edge); background: var(--card); overflow: hidden; transition: border-color 0.25s; }
+.pg-hosts .hc::before { content: ''; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 4px; background: var(--c); }
+.pg-hosts .hc:hover, .pg-hosts .hc:focus-within { border-color: color-mix(in srgb, var(--c) 40%, var(--edge)); }
+.pg-hosts .hc-code { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; background: var(--c); color: #050607; box-shadow: 0 10px 26px -12px var(--c); }
+.pg-hosts .hc-mid { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pg-hosts .hc-mid b { font-size: 19px; font-weight: 800; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-hosts .hc-mid span { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+[dir='rtl'] .pg-hosts .hc-mid span { text-align: right; }
+.pg-hosts .hc-r { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.pg-hosts .hc-sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 18px; direction: ltr; }
+.pg-hosts .hc-sig i { width: 4px; border-radius: 1px; background: var(--edge2); }
+.pg-hosts .hc-sig i:nth-child(1) { height: 30%; } .pg-hosts .hc-sig i:nth-child(2) { height: 55%; } .pg-hosts .hc-sig i:nth-child(3) { height: 78%; } .pg-hosts .hc-sig i:nth-child(4) { height: 100%; }
+.pg-hosts .hc-sig.on i { background: #2fd26f; box-shadow: 0 0 6px rgb(47 210 111 / 0.5); animation: tf-hsig 2.4s ease-in-out infinite; }
+.pg-hosts .hc-sig.on i:nth-child(2) { animation-delay: 0.15s; } .pg-hosts .hc-sig.on i:nth-child(3) { animation-delay: 0.3s; } .pg-hosts .hc-sig.on i:nth-child(4) { animation-delay: 0.45s; }
+@keyframes tf-hsig { 0%, 70%, 100% { opacity: 1; } 35% { opacity: 0.35; } }
+.pg-hosts .hc-port { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; }
+.pg-hosts .hc-port small { font-size: 11px; font-weight: 500; color: var(--c); margin-inline-end: 5px; }
+.pg-hosts .hc-foot { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid var(--hair); padding-top: 10px; flex-wrap: wrap; }
+.pg-hosts .hc-chips { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.pg-hosts .hc-chip { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--edge2); color: var(--muted); white-space: nowrap; }
+.pg-hosts .hc-chip.c { color: var(--c); border-color: color-mix(in srgb, var(--c) 40%, transparent); }
+.pg-hosts .hc-chip.warn { color: var(--warn); border-color: rgb(245 158 11 / 0.4); }
+.pg-hosts .hc-acts { display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; }
+.pg-hosts .hc:hover .hc-acts, .pg-hosts .hc:focus-within .hc-acts { opacity: 1; }
+@media (hover: none) { .pg-hosts .hc-acts { opacity: 1; } }
+.pg-hosts .hc-ab { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.pg-hosts .hc-ab svg { width: 16px; height: 16px; }
+.pg-hosts .hc-ab:hover { background: var(--hover); color: var(--text); }
+.pg-hosts .hc-ab:focus-visible { outline: 2px solid var(--c); }
+.pg-hosts .hc-ab.del:hover, .pg-hosts .hc-ab.del.armed { color: #e07070; background: rgb(224 112 112 / 0.08); }
+/* PPTP: black with a white line, as in the design */
+.pg-hosts .hc.dark { background: linear-gradient(160deg, #000, #0a0b0d); border-color: rgb(232 234 237 / 0.6); }
+.pg-hosts .hc.dark .hc-code { background: #000; color: #fff; box-shadow: inset 0 0 0 1.5px #e8eaed; }
+.pg-hosts .hc.dark .hc-mid span { color: #fff; }
+@media (max-width: 520px) { .pg-hosts .p-node .dom { display: none; } }
+/* Cards exactly as the Cowork "signal" design: name + address, big ping, sparkline, actions on hover at the corner. */
+.pg-hosts .hc { gap: 14px 16px; padding: 20px 20px 14px; }
+.pg-hosts .hc-mid span { color: var(--muted); }
+.pg-hosts .hc-r { gap: 5px; }
+.pg-hosts .hc-sig i { transition: background 0.4s; animation: none !important; box-shadow: none !important; }
+.pg-hosts .hc-sig i.on { background: #2fd26f; }
+.pg-hosts .hc-ms { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.pg-hosts .hc-ms small { font-size: 11px; font-weight: 500; color: var(--muted); }
+.pg-hosts .hc-spark { grid-column: 1 / -1; width: 100%; height: 38px; display: block; }
+.pg-hosts .hc-spark path.l { fill: none; stroke: var(--c); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.pg-hosts .hc-spark path.a { fill: color-mix(in srgb, var(--c) 14%, transparent); }
+.pg-hosts .hc.dark .hc-spark path.l { stroke: #e8eaed; }
+.pg-hosts .hc-acts { position: absolute; top: 12px; left: 12px; padding: 2px; border-radius: 10px; background: rgb(8 9 11 / 0.9); }
+[dir='ltr'] .pg-hosts .hc-acts { left: auto; right: 12px; }
+.pg-hosts .hc.dark .hc-mid span { color: var(--muted); }

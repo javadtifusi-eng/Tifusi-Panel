@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { IconPlus } from '../components/icons'
-import { CountUp, Empty, Field, Sheet, useReducedMotion, useToast } from '../components/ui'
+import { CountUp, Empty, Field, Sheet, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
 import {
   ApiError,
@@ -54,15 +54,15 @@ const BADGE: Record<HostProtocol, string> = {
 }
 // Each protocol wears one colour everywhere on this page: its node on the map, its lines, its cards.
 const PCOLOR: Record<HostProtocol, string> = {
-  vless: '#38bdf8',
+  vless: '#4aa3ff',
   vmess: '#a78bfa',
   trojan: '#f472b6',
   shadowsocks: '#2dd4bf',
   hysteria2: '#f97316',
   wireguard: '#818cf8',
-  ikev2: '#22c55e',
+  ikev2: '#2fd26f',
   l2tp: '#ff4d4f',
-  pptp: '#a8a29e',
+  pptp: '#e8eaed',
 }
 const MONO: Record<HostProtocol, string> = { vless: 'VL', vmess: 'VM', trojan: 'TR', shadowsocks: 'SS', hysteria2: 'HY', wireguard: 'WG', ikev2: 'IK', l2tp: 'L2', pptp: 'PP' }
 
@@ -92,11 +92,66 @@ function emptyForm() {
 
 type Form = ReturnType<typeof emptyForm>
 
+// Latency from the admin's own browser to each host address: a tiny no-cors
+// request timed with performance.now(). It is what the device the panel is open
+// on sees — not a number from the server, which would only ever measure itself.
+const PING_EVERY = 3000
+const PING_KEEP = 28
+function useBrowserPing(addresses: string[]) {
+  const [hist, setHist] = useState<Record<string, number[]>>({})
+  const key = [...new Set(addresses)].sort().join('|')
+  useEffect(() => {
+    const list = key ? key.split('|') : []
+    if (!list.length) return
+    let alive = true
+    const once = async (addr: string): Promise<number | null> => {
+      const ctl = new AbortController()
+      const timer = window.setTimeout(() => ctl.abort(), 4000)
+      const t0 = performance.now()
+      try {
+        await fetch(`https://${addr}/favicon.ico?p=${Date.now()}`, { mode: 'no-cors', cache: 'no-store', signal: ctl.signal })
+        return Math.round(performance.now() - t0)
+      } catch {
+        return null
+      } finally {
+        window.clearTimeout(timer)
+      }
+    }
+    const round = async () => {
+      const results = await Promise.all(list.map(async (a) => [a, await once(a)] as const))
+      if (!alive) return
+      setHist((prev) => {
+        const next = { ...prev }
+        for (const [a, ms] of results) if (ms != null) next[a] = [...(prev[a] ?? []), ms].slice(-PING_KEEP)
+        return next
+      })
+    }
+    round()
+    const id = window.setInterval(round, PING_EVERY)
+    return () => {
+      alive = false
+      window.clearInterval(id)
+    }
+  }, [key])
+  return hist
+}
+
+const pingBars = (ms: number | undefined) => (ms == null ? 0 : ms < 75 ? 4 : ms < 110 ? 3 : ms < 170 ? 2 : 1)
+
+function sparkPaths(h: number[]): [string, string] {
+  if (h.length < 2) return ['', '']
+  const max = Math.max(...h) + 8
+  const min = Math.max(0, Math.min(...h) - 8)
+  const pts = h.map((v, k) => [(k / (h.length - 1)) * 120, 28 - ((v - min) / (max - min || 1)) * 26])
+  const line = 'M' + pts.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' L')
+  return [line, `${line} L120 30 L0 30 Z`]
+}
+
 export default function HostsPage({ createSignal = 0 }: { createSignal?: number } = {}) {
   const { t } = useLang()
   const h = t.ui.hosts
   const say = useToast()
-  const reduce = useReducedMotion()
+  const [armed, setArmed] = useState<number | null>(null)
   const protocolLabels = t.coresPage.protocolLabels
   const [hosts, setHosts] = useState<Host[] | null>(null)
   const [cores, setCores] = useState<Core[]>([])
@@ -250,7 +305,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
   }
 
   async function handleDelete(host: Host) {
-    if (!window.confirm(t.hostsPage.confirmDelete(host.remark))) return
+    setArmed(null)
     try {
       await deleteHost(host.id)
       await refresh()
@@ -259,6 +314,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
     }
   }
 
+  const pings = useBrowserPing((hosts ?? []).map((x) => x.address))
   const inboundById = new Map(allInbounds.map((i) => [i.id, i]))
   const coreById = new Map(cores.map((c) => [c.id, c]))
   const counts = Object.fromEntries(PROTOCOLS.map((p) => [p, (hosts ?? []).filter((x) => x.protocol === p).length])) as Record<HostProtocol, number>
@@ -285,6 +341,13 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
     boolean
   >
 
+  // The address(es) a protocol is served on, shown under its node so the map
+  // says where each service lives, not just that it exists.
+  function domainsOf(p: HostProtocol): string {
+    const addrs = [...new Set((hosts ?? []).filter((x) => x.protocol === p).map((x) => x.address))]
+    return addrs.length ? addrs[0] + (addrs.length > 1 ? ` +${addrs.length - 1}` : '') : ''
+  }
+
   // Which groups gate a host: xray hosts through their inbound, the rest directly.
   function hostGroups(host: Host): string[] {
     if (host.inbound_id != null) {
@@ -292,32 +355,6 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
       return (inb?.group_ids ?? []).map((id) => groups.find((g) => g.id === id)?.name ?? `#${id}`)
     }
     return groups.filter((g) => g.host_ids.includes(host.id)).map((g) => g.name)
-  }
-
-  function onPassMove(e: React.PointerEvent<HTMLElement>) {
-    const card = e.currentTarget
-    const inner = card.firstElementChild as HTMLElement | null
-    if (!inner) return
-    const r = card.getBoundingClientRect()
-    const px = (e.clientX - r.left) / r.width
-    const py = (e.clientY - r.top) / r.height
-    inner.style.setProperty('--gx', `${px * 100}%`)
-    inner.style.setProperty('--gy', `${py * 100}%`)
-    inner.style.setProperty('--gp', `${100 - px * 100}%`)
-    if (reduce) return
-    inner.style.setProperty('--rx', `${(0.5 - py) * 12}deg`)
-    inner.style.setProperty('--ry', `${(px - 0.5) * 16}deg`)
-  }
-  function onPassEnter(e: React.PointerEvent<HTMLElement>) {
-    const card = e.currentTarget
-    const r = card.getBoundingClientRect()
-    const d = { top: e.clientY - r.top, bottom: r.bottom - e.clientY, left: e.clientX - r.left, right: r.right - e.clientX }
-    card.dataset.from = Object.entries(d).sort((a, b) => a[1] - b[1])[0][0]
-  }
-  function onPassLeave(e: React.PointerEvent<HTMLElement>) {
-    const inner = e.currentTarget.firstElementChild as HTMLElement | null
-    inner?.style.setProperty('--rx', '0deg')
-    inner?.style.setProperty('--ry', '0deg')
   }
 
   function passDetails(host: Host) {
@@ -428,7 +465,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
               {PROTOCOLS.map((p) => (
                 <g key={p} style={{ ['--pc' as string]: PCOLOR[p] }}>
                   <line
-                    className={`c-line ${lit === p ? 'hot' : lit && protoFilter ? 'dim' : ''}`}
+                    className={`c-line ${counts[p] > 0 ? 'has' : ''} ${lit === p ? 'hot' : lit && protoFilter ? 'dim' : ''}`}
                     x1="50"
                     y1="50"
                     x2={NODE_POS[p][0]}
@@ -460,6 +497,7 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
                   <span className="cnt">{counts[p]}</span>
                 </span>
                 <small>{protocolLabels[p]}</small>
+                {domainsOf(p) && <em className="dom">{domainsOf(p)}</em>}
               </button>
             ))}
           </div>
@@ -494,70 +532,69 @@ export default function HostsPage({ createSignal = 0 }: { createSignal?: number 
           }
         />
       ) : (
-        <div className="passes">
+        <div className="hcards">
           {shown.map((host) => {
             const dt = passDetails(host)
+            const isLive = hostIsLive(host)
+            const hist = pings[host.address] ?? []
+            const ms = hist[hist.length - 1]
+            const bars = isLive ? pingBars(ms) : 0
+            const [line, area] = sparkPaths(hist)
             return (
               <article
                 key={host.id}
-                className="pass"
-                style={{ ['--pc' as string]: PCOLOR[host.protocol] }}
-                tabIndex={0}
-                onPointerEnter={onPassEnter}
-                onPointerMove={onPassMove}
-                onPointerLeave={onPassLeave}
+                className={`hc ${host.protocol === 'pptp' ? 'dark' : ''}`}
+                style={{ ['--c' as string]: PCOLOR[host.protocol] }}
               >
-                <div className="pass-inner">
-                  <div className="glare" />
-                  <div className="pass-main">
-                    <div className="pass-top">
-                      <span className="mono-badge">{MONO[host.protocol]}</span>
-                      <span className="kind">
-                        <b>{protocolLabels[host.protocol]}</b>
-                        {/* An IKEv2/L2TP core's type label is the protocol name again. */}
-                        {dt.kind.toLowerCase() !== protocolLabels[host.protocol].toLowerCase() && <small>{dt.kind}</small>}
-                      </span>
-                      <span className={`pill ${dt.pill.cls}`}>
-                        <i />
-                        {dt.pill.text}
-                      </span>
-                    </div>
-                    <div className="pass-name" title={host.remark}>
-                      {host.remark}
-                    </div>
-                    <div className="pass-route mono">{dt.route}</div>
-                    <div className="pass-meta">
-                      {dt.meta.map(([k, v]) => (
-                        <div key={k}>
-                          <span>{k}</span>
-                          <b title={v} dir="auto">
-                            {v}
-                          </b>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="stub">
-                    <span>{h.port}</span>
-                    <b>{dt.port}</b>
-                  </div>
-                  <div className="tray">
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={async () => {
-                        if (await copyToClipboard(host.address)) say(h.addressCopied)
-                      }}
-                    >
-                      {h.copyAddress}
-                    </button>
-                    <button type="button" className="btn" onClick={() => startEdit(host)}>
-                      {t.common.edit}
-                    </button>
-                    <button type="button" className="btn danger" onClick={() => handleDelete(host)}>
-                      {t.common.delete}
-                    </button>
-                  </div>
+                <span className="hc-code">{MONO[host.protocol]}</span>
+                <div className="hc-mid">
+                  <b title={host.remark}>{host.remark}</b>
+                  <span dir="ltr">{dt.route.replace(' : ', ':')}{dt.port !== '—' && !dt.route.includes(':') ? `:${dt.port.split(' ').pop()}` : ''}</span>
+                </div>
+                <div className="hc-r">
+                  <span className="hc-sig" title={isLive ? h.live : h.notLive} aria-label={isLive ? h.live : h.notLive}>
+                    {[0, 1, 2, 3].map((k) => (
+                      <i key={k} className={k < bars ? 'on' : ''} />
+                    ))}
+                  </span>
+                  <span className="hc-ms" dir="ltr" title={h.pingTitle}>
+                    {ms != null ? ms : '–'}
+                    <small> ms</small>
+                  </span>
+                </div>
+                <svg className="hc-spark" viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true">
+                  <path className="a" d={area} />
+                  <path className="l" d={line} />
+                </svg>
+                <div className="hc-acts">
+                  <button
+                    type="button"
+                    className="hc-ab"
+                    title={h.copyAddress}
+                    aria-label={h.copyAddress}
+                    onClick={async () => {
+                      if (await copyToClipboard(host.address)) say(h.addressCopied)
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" /></svg>
+                  </button>
+                  <button type="button" className="hc-ab" title={t.common.edit} aria-label={t.common.edit} onClick={() => startEdit(host)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20h4L19 9l-4-4L4 16v4z" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    className={`hc-ab del ${armed === host.id ? 'armed' : ''}`}
+                    title={t.common.delete}
+                    aria-label={armed === host.id ? t.hostsPage.confirmDelete(host.remark) : t.common.delete}
+                    onClick={() => (armed === host.id ? handleDelete(host) : setArmed(host.id))}
+                    onBlur={() => setArmed((a) => (a === host.id ? null : a))}
+                  >
+                    {armed === host.id ? (
+                      h.sure
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+                    )}
+                  </button>
                 </div>
               </article>
             )
