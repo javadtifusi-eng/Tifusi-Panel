@@ -63,7 +63,8 @@ export default function CoresHero({
 }: {
   cores: Core[]
   nodes: Node[]
-  engine: CoreType
+  /** null while the details panel is closed, so no tile reads as selected. */
+  engine: CoreType | null
   onPick: (type: CoreType) => void
   /** Cores.tsx owns the node-slot mapping (with its L2TP-in-IPsec-slot quirk). */
   holds: (node: Node, core: Core) => boolean
@@ -82,7 +83,6 @@ export default function CoresHero({
     return count === 0 ? c.notCreated : c.engineCount(count, runningOn(type).length)
   }
   const live = TILE_ORDER.filter((type) => statusOf(type) === 'live')
-  const xray = byType('xray')[0]
 
   return (
     <>
@@ -198,18 +198,169 @@ export default function CoresHero({
             </button>
           )
         })}
-        {xray && <TrafficMap core={xray} onOpen={() => onPick('xray')} />}
+        <TrafficMapSlot cores={cores} nodes={nodes} holds={holds} statusOf={statusOf} onPick={onPick} />
       </section>
     </>
   )
 }
 
-function TrafficMap({ core, onOpen }: { core: Core; onOpen: () => void }) {
+type MapItem = { key: string; label: string; sub: string }
+type MapData = { ins: MapItem[]; outs: MapItem[]; more: number; title: string; coreSub: string; midLabel: string }
+
+const OPEN_KEY = 'tifusi_cores_map_open'
+const TYPE_KEY = 'tifusi_cores_map_type'
+// Per-viewer UI preference only; storage can be missing or throw (private mode).
+function readPref(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // not worth surfacing
+  }
+}
+
+function TrafficMapSlot({
+  cores,
+  nodes,
+  holds,
+  statusOf,
+  onPick,
+}: {
+  cores: Core[]
+  nodes: Node[]
+  holds: (node: Node, core: Core) => boolean
+  statusOf: (type: CoreType) => Status
+  onPick: (type: CoreType) => void
+}) {
   const { t } = useLang()
   const c = t.ui.cores
+  const [open, setOpen] = useState(() => readPref(OPEN_KEY) !== '0')
+  const created = TILE_ORDER.filter((type) => cores.some((x) => x.core_type === type))
+  const saved = readPref(TYPE_KEY) as CoreType | null
+  const [picked, setPicked] = useState<CoreType | null>(saved && TILE_ORDER.includes(saved) ? saved : null)
+  const type = picked && created.includes(picked) ? picked : created.includes('xray') ? 'xray' : created[0]
+
+  const setOpenPref = (v: boolean) => {
+    setOpen(v)
+    writePref(OPEN_KEY, v ? '1' : '0')
+  }
+
+  if (!type) return null
+  if (!open) {
+    return (
+      <button type="button" className="ch-map-open" onClick={() => setOpenPref(true)}>
+        <span className="cx-plus">+</span>
+        {c.mapShow}
+      </button>
+    )
+  }
+
+  const core = cores.find((x) => x.core_type === type)!
+  const running = nodes.filter((n) => holds(n, core))
+  const data = mapData(core, running, c)
+
+  return (
+    <div className="ch-map" style={{ ['--c' as string]: CORE_TINT[type] }}>
+      <div className="tm-h">
+        <div>
+          <span className="cx-eyebrow">TRAFFIC MAP</span>
+          <b>{c.mapTitle}</b>
+        </div>
+        <div className="tm-r">
+          <div className="tm-pick" role="tablist" aria-label={c.mapTitle}>
+            {TILE_ORDER.map((ct) => (
+              <button
+                key={ct}
+                type="button"
+                role="tab"
+                aria-selected={ct === type}
+                disabled={!created.includes(ct)}
+                title={created.includes(ct) ? CORE_NAME[ct] : `${CORE_NAME[ct]} — ${c.notCreated}`}
+                style={{ ['--c' as string]: CORE_TINT[ct] }}
+                className={statusOf(ct)}
+                onClick={() => {
+                  setPicked(ct)
+                  writePref(TYPE_KEY, ct)
+                }}
+              >
+                {CORE_CODE[ct]}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="tm-x" aria-label={c.mapClose} title={c.mapClose} onClick={() => setOpenPref(false)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <MapCanvas data={data} onOpen={() => onPick(type)} />
+    </div>
+  )
+}
+
+// What each core looks like as a flow: entry point(s) → the core on its node(s) → where traffic leaves.
+function mapData(core: Core, running: Node[], c: ReturnType<typeof useLang>['t']['ui']['cores']): MapData {
+  const nodeNames = running.map((n) => n.name).join(', ') || '—'
+  const coreSub = `${core.name} · ${nodeNames}`
+  const internet: MapItem = { key: 'net', label: c.mapInternet, sub: 'direct' }
+  switch (core.core_type) {
+    case 'xray': {
+      const config = (core.config ?? {}) as { outbounds?: { tag?: string; protocol?: string }[]; routing?: { rules?: { outboundTag?: string }[] } }
+      const outs = (config.outbounds ?? []).filter((o) => !INTERNAL_OUTBOUNDS.has(o.tag ?? '')).slice(0, 4)
+      const rules = (config.routing?.rules ?? []).filter((r) => !INTERNAL_OUTBOUNDS.has(r.outboundTag ?? '')).length
+      return {
+        ins: core.inbounds.slice(0, 4).map((ib) => ({ key: String(ib.id), label: ib.tag, sub: ib.port ? `:${ib.port}` : '' })),
+        outs: outs.map((o, k) => ({ key: (o.tag ?? '') + k, label: o.tag ?? '—', sub: o.protocol ?? '' })),
+        more: Math.max(0, core.inbounds.length - 4),
+        title: 'XRAY',
+        coreSub,
+        midLabel: rules ? c.rulesCount(rules) : c.mapRest,
+      }
+    }
+    case 'ikev2':
+      return {
+        ins: [{ key: 'in', label: 'IKEv2', sub: 'UDP 500·4500' }],
+        outs: core.ikev2_egress_vless ? [{ key: 'vless', label: 'VLESS', sub: 'egress' }] : [internet],
+        more: 0,
+        title: 'IKEv2',
+        coreSub,
+        midLabel: core.ikev2_auth_mode === 'psk' ? 'PSK' : 'EAP',
+      }
+    case 'l2tp':
+      return { ins: [{ key: 'in', label: 'L2TP', sub: 'UDP 1701' }], outs: [internet], more: 0, title: 'L2TP', coreSub, midLabel: 'IPsec PSK' }
+    case 'pptp':
+      return { ins: [{ key: 'in', label: 'PPTP', sub: 'TCP 1723' }], outs: [internet], more: 0, title: 'PPTP', coreSub, midLabel: 'MPPE' }
+    case 'hysteria2':
+      return {
+        ins: [{ key: 'in', label: 'Hysteria2', sub: `UDP ${core.hysteria2_port ?? '—'}` }],
+        outs: [internet],
+        more: 0,
+        title: 'HY2',
+        coreSub,
+        midLabel: 'QUIC',
+      }
+    case 'wireguard':
+      return {
+        ins: [{ key: 'in', label: 'WireGuard', sub: `UDP ${core.wireguard_port ?? '—'}` }],
+        outs: [internet],
+        more: 0,
+        title: 'WG',
+        coreSub,
+        midLabel: 'WireGuard',
+      }
+  }
+}
+
+function MapCanvas({ data, onOpen }: { data: MapData; onOpen: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [narrow, setNarrow] = useState(false)
-
   useEffect(() => {
     const el = box.current
     if (!el) return
@@ -217,52 +368,20 @@ function TrafficMap({ core, onOpen }: { core: Core; onOpen: () => void }) {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-
-  const config = (core.config ?? {}) as { outbounds?: { tag?: string; protocol?: string }[]; routing?: { rules?: { outboundTag?: string }[] } }
-  const ins = core.inbounds.slice(0, 4)
-  const outs = (config.outbounds ?? []).filter((o) => !INTERNAL_OUTBOUNDS.has(o.tag ?? '')).slice(0, 4)
-  const rules = (config.routing?.rules ?? []).filter((r) => !INTERNAL_OUTBOUNDS.has(r.outboundTag ?? '')).length
-  const more = core.inbounds.length - ins.length
-  const rulesLabel = rules ? c.rulesCount(rules) : c.mapRest
-  const short = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
-
-  return (
-    <div className="ch-map" ref={box}>
-      <div className="tm-h">
-        <div>
-          <span className="cx-eyebrow">TRAFFIC MAP</span>
-          <b>{c.mapTitle}</b>
-        </div>
-        <span className="tm-leg">
-          <i />
-          Xray · {core.name}
-        </span>
-      </div>
-      {narrow ? (
-        <VerticalMap ins={ins} outs={outs} more={more} coreName={core.name} rulesLabel={rulesLabel} short={short} onOpen={onOpen} />
-      ) : (
-        <WideMap ins={ins} outs={outs} more={more} coreName={core.name} rulesLabel={rulesLabel} short={short} onOpen={onOpen} />
-      )}
-    </div>
-  )
+  return <div ref={box}>{narrow ? <VerticalMap data={data} onOpen={onOpen} /> : <WideMap data={data} onOpen={onOpen} />}</div>
 }
 
-type MapProps = {
-  ins: Core['inbounds']
-  outs: { tag?: string; protocol?: string }[]
-  more: number
-  coreName: string
-  rulesLabel: string
-  short: (s: string, n: number) => string
-  onOpen: () => void
-}
+const OUT = '#2fd26f'
+const short = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
+// The core tint can be a CSS variable (PPTP), which SVG presentation attributes
+// don't resolve — so tinted strokes/fills go through style instead.
+const tint = { stroke: 'var(--c)' }
+const tintFill = { fill: 'var(--c)' }
 
-const BLUE = '#4aa3ff'
-const GREEN = '#2fd26f'
-
-function WideMap({ ins, outs, more, coreName, rulesLabel, short, onOpen }: MapProps) {
+function WideMap({ data, onOpen }: { data: MapData; onOpen: () => void }) {
   const { t } = useLang()
   const c = t.ui.cores
+  const { ins, outs, more } = data
   const H = 220
   const top = 34
   const avail = H - top - 14
@@ -281,14 +400,14 @@ function WideMap({ ins, outs, more, coreName, rulesLabel, short, onOpen }: MapPr
         const y = y0 + k * step
         const d = `M478 ${y} C 410 ${y}, ${cx + 118} ${cy}, ${cx + 58} ${cy}`
         return (
-          <g key={o.id}>
-            <path d={d} className="base" stroke={BLUE} />
-            <path d={d} className="run" stroke={BLUE} />
+          <g key={o.key}>
+            <path d={d} className="base" style={tint} />
+            <path d={d} className="run" style={tint} />
             <g className="tpill" onClick={onOpen}>
-              <rect x={478} y={y - 13} width={150} height={26} rx={13} stroke={BLUE} />
-              <circle cx={614} cy={y} r={3.5} fill={GREEN} />
-              <text x={604} y={y + 4} textAnchor="end" className="tag">{short(o.tag, 11)}</text>
-              <text x={488} y={y + 4} className="port" fill={BLUE}>{o.port ? ':' + o.port : ''}</text>
+              <rect x={478} y={y - 13} width={150} height={26} rx={13} style={tint} />
+              <circle cx={614} cy={y} r={3.5} fill={OUT} />
+              <text x={604} y={y + 4} textAnchor="end" className="tag">{short(o.label, 11)}</text>
+              <text x={488} y={y + 4} className="port" style={tintFill}>{o.sub}</text>
             </g>
           </g>
         )
@@ -298,36 +417,37 @@ function WideMap({ ins, outs, more, coreName, rulesLabel, short, onOpen }: MapPr
         const y = oy0 + k * oStep
         const d = `M${cx - 58} ${cy} C ${cx - 120} ${cy}, 200 ${y}, 140 ${y}`
         return (
-          <g key={(o.tag ?? '') + k}>
-            <path d={d} className="base" stroke={GREEN} />
-            <path d={d} className="run" stroke={GREEN} />
-            <rect x={16} y={y - 15} width={124} height={30} rx={15} className="opill" stroke={GREEN} />
-            <text x={34} y={y + 4} className="otag">{short(o.tag ?? '—', 10)}</text>
-            <text x={128} y={y + 4} textAnchor="end" className="port" fill={GREEN}>{o.protocol}</text>
+          <g key={o.key}>
+            <path d={d} className="base" stroke={OUT} />
+            <path d={d} className="run" stroke={OUT} />
+            <rect x={16} y={y - 15} width={124} height={30} rx={15} className="opill" stroke={OUT} />
+            <text x={34} y={y + 4} className="otag">{short(o.label, 9)}</text>
+            <text x={128} y={y + 4} textAnchor="end" className="port" fill={OUT}>{o.sub}</text>
           </g>
         )
       })}
       <rect x={160} y={cy - 30} width={92} height={18} rx={9} className="rpill" />
-      <text x={206} y={cy - 18} className="rtext">{rulesLabel}</text>
-      <rect x={cx - 58} y={cy - 30} width={116} height={60} rx={16} className="core" stroke={BLUE} />
-      <rect x={cx - 58} y={cy - 30} width={116} height={60} rx={16} className="core-glow" stroke={BLUE} />
-      <text x={cx} y={cy - 2} className="c1" fill={BLUE}>XRAY</text>
-      <text x={cx} y={cy + 15} className="c2">{short(coreName, 16)}</text>
+      <text x={206} y={cy - 18} className="rtext">{data.midLabel}</text>
+      <rect x={cx - 58} y={cy - 30} width={116} height={60} rx={16} className="core" style={tint} />
+      <rect x={cx - 58} y={cy - 30} width={116} height={60} rx={16} className="core-glow" style={tint} />
+      <text x={cx} y={cy - 2} className="c1" style={tintFill}>{data.title}</text>
+      <text x={cx} y={cy + 15} className="c2">{short(data.coreSub, 18)}</text>
     </svg>
   )
 }
 
-// Phone layout: inbounds on top, Xray in the middle, outbounds below, so every
+// Phone layout: entries on top, the core in the middle, exits below, so every
 // label stays at a readable size instead of shrinking the wide 640-unit map.
-function VerticalMap({ ins, outs, more, coreName, rulesLabel, short, onOpen }: MapProps) {
+function VerticalMap({ data, onOpen }: { data: MapData; onOpen: () => void }) {
   const { t } = useLang()
   const c = t.ui.cores
+  const { ins, outs, more } = data
   const W = 340
   const cx = W / 2
   const PW = 150
   const PH = 30
   const cols = (n: number) => (n === 1 ? [cx] : [cx + 82, cx - 82])
-  const grid = <T,>(list: T[], y0: number) =>
+  const grid = (list: MapItem[], y0: number) =>
     list.map((o, k) => ({ o, x: cols(Math.min(list.length, 2))[k % 2], y: y0 + Math.floor(k / 2) * (PH + 10) }))
   const gi = grid(ins, 28)
   const inBottom = 28 + Math.ceil(Math.max(ins.length, 1) / 2) * (PH + 10) - 10
@@ -342,41 +462,41 @@ function VerticalMap({ ins, outs, more, coreName, rulesLabel, short, onOpen }: M
       {gi.map(({ o, x, y }) => {
         const d = `M${x} ${y + PH} C ${x} ${y + PH + 30}, ${cx} ${coreTop - 30}, ${cx} ${coreTop}`
         return (
-          <g key={o.id}>
-            <path d={d} className="base" stroke={BLUE} />
-            <path d={d} className="run" stroke={BLUE} />
+          <g key={o.key}>
+            <path d={d} className="base" style={tint} />
+            <path d={d} className="run" style={tint} />
           </g>
         )
       })}
-      {go.map(({ o, x, y }, k) => {
+      {go.map(({ o, x, y }) => {
         const d = `M${cx} ${coreBot} C ${cx} ${coreBot + 30}, ${x} ${y - 30}, ${x} ${y}`
         return (
-          <g key={(o.tag ?? '') + k}>
-            <path d={d} className="base" stroke={GREEN} />
-            <path d={d} className="run" stroke={GREEN} />
+          <g key={o.key}>
+            <path d={d} className="base" stroke={OUT} />
+            <path d={d} className="run" stroke={OUT} />
           </g>
         )
       })}
       {gi.map(({ o, x, y }) => (
-        <g key={o.id} className="tpill" onClick={onOpen}>
-          <rect x={x - PW / 2} y={y} width={PW} height={PH} rx={15} stroke={BLUE} />
-          <circle cx={x + PW / 2 - 14} cy={y + PH / 2} r={3.5} fill={GREEN} />
-          <text x={x + PW / 2 - 24} y={y + PH / 2 + 4} textAnchor="end" className="tag">{short(o.tag, 10)}</text>
-          <text x={x - PW / 2 + 12} y={y + PH / 2 + 4} className="port" fill={BLUE}>{o.port ? ':' + o.port : ''}</text>
+        <g key={o.key} className="tpill" onClick={onOpen}>
+          <rect x={x - PW / 2} y={y} width={PW} height={PH} rx={15} style={tint} />
+          <circle cx={x + PW / 2 - 14} cy={y + PH / 2} r={3.5} fill={OUT} />
+          <text x={x + PW / 2 - 24} y={y + PH / 2 + 4} textAnchor="end" className="tag">{short(o.label, 10)}</text>
+          <text x={x - PW / 2 + 12} y={y + PH / 2 + 4} className="port" style={tintFill}>{o.sub}</text>
         </g>
       ))}
-      <rect x={cx - 80} y={coreTop} width={160} height={62} rx={16} className="core" stroke={BLUE} />
-      <rect x={cx - 80} y={coreTop} width={160} height={62} rx={16} className="core-glow" stroke={BLUE} />
-      <text x={cx} y={coreTop + 28} className="c1" fill={BLUE}>XRAY</text>
-      <text x={cx} y={coreTop + 47} className="c2">{short(coreName, 18)}</text>
+      <rect x={cx - 80} y={coreTop} width={160} height={62} rx={16} className="core" style={tint} />
+      <rect x={cx - 80} y={coreTop} width={160} height={62} rx={16} className="core-glow" style={tint} />
+      <text x={cx} y={coreTop + 28} className="c1" style={tintFill}>{data.title}</text>
+      <text x={cx} y={coreTop + 47} className="c2">{short(data.coreSub, 20)}</text>
       <rect x={cx + 14} y={coreBot + 18} width={96} height={22} rx={11} className="rpill" />
-      <text x={cx + 62} y={coreBot + 33} className="rtext">{rulesLabel}</text>
+      <text x={cx + 62} y={coreBot + 33} className="rtext">{data.midLabel}</text>
       <text x={cx - 130} y={coreBot + 33} className="cap">{c.mapOut}</text>
-      {go.map(({ o, x, y }, k) => (
-        <g key={(o.tag ?? '') + k}>
-          <rect x={x - PW / 2} y={y} width={PW} height={PH} rx={15} className="opill" stroke={GREEN} />
-          <text x={x + PW / 2 - 14} y={y + PH / 2 + 4} textAnchor="end" className="otag">{short(o.tag ?? '—', 11)}</text>
-          <text x={x - PW / 2 + 12} y={y + PH / 2 + 4} className="port" fill={GREEN}>{o.protocol}</text>
+      {go.map(({ o, x, y }) => (
+        <g key={o.key}>
+          <rect x={x - PW / 2} y={y} width={PW} height={PH} rx={15} className="opill" stroke={OUT} />
+          <text x={x + PW / 2 - 14} y={y + PH / 2 + 4} textAnchor="end" className="otag">{short(o.label, 11)}</text>
+          <text x={x - PW / 2 + 12} y={y + PH / 2 + 4} className="port" fill={OUT}>{o.sub}</text>
         </g>
       ))}
     </svg>

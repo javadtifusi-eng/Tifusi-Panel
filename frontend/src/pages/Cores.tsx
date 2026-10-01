@@ -1002,6 +1002,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   const [nodes, setNodes] = useState<Node[]>([])
   const [error, setError] = useState<string | null>(null)
   const [engine, setEngine] = useState<CoreType>('xray')
+  const [panelOpen, setPanelOpen] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm())
@@ -1276,22 +1277,40 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     <div className="pg-cores" style={{ ['--ec' as string]: ENGINE_COLOR[engine] }}>
       <h1 className="sr-only">{t.coresPage.title}</h1>
 
-      {cores && <CoresHero cores={cores} nodes={nodes} engine={engine} onPick={setEngine} holds={holdsCore} />}
+      {cores && (
+        <CoresHero
+          cores={cores}
+          nodes={nodes}
+          engine={panelOpen ? engine : null}
+          onPick={(type) => {
+            setEngine(type)
+            setPanelOpen(true)
+          }}
+          holds={holdsCore}
+        />
+      )}
 
       {error && <div className="tf-alert">{error}</div>}
 
       {cores === null ? (
         <div className="skel" style={{ height: 260, borderRadius: 18 }} />
-      ) : (
+      ) : !panelOpen ? null : (
         <section className="cx-drop" style={{ ['--c' as string]: CORE_TINT[engine] }} aria-label={t.coresPage.coreTypeLabels[engine]}>
           <div className="cx-drop-head">
             <span className="cx-eyebrow">CORES · {CORE_NAME[engine].toUpperCase()}</span>
-            {shown.length > 0 && (
-              <button type="button" className="btn" onClick={() => openNew(engine)}>
-                <IconPlus size={14} />
-                {c.newOfType(t.coresPage.coreTypeLabels[engine])}
+            <span className="cx-drop-acts">
+              {shown.length > 0 && (
+                <button type="button" className="btn" onClick={() => openNew(engine)}>
+                  <IconPlus size={14} />
+                  {c.newOfType(t.coresPage.coreTypeLabels[engine])}
+                </button>
+              )}
+              <button type="button" className="cx-x" aria-label={c.panelClose} title={c.panelClose} onClick={() => setPanelOpen(false)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
               </button>
-            )}
+            </span>
           </div>
           {shown.length === 0 ? (
           <Empty
