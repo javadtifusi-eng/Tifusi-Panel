@@ -23,6 +23,11 @@ def main() -> None:
         port=int(os.environ.get("AGENT_PORT", "62050")),
         ssl_certfile=str(CERT_FILE),
         ssl_keyfile=str(KEY_FILE),
+        # Plain asyncio, not the uvloop uvicorn picks by default: the REALITY
+        # scan runs thousands of concurrent TLS handshakes in this loop, and
+        # under uvloop the same 2000-name check took 75 s with 400 timeouts and
+        # the top-60 timing 372 s, against 49 s / ~85 / 10 s on asyncio.
+        loop="asyncio",
     )
 
 

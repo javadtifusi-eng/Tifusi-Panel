@@ -749,43 +749,6 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
               </div>
             )}
 
-            {good.length > 0 && (
-              <div className="form-section">
-                <b style={{ fontSize: '0.9rem' }}>📱 {rs.device.title}</b>
-                <div className="hint" style={{ margin: 0 }}>{rs.device.intro}</div>
-                {deviceNet &&
-                  (deviceNet.operator ? (
-                    <div className="hint" style={{ margin: 0 }}>{rs.device.net(rs.device.ops[deviceNet.operator] ?? deviceNet.operator, deviceNet.ip)}</div>
-                  ) : (
-                    <div className="tf-alert">{rs.device.notIran(deviceNet.ip)}</div>
-                  ))}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {!deviceNet ? (
-                    <button type="button" className="btn solid" onClick={whoami}>
-                      {rs.device.check}
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="btn solid"
-                        disabled={!!deviceBusy}
-                        onClick={() => testDevice(deviceNet.operator ?? 'unknown')}
-                      >
-                        {deviceBusy
-                          ? rs.device.running(deviceBusy.done, deviceBusy.total)
-                          : deviceNet.operator
-                            ? rs.device.run(good.slice(0, 20).length)
-                            : rs.device.runAnyway}
-                      </button>
-                      <button type="button" className="btn" disabled={!!deviceBusy} onClick={whoami}>
-                        {rs.device.recheck}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
             {shown.length > 0 && <div className="hint" style={{ margin: 0 }}>{rs.legend}</div>}
             <ul className="rsc-list">
               {shown.map((r, i) => {
