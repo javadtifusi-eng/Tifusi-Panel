@@ -317,7 +317,9 @@ function mapData(core: Core, running: Node[], c: ReturnType<typeof useLang>['t']
       const rules = (config.routing?.rules ?? []).filter((r) => !INTERNAL_OUTBOUNDS.has(r.outboundTag ?? '')).length
       return {
         ins: core.inbounds.slice(0, 4).map((ib) => ({ key: String(ib.id), label: ib.tag, sub: ib.port ? `:${ib.port}` : '' })),
-        outs: outs.map((o, k) => ({ key: (o.tag ?? '') + k, label: o.tag ?? '—', sub: o.protocol ?? '' })),
+        // No outbounds in the stored config means the node's built-in direct
+        // freedom carries everything, so the map shows that rather than nothing.
+        outs: outs.length ? outs.map((o, k) => ({ key: (o.tag ?? '') + k, label: o.tag ?? '—', sub: o.protocol ?? '' })) : [internet],
         more: Math.max(0, core.inbounds.length - 4),
         title: 'XRAY',
         coreSub,

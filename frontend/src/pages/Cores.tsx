@@ -932,7 +932,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   const [nodes, setNodes] = useState<Node[]>([])
   const [error, setError] = useState<string | null>(null)
   const [engine, setEngine] = useState<CoreType>('xray')
-  const [panelOpen, setPanelOpen] = useState(true)
+  // Nothing is opened until a tile is picked.
+  const [panelOpen, setPanelOpen] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm())
