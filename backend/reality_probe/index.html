@@ -45,24 +45,39 @@
   .g { color: var(--good); } .w { color: var(--warn); } .b { color: var(--bad); } .m { color: var(--muted); }
   .copy { background: #0a1224; color: var(--accent); padding: 4px 10px; font-size: 12px; border: 1px solid var(--line); }
   .how { color: var(--muted); font-size: 13px; margin: 0; padding-inline-start: 18px; }
+  .inp { width: 100%; direction: ltr; background: #0a1224; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font: 13px Consolas, monospace; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  select { background: #0a1224; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+  details summary { cursor: pointer; color: var(--muted); }
+  .found { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; direction: ltr; }
+  .found span { background: #0a1224; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  .found span.p { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>اسکنر اپلود Reality</h1>
-  <p class="sub">هر SNI را با چند Fingerprint از روی همین اینترنت تست می‌کند و بهترین ترکیب را از نظر <b>اپلود</b> پیدا می‌کند.</p>
+  <p class="sub">سایت‌هایی که روی <b>همین اینترنت</b> باز و سریع‌اند را خودش پیدا می‌کند، برای بهترین‌ها از پنل کانفیگ تست می‌گیرد و هر کدام را با چند Fingerprint از نظر <b>اپلود</b> می‌سنجد.</p>
 
   <div class="card">
     <ol class="how">
-      <li>در پنل «اسکنر REALITY» را باز کن و اسکن بزن. وقتی تمام شد، کانفیگ‌های تست خودکار ساخته می‌شوند.</li>
-      <li>زیرش «کپی لینک ساب» را بزن و لینک را اینجا بگذار. این لینک ۳۰ دقیقه اعتبار دارد.</li>
-      <li>لپ‌تاپ باید با اینترنت همان اپراتوری وصل باشد که می‌خواهی بسنجی (مثلاً همراه اول)، و <b>VPN خاموش</b> باشد.</li>
+      <li>لپ‌تاپ را به اینترنت همان اپراتوری وصل کن که می‌خواهی بسنجی (مثلاً هات‌اسپات گوشی با سیم‌کارت همراه اول) و <b>VPN را خاموش</b> کن.</li>
+      <li>یک بار در پنل از «تنظیمات ← API Key ها» یک کلید بساز و با آدرس پنل اینجا بگذار (روی همین لپ‌تاپ ذخیره می‌شود).</li>
+      <li>«پیدا کن و تست کن» را بزن. اول سایت‌ها از همین اینترنت بررسی می‌شوند، بعد بهترین‌ها از داخل تونل واقعی تست می‌شوند.</li>
     </ol>
   </div>
 
   <div class="card">
-    <label class="t" for="sub">لینک اشتراک تست میدانی</label>
-    <textarea id="sub" placeholder="https://.../api/reality/field/..."></textarea>
+    <div class="grid2">
+      <div><label class="t" for="panel">آدرس پنل</label><input class="inp" id="panel" placeholder="https://panel.example.ir"></div>
+      <div><label class="t" for="key">کلید API پنل</label><input class="inp" id="key" type="password" placeholder="tifusi_..."></div>
+    </div>
+    <div class="row">
+      <div><label class="t" for="count">چند سایت بررسی شود</label>
+        <select id="count"><option value="300">۳۰۰ (سریع)</option><option value="1000" selected>۱۰۰۰</option><option value="2000">۲۰۰۰</option></select></div>
+      <div><label class="t" for="top">چندتا در تونل تست شود</label><input id="top" type="number" min="1" max="12" value="10"></div>
+    </div>
     <div class="row">
       <div>
         <label class="t">Fingerprintها</label>
@@ -71,7 +86,7 @@
       <div><label class="t" for="up">اپلود هر تست (MB)</label><input id="up" type="number" min="1" max="50" value="5"></div>
       <div><label class="t" for="down">دانلود هر تست (MB)</label><input id="down" type="number" min="1" max="50" value="2"></div>
       <div style="display:flex;gap:8px">
-        <button class="go" id="go">شروع تست</button>
+        <button class="go" id="auto">پیدا کن و تست کن</button>
         <button class="stop" id="stop" disabled>توقف</button>
       </div>
     </div>
@@ -79,7 +94,19 @@
     <div class="err" id="err"></div>
   </div>
 
+  <div class="card">
+    <details>
+      <summary>حالت دستی: لینک ساب تست میدانی دارم</summary>
+      <div style="margin-top:12px">
+        <textarea id="sub" placeholder="https://.../api/reality/field/..."></textarea>
+        <div class="row"><button class="go" id="go">شروع با این لینک</button></div>
+      </div>
+    </details>
+  </div>
+
   <div class="card" id="progress" hidden>
+    <div id="atext" hidden></div>
+    <div class="found" id="found" hidden></div>
     <div id="ptext"></div>
     <div class="bar"><i id="pbar"></i></div>
     <div class="est" id="used"></div>
@@ -106,6 +133,8 @@ $("fps").innerHTML = FPS.map(([f, on]) => `<label><input type="checkbox" value="
 const fromPanel = new URLSearchParams(location.search).get("sub");
 if (fromPanel) { $("sub").value = fromPanel; history.replaceState(null, "", "/"); }
 else { try { $("sub").value = localStorage.getItem("sub") || ""; } catch (e) {} }
+// Panel address and API key stay on this laptop only (this page is served on 127.0.0.1).
+try { $("panel").value = localStorage.getItem("panel") || ""; $("key").value = localStorage.getItem("key") || ""; } catch (e) {}
 
 const mbps = (bps) => bps ? (bps * 8 / 1e6).toFixed(2) : "–";
 const cls = (bps) => !bps ? "m" : bps * 8 / 1e6 >= 2 ? "g" : bps * 8 / 1e6 >= 1 ? "w" : "b";
@@ -137,6 +166,17 @@ $("go").onclick = async () => {
   if (!res.ok) { $("err").textContent = data.error || "خطا"; return; }
   render(data); poll();
 };
+$("auto").onclick = async () => {
+  $("err").textContent = "";
+  const panel = $("panel").value.trim(), key = $("key").value.trim();
+  try { localStorage.setItem("panel", panel); localStorage.setItem("key", key); } catch (e) {}
+  const res = await fetch("/api/auto", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ panel, key, count: +$("count").value, top: +$("top").value, fingerprints: selectedFps(),
+      upload_mb: +$("up").value, download_mb: +$("down").value }) });
+  const data = await res.json();
+  if (!res.ok) { $("err").textContent = data.error || "خطا"; return; }
+  render(data); poll();
+};
 $("stop").onclick = () => fetch("/api/stop", { method: "POST" });
 $("bestcopy").onclick = (e) => copy(bestLink, e.target);
 $("rows").onclick = (e) => { if (e.target.dataset.i) copy(links[e.target.dataset.i], e.target); };
@@ -151,10 +191,28 @@ function poll() {
   }, 1000);
 }
 
+const PHASE = { panel: "اتصال به پنل…", discovering: "بررسی سایت‌ها از همین اینترنت", opening: "ساخت کانفیگ تست روی نود…", testing: "تست داخل تونل", done: "تمام شد", error: "خطا" };
+
+function renderAuto(d) {
+  const a = d.auto;
+  $("atext").hidden = !a; $("found").hidden = !(a && a.found && a.found.length);
+  if (!a) return;
+  $("progress").hidden = false;
+  let t = PHASE[a.phase] || a.phase;
+  if (a.node) t += ` · نود: ${esc(a.node)}`;
+  if (a.disc_total) t += ` · ${a.disc_done} از ${a.disc_total} سایت بررسی شد، ${a.disc_ok} تا باز بود`;
+  $("atext").innerHTML = t;
+  if (a.phase === "discovering") $("pbar").style.width = (a.disc_total ? a.disc_done / a.disc_total * 100 : 0) + "%";
+  if (a.phase === "error") $("err").textContent = a.error || "خطا";
+  const picked = new Set(a.picked || []);
+  $("found").innerHTML = (a.found || []).map((f) => `<span class="${picked.has(f.host) ? "p" : ""}">${esc(f.host)} · ${f.ms}ms</span>`).join("");
+}
+
 function render(d) {
-  if (!d.results) return;
   const running = d.state === "running";
-  $("go").disabled = running; $("stop").disabled = !running;
+  $("go").disabled = running; $("auto").disabled = running; $("stop").disabled = !running;
+  renderAuto(d);
+  if (!d.results) return;
   $("progress").hidden = false; $("tablecard").hidden = false;
   $("ptext").textContent = running ? `در حال تست: ${d.done} از ${d.total}` : `تمام شد: ${d.done} از ${d.total}`;
   $("pbar").style.width = (d.total ? d.done / d.total * 100 : 0) + "%";

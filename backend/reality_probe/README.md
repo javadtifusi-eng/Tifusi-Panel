@@ -1,18 +1,29 @@
 # Tifusi Reality Probe
 
-Measures, from a laptop on an Iranian operator, how fast each REALITY
-field-test config really is, once per uTLS fingerprint — above all the upload,
-which mobile operators throttle per SNI while download stays fine.
+Finds and measures REALITY targets from a laptop on an Iranian operator — above
+all the upload, which mobile operators throttle per SNI while download stays
+fine. The panel itself does no scanning any more; everything that depends on
+the operator is measured here, on the operator.
 
-The panel's REALITY scanner opens the throwaway inbounds and hands out a
-subscription link (`/api/reality/field/<token>`, valid 30 minutes). Paste that
-link into the probe's page; it dials every config through an embedded Xray
-client and times a delay check, a download and an upload through the tunnel.
-A browser cannot do this: it cannot choose the SNI or the TLS fingerprint.
+Automatic mode (the default): paste the panel address and an admin API key
+once (kept in this page's localStorage on 127.0.0.1). The probe
 
-The panel image builds it (backend/Dockerfile) and serves the zip to admins
-from the REALITY scanner (`GET /api/reality/probe/download`), with an "open in
-the probe" link that fills the subscription in through `?sub=`.
+1. gets a page of popular names from the panel (`GET /api/reality/candidates`,
+   only a list from the Tranco feed — the feed site itself may not open on the
+   operator with the VPN off, the panel must),
+2. TLS 1.3 + h2 handshakes each name directly from the laptop and re-times the
+   40 quickest one at a time (a poisoned DNS answer, a blocked SNI or a
+   throttled hello all show up here),
+3. asks the panel to open field-test inbounds for the quickest few
+   (`POST /api/reality/nodes/{id}/field-test`, first connected node), and
+4. dials each through an embedded Xray client once per uTLS fingerprint and
+   times a delay check, a download and an upload.
+
+Manual mode still takes a field-test subscription link directly.
+
+The panel has to be reachable from the operator without a VPN — on MCI that
+means behind a domestic CDN such as Arvan. The panel image builds the probe
+(backend/Dockerfile) and serves the zip at `GET /api/reality/probe/download`.
 
 The page is served on 127.0.0.1 only and opens by itself. `PROBE_DEBUG=1`
 prints Xray's own log in the console window.

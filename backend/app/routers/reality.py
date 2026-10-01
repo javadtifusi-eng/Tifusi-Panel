@@ -9,6 +9,9 @@ from the network that actually throttles it.
 
 import asyncio
 import base64
+import io
+import time
+import zipfile
 import json
 import secrets
 import socket
@@ -151,6 +154,54 @@ async def stop_field_test(node_id: int, request: Request, db: AsyncSession = Dep
     test = await _node_call(node, "DELETE", "/reality/field-test")
     _field_tokens.pop(_field.pop(node.id, ""), None)
     return _field_view(node, test, await _field_base(request, db))
+
+
+# Names for the Windows probe to try. Only a list — the probe itself checks
+# them from the admin's own operator, which is the network that matters. It
+# comes from here rather than straight from the feed because the feed's site
+# may not open on that operator with the VPN off, while the panel must.
+_FEED_URL = "https://tranco-list.eu/top-1m.csv.zip"
+_FEED_KEEP = 20000
+_FEED_MAX_AGE = 12 * 3600
+_feed: dict = {"at": 0.0, "names": []}
+_feed_lock = asyncio.Lock()
+
+
+async def _feed_names() -> list[str]:
+    async with _feed_lock:
+        if _feed["names"] and time.time() - _feed["at"] < _FEED_MAX_AGE:
+            return _feed["names"]
+        try:
+            async with httpx.AsyncClient(timeout=45.0, follow_redirects=True, headers={"User-Agent": "TifusiPanel"}) as client:
+                resp = await client.get(_FEED_URL)
+                resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            if _feed["names"]:
+                return _feed["names"]
+            raise HTTPException(status_code=502, detail=f"Could not fetch the top-sites list: {exc.__class__.__name__}") from exc
+
+        def parse(blob: bytes) -> list[str]:
+            out: list[str] = []
+            zf = zipfile.ZipFile(io.BytesIO(blob))
+            with zf.open(zf.namelist()[0]) as f:
+                for line in io.TextIOWrapper(f, encoding="ascii", errors="ignore"):
+                    parts = line.strip().split(",")
+                    if len(parts) >= 2 and parts[1]:
+                        out.append(parts[1].lower())
+                    if len(out) >= _FEED_KEEP:
+                        break
+            return out
+
+        _feed["names"], _feed["at"] = await asyncio.to_thread(parse, resp.content), time.time()
+        return _feed["names"]
+
+
+@router.get("/candidates")
+async def candidates(page: int = 0, size: int = 1000) -> dict:
+    size = max(100, min(size, 3000))
+    names = await _feed_names()
+    lo = max(0, page) * size
+    return {"names": names[lo:lo + size], "page": max(0, page), "total": len(names)}
 
 
 # The Windows probe (backend/reality_probe/) measures the same field-test

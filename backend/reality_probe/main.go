@@ -40,9 +40,16 @@ type startRequest struct {
 	DownloadMB   int      `json:"download_mb"`
 }
 
+// runner is whatever the page is showing: a manual run (*Job, from a pasted
+// subscription) or an automatic one (*Auto, which finds its own targets).
+type runner interface {
+	Running() bool
+	Snapshot() map[string]any
+}
+
 var (
 	mu     sync.Mutex
-	job    *Job
+	run    runner
 	cancel context.CancelFunc
 )
 
@@ -68,6 +75,7 @@ func main() {
 		w.Write(page)
 	})
 	mux.HandleFunc("/api/start", handleStart)
+	mux.HandleFunc("/api/auto", handleAuto)
 	mux.HandleFunc("/api/status", handleStatus)
 	mux.HandleFunc("/api/stop", handleStop)
 
@@ -137,20 +145,59 @@ func handleStart(w http.ResponseWriter, r *http.Request) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if job != nil && job.Running() {
+	if run != nil && run.Running() {
 		writeJSON(w, 409, map[string]string{"error": "یک تست در حال اجراست"})
 		return
 	}
 	ctx, c := context.WithCancel(context.Background())
 	cancel = c
-	job = NewJob(configs, fps, req.UploadMB, req.DownloadMB)
+	job := NewJob(configs, fps, req.UploadMB, req.DownloadMB)
+	run = job
 	go job.Run(ctx)
 	writeJSON(w, 200, job.Snapshot())
 }
 
+func handleAuto(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req autoRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "bad request"})
+		return
+	}
+	req.UploadMB = clamp(req.UploadMB, 1, 50, 5)
+	req.DownloadMB = clamp(req.DownloadMB, 1, 50, 2)
+	req.Count = clamp(req.Count, 100, 3000, 1000)
+	req.Top = clamp(req.Top, 1, 12, 10)
+	fps := validFingerprints(req.Fingerprints)
+	if len(fps) == 0 {
+		writeJSON(w, 400, map[string]string{"error": "یک Fingerprint انتخاب کن"})
+		return
+	}
+	if _, err := newPanel(req.Panel, req.Key); err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if run != nil && run.Running() {
+		writeJSON(w, 409, map[string]string{"error": "یک تست در حال اجراست"})
+		return
+	}
+	ctx, c := context.WithCancel(context.Background())
+	cancel = c
+	a := &Auto{Phase: "panel", started: time.Now()}
+	run = a
+	go a.Run(ctx, req, fps)
+	writeJSON(w, 200, a.Snapshot())
+}
+
 func handleStatus(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
-	j := job
+	j := run
 	mu.Unlock()
 	if j == nil {
 		writeJSON(w, 200, map[string]any{"state": "idle"})
@@ -164,7 +211,7 @@ func handleStop(w http.ResponseWriter, r *http.Request) {
 	if cancel != nil {
 		cancel()
 	}
-	j := job
+	j := run
 	mu.Unlock()
 	if j == nil {
 		writeJSON(w, 200, map[string]any{"state": "idle"})
