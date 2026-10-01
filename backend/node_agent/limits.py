@@ -3,8 +3,11 @@ hwid_limit) for every protocol this node terminates itself. Whoever is
 already connected keeps their place; one more device is refused until one of
 them disconnects. Nobody is banned.
 
-- IKEv2 (EAP): IKE_SAs per EAP identity. The newest past the limit are
-  terminated. PSK mode has no per-user identity, so it can't be limited.
+- IKEv2 (EAP): IKE_SAs per EAP identity. The *oldest* past the limit are
+  terminated: a phone that changed network or reconnected leaves its old
+  IKE_SA behind until dead-peer detection gives up (minutes), and keeping
+  that one cut every fresh reconnect off right after it was established.
+  PSK mode has no per-user identity, so it can't be limited.
 - L2TP: ppp sessions per user, from the state ipsec_stats' ip-up hook keeps.
   The newest pppd past the limit is hung up.
 - Xray: a device is a client IP, read from Xray's access log. Traffic from any
@@ -175,8 +178,9 @@ def _enforce_ikev2() -> None:
         limit = limits.get(username)
         if not limit or len(sas) <= limit:
             continue
-        # Longest established first: those keep their place.
-        sas.sort(key=lambda sa: sa[0], reverse=True)
+        # Newest first (established= counts seconds since): the latest connection
+        # keeps its place, a stale one left by a reconnect is the one dropped.
+        sas.sort(key=lambda sa: sa[0])
         over.update(uniqueid for _, uniqueid in sas[limit:])
 
     # Only terminate what was over the limit on two passes in a row: rekeying
