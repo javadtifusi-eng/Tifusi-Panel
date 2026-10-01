@@ -1,20 +1,10 @@
-"""Finding a REALITY camouflage target for a node.
+"""REALITY field test: throwaway inbounds for the Windows probe.
 
-One flow, and it is live every time: the node reads the names off the
-certificates of its own datacenter neighbours (node_agent/reality_scan.py),
-this router asks probes inside Iran which of those are really open there
-and how fast they answer, and only those go back to the node for the
-per-fingerprint REALITY test. There is deliberately no built-in list of
-names anywhere — a published target is the first one a censor blocks, and
-a name that is excellent on one server's network is ordinary on another's.
-
-Ranking is by working well, not by reachability: connecting at all is the
-minimum bar. The node load-tests each finalist the way REALITY will really
-use it — a handshake per user connection, all day — because a target that
-drops handshakes under load or shuts the node out breaks users however fast
-it is idle. After that come how fast Iran reaches the name and the node->
-target handshake. The last word belongs to the field test at the bottom of
-this file, where a real phone on Iranian internet measures real throughput.
+The panel no longer scans for targets itself. The Windows probe
+(backend/reality_probe) picks names on the admin's own operator and asks for
+a field test here; the node opens one short-lived inbound per name
+(node_agent/field_test.py) and the probe measures real upload through each,
+from the network that actually throttles it.
 """
 
 import asyncio
@@ -35,23 +25,9 @@ from app.database import get_db
 from app.dependencies import require_permission
 from app.models.node import Node
 from app.network_health.operators import operator_for_ip
-from app.reality import iran_check
 from app.settings_store import get_subscription_url
-from app.subscription.lookup import client_ip
 
 router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
-
-
-# How many names get an Iran check per scan: check-host.net is a shared free
-# service, so the nearest survivors are asked about and the rest wait for the
-# next round rather than queueing behind them.
-_IRAN_CHECKS_PER_SCAN = 30
-
-# How many Iran-open names get the per-fingerprint REALITY test and the load
-# test. Each costs the node a little over a minute (ten fingerprints, four
-# fetches each, then about twenty seconds of load), so it is the fastest
-# handful rather than everything that passed.
-_PROVE_TOP = 8
 
 
 async def _node_or_404(node_id: int, db: AsyncSession) -> Node:
@@ -86,147 +62,6 @@ async def _public_ipv4(address: str) -> str | None:
     except OSError:
         return None
     return infos[0][4][0] if infos else None
-
-
-def _iran_ms(r: dict) -> int:
-    """How long Iran took to reach the name — the speed signal a scan has
-    before any phone is involved. Unknown sorts last, never first."""
-    ms = (r.get("iran") or {}).get("ms")
-    return ms if ms is not None else 10**6
-
-
-def _with_iran(scan: dict, node: Node) -> dict:
-    # Every name that survived validation is asked about, because being open
-    # in Iran is the one condition that cannot be traded away: it decides
-    # which names are worth testing, rather than being a label added to the
-    # results afterwards. The quickest from the node go first, so the cap
-    # below falls on the names least likely to be wanted anyway.
-    survivors = sorted(
-        [r for r in scan.get("results", []) if r.get("usable")],
-        key=lambda r: r.get("latency_ms") or 10**6,
-    )
-    for r in survivors[:_IRAN_CHECKS_PER_SCAN]:
-        iran_check.start_sni(r["host"])
-    for r in scan.get("results", []):
-        cached = iran_check.cached_only("http", f"https://{r['host']}")
-        r["iran"] = cached or ({"verdict": "checking"} if iran_check.pending("http", f"https://{r['host']}") else None)
-    scan["node_iran"] = iran_check.cached_only("tcp", f"{node.address}:{node.port}") or {"verdict": "checking"}
-    return scan
-
-
-# One handover per scan, keyed by the node's own start time for it: a re-scan
-# gets a fresh key, a repeated poll does not.
-_proved: dict[int, str] = {}
-
-
-async def _maybe_prove(node: Node, scan: dict) -> dict:
-    """The node parks in `checking` once it has validated and timed its
-    finds. When Iran has answered for all of them, hand the open ones back —
-    fastest from Iran first — for the per-fingerprint test. A name Iran
-    blocks is never tested: it could not be used whatever the result."""
-    if scan.get("state") != "checking":
-        return scan
-    survivors = [r for r in scan.get("results", []) if r.get("usable")]
-    if any((r.get("iran") or {}).get("verdict") == "checking" for r in survivors):
-        return scan
-    key = str(scan.get("started_at"))
-    if _proved.get(node.id) == key:
-        return scan
-    _proved[node.id] = key
-    ready = sorted(
-        [r for r in survivors if (r.get("iran") or {}).get("verdict") == "open"],
-        key=lambda r: (_iran_ms(r), r.get("latency_ms") or 10**6),
-    )[:_PROVE_TOP]
-    try:
-        return await _node_call(node, "POST", "/reality/prove", json={"hosts": [r["host"] for r in ready]})
-    except HTTPException as exc:
-        scan["error"] = str(exc.detail)
-        return scan
-
-
-# Per node: how far out the scan has walked and every name it has already
-# turned up. Every search goes one ring further and skips what was already
-# shown, so a search never repeats the last one's sites. Kept on disk so a
-# panel restart doesn't send the next search back to the first /24.
-_ROUNDS_FILE = Path(__file__).resolve().parents[2] / "data" / "reality_rounds.json"
-
-
-def _load_rounds() -> dict[int, dict]:
-    try:
-        raw = json.loads(_ROUNDS_FILE.read_text())
-        return {int(k): {"ring": int(v["ring"]), "seen": set(v["seen"])} for k, v in raw.items()}
-    except (OSError, ValueError, KeyError, TypeError):
-        return {}
-
-
-def _save_rounds() -> None:
-    try:
-        _ROUNDS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _ROUNDS_FILE.write_text(json.dumps({k: {"ring": v["ring"], "seen": sorted(v["seen"])} for k, v in _rounds.items()}))
-    except OSError:
-        pass
-
-
-_rounds: dict[int, dict] = _load_rounds()
-
-
-@router.post("/nodes/{node_id}/scan")
-async def start_node_scan(node_id: int, page: int | None = None, db: AsyncSession = Depends(get_db)) -> dict:
-    node = await _node_or_404(node_id, db)
-    rounds = _rounds.setdefault(node.id, {"ring": 0, "seen": set()})
-    # ring is the page into the live top-domains feed. "Start" (page 0) rescans
-    # the top of the current-day list; "Scan more" (page omitted) walks to the
-    # next page. Either way it is fetched fresh from the feed, never stored here.
-    rounds["ring"] = page if page is not None else rounds.get("ring", 0) + 1
-    _save_rounds()
-    scan = await _node_call(node, "POST", "/reality/scan", json={
-        "public_ip": await _public_ipv4(node.address),
-        "ring": max(0, rounds["ring"]),
-        "exclude": [],
-    })
-    # Whether the node itself is reachable from Iran is worth knowing
-    # before any SNI is: a blocked address makes every SNI moot.
-    asyncio.get_running_loop().create_task(iran_check.address(node.address, node.port))
-    return _with_iran(scan, node)
-
-
-@router.delete("/nodes/{node_id}/scan")
-async def stop_node_scan(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
-    node = await _node_or_404(node_id, db)
-    return _with_iran(await _node_call(node, "DELETE", "/reality/scan"), node)
-
-
-@router.get("/nodes/{node_id}/scan")
-async def node_scan_status(node_id: int, db: AsyncSession = Depends(get_db)) -> dict:
-    node = await _node_or_404(node_id, db)
-    scan = await _node_call(node, "GET", "/reality/scan")
-    # No "seen" tracking any more: the candidate sources are the node's own live
-    # traffic (meant to reappear) and a page of the live top-domains feed (the
-    # page number itself, ring, is what advances on "scan more"). Neither wants a
-    # growing exclude set, and the neighbour discovery that needed one is gone.
-    # The verdicts have to be on the results before _maybe_prove can read
-    # them; when it does hand over, it returns the node's fresh status, which
-    # needs them again. The second pass is free — the answers are cached.
-    scan = await _maybe_prove(node, _with_iran(scan, node))
-    scan = _with_iran(scan, node)
-    return scan
-
-
-# --- test from the admin's own device ------------------------------------
-#
-# check-host.net's Iranian probes all sit in datacenters, so a name they find
-# open can still be filtered or throttled on a mobile operator — the gap
-# between "works on TCI" and "not on MCI". The admin's own browser, on
-# whatever network the laptop is on, is the vantage point that closes it:
-# the dashboard fetches each finalist from there (RealityScanner.tsx) and
-# this says which operator that is, so each result is labelled with it —
-# and so a browser that is really going out through a VPN is caught rather
-# than reported as Iran.
-
-@router.get("/whoami")
-async def whoami(request: Request) -> dict:
-    ip = client_ip(request)
-    return {"ip": ip, "operator": operator_for_ip(ip)}
 
 
 # --- real test from inside Iran (node_agent/field_test.py) ----------------

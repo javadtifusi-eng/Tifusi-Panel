@@ -67,7 +67,6 @@ export default function InboundBuilder({
   onAdd,
   generatingKeys,
   onGenerateKeys,
-  onScan,
 }: {
   wizard: InboundWizard
   onChange: (patch: Partial<InboundWizard>) => void
@@ -77,7 +76,6 @@ export default function InboundBuilder({
   onAdd: () => void
   generatingKeys: boolean
   onGenerateKeys: () => void
-  onScan: () => void
 }) {
   const { t } = useLang()
   const b = t.coresPage.builder
@@ -269,9 +267,6 @@ export default function InboundBuilder({
                 <span className="ib-actions">
                   <button type="button" className="btn" onClick={onGenerateKeys} disabled={generatingKeys}>
                     {generatingKeys ? b.makingKey : w.realityPrivateKey ? b.remakeKey : b.makeKey}
-                  </button>
-                  <button type="button" className="btn" onClick={onScan}>
-                    {b.findSite}
                   </button>
                 </span>
               </div>

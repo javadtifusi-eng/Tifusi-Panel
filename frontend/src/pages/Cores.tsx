@@ -17,9 +17,7 @@ import {
   type Core,
   type CoreType,
   type Node,
-  type RealityCandidate,
 } from '../lib/api'
-import RealityScanner from '../components/RealityScanner'
 import InboundBuilder from '../components/InboundBuilder'
 import CoresHero, { CORE_CODE, CORE_NAME, CORE_TINT } from '../components/CoresHero'
 import { copyToClipboard } from '../lib/clipboard'
@@ -1025,7 +1023,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     (!isTransportProtocol ||
       (!!wizard.network && !!wizard.security && (wizard.security !== 'reality' || (!!wizard.sni && !!wizard.realityPrivateKey && !!wizard.realityShortId))))
 
-  const [scannerOpen, setScannerOpen] = useState(false)
   const [generatingKeys, setGeneratingKeys] = useState(false)
   const [generatingIkev2Cert, setGeneratingIkev2Cert] = useState(false)
   const [usingPanelCert, setUsingPanelCert] = useState(false)
@@ -1139,16 +1136,6 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
     const text = await file.text()
     setForm((f) => ({ ...f, configText: text }))
     if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  function applyScannedTarget(c: RealityCandidate) {
-    updateWizard('sni', c.host)
-    const next = patchRealityInJson(form.configText, (reality) => {
-      reality.dest = c.dest ?? `${c.host}:443`
-      reality.serverNames = [c.host]
-    })
-    if (next !== null) setForm((f) => ({ ...f, configText: next }))
-    say(t.ui.realityScan.applied(c.host))
   }
 
   async function generateKeys() {
@@ -1611,10 +1598,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                 onAdd={addWizardToJson}
                 generatingKeys={generatingKeys}
                 onGenerateKeys={generateKeys}
-                onScan={() => setScannerOpen(true)}
               />
 
-              {scannerOpen && <RealityScanner onPick={applyScannedTarget} onClose={() => setScannerOpen(false)} picked={wizard.sni} />}
 
             </div>
           )}
