@@ -24,7 +24,7 @@
 
   --c-app: 10 10 10; /* #0a0a0a ground */
   --c-side: 13 13 13; /* #0d0d0d sidebar */
-  --c-surface: 13 13 14; /* #0d0d0e card (dotted, see design.css) */
+  --c-surface: 13 13 14; /* #0d0d0e card */
   --c-field: 14 14 14; /* #0e0e0e inputs */
   --c-well: 13 13 14; /* #0d0d0e inner well */
   --c-well-strong: 8 8 8;

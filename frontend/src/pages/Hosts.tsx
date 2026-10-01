@@ -28,16 +28,18 @@ const PLACEHOLDER_KEYS = ['username', 'protocol', 'days_left', 'expire_date', 'd
 
 // Where each protocol sits around the hub, in percent of .c-orbit — a box inset from the stage
 // by more than half a node's size, so nodes on its very edge (0 / 100) still show whole.
+// Evenly round a circle (40° apart, VLESS at the top) inside a square stage, so
+// no two protocols crowd each other however wide the page is.
 const NODE_POS: Record<HostProtocol, [number, number]> = {
-  vless: [14, 14],
-  vmess: [50, 0],
-  trojan: [86, 14],
-  shadowsocks: [100, 62],
-  hysteria2: [80, 100],
-  wireguard: [50, 100],
-  ikev2: [20, 100],
-  l2tp: [0, 62],
-  pptp: [0, 30],
+  vless: [50, 0],
+  vmess: [82, 12],
+  trojan: [99, 41],
+  shadowsocks: [93, 75],
+  hysteria2: [67, 97],
+  wireguard: [33, 97],
+  ikev2: [7, 75],
+  l2tp: [1, 41],
+  pptp: [18, 12],
 }
 const BADGE: Record<HostProtocol, string> = {
   vless: 'VLESS',

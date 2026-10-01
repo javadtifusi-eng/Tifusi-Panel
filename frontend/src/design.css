@@ -553,15 +553,15 @@ select.input { padding-block: 7px; }
 
 /* ═════════ Hosts (.pg-hosts) ═════════ */
 .pg-hosts { display: flex; flex-direction: column; gap: 18px; }
-.pg-hosts .constellation { position: relative; display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 10px; border: 1px solid var(--edge); border-radius: 22px; background: #0b0b0b; overflow: hidden; isolation: isolate; }
-.pg-hosts .constellation::before { content: ''; position: absolute; inset: 0; z-index: -1; background-image: radial-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1.2px); background-size: 16px 16px; -webkit-mask-image: radial-gradient(70% 90% at 35% 50%, #000 20%, transparent 80%); mask-image: radial-gradient(70% 90% at 35% 50%, #000 20%, transparent 80%); }
+.pg-hosts .constellation { position: relative; display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--edge); border-radius: 22px; background: #0b0b0b; overflow: hidden; isolation: isolate; }
+.pg-hosts .constellation::before { content: ''; position: absolute; inset: 0; z-index: -1; background-image: var(--dots); background-size: 16px 16px; -webkit-mask-image: radial-gradient(70% 90% at 35% 50%, #000 20%, transparent 80%); mask-image: radial-gradient(70% 90% at 35% 50%, #000 20%, transparent 80%); }
 .pg-hosts .c-info { padding: 22px; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 .pg-hosts .c-info .tl { font-size: 0.78rem; color: var(--muted); }
 .pg-hosts .c-info .big { font-family: var(--font-en); font-size: 2.8rem; font-weight: 600; line-height: 1; }
 .pg-hosts .c-info p { margin: 0; font-size: 0.78rem; color: var(--faint); line-height: 1.8; }
 /* A node is ~80px tall with its label; the orbit's inset keeps nodes placed on its edge inside the stage. */
-.pg-hosts .c-stage { position: relative; min-height: 360px; }
-.pg-hosts .c-orbit { position: absolute; inset: 44px 58px 58px; }
+.pg-hosts .c-stage { position: relative; width: 100%; max-width: 520px; aspect-ratio: 1 / 1; justify-self: center; }
+.pg-hosts .c-orbit { position: absolute; inset: 56px; }
 .pg-hosts .c-orbit svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .pg-hosts .c-line { stroke: #2a2a2a; stroke-width: 1.5; vector-effect: non-scaling-stroke; transition: stroke 0.25s; }
 .pg-hosts .c-line.hot { stroke: var(--accent); stroke-dasharray: 6 6; animation: tf-cflow 0.9s linear infinite; }
@@ -580,7 +580,7 @@ select.input { padding-block: 7px; }
 .pg-hosts .p-node.zero .cnt { background: var(--raised); color: var(--faint); border: 1px solid var(--edge2); }
 .pg-hosts .p-node.zero .badge { color: var(--faint); }
 .pg-hosts .p-node:hover .badge, .pg-hosts .p-node[aria-pressed='true'] .badge { border-color: var(--accent); box-shadow: 0 0 30px rgb(249 115 22 / 0.2); transform: translateY(-2px); }
-@media (max-width: 760px) { .pg-hosts .constellation { grid-template-columns: 1fr; } .pg-hosts .c-stage { min-height: 330px; } .pg-hosts .c-orbit { inset: 40px 46px 56px; } }
+@media (max-width: 760px) { .pg-hosts .constellation { grid-template-columns: 1fr; } .pg-hosts .c-info { order: 2; } .pg-hosts .c-orbit { inset: 48px; } }
 .pg-hosts .passes { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; perspective: 1100px; }
 @media (max-width: 400px) { .pg-hosts .passes { grid-template-columns: 1fr; } }
 .pg-hosts .passes:has(.pass:hover) .pass:not(:hover) { filter: blur(1.5px) brightness(0.62); transform: scale(0.985); }
@@ -903,7 +903,7 @@ select.input { padding-block: 7px; }
 .pg-tunnels { display: flex; flex-direction: column; gap: 18px; }
 .pg-tunnels .map-card { display: grid; grid-template-columns: minmax(0, 1fr) 270px; border: 1px solid var(--edge); border-radius: 22px; overflow: hidden; background: #0b0b0b; }
 .pg-tunnels .map { position: relative; min-width: 0; isolation: isolate; }
-.pg-tunnels .map::before { content: ''; position: absolute; inset: 0; z-index: -1; background-image: radial-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1.2px); background-size: 16px 16px; -webkit-mask-image: radial-gradient(80% 80% at 50% 50%, #000 30%, transparent 85%); mask-image: radial-gradient(80% 80% at 50% 50%, #000 30%, transparent 85%); }
+.pg-tunnels .map::before { content: ''; position: absolute; inset: 0; z-index: -1; background-image: var(--dots); background-size: 16px 16px; -webkit-mask-image: radial-gradient(80% 80% at 50% 50%, #000 30%, transparent 85%); mask-image: radial-gradient(80% 80% at 50% 50%, #000 30%, transparent 85%); }
 .pg-tunnels .map svg { display: block; width: 100%; height: auto; }
 .pg-tunnels .sonar circle { fill: none; stroke: rgb(249 115 22 / 0.08); }
 .pg-tunnels .wire-base { fill: none; stroke: #262626; stroke-width: 1.5; }
@@ -1450,7 +1450,9 @@ select.input { padding-block: 7px; }
    The big container cards carry a faint dot grid over the card fill. Only
    containers get it: rows, chips, inputs and inner wells keep a solid fill
    so the text on them never sits over dots. */
-:root { --dots: radial-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1.3px); }
+/* Turned off at the owner's request (2026-10-01): plain fills everywhere. Kept as a
+   variable so every surface that used it switches back with one line. */
+:root { --dots: none; }
 .tf-card, .pg-login .lcard,
 .pg-dash .kpi, .pg-dash .dcard, .pg-dash .uptime,
 .pg-users .tile, .pg-users .board,
@@ -1745,3 +1747,4 @@ select.input { padding-block: 7px; }
 .pg-cores .qb-tag b { color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); padding: 2px 7px; border-radius: 6px; font-weight: 500; }
 .pg-cores .qb-json { margin: 0; max-height: 460px; }
 .pg-cores .qb-empty { border: 1px dashed var(--edge); border-radius: 12px; padding: 30px 16px; text-align: center; color: var(--faint); font-size: 0.8rem; }
+@media (max-width: 520px) { .pg-hosts .p-node .badge { width: 46px; height: 46px; border-radius: 14px; font-size: 0.64rem; } .pg-hosts .p-node small { font-size: 0.6rem; } .pg-hosts .c-hub { width: 64px; height: 64px; border-radius: 20px; } .pg-hosts .c-hub i { width: 38px; } .pg-hosts .c-orbit { inset: 44px; } }
