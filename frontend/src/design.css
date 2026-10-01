@@ -1,3 +1,5 @@
+/* Animations ignore prefers-reduced-motion across the whole panel on purpose: the owner
+   wants everything moving, and Windows' "show animations" switch was freezing it. */
 /* The approved panel design (see the "final design" prototype): shared pieces
    first, then one block per page, each scoped under its page root class so a
    generic name like .card or .tip on one page can't restyle another. Plain
@@ -348,7 +350,6 @@ select.input { padding-block: 7px; }
 .pg-dash .end-pulse { transform-box: fill-box; transform-origin: center; animation: tf-endp 2s ease-out infinite; }
 @keyframes tf-endp { 0% { opacity: .55; transform: scale(1); } 100% { opacity: 0; transform: scale(3.2); } }
 .pg-dash .kpi .spark { width: 96px; height: 34px; overflow: hidden; }
-@media (prefers-reduced-motion: reduce) { .pg-dash .reveal, .pg-dash .spark-run, .pg-dash .end-pulse { animation: none; } .pg-dash .spark-run { stroke-dasharray: none; } .pg-dash .end-pulse { opacity: 0; } }
 @media (max-width: 1100px) { .pg-dash .row-a, .pg-dash .row-c { grid-template-columns: 1fr; } .pg-dash .row-b { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .pg-dash .row-b, .pg-dash .row-d { grid-template-columns: 1fr; } }
 .pg-dash .dcard { background: var(--card); border: 1px solid var(--edge); border-radius: 16px; min-width: 0; display: flex; flex-direction: column; }
@@ -466,7 +467,6 @@ select.input { padding-block: 7px; }
 .pg-users .stat-ring .mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
 .pg-users .stat-ring .mid b { font-family: var(--font-en); font-size: 1rem; font-weight: 700; color: var(--c); font-variant-numeric: tabular-nums; }
 .pg-users .stat-ring .mid small { font-family: var(--font-en); font-size: 0.62rem; color: var(--faint); }
-@media (prefers-reduced-motion: reduce) { .pg-users .stat-ring .fg { transition: none; } }
 .pg-users .tile.split { grid-column: span 3; }
 .pg-users .grow-in i { transform-origin: left; animation: tf-grow 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes tf-grow { from { transform: scaleX(0); } }
@@ -527,7 +527,6 @@ select.input { padding-block: 7px; }
 .pg-users .soon .left { font-size: 0.7rem; color: var(--warn); white-space: nowrap; }
 .pg-users .soon .left.hot { color: var(--bad); }
 .pg-users .soon button { font: inherit; font-size: 0.7rem; border: 0; background: rgb(249 115 22 / 0.12); color: var(--accent); border-radius: 8px; padding: 2px 9px; cursor: pointer; }
-@media (prefers-reduced-motion: reduce) { .pg-users .srow, .pg-users .ubar i, .pg-users .grow-in i, .pg-users .trend .run, .pg-users .uav.on::after { animation: none; } }
 .pg-users .tpl-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--hair); background: var(--well); }
 .tf-user-sheet .d-usage { display: flex; align-items: center; gap: 16px; background: var(--card); border: 1px solid var(--edge); border-radius: 16px; padding: 14px; }
 .tf-user-sheet .gauge-r { --p: 0; width: 84px; height: 84px; border-radius: 50%; flex: none; display: grid; place-items: center; position: relative; background: conic-gradient(var(--gc, var(--accent)) calc(var(--p) * 1%), var(--raised) 0); }
@@ -570,7 +569,6 @@ select.input { padding-block: 7px; }
 .pg-hosts .c-flow { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 7; vector-effect: non-scaling-stroke; animation: tf-cback 2.4s ease-in-out infinite alternate; }
 @keyframes tf-cback { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -72; } }
 .pg-hosts .p-node.live .badge { border-color: rgb(249 115 22 / 0.55); box-shadow: 0 0 22px rgb(249 115 22 / 0.16); }
-@media (prefers-reduced-motion: reduce) { .pg-hosts .c-flow, .pg-hosts .c-line.hot { animation: none; } }
 .pg-hosts .c-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 78px; height: 78px; border-radius: 24px; display: grid; place-items: center; background: linear-gradient(145deg, #1b1b1b, #0f0f0f); border: 1px solid var(--edge2); box-shadow: 0 0 0 8px rgb(249 115 22 / 0.04), 0 0 50px rgb(249 115 22 / 0.12); }
 .pg-hosts .c-hub i { width: 46px; aspect-ratio: 640 / 490; background: #e5e5e5; -webkit-mask: url('/logo-tifusi.png') center / contain no-repeat; mask: url('/logo-tifusi.png') center / contain no-repeat; }
 .pg-hosts .p-node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; font: inherit; background: transparent; border: 0; cursor: pointer; color: var(--body); padding: 0; }
@@ -637,7 +635,6 @@ select.input { padding-block: 7px; }
 .pg-hosts .pass-route { color: color-mix(in srgb, var(--pc) 75%, #fff); }
 .pg-hosts .stub b { color: color-mix(in srgb, var(--pc) 60%, #fff); }
 .pg-hosts .stub { border-inline-start-color: color-mix(in srgb, var(--pc) 30%, #2c2c2c); }
-@media (prefers-reduced-motion: reduce) { .pg-hosts .p-node.live .badge, .pg-hosts .c-mix i { animation: none; } }
 .tf-sheet .placeholder-list { display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 12px; background: var(--well); border: 1px solid var(--hair); }
 .tf-sheet .placeholder-list button:hover { background: var(--raised); color: var(--text); }
 .tf-sheet .placeholder-list code { font-family: 'JetBrains Mono', monospace; color: var(--amber); direction: ltr; }
@@ -1064,10 +1061,6 @@ select.input { padding-block: 7px; }
 .pg-set .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 .pg-set .confirm .input { width: auto; min-width: 160px; padding: 5px 10px; font-size: 0.8rem; }
 
-@media (prefers-reduced-motion: reduce) {
-  .pg-hosts .pass-inner { transform: none !important; }
-  .pg-tunnels .wire-beam, .pg-tunnels .packet { animation: none; }
-}
 
 /* ═════════ Resellers (.pg-resellers) and a reseller's allowance on Users ═════════ */
 .rs-meter { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -1155,7 +1148,6 @@ select.input { padding-block: 7px; }
 .nav-spot::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: radial-gradient(80px circle at var(--x, 50%) var(--y, 50%), rgb(249 115 22 / 0.75), transparent 70%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
 .nav-spot:hover::before, .nav-spot:hover::after { opacity: 1; }
 .nav-spot:hover svg { color: var(--accent); }
-@media (prefers-reduced-motion: reduce) { .nav-spot::before, .nav-spot::after { transition: none; } }
 
 /* ── Settings: Connection Shield ── */
 .pg-set .sec-wide { grid-column: 1 / -1; }
@@ -1244,7 +1236,6 @@ select.input { padding-block: 7px; }
 .rsc-fps .fp.slow { color: var(--warn); border-color: rgb(245 158 11 / 0.35); }
 .rsc-fps .fp.wait { animation: tf-blink 1.2s ease-in-out infinite; }
 @keyframes tf-blink { 50% { opacity: 0.4; } }
-@media (prefers-reduced-motion: reduce) { .rsc-row, .rsc-steps li.now .d, .rsc-fps .fp.wait { animation: none; } }
 
 /* CDN tunnel checklist */
 .cdn-steps { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; color: var(--body); line-height: 1.7; }
@@ -1289,7 +1280,6 @@ select.input { padding-block: 7px; }
 @keyframes cdt-slide { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
 [dir='rtl'] .rsc-bar.indeterminate i { animation-name: cdt-slide-rtl; }
 @keyframes cdt-slide-rtl { 0% { transform: translateX(120%); } 100% { transform: translateX(-320%); } }
-@media (prefers-reduced-motion: reduce) { .rsc-bar.indeterminate i { animation: none; width: 100%; opacity: 0.5; } }
 @media (max-width: 560px) { .cdt-head { flex-direction: column; } .cdt-row { flex-wrap: wrap; } }
 .pg-users .tile.stat:focus:not(:focus-visible) { outline: none; }
 
@@ -1336,7 +1326,6 @@ select.input { padding-block: 7px; }
 .pg-cores .cchain small { font-size: 0.64rem; color: var(--faint); line-height: 1.4; }
 .pg-cores .cchain .tag { font: 500 0.6rem var(--font-en); color: color-mix(in srgb, var(--ec) 70%, #fff); background: color-mix(in srgb, var(--ec) 12%, transparent); border-radius: 6px; padding: 0 6px; }
 .pg-cores .beam-run { stroke: var(--ec); }
-@media (prefers-reduced-motion: reduce) { .pg-cores .cchain .wire.live, .pg-cores .core-hop .box, .pg-cores .core-card { animation: none; } }
 
 /* ---------- Inbound builder (Cores → Xray) ----------
    Colour means a layer of the connection, never decoration: each group sets --c to its layer's
@@ -1430,10 +1419,6 @@ select.input { padding-block: 7px; }
   .ib-c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ib-c3, .ib-row { grid-template-columns: minmax(0, 1fr); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .ib-pkt { display: none; }
-  .ib-tile, .ib-seg button { transition: none; }
-}
 @keyframes ib-stream { to { stroke-dashoffset: -180; } }
 @keyframes ib-breathe { 0%, 100% { opacity: .04; } 50% { opacity: .13; } }
 @keyframes ib-glow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
@@ -1442,9 +1427,6 @@ select.input { padding-block: 7px; }
 .ib-breathe { animation: ib-breathe 2.4s ease-in-out infinite; }
 .ib-breathe-soft { animation: ib-breathe-soft 3s ease-in-out infinite; }
 .ib-glow { animation: ib-glow 3.2s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .ib-stream, .ib-breathe, .ib-breathe-soft, .ib-glow { animation: none; }
-}
 
 /* ═════════ Dotted cards ═════════
    The big container cards carry a faint dot grid over the card fill. Only
@@ -1510,8 +1492,7 @@ select.input { padding-block: 7px; }
 .tf-liverates .tf-livedot.on::before { background: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 70%, transparent); animation: tf-ping 1.6s cubic-bezier(0,0,0.2,1) infinite; }
 
 /* ═════════ Cores hero: board, tiles, traffic map (components/CoresHero.tsx) ═════════ */
-/* Colours come from the theme tokens; the per-core tint arrives as --c. Animations
-   deliberately ignore prefers-reduced-motion — the owner wants the board always live. */
+/* Colours come from the theme tokens; the per-core tint arrives as --c. */
 .pg-cores .ch-box { display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: 8px; align-items: center; border: 1px solid var(--edge); border-radius: 18px; padding: 18px; background: var(--card); }
 .pg-cores .ch-stats { display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; min-width: 0; }
 .pg-cores .ch-stats .lbl { font-size: 0.8rem; color: var(--muted); }

@@ -19,7 +19,7 @@ const BOARD: { type: CoreType; code: string; x: number; y: number; path: string 
 export const CORE_TINT: Record<CoreType, string> = {
   xray: '#4aa3ff',
   ikev2: '#2fd26f',
-  l2tp: '#f5c542',
+  l2tp: '#ff4d4f',
   pptp: 'var(--text)',
   hysteria2: '#ff8a3d',
   wireguard: '#a78bfa',

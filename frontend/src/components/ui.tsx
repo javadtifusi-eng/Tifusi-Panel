@@ -13,15 +13,10 @@ import { IconX } from './icons'
 
 // Shared building blocks of the approved panel design (styles in design.css).
 
+// Always false: the owner wants the panel animated even when the OS asks for
+// reduced motion (Windows' "show animations" switch was freezing every chart).
 export function useReducedMotion(): boolean {
-  const [reduce, setReduce] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const onChange = () => setReduce(mq.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-  return reduce
+  return false
 }
 
 // ── Toast: one short confirmation line at the bottom of the screen.

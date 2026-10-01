@@ -219,7 +219,7 @@ function ActivityWave({ reports, label }: { reports: RecentAppReport[]; label: s
   useEffect(() => {
     let raf = 0
     let last = 0
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const reduce = false // always animate; see useReducedMotion
     function frame(now: number) {
       const t = Date.now()
       const a = Math.floor(t / WAVE_BUCKET) * WAVE_BUCKET

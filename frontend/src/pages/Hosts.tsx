@@ -61,7 +61,7 @@ const PCOLOR: Record<HostProtocol, string> = {
   hysteria2: '#f97316',
   wireguard: '#818cf8',
   ikev2: '#22c55e',
-  l2tp: '#94a3b8',
+  l2tp: '#ff4d4f',
   pptp: '#a8a29e',
 }
 const MONO: Record<HostProtocol, string> = { vless: 'VL', vmess: 'VM', trojan: 'TR', shadowsocks: 'SS', hysteria2: 'HY', wireguard: 'WG', ikev2: 'IK', l2tp: 'L2', pptp: 'PP' }

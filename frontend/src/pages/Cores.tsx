@@ -28,7 +28,7 @@ const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp
 // A Record, so a core type added later cannot silently fall through to another type's label —
 // the way Hysteria2 used to show up marked "L2TP".
 // Each engine wears the colour its protocol has on the Hosts page (L2TP is slate: no yellow).
-const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', wireguard: '#818cf8', l2tp: '#94a3b8', pptp: '#a8a29e' }
+const ENGINE_COLOR: Record<CoreType, string> = { xray: '#38bdf8', ikev2: '#22c55e', hysteria2: '#f97316', wireguard: '#818cf8', l2tp: '#ff4d4f', pptp: '#a8a29e' }
 
 /** 32 hex characters, the same as the panel generates when the field is left empty. */
 function randomObfs(): string {
