@@ -37,7 +37,7 @@ const SS_METHODS = ['2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm', 'aes-2
 const allowedSecurity = (w: InboundWizard, s: InboundSecurity) => !(s === 'reality' && w.network === 'ws')
 const allowedNetwork = (w: InboundWizard, n: InboundNetwork) => !(n === 'ws' && w.security === 'reality')
 
-// Presets never fill in a REALITY target: that has to come from the live scanner, not a fixed name.
+// Presets never fill in a REALITY target: the admin picks the cover site, never a fixed name.
 const PRESETS: { key: 'reality' | 'wsCdn' | 'trojanTls'; hue: string; tag: string; set: Partial<InboundWizard> }[] = [
   { key: 'reality', hue: HUE.reality, tag: 'vless-reality', set: { protocol: 'vless', network: 'tcp', security: 'reality', port: '443', fingerprint: 'chrome' } },
   { key: 'wsCdn', hue: HUE.network, tag: 'vless-ws', set: { protocol: 'vless', network: 'ws', security: 'none', port: '8080', path: '/ws' } },

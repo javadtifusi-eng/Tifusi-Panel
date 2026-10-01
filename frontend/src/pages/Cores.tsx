@@ -20,6 +20,8 @@ import {
 } from '../lib/api'
 import InboundBuilder from '../components/InboundBuilder'
 import CoresHero, { CORE_CODE, CORE_NAME, CORE_TINT } from '../components/CoresHero'
+import QuickInbound from '../components/QuickInbound'
+import { buildInboundJson, emptyWizard } from '../lib/inboundWizard'
 import { copyToClipboard } from '../lib/clipboard'
 
 const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp', 'pptp']
@@ -62,26 +64,6 @@ function emptyForm() {
   }
 }
 
-type WizardProtocol = 'vless' | 'vmess' | 'trojan' | 'shadowsocks'
-
-function emptyWizard() {
-  return {
-    protocol: '' as WizardProtocol | '',
-    network: '' as 'tcp' | 'ws' | 'grpc' | '',
-    security: '' as 'none' | 'tls' | 'reality' | '',
-    tag: '',
-    port: '',
-    sni: '',
-    fingerprint: '',
-    alpn: '',
-    path: '',
-    hostHeader: '',
-    method: '',
-    realityPrivateKey: '',
-    realityShortId: '',
-  }
-}
-
 // Applies `patch` to every REALITY inbound already in the JSON. Returns the new text, or null when
 // the JSON doesn't parse or has no REALITY inbound yet (then the wizard's "add to JSON" adds one).
 function patchRealityInJson(text: string, patch: (reality: Record<string, unknown>) => void): string | null {
@@ -99,56 +81,6 @@ function patchRealityInJson(text: string, patch: (reality: Record<string, unknow
   } catch {
     return null
   }
-}
-
-function buildInboundJson(w: ReturnType<typeof emptyWizard>): Record<string, unknown> {
-  const isTransport = w.protocol !== 'shadowsocks'
-  const settings: Record<string, unknown> = { clients: [] }
-  if (w.protocol === 'vless') {
-    settings.decryption = 'none'
-    if (w.security === 'reality' && w.network === 'tcp') settings.flow = 'xtls-rprx-vision'
-  } else if (w.protocol === 'shadowsocks') {
-    settings.method = w.method
-  }
-
-  const streamSettings: Record<string, unknown> = isTransport ? { network: w.network, security: w.security } : {}
-
-  if (isTransport && w.security === 'reality') {
-    const realitySettings: Record<string, unknown> = {
-      show: false,
-      dest: `${w.sni}:443`,
-      serverNames: [w.sni],
-      privateKey: w.realityPrivateKey,
-      shortIds: [w.realityShortId],
-    }
-    if (w.fingerprint) realitySettings.fingerprint = w.fingerprint
-    streamSettings.realitySettings = realitySettings
-  } else if (isTransport && w.security === 'tls') {
-    const tlsSettings: Record<string, unknown> = {}
-    if (w.sni) tlsSettings.serverName = w.sni
-    if (w.alpn) tlsSettings.alpn = w.alpn.split(',').map((s) => s.trim()).filter(Boolean)
-    if (w.fingerprint) tlsSettings.fingerprint = w.fingerprint
-    streamSettings.tlsSettings = tlsSettings
-  }
-
-  if (isTransport && w.network === 'ws') {
-    const wsSettings: Record<string, unknown> = {}
-    if (w.path) wsSettings.path = w.path
-    if (w.hostHeader) wsSettings.headers = { Host: w.hostHeader }
-    streamSettings.wsSettings = wsSettings
-  } else if (isTransport && w.network === 'grpc') {
-    streamSettings.grpcSettings = { serviceName: w.path || '' }
-  }
-
-  const inbound: Record<string, unknown> = {
-    tag: w.tag,
-    listen: '0.0.0.0',
-    port: Number(w.port),
-    protocol: w.protocol,
-    settings,
-  }
-  if (isTransport) inbound.streamSettings = streamSettings
-  return inbound
 }
 
 function parseConfig(text: string): Record<string, unknown> {
@@ -1011,6 +943,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   const [code, setCode] = useState<{ coreId: number; part: string } | null>(null)
   const [confirmDel, setConfirmDel] = useState<number | null>(null)
   const [openIb, setOpenIb] = useState<string | null>(null)
+  const [addingTo, setAddingTo] = useState<number | null>(null)
 
   const [wizard, setWizard] = useState(emptyWizard())
   const [addedFlash, setAddedFlash] = useState(false)
@@ -1532,15 +1465,21 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
                     </div>
                   )}
                   {isXray && (
-                    <button type="button" className="cx-addx" onClick={() => startEdit(core)}>
-                      <span className="cx-plus">+</span>
+                    <button
+                      type="button"
+                      className={`cx-addx ${addingTo === core.id ? 'on' : ''}`}
+                      aria-expanded={addingTo === core.id}
+                      onClick={() => setAddingTo(addingTo === core.id ? null : core.id)}
+                    >
+                      <span className="cx-plus">{addingTo === core.id ? '×' : '+'}</span>
                       <span className="cx-tx">
-                        <b>{c.addInbound}</b>
+                        <b>{addingTo === core.id ? c.qb.close : c.addInbound}</b>
                         <small>{c.addInboundSub}</small>
                       </span>
                       <span className="cx-arw">{dir === 'rtl' ? '←' : '→'}</span>
                     </button>
                   )}
+                  {isXray && addingTo === core.id && <QuickInbound core={core} onSaved={() => refresh()} />}
                 </div>
               )
             })
