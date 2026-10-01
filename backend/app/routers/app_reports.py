@@ -1,6 +1,14 @@
+import asyncio
+import json
+import os
+import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy import delete, select
@@ -149,3 +157,74 @@ async def recent_app_reports(
         )
         for report, username in rows.all()
     ]
+
+
+# --- the app's own update channel ---------------------------------------------
+#
+# The app used to ask api.github.com for the latest release and download the
+# APK from github.com: slow or half-filtered from Iran, on the customer's own
+# data. The panel fetches the release once in a while instead (the server reaches
+# GitHub fine) and serves it from the customer-facing domain the app's
+# subscription link already uses. Public like /app/report: the APK is the same
+# file GitHub hands to anyone.
+_APP_REPO = os.environ.get("TIFUSI_APP_REPO", "javadtifusi-eng/Tifusi-VPN")
+_APP_ASSET = "tifusi-vpn.apk"
+_APP_DIR = Path(__file__).resolve().parents[2] / "data" / "app_update"
+_APP_CHECK_EVERY = 3600
+_app_lock = asyncio.Lock()
+_app_checked = 0.0
+
+
+def _app_meta() -> dict | None:
+    try:
+        meta = json.loads((_APP_DIR / "meta.json").read_text())
+        return meta if (_APP_DIR / _APP_ASSET).is_file() else None
+    except (OSError, ValueError):
+        return None
+
+
+async def _refresh_app_release() -> dict | None:
+    """The cached release, refreshed from GitHub at most once an hour. A failed
+    refresh keeps serving the last good APK."""
+    global _app_checked
+    async with _app_lock:
+        meta = _app_meta()
+        if time.time() - _app_checked < _APP_CHECK_EVERY and meta:
+            return meta
+        _app_checked = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers={"User-Agent": "TifusiPanel"}) as client:
+                rel = (await client.get(f"https://api.github.com/repos/{_APP_REPO}/releases/latest")).json()
+                build = int(str(rel.get("tag_name", "")).lstrip("v"))
+                if meta and meta.get("build") == build:
+                    return meta
+                asset = next(a for a in rel.get("assets", []) if a.get("name") == _APP_ASSET)
+                _APP_DIR.mkdir(parents=True, exist_ok=True)
+                tmp = _APP_DIR / (_APP_ASSET + ".part")
+                async with client.stream("GET", asset["browser_download_url"]) as resp:
+                    resp.raise_for_status()
+                    with tmp.open("wb") as f:
+                        async for chunk in resp.aiter_bytes():
+                            f.write(chunk)
+                tmp.replace(_APP_DIR / _APP_ASSET)
+                meta = {"build": build, "size": (_APP_DIR / _APP_ASSET).stat().st_size, "fetched_at": int(time.time())}
+                (_APP_DIR / "meta.json").write_text(json.dumps(meta))
+                return meta
+        except (httpx.HTTPError, ValueError, KeyError, StopIteration, OSError):
+            return meta
+
+
+@router.get("/app/latest")
+async def app_latest() -> dict:
+    meta = await _refresh_app_release()
+    if not meta:
+        raise HTTPException(status_code=404, detail="No app release available yet")
+    return {"build": meta["build"], "size": meta["size"], "path": "/app/download"}
+
+
+@router.get("/app/download")
+async def app_download() -> FileResponse:
+    meta = await _refresh_app_release()
+    if not meta:
+        raise HTTPException(status_code=404, detail="No app release available yet")
+    return FileResponse(_APP_DIR / _APP_ASSET, media_type="application/vnd.android.package-archive", filename=_APP_ASSET)
