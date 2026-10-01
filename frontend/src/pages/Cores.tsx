@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { describeStream, parseShareLink, ShareLinkError } from '../lib/shareLink'
 import { IconArrow, IconBolt, IconCopy, IconGlobe, IconLock, IconPlus, IconRefresh, IconServer, IconShield, IconUser } from '../components/icons'
 import { Empty, Field, Sheet, highlightJsonLines, useToast } from '../components/ui'
@@ -21,7 +21,7 @@ import {
 } from '../lib/api'
 import RealityScanner from '../components/RealityScanner'
 import InboundBuilder from '../components/InboundBuilder'
-import CoresHero from '../components/CoresHero'
+import CoresHero, { CORE_CODE, CORE_NAME, CORE_TINT } from '../components/CoresHero'
 import { copyToClipboard } from '../lib/clipboard'
 
 const CORE_TYPES: CoreType[] = ['xray', 'ikev2', 'hysteria2', 'wireguard', 'l2tp', 'pptp']
@@ -836,174 +836,6 @@ function NodeAssignment({ core, nodes, onChanged }: { core: Core; nodes: Node[];
   )
 }
 
-interface FlowRule {
-  n: string
-  match: string
-  to: string
-  inboundTags: string[]
-  def?: boolean
-}
-
-// Inbounds → routing rules → outbounds, read straight from the stored config.
-// `live`: a node running this core is connected; only then does traffic animate along the beams.
-function XrayFlow({ core, live, onOpen }: { core: Core; live: boolean; onOpen: (part: string) => void }) {
-  const { t, dir } = useLang()
-  const c = t.ui.cores
-  const config = (core.config ?? {}) as Record<string, unknown>
-  const rawInbounds = Array.isArray(config.inbounds) ? (config.inbounds as Record<string, unknown>[]) : []
-  const configOutbounds = Array.isArray(config.outbounds) ? (config.outbounds as Record<string, unknown>[]) : []
-  // A config without outbounds still runs: the node adds a freedom "direct" outbound itself. Showing
-  // it keeps the flow complete (inbound → rule → outbound) instead of ending at the rules column.
-  const implicitOutbound = configOutbounds.length === 0
-  const rawOutbounds = implicitOutbound ? [{ tag: 'direct', protocol: 'freedom' }] : configOutbounds
-  const rawRules = Array.isArray((config.routing as { rules?: unknown })?.rules) ? ((config.routing as { rules: RoutingRule[] }).rules as RoutingRule[]) : []
-  const parsed = new Map(core.inbounds.map((i) => [i.tag, i]))
-  const firstOutbound = (rawOutbounds[0]?.tag as string | undefined) ?? 'direct'
-  const outProto = new Map(rawOutbounds.map((o) => [String(o.tag ?? ''), String(o.protocol ?? '')]))
-
-  const rules: FlowRule[] = rawRules.map((r, i) => ({
-    n: String(i + 1),
-    match:
-      [...(r.inboundTag ?? []).map((x) => `inbound:${x}`), ...(r.domain ?? []), ...(r.ip ?? []), r.port != null ? `port:${r.port}` : '', r.network ?? '']
-        .filter(Boolean)
-        .join(' · ') || '*',
-    to: r.outboundTag ?? r.balancerTag ?? '—',
-    inboundTags: r.inboundTag ?? [],
-  }))
-  rules.push({ n: '—', match: c.restOfTraffic, to: firstOutbound, inboundTags: [], def: true })
-
-  const kindOf = (tag: string) => {
-    const p = outProto.get(tag)
-    if (p === 'blackhole') return 'block'
-    if (p === 'freedom') return 'direct'
-    return ''
-  }
-
-  const flowRef = useRef<HTMLDivElement>(null)
-  const [beams, setBeams] = useState<{ d: string; kind: string }[]>([])
-
-  useLayoutEffect(() => {
-    const flow = flowRef.current
-    if (!flow) return
-    function draw() {
-      if (!flow || flow.offsetParent === null) return
-      const box = flow.getBoundingClientRect()
-      const rect = (id: string) => flow.querySelector<HTMLElement>(`[data-flow="${id}"]`)?.getBoundingClientRect()
-      const curve = (a: DOMRect, b: DOMRect) => {
-        const x1 = (dir === 'rtl' ? a.left : a.right) - box.left
-        const x2 = (dir === 'rtl' ? b.right : b.left) - box.left
-        const y1 = a.top + a.height / 2 - box.top
-        const y2 = b.top + b.height / 2 - box.top
-        const mx = (x1 + x2) / 2
-        return `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`
-      }
-      const out: { d: string; kind: string }[] = []
-      rawInbounds.forEach((inb, i) => {
-        const tag = String(inb.tag ?? i)
-        const a = rect(`in${i}`)
-        if (!a) return
-        const targeted = rules.findIndex((r) => r.inboundTags.includes(tag))
-        const b = rect(targeted >= 0 ? `r${targeted}` : 'rules')
-        const internal = inb.protocol === 'dokodemo-door'
-        if (b) out.push({ d: curve(a, b), kind: internal ? 'quiet' : '' })
-      })
-      rules.forEach((r, i) => {
-        const a = rect(`r${i}`)
-        const oi = rawOutbounds.findIndex((o) => o.tag === r.to)
-        const b = rect(oi >= 0 ? `out${oi}` : '')
-        if (a && b) out.push({ d: curve(a, b), kind: kindOf(r.to) === 'block' ? 'block' : r.inboundTags.length && !r.def ? 'quiet' : '' })
-      })
-      setBeams(out)
-    }
-    draw()
-    const ro = new ResizeObserver(draw)
-    ro.observe(flow)
-    return () => ro.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [core, dir])
-
-  return (
-    <div className="tf-card flow-card">
-      <div className="tf-card-head">
-        <h3>{c.flowTitle}</h3>
-        <span className="flex flex-wrap items-center gap-2.5">
-          <small>{c.flowHint}</small>
-          <button type="button" className="btn" onClick={() => onOpen('all')}>
-            {c.jsonFile}
-          </button>
-        </span>
-      </div>
-      <div className="flow" ref={flowRef}>
-        <svg className="beams" aria-hidden="true">
-          {beams.map((b, i) => (
-            <g key={i}>
-              <path className="beam-base" d={b.d} />
-              {live && <path className={`beam-run ${b.kind}`} d={b.d} />}
-            </g>
-          ))}
-        </svg>
-        <div className="col">
-          <span className="col-title">{c.colInbounds}</span>
-          {rawInbounds.length === 0 && <span className="hint">{t.coresPage.noInbounds}</span>}
-          {rawInbounds.map((inb, i) => {
-            const tag = String(inb.tag ?? `#${i + 1}`)
-            const p = parsed.get(tag)
-            const internal = inb.protocol === 'dokodemo-door'
-            return (
-              <button key={i} type="button" data-flow={`in${i}`} className={`blk ${internal ? 'dim' : ''}`} onClick={() => onOpen(`inbounds.${i}`)}>
-                <span className="top">
-                  <span className="tag">{tag}</span>
-                  {inb.port != null && <span className="chip en">:{String(inb.port)}</span>}
-                </span>
-                <span className="sub">
-                  {internal
-                    ? c.internalInbound
-                    : [String(inb.protocol ?? '').toUpperCase(), p?.security && p.security !== 'none' ? p.security.toUpperCase() : '', p ? c.hostsCount(p.host_count) : '']
-                        .filter(Boolean)
-                        .join(' · ')}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-        <div className="col">
-          <span className="col-title">{c.colRules}</span>
-          <button type="button" data-flow="rules" className="blk rules" onClick={() => onOpen('routing')}>
-            {rules.map((r, i) => (
-              <span key={i} data-flow={`r${i}`} className={`rule ${r.def ? 'def' : ''}`}>
-                <span className="n">{r.n}</span>
-                <span className="m" title={r.match}>
-                  {r.match}
-                </span>
-                <span className={`to ${kindOf(r.to)}`}>{r.to}</span>
-              </span>
-            ))}
-          </button>
-        </div>
-        <div className="col">
-          <span className="col-title">{c.colOutbounds}</span>
-          {rawOutbounds.map((o, i) => (
-            <button
-              key={i}
-              type="button"
-              data-flow={`out${i}`}
-              className="blk"
-              onClick={() => (implicitOutbound ? onOpen('all') : onOpen(`outbounds.${i}`))}
-            >
-              <span className="top">
-                <span className="tag">{String(o.tag ?? `#${i + 1}`)}</span>
-                <span className="chip en">{String(o.protocol ?? '')}</span>
-              </span>
-              {i === 0 && <span className="sub">{implicitOutbound ? c.implicitOutbound : c.defaultOutbound}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-      <p className="flow-note">{c.flowNote}</p>
-    </div>
-  )
-}
-
 function CodeSheet({ core, part, onPart, onClose }: { core: Core; part: string; onPart: (p: string) => void; onClose: () => void }) {
   const { t } = useLang()
   const say = useToast()
@@ -1139,6 +971,28 @@ function CoreChain({ hops, live }: { hops: Hop[]; live: boolean }) {
   )
 }
 
+const ICO = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+const IcoJson = () => (
+  <svg {...ICO}>
+    <path d="M8 3H6a2 2 0 0 0-2 2v4l-2 3 2 3v4a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v4l2 3-2 3v4a2 2 0 0 1-2 2h-2" />
+  </svg>
+)
+const IcoEdit = () => (
+  <svg {...ICO}>
+    <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+  </svg>
+)
+const IcoDel = () => (
+  <svg {...ICO}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+  </svg>
+)
+const IcoChev = () => (
+  <svg {...ICO} width={15} height={15} className="cx-ibchev">
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+)
+
 export default function CoresPage({ createSignal = 0 }: { createSignal?: number } = {}) {
   const { t, dir } = useLang()
   const c = t.ui.cores
@@ -1156,6 +1010,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   const [lastWarnings, setLastWarnings] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [code, setCode] = useState<{ coreId: number; part: string } | null>(null)
+  const [confirmDel, setConfirmDel] = useState<number | null>(null)
+  const [openIb, setOpenIb] = useState<string | null>(null)
 
   const [wizard, setWizard] = useState(emptyWizard())
   const [addedFlash, setAddedFlash] = useState(false)
@@ -1395,7 +1251,7 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
   }
 
   async function handleDelete(core: Core) {
-    if (!window.confirm(t.coresPage.confirmDelete(core.name))) return
+    setConfirmDel(null)
     try {
       await deleteCore(core.id)
       await refresh()
@@ -1422,205 +1278,268 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
 
       {cores && <CoresHero cores={cores} nodes={nodes} engine={engine} onPick={setEngine} holds={holdsCore} />}
 
-      <div className="sub-head">
-        <p className="tf-note" style={{ margin: 0, maxWidth: '80ch' }}>
-          {engine === 'xray' ? t.coresPage.intro : engineSub[engine]}
-        </p>
-        <button type="button" className="btn solid" onClick={() => openNew(engine)}>
-          <IconPlus size={14} />
-          {c.newOfType(t.coresPage.coreTypeLabels[engine])}
-        </button>
-      </div>
-
       {error && <div className="tf-alert">{error}</div>}
 
       {cores === null ? (
         <div className="skel" style={{ height: 260, borderRadius: 18 }} />
-      ) : shown.length === 0 ? (
-        <Empty
-          title={c.emptyTitle(t.coresPage.coreTypeLabels[engine])}
-          text={
-            engine === 'l2tp'
-              ? t.hostsPage.l2tpHint
-              : engine === 'ikev2'
-                ? t.coresPage.ikev2CertHint
-                : engine === 'hysteria2'
-                  ? t.coresPage.hysteria2CardHint
-                  : engine === 'wireguard'
-                    ? t.coresPage.wireguardCardHint
-                    : t.coresPage.intro
-          }
-          action={
-            <button type="button" className="btn solid" onClick={() => openNew(engine)}>
-              <IconPlus size={14} />
-              {c.newOfType(t.coresPage.coreTypeLabels[engine])}
-            </button>
-          }
-        />
       ) : (
-        shown.map((core) => {
-          const config = (core.config ?? {}) as Record<string, unknown>
-          const ruleCount = Array.isArray((config.routing as { rules?: unknown[] })?.rules) ? ((config.routing as { rules: unknown[] }).rules.length as number) : 0
-          const outCount = Array.isArray(config.outbounds) ? (config.outbounds as unknown[]).length : 0
-          const runningNodes = nodes.filter((n) => holdsCore(n, core))
-          const coreLive = runningNodes.some((n) => n.status === 'connected')
-          return (
-            <div key={core.id} className="flex flex-col gap-3.5">
-              <div className="tf-card core-card" style={{ ['--ec' as string]: ENGINE_COLOR[core.core_type] }}>
-                <div className="core-head">
-                  <span className="t">
-                    <b>{core.name}</b>
-                    <small>{core.note || t.coresPage.coreTypeLabels[core.core_type]}</small>
-                  </span>
-                  {core.core_type === 'xray' &&
-                    (core.warnings.length === 0 ? <span className="valid">✓ {c.validJson}</span> : <span className="pill warn">{c.warnings(core.warnings.length)}</span>)}
-                  <span className="chips">
-                    {core.core_type === 'xray' ? (
-                      <>
-                        <span className="chip">{c.inboundsCount(core.inbounds.length)}</span>
-                        <span className="chip">{c.rulesCount(ruleCount)}</span>
-                        <span className="chip">{c.outboundsCount(outCount)}</span>
-                      </>
-                    ) : (
-                      <span className="chip">{c.hostsCount(core.host_count)}</span>
-                    )}
-                  </span>
-                  <span className={`pill ${coreLive ? 'ok live' : 'idle'}`}>
-                    <i />
-                    {runningNodes.length ? c.liveOn(runningNodes.length) : c.notRunning}
-                  </span>
-                  <span className="acts">
-                    {core.core_type === 'xray' && (
-                      <button type="button" className="btn" onClick={() => setCode({ coreId: core.id, part: 'all' })}>
-                        {c.jsonFile}
-                      </button>
-                    )}
-                    <button type="button" className="btn solid" onClick={() => startEdit(core)}>
-                      {t.common.edit}
-                    </button>
-                    <button type="button" className="btn danger" onClick={() => handleDelete(core)}>
-                      {t.common.delete}
-                    </button>
-                  </span>
-                </div>
-                {core.warnings.length > 0 && (
-                  <div className="warn-box">
-                    {core.warnings.map((w, i) => (
-                      <div key={i}>• {w}</div>
-                    ))}
-                  </div>
-                )}
-                {core.core_type !== 'xray' && (
-                  <div className="core-body">
-                    <div className="panel">
-                      <h4>{c.specsTitle}</h4>
-                      <div className="specs">
-                        {core.core_type === 'hysteria2' && (
-                          <>
-                            <Spec label={t.coresPage.hysteria2PortLabel} value={`UDP ${core.hysteria2_port ?? '—'}`} tint />
-                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
-                            <SecretSpec label={t.coresPage.hysteria2ObfsLabel} value={core.hysteria2_obfs} show={c.reveal} hide={c.conceal} />
-                            <RateSpec label={c.rateCap} mbps={core.hysteria2_rate_mbps} none={t.coresPage.hysteria2RatePlaceholder} />
-                          </>
-                        )}
-                        {core.core_type === 'wireguard' && (
-                          <>
-                            <Spec label={t.coresPage.wireguardPortLabel} value={`UDP ${core.wireguard_port ?? '—'}`} tint />
-                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
-                            <Spec label="MTU" value={String(core.wireguard_mtu ?? '—')} />
-                            <Spec label={t.coresPage.wireguardKeyLabel} value={core.wireguard_public_key ?? '—'} wide />
-                          </>
-                        )}
-                        {core.core_type === 'ikev2' && (
-                          <>
-                            <Spec label="Remote ID" value={core.ikev2_remote_id ?? '—'} tint wide />
-                            <Spec
-                              label={t.coresPage.ikev2AuthModeLabel}
-                              value={core.ikev2_auth_mode === 'psk' ? t.coresPage.ikev2AuthModePsk : t.coresPage.ikev2AuthModeEap}
-                              fa
-                            />
-                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
-                            <Spec
-                              label="SSL"
-                              value={core.ikev2_certificate ? t.coresPage.ikev2CertStatusCustom : t.coresPage.ikev2CertStatusAuto}
-                              fa
-                              wide
-                            />
-                            {core.ikev2_psk && <SecretSpec label="PSK" value={core.ikev2_psk} show={c.reveal} hide={c.conceal} />}
-                          </>
-                        )}
-                        {core.core_type === 'pptp' && (
-                          <>
-                            <Spec label="TCP" value="1723 · GRE" tint />
-                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
-                          </>
-                        )}
-                        {core.core_type === 'l2tp' && (
-                          <>
-                            <Spec label="UDP" value="500 · 1701 · 4500" tint />
-                            <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
-                            <SecretSpec label="PSK" value={core.l2tp_psk} show={c.reveal} hide={c.conceal} />
-                          </>
-                        )}
+        <section className="cx-drop" style={{ ['--c' as string]: CORE_TINT[engine] }} aria-label={t.coresPage.coreTypeLabels[engine]}>
+          <div className="cx-drop-head">
+            <span className="cx-eyebrow">CORES · {CORE_NAME[engine].toUpperCase()}</span>
+            {shown.length > 0 && (
+              <button type="button" className="btn" onClick={() => openNew(engine)}>
+                <IconPlus size={14} />
+                {c.newOfType(t.coresPage.coreTypeLabels[engine])}
+              </button>
+            )}
+          </div>
+          {shown.length === 0 ? (
+          <Empty
+            title={c.emptyTitle(t.coresPage.coreTypeLabels[engine])}
+            text={
+              engine === 'l2tp'
+                ? t.hostsPage.l2tpHint
+                : engine === 'ikev2'
+                  ? t.coresPage.ikev2CertHint
+                  : engine === 'hysteria2'
+                    ? t.coresPage.hysteria2CardHint
+                    : engine === 'wireguard'
+                      ? t.coresPage.wireguardCardHint
+                      : t.coresPage.intro
+            }
+            action={
+              <button type="button" className="btn solid" onClick={() => openNew(engine)}>
+                <IconPlus size={14} />
+                {c.newOfType(t.coresPage.coreTypeLabels[engine])}
+              </button>
+            }
+          />
+          ) : (
+            shown.map((core) => {
+              const config = (core.config ?? {}) as Record<string, unknown>
+              const ruleCount = Array.isArray((config.routing as { rules?: unknown[] })?.rules) ? ((config.routing as { rules: unknown[] }).rules.length as number) : 0
+              const outCount = Array.isArray(config.outbounds) ? (config.outbounds as unknown[]).length : 0
+              const rawInbounds = Array.isArray(config.inbounds) ? (config.inbounds as { tag?: string }[]) : []
+              const runningNodes = nodes.filter((n) => holdsCore(n, core))
+              const coreLive = runningNodes.some((n) => n.status === 'connected')
+              const isXray = core.core_type === 'xray'
+              return (
+                <div key={core.id} className="cx-core" style={{ ['--c' as string]: CORE_TINT[core.core_type] }}>
+                  <div className="cx-head">
+                    <div className="cx-id">
+                      <span className="cx-chip">{CORE_CODE[core.core_type]}</span>
+                      <div className="cx-title">
+                        <span className="cx-eyebrow">CORE · {CORE_NAME[core.core_type].toUpperCase()}</span>
+                        <h2>{core.name}</h2>
+                        <div className="kind">{core.note || t.coresPage.coreTypeLabels[core.core_type]}</div>
                       </div>
                     </div>
-                    <div className="panel">
-                      <h4>{c.chainTitle}</h4>
-                      <CoreChain
-                        live={coreLive}
-                        hops={[
-                          { icon: <IconUser size={20} />, title: c.hopPhone, sub: core.core_type === 'hysteria2' || core.core_type === 'wireguard' ? c.hopApp : c.hopNative },
-                          {
-                            icon: core.core_type === 'hysteria2' || core.core_type === 'wireguard' ? <IconBolt size={20} /> : core.core_type === 'ikev2' ? <IconShield size={20} /> : <IconLock size={20} />,
-                            title: t.coresPage.coreTypeLabels[core.core_type],
-                            tag:
-                              core.core_type === 'hysteria2'
-                                ? `QUIC · UDP ${core.hysteria2_port ?? '—'}`
-                                : core.core_type === 'wireguard'
-                                  ? `UDP ${core.wireguard_port ?? '—'}`
-                                  : core.core_type === 'ikev2' ? 'UDP 500 · 4500' : core.core_type === 'pptp' ? 'TCP 1723 · GRE' : 'UDP 1701',
-                            core: true,
-                          },
-                          { icon: <IconServer size={20} />, title: runningNodes.map((n) => n.name).join(', ') || '—', sub: c.hopNode },
-                          ...(core.core_type === 'ikev2' && core.ikev2_egress_vless ? [{ icon: <IconArrow size={20} />, title: 'VLESS', sub: c.hopEgress }] : []),
-                          { icon: <IconGlobe size={20} />, title: c.hopInternet },
-                        ]}
-                      />
-                      <p className="hint" style={{ marginTop: 14 }}>
-                        {core.core_type === 'hysteria2'
-                          ? t.coresPage.hysteria2CardHint
-                          : core.core_type === 'wireguard'
-                            ? t.coresPage.wireguardCardHint
-                            : core.core_type === 'pptp'
-                            ? t.coresPage.pptpCardHint
-                            : core.core_type === 'l2tp'
-                            ? t.hostsPage.l2tpHint
-                            : core.ikev2_egress_vless
-                              ? c.chainEgress
-                              : core.ikev2_auth_mode === 'psk'
-                                ? t.coresPage.ikev2AuthModePskHint
-                                : c.chainDirect}
-                      </p>
+                    <div className="cx-hdr">
+                      {isXray &&
+                        (core.warnings.length === 0 ? <span className="valid">✓ {c.validJson}</span> : <span className="pill warn">{c.warnings(core.warnings.length)}</span>)}
+                      <span className={`pill ${coreLive ? 'ok live' : 'idle'}`}>
+                        <i />
+                        {runningNodes.length ? c.liveOn(runningNodes.length) : c.notRunning}
+                      </span>
+                      <span className="cx-icons">
+                        {isXray && (
+                          <button type="button" className="cx-ib" title={c.jsonFile} aria-label={c.jsonFile} onClick={() => setCode({ coreId: core.id, part: 'all' })}>
+                            <IcoJson />
+                          </button>
+                        )}
+                        <button type="button" className="cx-ib" title={t.common.edit} aria-label={t.common.edit} onClick={() => startEdit(core)}>
+                          <IcoEdit />
+                        </button>
+                        <button type="button" className="cx-ib del" title={t.common.delete} aria-label={t.common.delete} onClick={() => setConfirmDel(core.id)}>
+                          <IcoDel />
+                        </button>
+                      </span>
                     </div>
                   </div>
-                )}
-                <NodeAssignment
-                  core={core}
-                  nodes={nodes}
-                  onChanged={() => {
-                    refreshNodes()
-                    refresh()
-                  }}
-                />
-              </div>
-
-              {core.core_type === 'xray' && (
-                <XrayFlow core={core} live={coreLive} onOpen={(part) => setCode({ coreId: core.id, part })} />
-              )}
-
-            </div>
-          )
-        })
+                  {confirmDel === core.id && (
+                    <div className="cx-confirm" role="alert">
+                      {c.confirmDeleteCore(core.name)}
+                      <button type="button" className="btn danger" onClick={() => handleDelete(core)}>
+                        {c.deleteYes}
+                      </button>
+                      <button type="button" className="btn" onClick={() => setConfirmDel(null)}>
+                        {c.deleteNo}
+                      </button>
+                    </div>
+                  )}
+                  {core.warnings.length > 0 && (
+                    <div className="warn-box">
+                      {core.warnings.map((w, i) => (
+                        <div key={i}>• {w}</div>
+                      ))}
+                    </div>
+                  )}
+                  {isXray && (
+                    <div className="cx-kpis">
+                      <div className="kpi"><span>{c.kpiInbounds}</span><b>{core.inbounds.length}</b></div>
+                      <div className="kpi"><span>{c.kpiRules}</span><b>{ruleCount}</b></div>
+                      <div className="kpi"><span>{c.kpiOutbounds}</span><b>{outCount}</b></div>
+                      <div className="kpi">
+                        <span>{c.kpiNode}</span>
+                        <b className={`nodev ${coreLive ? 'on' : ''}`}>
+                          <i />
+                          {runningNodes.map((n) => n.name).join(', ') || '—'}
+                        </b>
+                      </div>
+                    </div>
+                  )}
+                    {core.core_type !== 'xray' && (
+                      <div className="core-body">
+                        <div className="panel">
+                          <h4>{c.specsTitle}</h4>
+                          <div className="specs">
+                            {core.core_type === 'hysteria2' && (
+                              <>
+                                <Spec label={t.coresPage.hysteria2PortLabel} value={`UDP ${core.hysteria2_port ?? '—'}`} tint />
+                                <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                                <SecretSpec label={t.coresPage.hysteria2ObfsLabel} value={core.hysteria2_obfs} show={c.reveal} hide={c.conceal} />
+                                <RateSpec label={c.rateCap} mbps={core.hysteria2_rate_mbps} none={t.coresPage.hysteria2RatePlaceholder} />
+                              </>
+                            )}
+                            {core.core_type === 'wireguard' && (
+                              <>
+                                <Spec label={t.coresPage.wireguardPortLabel} value={`UDP ${core.wireguard_port ?? '—'}`} tint />
+                                <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                                <Spec label="MTU" value={String(core.wireguard_mtu ?? '—')} />
+                                <Spec label={t.coresPage.wireguardKeyLabel} value={core.wireguard_public_key ?? '—'} wide />
+                              </>
+                            )}
+                            {core.core_type === 'ikev2' && (
+                              <>
+                                <Spec label="Remote ID" value={core.ikev2_remote_id ?? '—'} tint wide />
+                                <Spec
+                                  label={t.coresPage.ikev2AuthModeLabel}
+                                  value={core.ikev2_auth_mode === 'psk' ? t.coresPage.ikev2AuthModePsk : t.coresPage.ikev2AuthModeEap}
+                                  fa
+                                />
+                                <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                                <Spec
+                                  label="SSL"
+                                  value={core.ikev2_certificate ? t.coresPage.ikev2CertStatusCustom : t.coresPage.ikev2CertStatusAuto}
+                                  fa
+                                  wide
+                                />
+                                {core.ikev2_psk && <SecretSpec label="PSK" value={core.ikev2_psk} show={c.reveal} hide={c.conceal} />}
+                              </>
+                            )}
+                            {core.core_type === 'pptp' && (
+                              <>
+                                <Spec label="TCP" value="1723 · GRE" tint />
+                                <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                              </>
+                            )}
+                            {core.core_type === 'l2tp' && (
+                              <>
+                                <Spec label="UDP" value="500 · 1701 · 4500" tint />
+                                <Spec label={t.coresPage.colHosts} value={String(core.host_count)} />
+                                <SecretSpec label="PSK" value={core.l2tp_psk} show={c.reveal} hide={c.conceal} />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="panel">
+                          <h4>{c.chainTitle}</h4>
+                          <CoreChain
+                            live={coreLive}
+                            hops={[
+                              { icon: <IconUser size={20} />, title: c.hopPhone, sub: core.core_type === 'hysteria2' || core.core_type === 'wireguard' ? c.hopApp : c.hopNative },
+                              {
+                                icon: core.core_type === 'hysteria2' || core.core_type === 'wireguard' ? <IconBolt size={20} /> : core.core_type === 'ikev2' ? <IconShield size={20} /> : <IconLock size={20} />,
+                                title: t.coresPage.coreTypeLabels[core.core_type],
+                                tag:
+                                  core.core_type === 'hysteria2'
+                                    ? `QUIC · UDP ${core.hysteria2_port ?? '—'}`
+                                    : core.core_type === 'wireguard'
+                                      ? `UDP ${core.wireguard_port ?? '—'}`
+                                      : core.core_type === 'ikev2' ? 'UDP 500 · 4500' : core.core_type === 'pptp' ? 'TCP 1723 · GRE' : 'UDP 1701',
+                                core: true,
+                              },
+                              { icon: <IconServer size={20} />, title: runningNodes.map((n) => n.name).join(', ') || '—', sub: c.hopNode },
+                              ...(core.core_type === 'ikev2' && core.ikev2_egress_vless ? [{ icon: <IconArrow size={20} />, title: 'VLESS', sub: c.hopEgress }] : []),
+                              { icon: <IconGlobe size={20} />, title: c.hopInternet },
+                            ]}
+                          />
+                          <p className="hint" style={{ marginTop: 14 }}>
+                            {core.core_type === 'hysteria2'
+                              ? t.coresPage.hysteria2CardHint
+                              : core.core_type === 'wireguard'
+                                ? t.coresPage.wireguardCardHint
+                                : core.core_type === 'pptp'
+                                ? t.coresPage.pptpCardHint
+                                : core.core_type === 'l2tp'
+                                ? t.hostsPage.l2tpHint
+                                : core.ikev2_egress_vless
+                                  ? c.chainEgress
+                                  : core.ikev2_auth_mode === 'psk'
+                                    ? t.coresPage.ikev2AuthModePskHint
+                                    : c.chainDirect}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  <NodeAssignment
+                    core={core}
+                    nodes={nodes}
+                    onChanged={() => {
+                      refreshNodes()
+                      refresh()
+                    }}
+                  />
+                  {isXray && (
+                    <div className="cx-iblist">
+                      <div className="cx-ibhead">
+                        <span className="cx-eyebrow">INBOUNDS</span>
+                        <span className="cx-cnt">{core.inbounds.length}</span>
+                      </div>
+                      {core.inbounds.length === 0 && <div className="cx-empty">{c.noInbounds}</div>}
+                      {core.inbounds.map((ib) => {
+                        const key = `${core.id}:${ib.tag}`
+                        const open = openIb === key
+                        const raw = rawInbounds.find((x) => x.tag === ib.tag)
+                        const sec = ib.security && ib.security !== 'none' ? ` · ${ib.security.toUpperCase()}` : ''
+                        return (
+                          <div key={ib.id} className={`cx-ibi ${open ? 'open' : ''}`}>
+                            <button type="button" className="cx-ibrow" aria-expanded={open} onClick={() => setOpenIb(open ? null : key)}>
+                              <span className="cx-ibtag">{ib.tag}</span>
+                              <span className="cx-ibmeta">
+                                {ib.protocol.toUpperCase()} · {ib.network}
+                                {sec}
+                              </span>
+                              <span className="cx-ibport">{ib.port ? `:${ib.port}` : ''}</span>
+                              <IcoChev />
+                            </button>
+                            {open && raw && (
+                              <pre className="cx-json">
+                                {highlightJsonLines(JSON.stringify(raw, null, 2)).map((html, i) => (
+                                  <span key={i} className="ln" dangerouslySetInnerHTML={{ __html: html || ' ' }} />
+                                ))}
+                              </pre>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {isXray && (
+                    <button type="button" className="cx-addx" onClick={() => startEdit(core)}>
+                      <span className="cx-plus">+</span>
+                      <span className="cx-tx">
+                        <b>{c.addInbound}</b>
+                        <small>{c.addInboundSub}</small>
+                      </span>
+                      <span className="cx-arw">{dir === 'rtl' ? '←' : '→'}</span>
+                    </button>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </section>
       )}
 
       {code && codeCore && <CodeSheet core={codeCore} part={code.part} onPart={(part) => setCode({ coreId: codeCore.id, part })} onClose={() => setCode(null)} />}

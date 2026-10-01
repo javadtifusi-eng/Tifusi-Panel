@@ -25,7 +25,7 @@ export const CORE_TINT: Record<CoreType, string> = {
   wireguard: '#a78bfa',
 }
 
-const NAME: Record<CoreType, string> = {
+export const CORE_NAME: Record<CoreType, string> = {
   xray: 'Xray',
   ikev2: 'IKEv2',
   l2tp: 'L2TP',
@@ -33,6 +33,8 @@ const NAME: Record<CoreType, string> = {
   hysteria2: 'Hysteria2',
   wireguard: 'WireGuard',
 }
+
+export const CORE_CODE = Object.fromEntries(BOARD.map((b) => [b.type, b.code])) as Record<CoreType, string>
 
 const TILE_ORDER: CoreType[] = ['xray', 'ikev2', 'l2tp', 'pptp', 'hysteria2', 'wireguard']
 
@@ -99,7 +101,7 @@ export default function CoresHero({
               <div key={type} className="lgi">
                 <span className="nm">
                   <i style={{ background: CORE_TINT[type], opacity: statusOf(type) === 'none' ? 0.45 : 1 }} />
-                  {NAME[type]}
+                  {CORE_NAME[type]}
                 </span>
                 <span className="st">{subOf(type)}</span>
               </div>
@@ -156,7 +158,7 @@ export default function CoresHero({
                     {b.code}
                   </text>
                   <text y={44} className="name">
-                    {NAME[b.type]}
+                    {CORE_NAME[b.type]}
                   </text>
                   <circle cx={26} cy={-26} r={8} className="badge" />
                   <text x={26} y={-23} className="badge-n">
@@ -185,11 +187,11 @@ export default function CoresHero({
               onClick={() => onPick(type)}
             >
               <span className="top">
-                <span className="cd">{BOARD.find((b) => b.type === type)!.code}</span>
+                <span className="cd">{CORE_CODE[type]}</span>
                 <Signal status={s} />
               </span>
               <span className="nm">
-                <b>{NAME[type]}</b>
+                <b>{CORE_NAME[type]}</b>
                 <small>{subOf(type)}</small>
               </span>
               <span className="bar" />
@@ -228,7 +230,7 @@ function TrafficMap({ core, onOpen }: { core: Core; onOpen: () => void }) {
     <div className="ch-map" ref={box}>
       <div className="tm-h">
         <div>
-          <span className="eyebrow">TRAFFIC MAP</span>
+          <span className="cx-eyebrow">TRAFFIC MAP</span>
           <b>{c.mapTitle}</b>
         </div>
         <span className="tm-leg">
