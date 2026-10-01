@@ -732,6 +732,23 @@ export default function RealityScanner({ onPick, onClose, picked }: { onPick: (c
               {scan.state === 'error' && scan.error && <div className="tf-alert">{scan.error}</div>}
             </div>
 
+            {/* Surfaced as soon as a scan finishes, not only inside an active field test:
+                most admins never find the probe otherwise, and it is the only way to see
+                what an operator does to upload. */}
+            {scan.state === 'done' && (
+              <div className="form-section rsc-probe">
+                <b style={{ fontSize: '0.9rem' }}>💻 {rs.field.probe.title}</b>
+                <span className="hint" style={{ margin: 0 }}>{rs.field.probe.hint}</span>
+                <span className="hint" style={{ margin: 0 }}>{rs.field.probe.afterScan}</span>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button type="button" className="btn solid" onClick={() => downloadRealityProbe().catch(() => setError(rs.field.probe.missing))}>
+                    ⬇️ {rs.field.probe.download}
+                  </button>
+                  <span className="hint" style={{ margin: 0 }}>{rs.field.probe.warn}</span>
+                </div>
+              </div>
+            )}
+
             {good.length > 0 && (
               <div className="form-section">
                 <b style={{ fontSize: '0.9rem' }}>📱 {rs.device.title}</b>

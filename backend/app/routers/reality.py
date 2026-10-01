@@ -36,6 +36,7 @@ from app.dependencies import require_permission
 from app.models.node import Node
 from app.network_health.operators import operator_for_ip
 from app.reality import iran_check
+from app.settings_store import get_subscription_url
 from app.subscription.lookup import client_ip
 
 router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
@@ -260,9 +261,15 @@ def _field_links(node: Node, test: dict) -> list[dict]:
     return items
 
 
-def _field_view(node: Node, test: dict, request: Request) -> dict:
+async def _field_base(request: Request, db: AsyncSession) -> str:
+    # The probe fetches this link from a laptop on an Iranian operator with the
+    # VPN off, so it has to be on the customer-facing address that stays open
+    # there — the panel's own domain is often the filtered one.
+    return ((await get_subscription_url(db)) or settings.public_url or str(request.base_url)).rstrip("/")
+
+
+def _field_view(node: Node, test: dict, base: str) -> dict:
     token = _field.get(node.id)
-    base = (settings.public_url or str(request.base_url)).rstrip("/")
     items = _field_links(node, test) if test.get("uuid") else []
     for it in items:
         # Which operator each connection came from, not the addresses
@@ -294,13 +301,13 @@ async def start_field_test(node_id: int, request: Request, body: dict = Body(...
         _field_tokens.pop(old, None)
     token = secrets.token_urlsafe(18)
     _field[node.id], _field_tokens[token] = token, node.id
-    return _field_view(node, test, request)
+    return _field_view(node, test, await _field_base(request, db))
 
 
 @router.get("/nodes/{node_id}/field-test")
 async def field_test_status(node_id: int, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     node = await _node_or_404(node_id, db)
-    return _field_view(node, await _node_call(node, "GET", "/reality/field-test"), request)
+    return _field_view(node, await _node_call(node, "GET", "/reality/field-test"), await _field_base(request, db))
 
 
 @router.delete("/nodes/{node_id}/field-test")
@@ -308,7 +315,7 @@ async def stop_field_test(node_id: int, request: Request, db: AsyncSession = Dep
     node = await _node_or_404(node_id, db)
     test = await _node_call(node, "DELETE", "/reality/field-test")
     _field_tokens.pop(_field.pop(node.id, ""), None)
-    return _field_view(node, test, request)
+    return _field_view(node, test, await _field_base(request, db))
 
 
 # The Windows probe (backend/reality_probe/) measures the same field-test

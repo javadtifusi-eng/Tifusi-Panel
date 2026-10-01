@@ -81,7 +81,13 @@ _TRAFFIC_NAMES = 120
 _FEED_URL = "https://tranco-list.eu/top-1m.csv.zip"
 _FEED_PAGE = 2000
 _VALIDATE_TIMEOUT = 5.0
+_VALIDATE_CONCURRENCY = 64
 _FETCH_TIMEOUT = 10
+# Only this many of the quickest validated names get the careful one-at-a-time
+# timing. The panel Iran-checks the top 30 by latency and proves the top 8 of
+# those, so timing hundreds more (sequentially, ~9 handshakes each) only made
+# the scan take many minutes longer without changing what gets picked.
+_MEASURE_TOP = 60
 
 
 @dataclass
@@ -419,7 +425,9 @@ def _median(xs: list[float]) -> int | None:
 
 
 async def _measure_all(items: list[Candidate]) -> None:
-    usable = [c for c in items if c.usable]
+    # Validation's own first handshake is a rough latency (taken under load),
+    # good enough to pick which names deserve the careful timing.
+    usable = sorted((c for c in items if c.usable), key=lambda c: c.latency_ms or 10**6)[:_MEASURE_TOP]
     _job.phase_total, _job.phase_done = len(usable), 0
     for c in usable:
         await _measure(c, c.ip or c.host)
@@ -437,7 +445,7 @@ async def _measure(c: Candidate, target: str) -> None:
 
 async def _validate(items: list[Candidate]) -> None:
     _job.phase_total, _job.phase_done = len(items), 0
-    sem = asyncio.Semaphore(24)
+    sem = asyncio.Semaphore(_VALIDATE_CONCURRENCY)
 
     async def one(c: Candidate) -> None:
         async with sem:
