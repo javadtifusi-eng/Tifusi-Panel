@@ -90,6 +90,25 @@ _FETCH_TIMEOUT = 10
 _MEASURE_TOP = 60
 
 
+# Built once and shared: ssl.create_default_context() reloads the system CA
+# bundle every call (~38 ms of CPU here), and a scan makes thousands of
+# handshakes from this one thread — rebuilding it per connection was most of
+# the TLS-check phase's time and starved concurrent handshakes into timeouts.
+def _make_ctx(verify: bool, alpn: list[str]) -> ssl.SSLContext:
+    ctx = ssl.create_default_context()
+    if not verify:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    if alpn:
+        ctx.set_alpn_protocols(alpn)
+    return ctx
+
+
+_CTX_VALIDATE = _make_ctx(True, ["h2", "http/1.1"])
+_CTX_PEEK = _make_ctx(False, [])
+_CTX_TIMING = _make_ctx(False, ["h2"])
+
+
 @dataclass
 class Candidate:
     host: str
@@ -314,9 +333,7 @@ def _cert_names(der: bytes) -> list[str]:
 
 
 async def _peer_cert(ip: str) -> bytes | None:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx = _CTX_PEEK
     writer = None
     try:
         _, writer = await asyncio.wait_for(asyncio.open_connection(ip, 443, ssl=ctx), timeout=_DISCOVER_TIMEOUT)
@@ -359,8 +376,7 @@ async def _from_traffic() -> None:
 # --- 2. validate -----------------------------------------------------------
 
 async def _validate_one(c: Candidate) -> None:
-    ctx = ssl.create_default_context()
-    ctx.set_alpn_protocols(["h2", "http/1.1"])
+    ctx = _CTX_VALIDATE
     writer = None
     start = time.monotonic()
     try:
@@ -403,10 +419,7 @@ async def _tcp_ms(ip: str) -> float | None:
 
 
 async def _tls_ms(ip: str, host: str) -> float | None:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    ctx.set_alpn_protocols(["h2"])
+    ctx = _CTX_TIMING
     start = time.monotonic()
     try:
         _, w = await asyncio.wait_for(asyncio.open_connection(ip, 443, ssl=ctx, server_hostname=host), timeout=4)
