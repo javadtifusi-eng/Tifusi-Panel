@@ -1,4 +1,5 @@
 import enum
+import secrets
 import uuid as uuid_lib
 from datetime import datetime, timezone
 
@@ -8,6 +9,12 @@ from sqlalchemy.types import JSON
 
 from app.database import Base
 from app.models.group import group_users
+
+
+def new_ipsec_password() -> str:
+    """Six random digits: what a customer types by hand into a phone's own
+    IKEv2/L2TP/PPTP settings, so it stays short and number-only."""
+    return f"{secrets.randbelow(10**6):06d}"
 
 
 class UserStatus(str, enum.Enum):

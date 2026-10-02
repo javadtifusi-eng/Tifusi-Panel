@@ -12,7 +12,7 @@ from app.groups.access import hosts_for_user, resolve_groups
 from app.links.generator import build_ipsec_configs_for_user, build_links_for_user, build_pptp_configs_for_user
 from app.models.admin import Admin
 from app.models.app_report import AppReport
-from app.models.user import ProxyUser, UserStatus
+from app.models.user import ProxyUser, UserStatus, new_ipsec_password
 from app.models.user_device import UserDevice
 from app.nodes.sync import resync_nodes_in_background
 from app.resellers import check_data_limit, check_no_groups, check_quota, resolve_user_protocols
@@ -112,7 +112,7 @@ async def create_user(
         speed_limit_mbps=payload.speed_limit_mbps,
         note=payload.note,
         protocols=protocols,
-        ipsec_password=payload.ipsec_password,
+        ipsec_password=payload.ipsec_password or new_ipsec_password(),
         admin_id=admin.id,
     )
     user.groups = await resolve_groups(payload.group_ids, db) or []
@@ -163,6 +163,7 @@ async def bulk_create_users(
             hwid_limit=payload.hwid_limit,
             note=payload.note,
             protocols=protocols,
+            ipsec_password=new_ipsec_password(),
             admin_id=admin.id,
         )
         user.groups = list(groups)
