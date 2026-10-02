@@ -53,8 +53,11 @@ def build_iran_config(tunnel: Tunnel, foreign_host: str | None = None) -> dict:
             # far side must match is simply that same address.
             config["spoof_stealth"] = True
             config["spoof_peer_src"] = tunnel.spoof_source
-        if tunnel.foreign_address:
-            config["peer"] = f"{tunnel.foreign_address}:{tunnel.iran_port}"
+        # A foreign Node has no foreign_address of its own; its address
+        # arrives as foreign_host. Without a peer the Iran side won't start.
+        peer_host = tunnel.foreign_address or foreign_host
+        if peer_host:
+            config["peer"] = f"{peer_host}:{tunnel.iran_port}"
     if tunnel.transport == TunnelTransport.udp:
         # UDP forwards cross the raw relay (tunnel port + 1), not KCP.
         config["udp_raw"] = True

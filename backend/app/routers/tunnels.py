@@ -151,6 +151,9 @@ async def _resolve_foreign_node_id(node_id: int | None, db: AsyncSession) -> int
 
 
 def _validate_spoof_carriers(tunnel: Tunnel) -> None:
+    # The agent refuses to start a spoof tunnel with no forged source.
+    if tunnel.transport is TunnelTransport.spoof and not (tunnel.spoof_source or "").strip():
+        raise HTTPException(status_code=400, detail="The spoof transport needs a spoof source")
     if tunnel.spoof_carrier_back and tunnel.spoof_carrier == "auto":
         raise HTTPException(status_code=400, detail="A separate return carrier can't be combined with the auto carrier")
 
@@ -217,12 +220,18 @@ async def get_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> Tunn
     return await _get_tunnel_or_404(tunnel_id, db)
 
 
+_REQUIRED_FIELDS = {"name", "iran_address", "iran_port", "transport", "connection_count"}
+
+
 @router.put("/{tunnel_id}", response_model=TunnelResponse)
 async def update_tunnel(tunnel_id: int, payload: TunnelUpdate, db: AsyncSession = Depends(get_db)) -> Tunnel:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)
 
     data = payload.model_dump(exclude_unset=True, exclude={"foreign_node_id", "forwards"})
     for field, value in data.items():
+        # An explicit null on a required column would only fail at commit, as a 500.
+        if value is None and field in _REQUIRED_FIELDS:
+            continue
         setattr(tunnel, field, value)
 
     if "forwards" in payload.model_fields_set and payload.forwards is not None:
@@ -459,10 +468,11 @@ async def tunnel_throughput(tunnel_id: int, db: AsyncSession = Depends(get_db)) 
 async def test_tunnel(tunnel_id: int, db: AsyncSession = Depends(get_db)) -> TunnelTestResult:
     tunnel = await _get_tunnel_or_404(tunnel_id, db)
 
-    # A udp tunnel listens with KCP over UDP, so a TCP connect to that port
-    # fails whether or not the tunnel is healthy — skipping is honest,
-    # reporting it unreachable would mark a working tunnel broken.
-    if tunnel.transport is TunnelTransport.udp:
+    # A udp tunnel listens with KCP over UDP and a spoof one on a raw/UDP
+    # socket, so a TCP connect to that port fails whether or not the tunnel is
+    # healthy — skipping is honest, reporting it unreachable would mark a
+    # working tunnel broken.
+    if tunnel.transport in (TunnelTransport.udp, TunnelTransport.spoof):
         iran_reachable, iran_latency = None, None
     else:
         iran_reachable, iran_latency = await tcp_probe(tunnel.iran_address, tunnel.iran_port)
