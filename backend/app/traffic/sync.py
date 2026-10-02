@@ -100,11 +100,14 @@ async def collect_traffic(db: AsyncSession) -> None:
         except Exception:
             stats = {}
         # Hysteria2 usage counts exactly like Xray's: without this a user's
-        # data limit would not see a byte that went through it.
-        try:
-            hysteria = await _fetch_hysteria_stats(node)
-        except Exception:
-            hysteria = None
+        # data limit would not see a byte that went through it. A node with no
+        # Hysteria2 core assigned isn't asked at all.
+        hysteria = None
+        if node.hysteria_core_id is not None:
+            try:
+                hysteria = await _fetch_hysteria_stats(node)
+            except Exception:
+                hysteria = None
         if hysteria is not None:
             _hysteria_online[node.id] = list((hysteria.get("online") or {}).keys())
             stats = {**stats}
