@@ -237,8 +237,11 @@ def _l2tp_connection(psk: str) -> tuple[str, str]:
     conn = (
         "  l2tp-psk {\n"
         "    version = 1\n"
+        # modp1024 last: older Android L2TP clients offer only DH group 2 and
+        # were refused with NO_PROPOSAL_CHOSEN; anything newer still gets 2048.
         "    proposals = aes256-sha256-modp2048,aes128-sha256-modp2048,"
-        "aes256-sha1-modp2048,aes128-sha1-modp2048,3des-sha1-modp2048\n"
+        "aes256-sha1-modp2048,aes128-sha1-modp2048,3des-sha1-modp2048,"
+        "aes256-sha256-modp1024,aes128-sha256-modp1024,aes256-sha1-modp1024,aes128-sha1-modp1024,3des-sha1-modp1024\n"
         "    local_addrs = %any\n"
         "    remote_addrs = %any\n"
         "    local { auth = psk }\n"
