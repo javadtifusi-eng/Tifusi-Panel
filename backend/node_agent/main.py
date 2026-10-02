@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 
-from node_agent import hysteria, ipsec, ipsec_stats, limits, wireguard, xray_users
+from node_agent import hysteria, ipsec, ipsec_stats, limits, reality_candidates, reality_field, wireguard, xray_users
 
 try:  # copied in from app/tunnels/cdn_scan.py by node_agent/Dockerfile
     from node_agent import cdn_scan
@@ -390,3 +390,37 @@ async def cdn_check(payload: dict, x_node_api_key: str | None = Header(default=N
         )
     raise HTTPException(status_code=400, detail="unknown check")
 
+
+@app.post("/reality/candidates")
+async def reality_candidates_collect(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Gathers and validates REALITY target names from this node
+    (node_agent/reality_candidates.py). Takes up to a minute or two."""
+    _check_key(x_node_api_key)
+    winners = [str(w) for w in (payload.get("winners") or [])][:100]
+    seeds = {str(k)[:40]: [str(h) for h in v][:100] for k, v in (payload.get("seeds") or {}).items() if isinstance(v, list)}
+    return await reality_candidates.collect(winners, seeds)
+
+
+@app.post("/reality/field-test")
+async def reality_field_test_start(payload: dict, x_node_api_key: str | None = Header(default=None)) -> dict:
+    """Opens throwaway REALITY inbounds for a test from inside Iran
+    (node_agent/reality_field.py). Replaces any test already running."""
+    _check_key(x_node_api_key)
+    try:
+        return await reality_field.start(payload.get("items") or [], payload.get("ttl") or 1800, payload.get("public_ip"),
+                                         keep_previous=bool(payload.get("keep_previous")))
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/reality/field-test")
+async def reality_field_test_status(x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    return reality_field.status()
+
+
+@app.delete("/reality/field-test")
+async def reality_field_test_stop(x_node_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_node_api_key)
+    await reality_field.stop()
+    return reality_field.status()

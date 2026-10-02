@@ -10,7 +10,7 @@ from app.config import settings
 from app.subscription.backup_domains import check_live_domain
 from app.database import async_session, init_db
 from app.network_health.operators import refresh_prefixes
-from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, hysteria, network_health, nodes, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
+from app.routers import admin, api_keys, app_reports, auth, cores, groups, hosts, hysteria, network_health, nodes, reality, resellers, settings as settings_router, setup, shield, stats, subscription, system, tunnels, user_templates, users
 from app.shield.engine import run_shield_cycle
 from app.tls_renewal import renew_certificates
 from app.traffic.sync import run_traffic_cycle
@@ -129,5 +129,8 @@ def create_app() -> FastAPI:
     app.include_router(tunnels.router)
     app.include_router(shield.router)
     app.include_router(network_health.router)
+    app.include_router(reality.router)
+    app.include_router(reality.public_router)
+    app.include_router(reality.probe_download_router)
 
     return app

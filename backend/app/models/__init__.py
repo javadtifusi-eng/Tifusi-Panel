@@ -7,6 +7,7 @@ from app.models.host import Host, HostProtocol, HostSecurity
 from app.models.inbound import Inbound
 from app.models.node import Node, NodeStatus
 from app.models.node_traffic_snapshot import NodeTrafficSnapshot
+from app.models.reality_result import RealityResult
 from app.models.setting import PanelSetting
 from app.models.setup_key import SetupKey
 from app.models.shield import ShieldEvent, ShieldGroup, ShieldMember, ShieldMode
@@ -33,6 +34,7 @@ __all__ = [
     "Node",
     "NodeStatus",
     "NodeTrafficSnapshot",
+    "RealityResult",
     "Core",
     "Group",
     "PanelSetting",
