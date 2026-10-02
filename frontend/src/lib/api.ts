@@ -1441,3 +1441,57 @@ export async function setBackupAutoFailover(on: boolean): Promise<PanelSettings>
   const res = await authorizedFetch('/settings', { method: 'PUT', body: JSON.stringify({ backup_auto_failover: on }) })
   return res.json()
 }
+
+// ── REALITY scan for an Iranian operator (backend app/routers/reality.py).
+// The probe on the admin's phone or laptop measures; the panel only starts a
+// scan, hands out its link and shows what came back.
+
+export interface RealityScan {
+  state: 'idle' | 'collecting' | 'ready' | 'failed'
+  error?: string | null
+  round?: number
+  run_id?: string
+  token?: string
+  node_id?: number
+  count?: number
+  expires_at?: number
+  link?: string
+  download_base?: string
+}
+
+export interface RealityResult {
+  run_at: string
+  run_id: string
+  round: number
+  operator: string | null
+  sni: string
+  source: string | null
+  label: string | null
+  port: number
+  fingerprint: string
+  ok: boolean
+  delay_ms: number | null
+  up_bps: number | null
+  down_bps: number | null
+  error: string | null
+}
+
+export async function getRealityScan(): Promise<RealityScan> {
+  const res = await authorizedFetch('/reality/scan')
+  return res.json()
+}
+
+export async function startRealityScan(nodeId: number): Promise<RealityScan> {
+  const res = await authorizedFetch(`/reality/nodes/${nodeId}/scan`, { method: 'POST' })
+  return res.json()
+}
+
+export async function stopRealityScan(): Promise<RealityScan> {
+  const res = await authorizedFetch('/reality/scan', { method: 'DELETE' })
+  return res.json()
+}
+
+export async function listRealityResults(days = 14): Promise<{ results: RealityResult[] }> {
+  const res = await authorizedFetch(`/reality/results?days=${days}`)
+  return res.json()
+}

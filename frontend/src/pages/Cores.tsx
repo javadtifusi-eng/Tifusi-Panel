@@ -3,6 +3,7 @@ import { describeStream, parseShareLink, ShareLinkError } from '../lib/shareLink
 import { IconArrow, IconBolt, IconCopy, IconGlobe, IconLock, IconPlus, IconRefresh, IconServer, IconShield, IconUser } from '../components/icons'
 import { Empty, Field, Sheet, highlightJsonLines, useToast } from '../components/ui'
 import { useLang } from '../i18n/LangContext'
+import SniScanner from '../components/SniScanner'
 import {
   ApiError,
   createCore,
@@ -1487,6 +1488,8 @@ export default function CoresPage({ createSignal = 0 }: { createSignal?: number 
           )}
         </section>
       )}
+
+      <SniScanner />
 
       {code && codeCore && <CodeSheet core={codeCore} part={code.part} onPart={(part) => setCode({ coreId: codeCore.id, part })} onClose={() => setCode(null)} />}
 

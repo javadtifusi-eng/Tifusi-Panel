@@ -37,6 +37,7 @@ from app.dependencies import require_permission
 from app.models.node import Node
 from app.models.reality_result import RealityResult
 from app.network_health.operators import operator_for_ip
+from app.settings_store import get_public_url, get_subscription_url
 from app.subscription.lookup import client_ip
 
 router = APIRouter(prefix="/api/reality", tags=["reality"], dependencies=[Depends(require_permission("cores"))])
@@ -156,15 +157,19 @@ async def start_scan(node_id: int, request: Request, db: AsyncSession = Depends(
         "started_at": time.time(), "expires_at": time.time() + _TTL,
     }
     _run["task"] = asyncio.create_task(_collect(_run, node, await _winners(db)))
-    return await scan_status()
+    return await scan_status(request, db)
 
 
 @router.get("/scan")
-async def scan_status() -> dict:
+async def scan_status(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     if _run is None or time.time() > _run["expires_at"]:
         return {"state": "idle"}
     plan = _plan(_run)
-    return {**plan, "token": _run["token"], "node_id": _run["node_id"], "count": len(plan["configs"])}
+    # The customer-facing domain: it is the one most likely to open on the
+    # operator, and the probe falls back to a VPN for the first fetch if not.
+    base = ((await get_subscription_url(db)) or (await get_public_url(db)) or str(request.base_url)).rstrip("/")
+    return {**plan, "token": _run["token"], "node_id": _run["node_id"], "count": len(plan["configs"]),
+            "link": f"{base}/api/reality/run/{_run['token']}", "download_base": f"{base}/api/reality/probe"}
 
 
 @router.delete("/scan")
