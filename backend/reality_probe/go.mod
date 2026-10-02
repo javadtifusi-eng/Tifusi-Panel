@@ -1,8 +1,11 @@
 module tifusi/reality-probe
 
-go 1.26
+go 1.26.0
 
-require github.com/xtls/xray-core v1.260327.0
+require (
+	github.com/xtls/xray-core v1.260327.0
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20260929172509-b39ff6d641ec
+)
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect

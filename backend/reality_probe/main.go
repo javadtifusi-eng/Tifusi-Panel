@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -110,7 +111,7 @@ func run(link string) error {
 	}
 	var plan Plan
 	viaVPN := false
-	if err := getJSON(link, &plan); err != nil {
+	if err := getJSON(link, &plan); errors.As(err, new(unreachable)) {
 		fmt.Println("⚠️ پنل بدون VPN باز نشد:", err)
 		ask("👈 فقط برای گرفتن لیست، VPN را روشن کن و Enter بزن...")
 		viaVPN = true
@@ -312,10 +313,14 @@ func publicIP() string {
 	return ""
 }
 
+// unreachable means the panel never answered, as opposed to answering with
+// an error: only then is a VPN worth asking for.
+type unreachable struct{ error }
+
 func getJSON(url string, v any) error {
 	resp, err := api.Get(url)
 	if err != nil {
-		return fmt.Errorf("پنل جواب نداد: %v", err)
+		return unreachable{fmt.Errorf("پنل جواب نداد: %v", err)}
 	}
 	return decode(resp, v)
 }
