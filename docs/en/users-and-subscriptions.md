@@ -24,7 +24,7 @@ The device limit cannot be applied to Hysteria2, which runs outside the nodes, o
 Every user has one subscription URL, `/sub/{secret}`, shown with a QR code, and a short access code, `/code/{code}`, meant for reading out when a link cannot be sent. The subscription delivers:
 
 - Per-host `vless://`, `vmess://`, `trojan://`, `ss://` and `hysteria2://` URIs.
-- Connection parameters for L2TP and IKEv2, and an IKEv2 `.mobileconfig` profile for iOS and macOS.
+- Connection parameters for L2TP and IKEv2, and an IKEv2 `.mobileconfig` profile for iOS and macOS. Opened in a browser, each L2TP and IKEv2 card also has an animated Android guide: a phone that types the user's own values into Android's VPN settings step by step, with every value listed beneath it to copy.
 - A native profile for Clash-family and sing-box clients, detected by User-Agent.
 
 Resetting a user's secret invalidates both the old link and the old access code.

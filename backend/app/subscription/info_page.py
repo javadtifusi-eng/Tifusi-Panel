@@ -19,6 +19,8 @@ from pathlib import Path
 import qrcode
 import qrcode.image.svg
 
+from app.subscription.android_guide import ANDROID_GUIDE_CSS, ANDROID_GUIDE_JS, android_guide_html
+
 _ACCENT = "#f97316"
 
 _ASSETS = Path(__file__).resolve().parent / "assets"
@@ -156,12 +158,17 @@ def build_info_page_html(
     # Windows) or by the one-tap profile (iPhone), so each card lists exactly
     # the fields those settings ask for, starting with the type to pick.
     for ike in ikev2_configs:
+        # A PSK is only set on a Core in shared-secret mode (see
+        # build_ipsec_configs_for_user), where Android needs a different Type.
+        psk_mode = bool(ike.get("psk"))
         body = f"""
-          <div class="kv"><span>نوع</span><span class="mono">IKEv2/IPSec MSCHAPv2</span></div>
+          <div class="kv"><span>نوع</span><span class="mono">{'IKEv2/IPSec PSK' if psk_mode else 'IKEv2/IPSec MSCHAPv2'}</span></div>
           <div class="kv"><span>سرور</span><span class="mono">{_esc(ike['server'])}</span></div>
           <div class="kv"><span>یوزرنیم</span><span class="mono">{_esc(ike['username'])}</span></div>
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(ike['password'])}</span></div>
+          {f'<div class="kv"><span>PSK</span><span class="mono">{_esc(ike["psk"])}</span></div>' if psk_mode else ''}
           {f'<a class="mobileconfig-btn" href="{_esc(ike.get("install_url") or ike["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if ike.get('mobileconfig_url') else ''}
+          {android_guide_html("ikev2-psk" if psk_mode else "ikev2", server=ike['server'], username=ike['username'], password=ike['password'], psk=ike.get('psk'))}
         """
         copy_text = f"Server: {ike['server']}\nUsername: {ike['username']}\nPassword: {ike['password']}"
         sections.append(_card(f"IKEv2 · {ike['remark']}", body, copy_text))
@@ -174,6 +181,7 @@ def build_info_page_html(
           <div class="kv"><span>پسورد</span><span class="mono">{_esc(l2tp['password'])}</span></div>
           {f'<div class="kv"><span>PSK</span><span class="mono">{_esc(l2tp["psk"])}</span></div>' if l2tp.get('psk') else ''}
           {f'<a class="mobileconfig-btn" href="{_esc(l2tp.get("install_url") or l2tp["mobileconfig_url"])}">{_APPLE_SVG}<span>نصب مستقیم روی آیفون و مک</span></a>{_IOS_HELP}' if l2tp.get('mobileconfig_url') else ''}
+          {android_guide_html("l2tp", server=l2tp['server'], username=l2tp['username'], password=l2tp['password'], psk=l2tp.get('psk'))}
         """
         copy_text = f"Server: {l2tp['server']}\nUsername: {l2tp['username']}\nPassword: {l2tp['password']}"
         sections.append(_card(f"L2TP · {l2tp['remark']}", body, copy_text))
@@ -189,6 +197,8 @@ def build_info_page_html(
         """
         copy_text = f"Server: {pptp['server']}\nUsername: {pptp['username']}\nPassword: {pptp['password']}"
         sections.append(_card(f"PPTP · {pptp['remark']}", body, copy_text))
+
+    guide_needed = bool(ikev2_configs or l2tp_configs)
 
     if not sections:
         sections.append('<div class="empty">هیچ سرویسی برای این اکانت تعریف نشده.</div>')
@@ -306,6 +316,7 @@ def build_info_page_html(
   .reset-btn.confirm {{ background: #3a1616; color: #fecaca; border-color: #f87171; }}
   .reset-btn:disabled {{ opacity: 0.6; cursor: default; }}
   .reset-hint {{ text-align: center; color: #6b6b6b; font-size: 11px; margin-top: 6px; }}
+  {ANDROID_GUIDE_CSS if guide_needed else ""}
   .footer {{ display: flex; justify-content: center; margin-top: 28px; opacity: 0.35; }}
   .footer img {{ width: 44px; height: 24px; }}
 </style>
@@ -419,5 +430,6 @@ def build_info_page_html(
       }});
     }}
   </script>
+  {f"<script>{ANDROID_GUIDE_JS}</script>" if guide_needed else ""}
 </body>
 </html>"""
