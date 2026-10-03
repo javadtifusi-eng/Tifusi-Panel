@@ -371,6 +371,44 @@ def _ikev2_connection(
     return conn, pool, secrets_block
 
 
+def _ikev2_user_psk(eap_conn: str, host: str, users: list[dict]) -> tuple[str, str]:
+    """Per-user IKEv2 PSK next to the cert+EAP connection: identifier = the
+    username, pre-shared key = the user's own password. For phones and lines
+    where the server certificate never gets through (on some Hamrah-e Aval
+    ranges the IKE_AUTH carrying it is dropped, and some phones refuse it),
+    since a PSK handshake carries no certificate at all.
+
+    Each user gets two connections whose remote id is exactly their name: as
+    an FQDN id (Xiaomi and most clients) and as a key id (Samsung / Android's
+    own IKE client sends a bare name that way). A made-up identity matches
+    none of them, so it can never be checked against the L2TP core's shared
+    key, which is stored without an owner and would otherwise match any name
+    — a single `remote { auth = psk }` connection let anyone in with that key.
+    EAP clients still reach ikev2-eap: charon switches to it when the client
+    asks for EAP, whichever connection its identity first matched."""
+    base = eap_conn.replace("    send_cert = always\n", "")
+    base = re.sub(
+        r"    local \{\n.*?\n    \}\n",
+        f"    local {{\n      auth = psk\n      id = {host}\n    }}\n",
+        base, count=1, flags=re.S,
+    )
+    conns, secrets = [], []
+    for i, u in enumerate(users):
+        username = str(u.get("username", "")).replace('"', '\\"')
+        password = str(u.get("password", "")).replace('"', '\\"')
+        if not username or not password:
+            continue
+        for kind, remote in (("f", username), ("k", f"keyid:{username}")):
+            conn = base.replace("  ikev2-eap {", f"  psk-{kind}{i} {{", 1)
+            conns.append(re.sub(
+                r"    remote \{\n.*?\n    \}\n",
+                f'    remote {{\n      auth = psk\n      id = "{remote}"\n    }}\n',
+                conn, count=1, flags=re.S,
+            ))
+            secrets.append(f'  ike-{"u" if kind == "f" else "k"}{i} {{\n    id = "{remote}"\n    secret = "{password}"\n  }}\n')
+    return "".join(conns), "".join(secrets)
+
+
 def _swanctl_conf_multi(cores: list[dict]) -> str:
     """One swanctl.conf that holds every assigned IPsec core at once, so a
     single node can serve IKEv2 and L2TP side by side. charon keys inbound
@@ -392,6 +430,11 @@ def _swanctl_conf_multi(cores: list[dict]) -> str:
             conns.append(conn)
             pools.append(pool)
             secrets.append(secret)
+            host = (core.get("remote_id") or "").strip()
+            if (core.get("ikev2_auth_mode") or "eap") == "eap" and host:
+                psk_conns, psk_secrets = _ikev2_user_psk(conn, host, core.get("users") or [])
+                conns.append(psk_conns)
+                secrets.append(psk_secrets)
     pools_doc = ("pools {\n" + "".join(pools) + "}\n") if pools else ""
     return (
         "connections {\n" + "".join(conns) + "}\n"
