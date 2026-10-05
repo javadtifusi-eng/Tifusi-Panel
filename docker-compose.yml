@@ -1,0 +1,49 @@
+services:
+  panel:
+    # The prebuilt image (built by .github/workflows/build-images.yml from the
+    # private source repository). See install.sh.
+    image: ${TIFUSI_PANEL_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-backend:latest}
+    container_name: tifusi-panel
+    restart: unless-stopped
+    ports:
+      # Loopback only. Everything outside reaches the API through the dashboard's
+      # nginx (/api/, /sub/, /code/, /app/ on the HTTPS port), with TLS and the real
+      # client IP. Published on every address it served plain HTTP — an admin login
+      # over it traveled unencrypted — and let anyone set X-Real-IP themselves.
+      - "127.0.0.1:${TIFUSI_PANEL_PORT:-8000}:8000"
+      # Only for Settings > SSL Certificate > "Get free SSL" — certbot's
+      # standalone plugin needs to answer Let's Encrypt's HTTP-01 challenge
+      # on the real port 80 itself. Harmless to leave published even if
+      # that button is never used.
+      - "80:80"
+    volumes:
+      - ./data:/app/data
+      # Always mounted, shared with the dashboard container below: this is
+      # where the panel writes a cert/key uploaded from Settings > SSL
+      # Certificate, and (for the separate advanced "direct TLS" option,
+      # see the README) where TIFUSI_SSL_CERTFILE/TIFUSI_SSL_KEYFILE point.
+      - ./certs:/app/certs
+    env_file:
+      - .env
+
+  dashboard:
+    image: ${TIFUSI_DASHBOARD_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-frontend:latest}
+    container_name: tifusi-dashboard
+    restart: unless-stopped
+    ports:
+      - "${TIFUSI_DASHBOARD_PORT:-8080}:80"
+      # 443 is what a browser assumes and what Let's Encrypt validates
+      # against, so it stays the default — but it's configurable for a server
+      # fronted by something that expects a different one (Cloudflare's 2053,
+      # 2083, 2087, 2096, 8443). Set TIFUSI_PUBLIC_URL to match, or
+      # subscription links will point at a port nothing is listening on.
+      - "${TIFUSI_DASHBOARD_HTTPS_PORT:-443}:443"
+    volumes:
+      # Always mounted, harmless if empty: drop fullchain.pem/privkey.pem in
+      # here (install.sh's Let's Encrypt step does this for you) to serve
+      # the dashboard, API and subscription links over HTTPS directly on
+      # port 443. Picked up automatically at container start — no
+      # nginx.conf edits or restart-time toggling needed.
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - panel

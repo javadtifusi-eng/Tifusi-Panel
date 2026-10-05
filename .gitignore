@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+data/
+.env
+node_modules/
+dist/
+.DS_Store
+*.log
+*.tsbuildinfo
+certs/
+letsencrypt-work/
+letsencrypt-work*/
+tifusi-backup-*.tar.gz
+mysql-data/

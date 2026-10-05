@@ -1,0 +1,51 @@
+name: Build tunnel agent
+
+# Publishes the prebuilt binaries backend/tunnel_agent/install.sh downloads, so the
+# Iran and foreign servers never compile anything (go.dev is unreachable from many
+# Iranian networks). The source is checked out from the private repository with a
+# read-only deploy key; the fixed "tunnel-agent" release here keeps the download URL
+# stable and each run replaces its assets in place.
+#
+#   gh workflow run build-tunnel-agent.yml -R javadtifusi-eng/Tifusi-Panel
+# A push to the ci-test branch only builds (no release), to try a workflow change.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Source branch, tag or commit"
+        default: main
+  push:
+    branches: [ci-test]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: javadtifusi-eng/Tifusi-Panel-Source
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          ref: ${{ github.event.inputs.ref || 'main' }}
+          path: src
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/backend/tunnel_agent/go.mod
+          cache-dependency-path: src/backend/tunnel_agent/go.sum
+
+      - name: Build binaries
+        working-directory: src/backend/tunnel_agent
+        run: bash build.sh
+
+      - name: Publish on the tunnel-agent release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tunnel-agent
+          name: Tifusi Tunnel agent
+          make_latest: false
+          overwrite_files: true
+          files: src/backend/tunnel_agent/dist/tifusi-tunnel-linux-*

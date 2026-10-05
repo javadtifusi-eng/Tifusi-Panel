@@ -1,0 +1,8 @@
+---
+// The docs site is dark-only: force the dark theme and skip the theme picker.
+---
+
+<script is:inline>
+	document.documentElement.dataset.theme = 'dark';
+	window.StarlightThemeProvider = { updatePickers() {} };
+</script>

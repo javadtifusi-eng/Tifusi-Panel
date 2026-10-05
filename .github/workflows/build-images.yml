@@ -1,0 +1,77 @@
+name: Build & publish images
+
+# The source lives in the private repository javadtifusi-eng/Tifusi-Panel-Source;
+# this public repository only carries the install files. The workflow checks the
+# source out with a read-only deploy key (secret SOURCE_DEPLOY_KEY), builds the
+# images there (they ship compiled bytecode only, see the Dockerfiles) and
+# publishes them to the same ghcr.io names install.sh, install-node.sh and
+# `tifusi update` pull.
+#
+# Run it after pushing to the source repository:
+#   gh workflow run build-images.yml -R javadtifusi-eng/Tifusi-Panel
+# A push to the ci-test branch builds everything under the "ci-test" tag only,
+# so a change to this workflow can be tried without touching :latest.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Source branch, tag or commit"
+        default: main
+  push:
+    branches: [ci-test]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: tifusi-panel-backend
+            context: backend
+            dockerfile: backend/Dockerfile
+          - image: tifusi-panel-frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+          - image: tifusi-node-agent
+            context: backend
+            dockerfile: backend/node_agent/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: javadtifusi-eng/Tifusi-Panel-Source
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          ref: ${{ github.event.inputs.ref || 'main' }}
+          path: src
+
+      - id: tags
+        run: |
+          img="${REGISTRY}/${{ github.repository_owner }}/${{ matrix.image }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "list=${img}:ci-test" >> "$GITHUB_OUTPUT"
+          else
+            echo "list=${img}:latest,${img}:$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: src/${{ matrix.context }}
+          file: src/${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
