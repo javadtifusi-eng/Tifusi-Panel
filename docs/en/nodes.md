@@ -26,6 +26,35 @@ With IKEv2 in the IPsec slot and an L2TP core in the L2TP slot, one server serve
    `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules, turns on BBR congestion control with larger network buffers (`/etc/sysctl.d/99-tifusi-network.conf`) for better throughput on long, lossy links, and starts the `tifusi-node` container on the host network.
 3. Select **Sync** in the panel to push the initial configuration. After the first successful sync, health checks and traffic collection run continuously.
 
+## Install over SSH (from the panel)
+
+Next to the copy-paste command, the node's **SSH** button lets the panel do the install itself. It is an extra option: the manual command above keeps working exactly as before.
+
+1. Enter the server's SSH user and port and, for the first connection only, its password or a private key. Leave **Install the panel's key** ticked: the panel adds its own key (`data/ssh/id_ed25519`, created on first use) to the server's `authorized_keys`, and every later connection uses that key. Your password or key is never stored.
+2. Choose **Offline (bundle)** or **Online (GitHub)** and press **Start install**. Online runs the same one-line installer on the server. Offline uploads the bundle described below over SFTP (skipped when the same file is already there, checked by SHA-256) and runs it. The installer's output streams into the sheet, and the panel syncs the node when it finishes.
+3. The server's host key is pinned on the first connection and checked before any credential is sent on later ones. If the server is reinstalled, use **Forget** next to the fingerprint.
+
+The **Terminal** tab runs any command on the node's server (as root, or through passwordless `sudo` for another user), with output and exit code, plus ready-made buttons for node status, logs, restart, disk and memory, firewall and ports. SSH on nodes is open to the panel owner only, and every command is logged with the admin who ran it.
+
+## Offline install bundle
+
+For a server that can reach neither GitHub, ghcr.io, Docker Hub nor an apt mirror (an Iranian server during an international shutdown), build the offline bundle on the panel server, which still has open internet:
+
+```bash
+tifusi panel node-bundle
+```
+
+It writes `data/node-bundle/tifusi-node-offline.tar` with the node image (`docker save`), Docker's static binaries (installed with their own systemd unit on a server without Docker, any distro), `iptables`/`kmod`/`iproute2` packages for Ubuntu 22.04/24.04 and Debian 12 (used only when the server lacks them), both tunnel binaries, the `tifusi node` command and a `SHA256SUMS` file the installer checks first. Rebuild it after updating the panel so nodes get the new image.
+
+Use it from the node's **SSH** sheet (offline method), or download it there and copy it over the domestic network yourself:
+
+```bash
+scp tifusi-node-offline.tar root@NODE:/root/
+ssh root@NODE 'cd /root && tar xf tifusi-node-offline.tar && cd tifusi-node-offline && bash install-node.sh <API_KEY> [PORT]'
+```
+
+`install-node.sh` switches to offline mode only when it runs from an unpacked bundle (or `TIFUSI_OFFLINE_DIR` points at one); the usual `curl` one-liner is unchanged. In offline mode it also opens the agent port when ufw is active. Keep a copy of the bundle on the Iranian server before a shutdown begins.
+
 ## Managing a node server
 
 The installer adds `tifusi node`, the node server's own menu, with `status`, `logs`, `restart` and `uninstall`, either interactively or as `tifusi node <action>`.

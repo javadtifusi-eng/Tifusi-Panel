@@ -5,6 +5,9 @@
 #
 # Usage:
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- <API_KEY> [PORT]
+#
+# Offline (no GitHub/ghcr/apt), from an unpacked tifusi-node-offline bundle:
+#   bash install-node.sh <API_KEY> [PORT]
 
 set -euo pipefail
 
@@ -302,6 +305,79 @@ printf '%s  Tifusi Node installer%s\n' "$C_GREEN" "$C_RESET"
 API_KEY="${1:-${TIFUSI_NODE_API_KEY:-}}"
 PORT="${2:-62050}"
 
+# Offline mode: run from inside an unpacked tifusi-node-offline bundle
+# (scripts/build-node-bundle.sh), or with TIFUSI_OFFLINE_DIR pointing at one.
+# Everything comes from the bundle — Docker, the node image, the management
+# command — so nothing touches GitHub, ghcr.io or apt. The usual curl
+# one-liner has no bundle beside it and takes the online path exactly as before.
+OFFLINE_DIR="${TIFUSI_OFFLINE_DIR:-}"
+if [ -z "$OFFLINE_DIR" ] && [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+  _self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  [ -f "$_self_dir/images/tifusi-node-agent.tar.gz" ] && OFFLINE_DIR="$_self_dir"
+fi
+if [ -n "$OFFLINE_DIR" ]; then
+  [ -f "$OFFLINE_DIR/images/tifusi-node-agent.tar.gz" ] || fail "No node image in $OFFLINE_DIR/images — is this an unpacked offline bundle?"
+  info "Offline install from $OFFLINE_DIR (bundle $(cat "$OFFLINE_DIR/VERSION" 2>/dev/null || echo '?'))"
+  if [ -f "$OFFLINE_DIR/SHA256SUMS" ] && command -v sha256sum >/dev/null 2>&1; then
+    (cd "$OFFLINE_DIR" && sha256sum --quiet -c SHA256SUMS >/dev/null 2>&1) \
+      || fail "The bundle is damaged (checksum mismatch) — copy it to this server again."
+  fi
+fi
+
+# Debian/Ubuntu packages from the bundle, for a stripped-down image that lacks
+# a tool Docker or this script needs; dpkg only, never apt.
+install_bundle_debs() {
+  local codename dir
+  codename=$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-}")
+  dir="$OFFLINE_DIR/debs/$codename"
+  if [ -z "$codename" ] || ! ls "$dir"/*.deb >/dev/null 2>&1; then
+    warn "No packages for '${codename:-this system}' in the bundle — skipping."
+    return 0
+  fi
+  command -v dpkg >/dev/null 2>&1 || return 0
+  dpkg -i --skip-same-version "$dir"/*.deb >/dev/null 2>&1 || dpkg --configure -a >/dev/null 2>&1 || true
+}
+
+# Docker's static release: dockerd starts its own bundled containerd, so a
+# single systemd unit is enough.
+install_static_docker() {
+  local tmp
+  command -v iptables >/dev/null 2>&1 || install_bundle_debs
+  tmp="$(mktemp -d)"
+  tar -xzf "$OFFLINE_DIR/docker/docker.tgz" -C "$tmp"
+  install -m 0755 "$tmp"/docker/* /usr/bin/
+  rm -rf "$tmp"
+  getent group docker >/dev/null 2>&1 || groupadd -r docker 2>/dev/null || true
+  cat > /etc/systemd/system/docker.service <<'UNIT'
+[Unit]
+Description=Docker Application Container Engine (Tifusi offline install)
+After=network-online.target firewalld.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/dockerd
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutStartSec=0
+Restart=always
+RestartSec=2
+LimitNOFILE=infinity
+LimitNPROC=infinity
+TasksMax=infinity
+Delegate=yes
+KillMode=process
+OOMScoreAdjust=-500
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now docker
+  local _
+  for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && return 0; sleep 1; done
+  return 1
+}
+
 # Asked before anything runs, so the rest of the install needs no attention.
 if [ -z "$API_KEY" ]; then
   printf '\n'
@@ -314,6 +390,9 @@ STEP_TOTAL=5
 step "Docker"
 if command -v docker >/dev/null 2>&1; then
   done_line "Docker is already installed"
+elif [ -n "$OFFLINE_DIR" ]; then
+  run_spinner "Installing Docker from the bundle..." install_static_docker \
+    || fail "Docker from the bundle didn't start — check: journalctl -u docker -n 30"
 else
   run_spinner "Installing Docker (official script)..." bash -c 'curl -fsSL https://get.docker.com | sh' || true
   command -v docker >/dev/null 2>&1 \
@@ -328,7 +407,13 @@ step "Node image"
 # the git clone it needs) if the pull fails — offline registry, a fork
 # with no images published yet, or this repo's Packages not made Public.
 PREBUILT_IMAGE="ghcr.io/javadtifusi-eng/tifusi-node-agent:latest"
-if pull_with_progress "Downloading the node image..." "$PREBUILT_IMAGE"; then
+if [ -n "$OFFLINE_DIR" ]; then
+  run_spinner "Loading the node image from the bundle..." docker load -q -i "$OFFLINE_DIR/images/tifusi-node-agent.tar.gz" || exit 1
+  # images/IMAGE names what was saved (the ghcr image, or a local build).
+  _bundled_ref=$(cat "$OFFLINE_DIR/images/IMAGE" 2>/dev/null || echo "$PREBUILT_IMAGE")
+  [ "$_bundled_ref" = tifusi-node-agent:latest ] || docker tag "$_bundled_ref" tifusi-node-agent
+  docker image inspect tifusi-node-agent >/dev/null 2>&1 || fail "The bundle's image didn't load as tifusi-node-agent."
+elif pull_with_progress "Downloading the node image..." "$PREBUILT_IMAGE"; then
   docker tag "$PREBUILT_IMAGE" tifusi-node-agent
 else
   fail "Couldn't download the node image from ghcr.io — check this server's internet access and try again."
@@ -455,19 +540,38 @@ if ! run_spinner "Waiting for the agent on port $PORT..." wait_for_agent; then
   exit 1
 fi
 
+# The agent's port has to be reachable from the panel; only touched when ufw
+# is already enforcing, so a server without a firewall is left as it was.
+if [ -n "$OFFLINE_DIR" ] && command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow "$PORT/tcp" comment 'Tifusi node agent' >/dev/null 2>&1 || true
+fi
+
+if [ -n "$OFFLINE_DIR" ] && [ -d "$OFFLINE_DIR/tunnel" ]; then
+  # Placed for a later tunnel install on this server; nothing is started.
+  case "$(uname -m)" in x86_64 | amd64) _ta=amd64 ;; aarch64 | arm64) _ta=arm64 ;; *) _ta="" ;; esac
+  if [ -n "$_ta" ] && [ -s "$OFFLINE_DIR/tunnel/tifusi-tunnel-linux-$_ta" ] && [ ! -e /usr/local/bin/tifusi-tunnel ]; then
+    install -m 0755 "$OFFLINE_DIR/tunnel/tifusi-tunnel-linux-$_ta" /usr/local/bin/tifusi-tunnel
+  fi
+fi
+
 step "Management command"
+# Not CLONE_DIR itself: the EXIT trap deletes that, and here it would be the bundle.
+SCRIPTS_SRC="$CLONE_DIR"
+if [ -n "$OFFLINE_DIR" ] && [ -f "$OFFLINE_DIR/scripts/manage-node.sh" ]; then
+  SCRIPTS_SRC="$OFFLINE_DIR"
+fi
 # The fast path pulls the prebuilt image and never clones, so fetch just the
 # three files the command is made of instead of cloning the whole repo for them.
-if [ ! -f "$CLONE_DIR/scripts/manage-node.sh" ]; then
+if [ ! -f "$SCRIPTS_SRC/scripts/manage-node.sh" ]; then
   mkdir -p "$CLONE_DIR/scripts"
   for f in install-commands.sh manage-node.sh tifusi; do
     curl -fsSL "$RAW_BASE/scripts/$f" -o "$CLONE_DIR/scripts/$f" || break
   done
 fi
-if [ -f "$CLONE_DIR/scripts/install-commands.sh" ] && [ -f "$CLONE_DIR/scripts/manage-node.sh" ]; then
+if [ -f "$SCRIPTS_SRC/scripts/install-commands.sh" ] && [ -f "$SCRIPTS_SRC/scripts/manage-node.sh" ]; then
   # shellcheck source=scripts/install-commands.sh
-  source "$CLONE_DIR/scripts/install-commands.sh"
-  install_node_commands "$CLONE_DIR"
+  source "$SCRIPTS_SRC/scripts/install-commands.sh"
+  install_node_commands "$SCRIPTS_SRC"
   done_line "Installed the 'tifusi node' command"
 else
   warn "Couldn't install the 'tifusi node' command — to remove this node later: docker rm -f tifusi-node"

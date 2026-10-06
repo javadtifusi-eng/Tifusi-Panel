@@ -457,6 +457,18 @@ action_uninstall() {
   exit 0
 }
 
+# The offline node bundle (scripts/build-node-bundle.sh) for servers that can't
+# reach GitHub/ghcr/apt; the panel serves it from data/node-bundle/ and uploads
+# it from a node's "Install over SSH" sheet.
+action_node_bundle() {
+  if [ ! -f scripts/build-node-bundle.sh ]; then
+    err "scripts/build-node-bundle.sh is missing — update the panel first (tifusi panel update)."
+    return 1
+  fi
+  info "Building the offline node bundle (node image, Docker, packages, tunnel binaries)..."
+  bash scripts/build-node-bundle.sh
+}
+
 menu() {
   banner
   printf '\n%s  What would you like to do?%s\n\n' "$C_CYAN" "$C_RESET"
@@ -472,6 +484,7 @@ menu() {
   printf '  %s10)%s Remove a node from this panel\n' "$C_GREEN" "$C_RESET"
   printf '  %s11)%s Edit the settings file (.env)\n' "$C_GREEN" "$C_RESET"
   printf '  %s12)%s Uninstall panel completely\n' "$C_GREEN" "$C_RESET"
+  printf '  %s13)%s Build the offline node bundle\n' "$C_GREEN" "$C_RESET"
   printf '  %s 0)%s Exit\n\n' "$C_GRAY" "$C_RESET"
   read -r -p "$(printf '%sEnter your choice: %s' "$C_GREEN" "$C_RESET")" choice
   echo
@@ -488,6 +501,7 @@ menu() {
     10) action_remove_node ;;
     11) action_edit_env ;;
     12) action_uninstall ;;
+    13) action_node_bundle ;;
     0) exit 0 ;;
     *) warn "Invalid choice." ;;
   esac
@@ -508,6 +522,7 @@ case "${1:-}" in
   remove-node) action_remove_node ;;
   env) action_edit_env ;;
   uninstall) action_uninstall ;;
+  node-bundle) action_node_bundle ;;
   "")
     while true; do
       menu

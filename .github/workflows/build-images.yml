@@ -75,3 +75,32 @@ jobs:
           tags: ${{ steps.tags.outputs.list }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # The offline node bundle (scripts/build-node-bundle.sh) for servers that can't
+  # reach GitHub, ghcr.io or apt, built from the node image just published and
+  # kept on the fixed "node-bundle" release, so its download URL never changes.
+  node-bundle:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the offline node bundle
+        env:
+          BUNDLE_OUT_DIR: dist
+          NO_COLOR: "1"
+        run: bash scripts/build-node-bundle.sh
+
+      - name: Publish on the node-bundle release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: node-bundle
+          name: Tifusi offline node bundle
+          make_latest: false
+          overwrite_files: true
+          files: |
+            dist/tifusi-node-offline.tar
+            dist/bundle.json

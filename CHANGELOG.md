@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v1.5.0 — 2026-10-06
+
+### Nodes
+- **Install over SSH.** A node's new **SSH** button lets the panel install the node itself: enter the server's SSH password or private key once, and the panel adds its own key (`data/ssh/`) to the server so later connections need nothing typed. Credentials are never stored. The installer's output streams into the sheet and the node is synced when it finishes. The server's host key is pinned on first contact and checked before any credential is sent. Owner only. The copy-paste install command is unchanged and still works as before.
+- **Node terminal.** The same sheet runs commands on the node's server with live output and the exit code, with ready buttons for node status, logs, restart, disk and memory, firewall and ports. Every command is logged with the admin who ran it.
+- **Offline node bundle.** `tifusi panel node-bundle` builds `data/node-bundle/tifusi-node-offline.tar` on the panel server: the node image, Docker's static binaries, `iptables`/`kmod`/`iproute2` packages for Ubuntu 22.04/24.04 and Debian 12, both tunnel binaries and the `tifusi node` command, checked by `SHA256SUMS`. It installs a node on a server with no GitHub, ghcr.io, Docker Hub or apt access (verified on a fresh Ubuntu 24.04 with no network at all), from the SSH sheet or by hand with `bash install-node.sh <API_KEY>` inside the unpacked folder. `install-node.sh` goes offline only when run from a bundle; the `curl` one-liner behaves as before.
 
 ### IPsec
 - **L2TP beside IKEv2 on one node.** A node has a separate L2TP slot next to its IPsec one, so it can run an IKEv2 core and an L2TP core at the same time: strongSwan loads both connections into one config and xl2tpd runs beside it. New Android phones (no L2TP since Android 12) use IKEv2 while older phones, iPhones and Windows use L2TP, all on one server. On the Cores page, tick the node on the L2TP core's card. The node agent needs the new image; a node with a single IPsec core keeps receiving the same config as before.
