@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.1 — 2026-10-06
+
+### Hosts
+- **Dynamic variables in the host name (remark).** A round `{ }` button inside the remark field opens a menu of variables; a click inserts the chosen one at the cursor, so several can be combined with your own text. Each user's links and subscriptions fill them with their own values: `{username}`, `{protocol}` (VLESS, VMess, Trojan…), `{expiry_date_en}`, `{expiry_date_fa}` (Jalali), `{days_left}`, `{used_traffic}`, `{remaining_traffic}`, `{total_traffic}` (with units, `∞` when unlimited), `{server_name}` / `{node_name}` (the nodes running the host's core) and `{status}` (فعال / منقضی / تمام‌شده). This replaces the earlier click-to-copy list and the flag row. Remarks written with the earlier names (`{expire_date}`, `{expire_jalali}`, `{data_limit_gb}`, `{data_left_gb}`, `{data_used_gb}`) still render as before.
+
 ## v1.5.0 — 2026-10-06
 
 ### Nodes
