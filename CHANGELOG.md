@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.2 — 2026-10-06
+
+### Groups
+- **A VLESS/VMess/Trojan/Shadowsocks host can have groups of its own.** Put such a host in a group and only that group's users get the link, on top of the Inbound's own groups; who is a client on the node is unchanged. Made for trying a link variant (another CDN port, a clean IP, TLS fragment) on a few users before everyone. The Groups page now lists every host, and the Hosts page marks a host's own groups with 🔒. Hosts without such groups behave exactly as before.
+
 ## v1.5.1 — 2026-10-06
 
 ### Hosts
