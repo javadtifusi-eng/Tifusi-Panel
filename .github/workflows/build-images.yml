@@ -9,6 +9,7 @@ name: Build & publish images
 #
 # Run it after pushing to the source repository:
 #   gh workflow run build-images.yml -R javadtifusi-eng/Tifusi-Panel
+# The test job runs the source's test suite first; a failure stops the build.
 # A push to the ci-test branch builds everything under the "ci-test" tag only,
 # so a change to this workflow can be tried without touching :latest.
 on:
@@ -24,7 +25,41 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # The same checks as the source repository's own Tests workflow, run on the
+  # exact source about to be published: no image is built, and nothing reaches
+  # :latest, unless the backend suite and the dashboard build pass.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: javadtifusi-eng/Tifusi-Panel-Source
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          ref: ${{ github.event.inputs.ref || 'main' }}
+          path: src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/backend/requirements*.txt
+      - name: Backend tests
+        working-directory: src/backend
+        run: |
+          pip install -r requirements-dev.txt
+          python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Dashboard type check and build
+        working-directory: src/frontend
+        run: |
+          npm ci
+          npm run build
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
