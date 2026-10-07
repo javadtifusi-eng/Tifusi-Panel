@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 **Tunnels** · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 **Tunnels** · 🛡️ [Connection Shield](connection-shield.md) · 🔀 [Domain rotation](domain-rotation.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Tunnels
 
@@ -63,6 +63,17 @@ After **Save**, the sheet shows the foreign install command; run it once on the 
 
 With the CDN option ticked the form also raises the connection count from 8 to 16, since a CDN limits each connection's speed.
 
+
+## Stealth relay (decoy for active probing)
+
+A WebSocket relay used to answer any request that wasn't the tunnel's with a bare `404`. A server on 443 that holds a real certificate and then only ever 404s is itself a tell: an active probe — a monitoring system that connects and looks at what comes back — marks the address as "not a real website" and it gets burned.
+
+With **Stealth relay** on (the default for new `ws`/`wss`/`wsmux`/`wssmux` tunnels), any request that isn't a genuine tunnel WebSocket upgrade — a browser, a scanner, a wrong path — gets an ordinary static web page with a `200`, served over the relay's real certificate. The probe sees an unremarkable website instead of a silent relay. A real tunnel client (the exact path with the WebSocket upgrade) is unaffected and connects as before.
+
+- It applies only to the WebSocket-handshake transports, the ones that terminate a real HTTP request a probe can send. `TCP + Stealth` already answers a probe with silence by design and is left as it is.
+- It is a per-tunnel toggle and is set on the **server (Iran) side** only.
+- Existing tunnels are never changed: the toggle defaults off for tunnels created before this, and takes effect only when a tunnel is created with it on or re-installed (run the Iran side's install command again, or **🔄 Update tunnel**).
+
 ## Choosing a transport
 
 Before the tunnel exists, **Recommend best transport** probes both servers and reports reachability and latency to each, then ranks the transports. The ranking reflects what can honestly be measured from outside the restricted network; it cannot predict how a particular filter will treat each transport, so test the chosen one after installation.
@@ -88,6 +99,26 @@ The tunnel's **🔑 Install over SSH** button does the install for you, one side
 **🔄 Update tunnel** in the same sheet moves an installed side to the newest tunnel binary with automatic rollback: the new binary is checked on the server against the current config before anything changes, the old one is kept as `tifusi-tunnel.prev`, and it comes back by itself if the service doesn't stay up or the tunnel's live links don't return within 45 seconds. The config is never changed. See [Safe updates](updates-and-rollback.md#updating-a-tunnel).
 
 SSH install and update are open to the panel owner only.
+
+
+## Chains (multi-hop routes)
+
+A **chain** carries traffic through an ordered list of hops instead of one relay: user → entry (Iran, public) → middle → … → exit (the real server). It is built entirely from the ordinary reverse tunnel, so nothing about the tunnel program changes: N hops make N−1 segments, each one a normal tunnel with **its own transport** — for example `TCP + Stealth` inside Iran and `WSS Mux` behind a CDN abroad.
+
+Open **Tunnels → 🔗 Chains**.
+
+- **Hops.** The first is the entry (the public address users connect to), the last the exit, anything between is a middle. Each hop but the exit owns the segment down to the next hop: its transport, tunnel port, SNI/path and connection count. The next hop dials that port, so only the entry and the middles need an inbound tunnel port, each on its own port.
+- **Forwarded ports.** Users connect to a **public port** on the entry; the exit delivers to the **target** (default `127.0.0.1`). The **service port** is the internal port carried from hop to hop.
+- **A middle runs two services** on its server — the client of the segment above and the server of the segment below — and hands traffic from one to the other over `127.0.0.1`, never over the network. So a middle's forward ports open no firewall hole; only each segment's tunnel port and the entry's public ports do.
+- **Subscription protocols only.** A chain carries what a subscription delivers (VLESS, VMess, Trojan, Shadowsocks, Hysteria2 over TCP). IKEv2 and L2TP are set up by hand on the phone and are not routed this way.
+
+### Install and test
+
+Each hop is installed on its own with its own SSH credentials, the same way each tunnel side is ([Install and update over SSH](#install-and-update-over-ssh)): **Install this hop** asks for that server's password once, adds the panel's key, sends the tunnel binary over SFTP, and writes each service's own config (0600) and `tifusi-<name>.service`. A live log follows. **Test chain** then opens the entry's public ports from the panel — which only answers if every hop relayed the connection through to the exit.
+
+Every 5 minutes the panel also probes each segment's tunnel port and the entry's public TCP ports and shows the result on the chain, naming what isn't reachable. UDP segments and forwards can't be checked with a TCP connection and are left out, so a UDP-only chain stays "ready to install" rather than being marked broken.
+
+Chains are owner-only, and a chain never changes an existing tunnel.
 
 ## Real client IP (PROXY protocol)
 

@@ -33,12 +33,13 @@
 | | |
 | --- | --- |
 | 🌐 **Every protocol on one node** | Xray (VLESS, VMess, Trojan, Shadowsocks, REALITY), IKEv2, L2TP, PPTP, Hysteria2 and WireGuard side by side; the panel renders and pushes each node's config |
-| 🚇 **Tunnels for hard networks** | Iran ↔ abroad relays over TCP/TLS/WebSocket/mux, a stealth transport, UDP (KCP), IP-spoofed carriers and CDN fronting, with a link test and live throughput |
+| 🚇 **Tunnels for hard networks** | Iran ↔ abroad relays over TCP/TLS/WebSocket/mux, a stealth transport, UDP (KCP), IP-spoofed carriers and CDN fronting; relays answer active probes with a decoy website, and multi-hop chains route through several relays with a different transport per hop, with a link test and live throughput |
 | 🔑 **Install from the panel** | Nodes and both tunnel sides installed over SSH with the panel's own key — online, or from an offline bundle over SFTP for servers with no outside internet |
 | 🛡️ **Updates that roll themselves back** | Config pushes validated (`xray -test`) with the last good config kept; tunnel binaries and node agents updated with automatic rollback, nodes one at a time with a canary |
 | 🔒 **Guard rails** | Reserved ports (agent, SSH, internal APIs) can't be taken by an inbound; a refused config is shown on the node while it keeps serving |
 | 👤 **Users & subscriptions** | One link for every client (plain, Clash, sing-box, HTML page), dynamic remark variables, groups per inbound or per host, on-hold, device limits, periodic resets, resellers with quotas |
 | 📶 **Staying reachable** | Connection Shield failover, network health from inside Iran, backup subscription domains, REALITY target scanner |
+| 🔀 **Domain rotation** | Pooled hosts go out on several healthy domains inside one subscription, so v2rayNG and V2Box users already hold working configs when a name is filtered; domains are checked from Iran and burnt ones replaced on their own. Backup subscription addresses can ride inside the subscription (Clash proxy-providers) |
 | 🧪 **Tested** | A pytest suite (links, subscriptions, traffic, migrations, rollback paths) runs on every push; images are only published when it passes |
 
 <p align="center">

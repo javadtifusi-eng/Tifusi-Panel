@@ -265,10 +265,16 @@ install_binary() {
 
 # ------------------------------------------------------------------ service
 
+# The service name. A chain's middle hop runs two legs on one server, so the
+# panel passes an instance name and these become tifusi-<inst>.service with
+# their own /etc/tifusi/<inst>.json. With no instance it stays plain "tifusi"
+# — a single tunnel is installed exactly as before.
+SVC=tifusi
+
 write_unit() {
   cat > "$UNIT" <<EOF
 [Unit]
-Description=Tifusi Tunnel
+Description=Tifusi Tunnel ${SVC}
 After=network-online.target
 Wants=network-online.target
 
@@ -294,10 +300,10 @@ save_cfg() {
 
 restart_service() {
   write_unit
-  systemctl enable tifusi >/dev/null 2>&1
-  systemctl restart tifusi
+  systemctl enable "$SVC" >/dev/null 2>&1
+  systemctl restart "$SVC"
   sleep 1
-  if systemctl is-active --quiet tifusi; then ok "service is running"
+  if systemctl is-active --quiet "$SVC"; then ok "service is running"
   else warn "service failed - check the logs in Manage"; fi
 }
 
@@ -1065,9 +1071,21 @@ menu() {
 # menu at all. Contrast with the normal path (menu -> setup_server/
 # setup_client), which asks for every field one at a time.
 unattended_install() {
-  local b64="$1" cfg mode port proto listen_proto
+  local b64="$1" inst="${2:-}" cfg mode port proto listen_proto host
   QUIET=1
   tunnel_art
+
+  # An instance name (a chain's middle hop installs two legs on one server):
+  # its own config file, unit and service name, so the two never clash. Only
+  # [A-Za-z0-9_-] to keep the derived paths and unit name safe.
+  if [ -n "$inst" ]; then
+    case "$inst" in
+      *[!A-Za-z0-9_-]*) die "invalid instance name: $inst" ;;
+    esac
+    CFG="$CFG_DIR/${inst}.json"
+    UNIT="/etc/systemd/system/tifusi-${inst}.service"
+    SVC="tifusi-${inst}"
+  fi
 
   progress 5 "checking the config"
   cfg=$(printf '%s' "$b64" | base64 -d 2>/dev/null) || die "invalid config (not valid base64)"
@@ -1088,14 +1106,16 @@ unattended_install() {
     [ "$(echo "$cfg" | jq -r '.transport // empty')" = "udp" ] && listen_proto=udp || listen_proto=tcp
     open_port "$port" "$listen_proto" >/dev/null
     [ "$(echo "$cfg" | jq -r '.domain // empty')" != "" ] && open_port 80 tcp >/dev/null
-    while read -r port proto; do
-      [ -n "$port" ] && open_port "$port" "$proto" >/dev/null
-    done < <(echo "$cfg" | jq -r '.forwards[]? | (.listen | split(":")[1]) + " " + .net')
+    # A middle hop's forwards listen on 127.0.0.1 (the hand-off between its two
+    # legs stays on loopback); only a 0.0.0.0 listener needs a firewall hole.
+    while read -r host port proto; do
+      [ -n "$port" ] && [ "$host" != "127.0.0.1" ] && open_port "$port" "$proto" >/dev/null
+    done < <(echo "$cfg" | jq -r '.forwards[]? | (.listen | split(":")[0]) + " " + (.listen | split(":")[1]) + " " + .net')
   fi
 
   progress 90 "starting the service"
   restart_service
-  systemctl is-active --quiet tifusi || die "the tunnel service did not start - see: journalctl -u tifusi -n 30"
+  systemctl is-active --quiet "$SVC" || die "the tunnel service did not start - see: journalctl -u $SVC -n 30"
   progress 100 "done"
   echo
   echo "  ${G}${BD}✓${N} ${W}Tifusi Tunnel is installed and running${N} ${D}(mode: $mode)${N}"
@@ -1111,7 +1131,9 @@ require_root
 # `--` first, which bash passes through to the script as $1, so skip it.
 [ "${1:-}" = "--" ] && shift
 if [ -n "${1:-}" ]; then
-  unattended_install "$1"
+  # Optional 2nd arg: an instance name, for a chain hop that runs more than one
+  # leg on the same server (app/tunnels/chain.py). Omitted = the plain tunnel.
+  unattended_install "$1" "${2:-}"
   exit 0
 fi
 
