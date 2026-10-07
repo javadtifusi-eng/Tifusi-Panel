@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Operations
+- **`tifusi panel update` rolls itself back.** The update now takes a safety snapshot first — the running images tagged for rollback, and the database, `.env` and `certs/` saved — then waits for the new version to answer; if it doesn't within 90 seconds it puts the previous images back (keeping every write, since migrations only add tables/columns) and, only if that still can't come up, restores the data snapshot too.
+
 ## v1.5.4 — 2026-10-07
 
 ### Hosts

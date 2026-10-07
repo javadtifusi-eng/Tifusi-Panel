@@ -86,6 +86,112 @@ random_free_port() {
 # The professional edition (install.sh --pro) keeps its data in the bundled MySQL.
 is_pro() { grep -q '^TIFUSI_EDITION=pro' .env 2>/dev/null; }
 
+# --- safe update: snapshot, then roll back if the panel doesn't come up ------
+
+ROLLBACK_DIR="$INSTALL_DIR/.rollback"
+
+# The host port the panel API is published on, for the health probe.
+panel_api_port() {
+  local p
+  p=$(grep '^TIFUSI_PANEL_PORT=' .env 2>/dev/null | cut -d= -f2)
+  echo "${p:-8000}"
+}
+
+# Healthy = the backend container is running (not restarting) and the API
+# answers. /api/setup/status needs no auth and returns 200 once the app has
+# started and its migrations have run.
+panel_healthy() {
+  local state port
+  state=$(docker inspect -f '{{.State.Status}}' tifusi-panel 2>/dev/null || echo missing)
+  [ "$state" = "running" ] || return 1
+  port=$(panel_api_port)
+  curl -fsS -m 5 -o /dev/null "http://127.0.0.1:${port}/api/setup/status" 2>/dev/null
+}
+
+wait_healthy() {
+  local timeout=${1:-90} i
+  for i in $(seq 1 "$timeout"); do
+    panel_healthy && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Tag the images the panel is running right now as :rollback, so a later
+# `docker compose pull` (which overwrites :latest) can't erase the way back.
+tag_rollback_images() {
+  local svc img
+  rm -f "$ROLLBACK_DIR/images.env"
+  mkdir -p "$ROLLBACK_DIR"
+  for svc in panel dashboard; do
+    img=$(docker inspect -f '{{.Image}}' "tifusi-$svc" 2>/dev/null) || continue
+    [ -n "$img" ] || continue
+    docker tag "$img" "tifusi-panel-$svc:rollback" 2>/dev/null || continue
+    if [ "$svc" = panel ]; then echo "TIFUSI_PANEL_IMAGE=tifusi-panel-panel:rollback" >> "$ROLLBACK_DIR/images.env"
+    else echo "TIFUSI_DASHBOARD_IMAGE=tifusi-panel-dashboard:rollback" >> "$ROLLBACK_DIR/images.env"; fi
+  done
+}
+
+# A full data snapshot (DB + .env + certs) kept only for this update, so a
+# failed update can be put back exactly. Separate from `tifusi panel backup`,
+# which the admin keeps.
+snapshot_data() {
+  mkdir -p "$ROLLBACK_DIR"
+  if is_pro; then
+    docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers tifusi' > "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null       || { err "Couldn't snapshot the database — aborting the update before anything changed."; return 1; }
+  fi
+  tar czf "$ROLLBACK_DIR/data.tgz" data certs .env 2>/dev/null || tar czf "$ROLLBACK_DIR/data.tgz" data .env || true
+  return 0
+}
+
+restore_data_snapshot() {
+  [ -f "$ROLLBACK_DIR/data.tgz" ] || { err "No data snapshot to restore."; return 1; }
+  local keep_mysql=""
+  is_pro && keep_mysql="$(grep -E '^(TIFUSI_MYSQL_PASSWORD|TIFUSI_MYSQL_ROOT_PASSWORD|TIFUSI_DATABASE_URL)=' .env 2>/dev/null)"
+  tar xzf "$ROLLBACK_DIR/data.tgz"
+  if [ -n "$keep_mysql" ]; then
+    grep -vE '^(TIFUSI_MYSQL_PASSWORD|TIFUSI_MYSQL_ROOT_PASSWORD|TIFUSI_DATABASE_URL)=' .env > .env.rb-tmp
+    printf '%s
+' "$keep_mysql" >> .env.rb-tmp; mv .env.rb-tmp .env; chmod 600 .env
+  fi
+  if is_pro && [ -f "$ROLLBACK_DIR/mysql-dump.sql" ]; then
+    docker compose up -d mysql >/dev/null 2>&1
+    local i
+    for i in $(seq 1 90); do
+      docker compose exec -T mysql sh -c 'mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent' >/dev/null 2>&1 && break
+      sleep 2
+    done
+    docker compose exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" tifusi' < "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null       || warn "Re-importing the database dump reported an error."
+  fi
+}
+
+# Bring the panel back up on the images it ran before this update. Our
+# migrations only ever add tables/columns, so the old code runs fine against
+# the already-migrated schema — this keeps every write made since the
+# snapshot. Only if the old code still can't come up (a rare destructive
+# migration) do we fall back to restoring the whole data snapshot.
+rollback_update() {
+  warn "The new version did not come up healthy — rolling back."
+  if [ -f "$ROLLBACK_DIR/images.env" ]; then
+    info "Putting the previous images back..."
+    env $(cat "$ROLLBACK_DIR/images.env" | xargs) docker compose up -d --no-deps panel dashboard >/dev/null 2>&1 || true
+    if wait_healthy 60; then
+      warn "Rolled back to the previous version (data kept). Your update did not take."
+      return 0
+    fi
+    warn "Old images alone didn't recover — restoring the data snapshot too (writes since the update are lost)."
+    docker compose down >/dev/null 2>&1 || true
+    restore_data_snapshot
+    env $(cat "$ROLLBACK_DIR/images.env" | xargs) docker compose up -d >/dev/null 2>&1 || true
+    if wait_healthy 90; then
+      warn "Rolled back to the previous version from the snapshot."
+      return 0
+    fi
+  fi
+  err "Rollback did not restore a healthy panel. The snapshot is kept at $ROLLBACK_DIR."
+  err "Restore it by hand with: tifusi panel restore  (or inspect: tifusi panel logs)."
+  return 1
+}
 action_update() {
   info "Checking for local changes..."
   if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
@@ -93,6 +199,10 @@ action_update() {
     warn "Resolve or commit them yourself, then run this again. Skipping update."
     return
   fi
+  info "Taking a safety snapshot before updating..."
+  tag_rollback_images
+  snapshot_data || return
+
   info "Pulling latest install files..."
   # fetch + reset: the public repository's history was restarted when the source went private,
   # so an older copy can't fast-forward. .env, data/ and certs/ are untracked and kept.
@@ -107,7 +217,14 @@ action_update() {
   fi
   info "Restarting with the new version..."
   docker compose up -d
-  info "Updated to $(cat backend/VERSION 2>/dev/null || echo '?')."
+
+  info "Waiting for the new version to come up..."
+  if wait_healthy 90; then
+    info "Updated to $(cat backend/VERSION 2>/dev/null || echo '?') — healthy."
+    info "The rollback snapshot is kept at $ROLLBACK_DIR until the next update."
+  else
+    rollback_update
+  fi
 }
 
 action_change_port() {

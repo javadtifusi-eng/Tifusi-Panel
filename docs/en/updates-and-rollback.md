@@ -68,6 +68,17 @@ A node's **SSH** sheet has an **Update** tab for one node; the Nodes page has **
 
 A node's users drop for a few seconds while its container is replaced and reconnect on their own; a node can't serve during its own restart. To avoid even that, put two nodes behind one address.
 
+## Updating the panel
+
+`tifusi panel update` takes a safety snapshot before it changes anything, then rolls the panel back if the new version doesn't come up healthy — so an update that breaks costs a short restart, not a panel that stays down.
+
+1. **Snapshot first.** The images the panel is running now are tagged `tifusi-panel-{backend,frontend}:rollback` (before the pull overwrites `:latest`), and the data (the database, `.env` and `certs/`) is saved under `<install>/.rollback/`.
+2. **Update.** The latest install files are pulled, the prebuilt images fetched, and the panel restarted; migrations run on start.
+3. **Health check.** The update waits up to 90 seconds for the backend container to be running and the API to answer. If it does, the update is kept and the snapshot is left in place until the next update.
+4. **Roll back on failure.** If it doesn't, the previous images are put back. Because migrations only ever add tables and columns, the old code runs against the already-migrated schema, so this keeps every write made since the snapshot. Only if the old code still can't come up — a rare destructive migration — is the data snapshot restored too, and the panel brought up on it.
+
+The database and `certs/` are never changed by a rollback unless the first layer fails, so a normal failed update loses nothing.
+
 ## Tests and CI
 
 The same guarantees are covered by the automated suite ([Development](development.md#tests)): the agent's validation and rollback run against fake `xray`, `hysteria`, `swanctl` and `xl2tpd` binaries; the tunnel and node update scripts run for real against a fake `systemctl` and a fake `docker`; and the migration chain must have one head, reversible recent steps and models identical to the migrated schema. Images are only published after the suite passes.
