@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🚢 **مرجع استقرار** · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 **مرجع استقرار** · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -58,10 +58,10 @@ alembic revision --autogenerate -m "describe the change"
 
 <div dir="rtl">
 
-SQLite برای تغییراتی از ستون‌ها که به‌صورت درجا قابل اعمال نیستند به `op.batch_alter_table(...)` نیاز دارد؛ فایل‌های تولیدشده‌ی خودکار را پیش از commit بازبینی کنید.
+SQLite برای تغییراتی از ستون‌ها که به‌صورت درجا قابل اعمال نیستند به `op.batch_alter_table(...)` نیاز دارد؛ فایل‌های تولیدشده‌ی خودکار را پیش از commit بازبینی کنید. اگر زنجیره‌ی مایگریشن بیش از یک head داشته باشد، یک مایگریشن اخیر برگشت‌پذیر نباشد یا اسکیمای مایگریت‌شده با مدل‌ها فرق کند، تست‌ها شکست می‌خورند.
 
 </div>
 
 ---
 
-<div dir="rtl"><sub>[→ مدیریت](operations.md) · [معماری ←](architecture.md)</sub></div>
+<div dir="rtl"><sub>[→ به‌روزرسانی امن](updates-and-rollback.md) · [معماری ←](architecture.md)</sub></div>

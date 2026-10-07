@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ **مدیریت** · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ **مدیریت** · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -24,6 +24,10 @@
 
 سرورهای نود منوی `tifusi node` مخصوص خود را دارند؛ بخش [نودها](nodes.md) را ببینید.
 
+## آپدیت بدون غافلگیری
+
+ایجنت نودها و باینری تانل‌ها از داخل پنل با برگشت خودکار آپدیت می‌شوند — نودها یکی‌یکی با Canary، تانل‌ها هر سمت جدا — و هر کانفیگی که به نود فرستاده می‌شود قبل از جایگزین شدن اعتبارسنجی می‌شود. اینکه هر لایه چطور بررسی می‌کند و برمی‌گردد در [به‌روزرسانی امن](updates-and-rollback.md) آمده است.
+
 ## مدیران
 
 پنل یک حساب مالک و هر تعداد مدیر اضافی با مجوزهای محدود روی کاربران، هاست‌ها، نودها، هسته‌ها، گروه‌ها، تانل‌ها و تنظیمات دارد. مدیر محدود فقط کاربرانی را می‌بیند که خود ساخته است. هر مدیر می‌تواند برای خودکارسازی کلید API صادر کند؛ کلید همیشه مجوزهای فعلی صاحبش را دارد. [نمایندگان](resellers.md) نوع جداگانه و محدودتری از حساب هستند.
@@ -40,4 +44,4 @@
 
 ---
 
-<div dir="rtl"><sub>[→ سلامت شبکه](network-health.md) · [مرجع استقرار ←](deployment.md)</sub></div>
+<div dir="rtl"><sub>[→ سلامت شبکه](network-health.md) · [به‌روزرسانی امن ←](updates-and-rollback.md)</sub></div>

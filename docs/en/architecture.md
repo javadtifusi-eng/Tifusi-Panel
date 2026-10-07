@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
 
 # Architecture
 
@@ -85,13 +85,17 @@ sequenceDiagram
 | `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, Connection Shield failover (`shield/`), network health (`network_health/`) |
 | `backend/alembic` | Database migrations |
 | `backend/cli` | `tifusi-cli`, including first-run admin key generation |
-| `backend/node_agent` | Node agent service, strongSwan/xl2tpd integration, node Dockerfile |
+| `backend/node_agent` | Node agent service, strongSwan/xl2tpd integration, config validation and rollback (`safe_apply.py`), node Dockerfile |
+| `backend/app/node_ssh` | Install, terminal and canary updates of nodes over SSH |
+| `backend/app/tunnels` | Tunnel configs, offline bundles, install and update over SSH |
+| `backend/tests` | pytest suite (see [Development](development.md#tests)) |
 | `backend/tunnel_agent` | Relay agent for the Tunnels feature (Go) |
 | `frontend` | React dashboard and nginx image |
 | `install.sh`, `install-node.sh` | Panel and node installers |
 | `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi-panel` and run as `tifusi panel` |
 | `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, the node and Tifusi Bot |
-| `.github/workflows/build-images.yml` | Builds and publishes panel, dashboard and node images to GHCR |
+| `.github/workflows/tests.yml` | Runs the test suite and the dashboard build on every push |
+| `build-images.yml` (public repository) | Runs the tests, then builds and publishes panel, dashboard and node images to GHCR |
 
 The dashboard is built with React 18, Vite and Tailwind CSS, localised in Persian (right-to-left) and English, with self-hosted Vazirmatn and Poppins typefaces.
 

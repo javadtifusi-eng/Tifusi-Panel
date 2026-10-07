@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 🎛️ [Operations](operations.md)</sub>
+<sub>[← README](../../README.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md)</sub>
 
 # Hysteria2
 

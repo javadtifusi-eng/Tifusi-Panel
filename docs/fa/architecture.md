@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 **معماری** · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 **معماری** · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -97,13 +97,17 @@ sequenceDiagram
 | `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, Connection Shield failover (`shield/`), network health (`network_health/`) |
 | `backend/alembic` | Database migrations |
 | `backend/cli` | `tifusi-cli`, including first-run admin key generation |
-| `backend/node_agent` | Node agent service, strongSwan/xl2tpd integration, node Dockerfile |
+| `backend/node_agent` | سرویس ایجنت نود، یکپارچگی strongSwan/xl2tpd، اعتبارسنجی و برگشت کانفیگ (`safe_apply.py`)، Dockerfile نود |
+| `backend/app/node_ssh` | نصب، ترمینال و آپدیت Canary نودها با SSH |
+| `backend/app/tunnels` | کانفیگ تانل، بسته‌ی آفلاین، نصب و آپدیت با SSH |
+| `backend/tests` | تست‌های pytest ([توسعه](development.md)) |
 | `backend/tunnel_agent` | Relay agent for the Tunnels feature (Go) |
 | `frontend` | React dashboard and nginx image |
 | `install.sh`, `install-node.sh` | Panel and node installers |
 | `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi-panel` and run as `tifusi panel` |
 | `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, the node and Tifusi Bot |
-| `.github/workflows/build-images.yml` | Builds and publishes panel, dashboard and node images to GHCR |
+| `.github/workflows/tests.yml` | اجرای تست‌ها و بیلد داشبورد با هر push |
+| `build-images.yml` (ریپوی عمومی) | اول تست‌ها، بعد ساخت و انتشار ایمیج‌های پنل، داشبورد و نود در GHCR |
 
 <div dir="rtl">
 

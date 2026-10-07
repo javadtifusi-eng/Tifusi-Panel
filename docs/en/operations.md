@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ **Operations** · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ **Operations** · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Operations
 
@@ -22,6 +22,10 @@
 
 Node servers have their own `tifusi node` menu; see [Nodes](nodes.md#managing-a-node-server).
 
+## Updates without downtime surprises
+
+Node agents and tunnel binaries can be updated from the panel with automatic rollback — node agents one at a time with a canary, tunnels side by side — and every config push to a node is validated before it replaces the running one. How each layer checks and rolls back is described in [Safe updates](updates-and-rollback.md).
+
 ## Administrators
 
 The panel has one owner account and any number of additional administrators with scoped permissions over users, hosts, nodes, cores, groups, tunnels and settings. A scoped administrator sees only the users it created. Every administrator can issue API keys for automation; a key always carries its owner's current permissions. [Resellers](resellers.md) are a separate, more restricted kind of account.
@@ -36,4 +40,4 @@ The public URL, administrator password, TLS certificate (upload or Let's Encrypt
 
 ---
 
-<sub>[← Network health](network-health.md) · [Deployment →](deployment.md)</sub>
+<sub>[← Network health](network-health.md) · [Safe updates →](updates-and-rollback.md)</sub>

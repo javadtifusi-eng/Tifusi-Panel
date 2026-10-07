@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 **Tunnels** · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 **Tunnels** · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Tunnels
 
@@ -76,6 +76,18 @@ Before the tunnel exists, **Recommend best transport** probes both servers and r
 1. Open the tunnel and copy the install command for each side.
 2. Run the relay command on the relay server and the foreign command on the foreign server.
 3. Select **Test connection**. The panel checks that it can reach the relay server, the foreign server and the tunnel's public port, and records the tunnel as `connected` or `error` with the latency and time of the check. A `udp` tunnel cannot be checked from outside; its service log is read on the relay server with `journalctl -u tifusi`.
+
+## Install and update over SSH
+
+The tunnel's **🔑 Install over SSH** button does the install for you, one side at a time. It is an extra option; the one-line commands and the offline bundle download keep working as before.
+
+1. The SSH address defaults to the tunnel's own address for that side (the Iran address, or the foreign node or address); change it only if SSH lives elsewhere. Enter the password or a private key for the first connection only — the panel installs its own key (the same one used for nodes) and later connections need nothing typed. Credentials are never stored; the host key is pinned on first contact.
+2. **Automatic** runs the usual online installer when the server can reach GitHub, and otherwise sends that side's offline bundle over SFTP and installs it (also the fallback when the online install fails midway). Online and offline can be forced.
+3. The installer's output streams into the sheet; if it fails, the last lines of the tunnel's service log are shown. Every install ends with the tunnel's health test. The offline bundle stays on the server (0600) for a reinstall during a shutdown.
+
+**🔄 Update tunnel** in the same sheet moves an installed side to the newest tunnel binary with automatic rollback: the new binary is checked on the server against the current config before anything changes, the old one is kept as `tifusi-tunnel.prev`, and it comes back by itself if the service doesn't stay up or the tunnel's live links don't return within 45 seconds. The config is never changed. See [Safe updates](updates-and-rollback.md#updating-a-tunnel).
+
+SSH install and update are open to the panel owner only.
 
 ## Real client IP (PROXY protocol)
 

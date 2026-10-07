@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 **Nodes** · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 **Nodes** · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Nodes
 
@@ -36,6 +36,10 @@ Next to the copy-paste command, the node's **SSH** button lets the panel do the 
 
 The **Terminal** tab runs any command on the node's server (as root, or through passwordless `sudo` for another user), with output and exit code, plus ready-made buttons for node status, logs, restart, disk and memory, firewall and ports. SSH on nodes is open to the panel owner only, and every command is logged with the admin who ran it.
 
+## Updating the node agent
+
+A node's **SSH** sheet has an **Update** tab, and the Nodes page a **🔄 Rolling node update** for several nodes at once, canary first. The node self-tests the new image, keeps the running one as `tifusi-node-agent:rollback`, and puts it back by itself if the new agent doesn't answer; the panel then pushes the config again, checks every service that was healthy is still healthy, and watches the node for a soak period before moving to the next one. Details in [Safe updates](updates-and-rollback.md#updating-node-agents-canary-rollout). `tifusi node update` on the node server still works as before.
+
 ## Offline install bundle
 
 For a server that can reach neither GitHub, ghcr.io, Docker Hub nor an apt mirror (an Iranian server during an international shutdown), build the offline bundle on the panel server, which still has open internet:
@@ -67,6 +71,8 @@ Removing a node takes two steps, because the panel never reaches into a node ser
 ## Synchronisation
 
 Any change that affects a node (a user created, renewed, limited or deleted, a core edited, a group changed) is resolved into the node's effective user set and pushed as two payloads: the rendered Xray JSON to `POST /config` and the IPsec connections, EAP secrets, PSK and address pools to `POST /ipsec-config`. Every `TIFUSI_TRAFFIC_SYNC_INTERVAL_SECONDS` (30 by default) the panel polls `GET /health` and `GET /stats`, accumulates per-user traffic, moves users to `expired` or `limited` when due, and resyncs nodes whose user set changed. The full sequence is drawn in [Architecture](architecture.md#node-synchronisation-lifecycle).
+
+Each push is applied safely: the agent checks a new Xray config with `xray run -test` before touching the running process, keeps the last config that ran, and puts it back if a service dies on a new one (Xray, WireGuard, Hysteria2, strongSwan, xl2tpd, pptpd). A refused config is shown on the node with the reason, and the node stays connected on its previous config. See [Safe updates](updates-and-rollback.md#config-pushes-on-a-node).
 
 ## Device limits on the node
 
