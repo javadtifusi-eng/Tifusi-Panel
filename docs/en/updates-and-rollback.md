@@ -2,7 +2,7 @@
 
 # Safe updates and rollback
 
-Every change that reaches a server — a config push, a tunnel binary, a node agent image — is checked before it replaces what is running, and the last version that worked is kept so it can come back on its own. A bad change costs at most the few seconds of a restart, never a node that stays down.
+Every change that reaches a server — a config push, a tunnel binary, a node agent image — is checked before it replaces what is running, and the last version that worked is kept so it can come back on its own. A bad change costs at most the few seconds of a restart, never a node that stays down. When an update finishes, a [short report](#update-report-on-telegram) goes to Telegram.
 
 | What changes | Checked before | Kept for rollback | Rolled back when |
 | --- | --- | --- | --- |
@@ -78,6 +78,21 @@ A node's users drop for a few seconds while its container is replaced and reconn
 4. **Roll back on failure.** If it doesn't, the previous images are put back. Because migrations only ever add tables and columns, the old code runs against the already-migrated schema, so this keeps every write made since the snapshot. Only if the old code still can't come up — a rare destructive migration — is the data snapshot restored too, and the panel brought up on it.
 
 The database and `certs/` are never changed by a rollback unless the first layer fails, so a normal failed update loses nothing.
+
+## Update report on Telegram
+
+When an update finishes, the panel sends one short message to the Telegram chat set under **Settings → Telegram Notifications** (the same bot token and chat id as the other notifications):
+
+| Update | When the report is sent | Result shown |
+| --- | --- | --- |
+| `tifusi panel update` | after the health check, or after a successful rollback | success, or rolled back to the previous version |
+| One node's agent (the **Update** tab of its SSH sheet) | when the job ends | success or failed, with how long it took |
+| **🔄 Rolling node update** | once, for the whole rollout | success or failed, with how long it took |
+| A tunnel side (**🔄 Update tunnel**) | when the job ends | success or failed, with how long it took |
+
+A failed report also carries the last error from the job's log. Every report ends with how many nodes are connected (and, when there are tunnels, how many are healthy) and the panel version. The message is written in Persian.
+
+An update cancelled by hand sends nothing. The report is best-effort: with Telegram not set up, or Telegram unreachable, it is simply dropped and the update itself is unaffected. A panel update whose rollback also fails sends none either, since the panel isn't running to send it.
 
 ## Tests and CI
 

@@ -50,6 +50,8 @@ A host is the public endpoint a client receives: address, port and display name,
 - **Hysteria2** hosts carry their own parameters, since Hysteria2 runs outside the nodes.
 - **Domain pool** (VLESS, VMess, Trojan, Shadowsocks and Hysteria2): the host goes out once per healthy domain of the pool, and filtered domains are replaced on their own — see [Domain rotation](domain-rotation.md).
 
+Several hosts on the same Xray inbound are link variants of one server-side inbound, so the **Hosts** page folds them into a single card — the same size, signal, ping and sparkline as any host card — titled with the inbound tag and a link count. Opening the card lists each host with its usual actions.
+
 ### Dynamic remark variables
 
 A round `{ }` button inside the host name field opens a menu of variables; a click inserts the variable at the cursor, so several can be combined with your own text (for example `🇩🇪 {server_name} | {username} - {days_left} days`). Each user's links and every subscription format fill them with that user's own values:

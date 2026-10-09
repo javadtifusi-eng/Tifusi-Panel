@@ -32,7 +32,7 @@ The panel has one owner account and any number of additional administrators with
 
 ## Notifications
 
-User and node state changes, and [Connection Shield](connection-shield.md) events, can be sent to Telegram, Discord or a generic webhook. Shield events arrive at the webhook as `shield_burnt`, `shield_switched`, `shield_no_spare`, `shield_recovered` and `shield_error`.
+User and node state changes, [Connection Shield](connection-shield.md) events and [domain rotation](domain-rotation.md) burns and recoveries can be sent to Telegram, Discord or a generic webhook. Shield events arrive at the webhook as `shield_burnt`, `shield_switched`, `shield_no_spare`, `shield_recovered` and `shield_error`. After every panel, node or tunnel update, Telegram also gets a [short update report](updates-and-rollback.md#update-report-on-telegram).
 
 ## Settings
 

@@ -34,7 +34,7 @@
 
 ## اعلان‌ها
 
-تغییر وضعیت کاربران و نودها و رویدادهای [سپر اتصال](connection-shield.md) را می‌توان به تلگرام، دیسکورد یا یک webhook عمومی ارسال کرد. رویدادهای سپر در webhook با نام‌های `shield_burnt`، `shield_switched`، `shield_no_spare`، `shield_recovered` و `shield_error` می‌رسند.
+تغییر وضعیت کاربران و نودها، رویدادهای [سپر اتصال](connection-shield.md) و سوختن و برگشتن دامنه‌ها در [چرخش دامنه](domain-rotation.md) را می‌توان به تلگرام، دیسکورد یا یک webhook عمومی ارسال کرد. رویدادهای سپر در webhook با نام‌های `shield_burnt`، `shield_switched`، `shield_no_spare`، `shield_recovered` و `shield_error` می‌رسند. بعد از هر آپدیت پنل، نود یا تانل هم یک [گزارش کوتاه](updates-and-rollback.md#گزارش-آپدیت-در-تلگرام) به تلگرام می‌رود.
 
 ## تنظیمات
 

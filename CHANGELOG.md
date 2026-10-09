@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.5.6 — 2026-10-09
+
+### Security
+- **Node TLS certificates are pinned.** The panel used to talk to node agents with certificate verification off, so someone on the path could read the node API key and every pushed user secret. It now pins each node's certificate and talks to no other. When a node's certificate changes (its container was recreated by an update or rollback), the new one is accepted only after the agent proves it is the real node — an HMAC under its API key over a fresh nonce and the certificate it serves — and no API key is sent before that. Agents from before this release can't prove anything: they are trusted on first use and re-pinned when they change, until updated; a node that has proven itself once and stops proving is refused as a likely interception. Update the node agents to get the full protection.
+- **Database backup and restore are owner-only.** Any admin with the "settings" scope could download the database (every password hash, 2FA secret and node key) or restore one that made them the owner. Others now get 403.
+- **Rate limits use the real client address** behind the dashboard's nginx. They used to see one address for everyone, so a stranger's wrong passwords could lock every admin out. The address nginx reports is believed only from a local proxy.
+- **Deleting a user or admin removes what belonged to it** (devices, app reports, group memberships, API keys), so a new account reusing the id on SQLite can't inherit them; a migration clears what was left behind earlier.
+- Passwords longer than 72 bytes no longer turn login into a 500; logins for unknown usernames take as long as for real ones; password change and app-code lookups are throttled; node-bundle download links can't be used as session tokens.
+
+### Dashboard
+- **Faster first load.** Pages load on demand; the first file shrank from 740 KB to 241 KB. A tab left open across a deploy reloads itself once if it asks for a page file that no longer exists.
+
+### Development
+- Tests for tunnel and chain SSH install, domain pool health and Connection Shield (233 in all); domain pool health no longer stops checking the other pools when one fails. `npm run check:i18n` checks the fa and en dictionaries stay in sync.
+
 ## v1.5.5 — 2026-10-09
 
 ### Operations
