@@ -84,7 +84,7 @@ Before the tunnel exists, **Recommend best transport** probes both servers and r
 
 ## Installing and testing
 
-1. Open the tunnel and copy the install command for each side.
+1. Open the tunnel and copy the install command for each side. Like the node command, it fetches `backend/tunnel_agent/install.sh` from the panel's own release tag and runs it only after its SHA-256 matches the checksum built into the panel.
 2. Run the relay command on the relay server and the foreign command on the foreign server.
 3. Select **Test connection**. The panel checks that it can reach the relay server, the foreign server and the tunnel's public port, and records the tunnel as `connected` or `error` with the latency and time of the check. A `udp` tunnel cannot be checked from outside; its service log is read on the relay server with `journalctl -u tifusi`.
 

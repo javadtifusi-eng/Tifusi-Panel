@@ -25,7 +25,7 @@ A reseller has no access to nodes, hosts, cores, tunnels, groups, statistics, us
 
 ## How the limits are counted
 
-The data quota is the live sum of the data limits carried by the reseller's current users; there is no separate balance to keep in step. Deleting a user frees its volume. A reseller with a data quota cannot create users with unlimited data, since such a user would bypass the quota. When a limit is reached, the request is refused with the remaining allowance in the message.
+The data quota covers the reseller account's whole lifetime, not a period. What counts against it is the data limit of each current user (or that user's usage, if it ran past the limit), plus all traffic the reseller's users used before a periodic reset or before being deleted. So a user with a periodic reset only gets its fresh period while the reseller's quota has room for it; otherwise the reset waits and the user stays limited until the owner raises the quota or the reseller frees room. Deleting a user, or lowering its limit, gives back only the volume it never used. A reseller with a data quota cannot create users with unlimited data, since such a user would bypass the quota. When a limit is reached, the request is refused with the remaining allowance in the message.
 
 Settling payment with a reseller happens outside the panel.
 

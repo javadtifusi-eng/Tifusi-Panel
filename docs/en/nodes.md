@@ -19,10 +19,7 @@ With IKEv2 in the IPsec slot and an L2TP core in the L2TP slot, one server serve
 ## Adding a node
 
 1. On the **Nodes** page, create the node with its address, agent port and the cores for its two slots. The panel generates an API key bound to the node.
-2. Run the install command shown for the node on the node server:
-   ```bash
-   bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install-node.sh)" -- <API_KEY> [PORT]
-   ```
+2. Run the install command shown for the node on the node server. It downloads `install-node.sh` from the release tag matching the panel's own version (for example `v1.5.6`, never `main`) to a temporary file and runs it with the node's API key and port only if its SHA-256 matches the checksum built into the panel; a changed or tampered script stops the command before anything runs.
    `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules, turns on BBR congestion control with larger network buffers (`/etc/sysctl.d/99-tifusi-network.conf`) for better throughput on long, lossy links, and starts the `tifusi-node` container on the host network.
 3. Select **Sync** in the panel to push the initial configuration. After the first successful sync, health checks and traffic collection run continuously.
 

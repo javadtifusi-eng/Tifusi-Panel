@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.5.7 — 2026-10-09
+
+### Security
+- **Install scripts are pinned and verified.** The node and tunnel install commands (the ones shown in the dashboard and the ones the panel runs over SSH) now download the script from this panel's release tag instead of `main`, and run it only if its SHA-256 matches the value built into the panel; anything else stops with "checksum mismatch" before running.
+- **Notification URLs can't reach internal addresses.** Webhook, Discord and Telegram requests refuse private, loopback, link-local and other reserved destinations (checked at connect time, so DNS rebinding doesn't help), never follow redirects and ignore proxy variables.
+- **Owner-only:** the panel's HTTPS private key (`/api/cores/panel-cert`, and an IKEv2 core using it), the subscription address (`subscription_url`, and `public_url` that links fall back to) and the backup subscription domains. Other admins get 403 for those; the rest of Settings is unchanged.
+- **Turning on two-factor login asks for the current password**, so a stolen session can't bind it to another phone.
+- **Changing your password revokes your API keys** (on by default; can be unticked). `PUT /api/admin/password` now answers 200 with the number revoked.
+- **Password guessing spread over many addresses is slowed per account**: after 10 failures in 15 minutes each further attempt at that account waits, up to 20 s, with at most two waiting at once. The right password from an address that has logged in before is never delayed, and nobody is locked out.
+
+### Resellers
+- **A reseller's volume quota covers the account's lifetime.** Traffic wiped by a periodic reset or used by a since-deleted user still counts, so `data_limit_reset_days` or delete-and-recreate can no longer resell the same quota again and again. A periodic reset waits while the quota has no room for it. Owner and non-reseller admins are unaffected.
+
+### Development
+- `scripts/release.sh <version> [--deploy]` publishes a release in one command (checks, public repository sync, install checksums, tests, tags, image builds, GitHub release), and `ops/deploy.sh` deploys to a production server with an automatic rollback when the new version isn't healthy.
+
 ## v1.5.6 — 2026-10-09
 
 ### Security

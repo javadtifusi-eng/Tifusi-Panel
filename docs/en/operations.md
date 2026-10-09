@@ -28,7 +28,7 @@ Node agents and tunnel binaries can be updated from the panel with automatic rol
 
 ## Administrators
 
-The panel has one owner account and any number of additional administrators with scoped permissions over users, hosts, nodes, cores, groups, tunnels and settings. A scoped administrator sees only the users it created. Every administrator can issue API keys for automation; a key always carries its owner's current permissions. [Resellers](resellers.md) are a separate, more restricted kind of account.
+The panel has one owner account and any number of additional administrators with scoped permissions over users, hosts, nodes, cores, groups, tunnels and settings. A scoped administrator sees only the users it created. Every administrator can issue API keys for automation; a key always carries its owner's current permissions. Changing your password revokes all your API keys unless you untick **Revoke all my API keys** (API clients: send `"revoke_api_keys": false`). [Resellers](resellers.md) are a separate, more restricted kind of account.
 
 ## Notifications
 
