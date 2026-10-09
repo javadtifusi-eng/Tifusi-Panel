@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## v1.5.5 — 2026-10-09
 
 ### Operations
 - **`tifusi panel update` rolls itself back.** The update now takes a safety snapshot first — the running images tagged for rollback, and the database, `.env` and `certs/` saved — then waits for the new version to answer; if it doesn't within 90 seconds it puts the previous images back (keeping every write, since migrations only add tables/columns) and, only if that still can't come up, restores the data snapshot too.
+- **Short Telegram report after every update.** When a panel update (`tifusi panel update`), a node agent update or rolling update, or a tunnel side update finishes, the panel sends one short message to the Telegram chat set in Settings: the result (success, failed, or rolled back) with how long it took, the last error if it failed, how many nodes are connected and tunnels healthy, and the panel version. A rolling update sends one message for the whole rollout; an update cancelled by hand sends none. Best-effort: with Telegram not set up, or Telegram unreachable, the update itself is unaffected.
 
 ## v1.5.4 — 2026-10-07
 

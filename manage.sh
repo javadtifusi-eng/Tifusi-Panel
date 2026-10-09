@@ -222,9 +222,15 @@ action_update() {
   if wait_healthy 90; then
     info "Updated to $(cat backend/VERSION 2>/dev/null || echo '?') — healthy."
     info "The rollback snapshot is kept at $ROLLBACK_DIR until the next update."
-  else
-    rollback_update
+    send_update_report ok
+  elif rollback_update; then
+    send_update_report rolled_back
   fi
+}
+
+# Best-effort Telegram report from inside the panel; never fails the update.
+send_update_report() {
+  docker exec tifusi-panel tifusi-cli update-report "$1" >/dev/null 2>&1 || true
 }
 
 action_change_port() {
