@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.5.8 — 2026-10-10
+
+### Sign-in
+- **Sign in with Google or GitHub.** The owner registers an OAuth app for the panel's address and enters its keys in Settings; each administrator links their own account there (with the current password). Only linked accounts are let in, one account per administrator, and two-factor login still applies. A password change unlinks them (whoever had the old password could have linked their own). No session token ever appears in a URL: the provider's callback hands the dashboard a one-time ticket. See [Signing in](docs/en/operations.md#signing-in).
+- **Remember me** at login keeps that browser signed in for 30 days; without it the session lasts a day and ends with the browser.
+- **Sign out of all devices** (Settings, or `POST /api/auth/logout-all`) ends every session of the administrator at once.
+
+### Nodes and tunnels
+- **SSH tries the panel's own key first.** Installing or updating a node, a tunnel side or a chain hop no longer insists on a password: the panel connects with its own key when the server has it (the panel's own server, or any server it has set up before) and remembers that. Only a server without the key asks for its password, once; the dashboard switches to the password field by itself when that happens.
+- **Adding a node opens the one-click SSH install** straight away (address, password, live log) instead of a command to paste into a terminal; the command is still one click away.
+
+### Fixes
+- An inbound using VLESS Encryption (`decryption`/`encryption` = `mlkem768x25519plus…`) could not be saved: its ~75-character client string did not fit the 32-character `inbounds.encryption` column ("Data too long"). The column is 255 characters now.
+- Installing a chain hop failed with a server error (the request read an `ssh_host` field it didn't declare).
+
 ## v1.5.7 — 2026-10-09
 
 ### Security
