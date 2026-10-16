@@ -160,3 +160,31 @@ The relay delivers IKEv2 (UDP 500 and 4500) to the foreign server's own address 
 ---
 
 <sub>[← Resellers](resellers.md) · [Connection Shield →](connection-shield.md)</sub>
+
+## Advanced settings
+
+**Speed preset:** three buttons above this section fill the numbers in at once: Light for a foreign server with little memory or many users, Balanced for most servers, Maximum speed for a strong server on a good line.
+
+In the tunnel form, under "Advanced settings". Leave a field empty to keep the default. After saving, press Install/Update so both servers get it (users drop for a few seconds).
+
+| Setting | Default | When to change |
+|---|---|---|
+| Warm connection count | 8 | The log says "no tunnel connection available": raise it (32, 64, 128). Larger uses more memory. |
+| Address the foreign server dials | empty | The foreign server cannot reach the Iran server's main IP (for example its international IPv4 is blocked): put the Iran server's IPv6 here. |
+| KCP window | 1024 | The foreign server runs out of memory: 256 or 512. `udp` and `spoof` only. |
+| UDP socket buffer | 8192 KB | Memory is short: 2048. |
+| FEC (data and parity) | 10 and 3 | Lossy line: parity 4 or 5. Clean line: 20 and 2 (uses less traffic). |
+
+## When a tunnel doesn't work well
+
+Go in order and stop at the step that fixes it.
+
+1. **Look at the tunnel card.** Is it green and connected? If not, press Test and read the error.
+2. **It reconnects every few tens of seconds:** the line cuts this transport. Change it: `tcp` to `tcpmux`, then `udp`.
+3. **Connected but slow:** run the link test to see whether the line loses packets. If it does, `udp` (KCP) does far better than `tcp`.
+4. **The foreign server can't connect though the Iran server pings:** the Iran server's international IPv4 is closed. Put its IPv6 in "Address the foreign server dials".
+5. **Some users can't connect and the log says "no tunnel connection available":** raise the warm connection count.
+6. **The foreign server slows down or services restart by themselves:** it is out of memory. Set the KCP window to 256 and add swap. If the CPU is full too, the server needs to be bigger; no tunnel setting replaces that.
+7. **One country is bad and the rest are fine:** the problem is that country's server, not the tunnel.
+
+To undo a change: empty the field (or put the old value back), save, Install/Update.

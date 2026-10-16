@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.5.9 — 2026-10-16
+
+### Users
+- **Which protocol a user connects with.** The node agent now reports each user's traffic split by what carried it (IKEv2, L2TP, PPTP, WireGuard, Xray, Hysteria2), and the panel keeps the last one as `last_protocol` on the user (the users API and `GET /api/users/{id}/links`). An account that is allowed several protocols usually settles on the one its phone works with; a seller's tool can now show just that one's settings. Needs the node agent of this version (`tifusi node update`); with an older agent the field stays empty.
+
+### Tunnels
+- **Two Iran servers behind one foreign server.** A foreign server that carries a second tunnel (its own service and status address) showed that tunnel as "runs a different tunnel" and without live traffic, because only the default service was read. Each tunnel is now matched to the agent that dials its Iran side.
+- **A separate address for the foreign side to dial** (`iran_link_address`, under Advanced settings in the tunnel form): when an Iran server's IPv4 is closed to the outside but its IPv6 is not, users keep connecting to the IPv4 address while the tunnel itself runs over IPv6.
+- **Live traffic for any foreign server.** A tunnel card showed "no traffic" whenever its foreign side was not a panel node, since only a node agent could read the tunnel's loopback counters. Once the panel's SSH key is on that server (Install over SSH puts it there and pins the host key), the panel now reads the counters over one kept-open SSH connection, so the graph, the link count and Test all work there too. A server without the key, or with no pinned host key, is never connected to in the background.
+- **Advanced settings in the tunnel form.** The KCP window, UDP socket buffer and FEC ratio of a `udp`/`spoof` tunnel were fixed in the agent; they are now fields with a plain explanation of when to change each (empty keeps the default, so existing tunnels are unchanged). A smaller window is the fix for a foreign server that runs out of memory under many connections. Needs the new tunnel agent on both servers (Install/Update).
+- The Iran server's IPv4 and IPv6 sit side by side at the top of the tunnel form (the IPv6 is what the foreign side dials when it is set), and the `udp` transport is labelled "UDP (KCP)".
+- The server watchdog (`ops/watchdog.sh`) now reports to Telegram when a tunnel this server dials loses its link (its Iran server is unreachable) and when it comes back.
+- The guide page's one-tap "connect" button for the Tifusi app now also works outside Chrome (Telegram's in-app browser, Samsung Internet, Firefox), and when the app does not open it shows what to do instead of doing nothing.
+- **A shared link opens a bare page.** `/sub/<secret>/guide` now shows a customer nothing to read and nothing about the account: with IKEv2, three buttons (download the Android app, pair it in one tap, install the iPhone profile); with Xray only, just the subscription's QR code. The step-by-step guide is at `?full=1`, and L2TP/PPTP-only services still open it directly.
+- **Speed presets in the tunnel form**: Light (small server), Balanced (recommended) and Maximum speed fill in the warm connection count and the KCP window and socket buffer in one click; the fields stay editable, and hand-edited numbers show as Custom.
+- The tunnel guide gained a "when it doesn't work" section: what to check and which setting to change, in order.
+- **Spoof tunnels open each forged source with a SYN.** Every forged packet used to carry PSH|ACK, so a stateful firewall on the way saw traffic for a connection it never saw open and dropped it. The agent now sends a lone SYN before the first data from each forged address. It also warns at startup, and shows `rp_filter_warning` in `/status`, when strict reverse-path filtering (`rp_filter=1`) is on, the usual cause of a spoof tunnel that is up but passes nothing. Needs the new tunnel agent on both servers (Update).
+
 ## v1.5.8 — 2026-10-10
 
 ### Sign-in
