@@ -53,10 +53,6 @@ The same panel with every record (users, nodes, hosts, groups, cores and setting
    `tifusi panel key` does the same from the management menu.
 3. Enter the key, then choose the owner username and password.
 
----
-
-<sub>[← README](../../README.md) · [Nodes →](nodes.md)</sub>
-
 ## Optional node on the panel server
 
 The installer asks **Install a VPN node on this same server? [y/N]**. The default **No** installs only the panel. Later, open **Nodes → New node** and enter another server’s IP address; install its agent using SSH or the provided command. A panel does not need a VPN node on its own machine.
@@ -64,3 +60,7 @@ The installer asks **Install a VPN node on this same server? [y/N]**. The defaul
 Choosing **Yes** installs and registers a local node after the panel is healthy. Its address and agent port are configurable. An existing `tifusi-node` container is kept unchanged. After creating your owner account, choose an Xray or IKEv2 core on **Cores** and assign the node there; no VPN core or customer is created without your choice.
 
 The dashboard’s first-service checklist follows node registration, successful sync, core assignment, connection host and first user. Configuration readiness still needs a real phone connection test. API access from another device uses the dashboard URL plus `/api`; the backend port itself listens on localhost only.
+
+---
+
+<sub>[← README](../../README.md) · [Nodes →](nodes.md)</sub>
