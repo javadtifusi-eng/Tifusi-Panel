@@ -34,7 +34,7 @@ jobs:
         with:
           repository: javadtifusi-eng/Tifusi-Panel-Source
           ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
-          ref: ${{ github.event.inputs.ref || main }}
+          ref: ${{ github.event.inputs.ref || 'main' }}
           path: src
       - id: ref
         run: echo "sha=$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -50,7 +50,7 @@ jobs:
         with:
           repository: javadtifusi-eng/Tifusi-Panel-Source
           ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
-          ref: ${{ github.event.inputs.ref || 'main' }}
+          ref: ${{ needs.resolve.outputs.source_ref }}
           path: src
       - uses: actions/setup-python@v5
         with:
@@ -96,7 +96,7 @@ jobs:
         with:
           repository: javadtifusi-eng/Tifusi-Panel-Source
           ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
-          ref: ${{ github.event.inputs.ref || 'main' }}
+          ref: ${{ needs.resolve.outputs.source_ref }}
           path: src
 
       - id: tags
