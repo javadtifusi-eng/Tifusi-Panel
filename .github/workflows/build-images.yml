@@ -25,10 +25,25 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      source_ref: ${{ steps.ref.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: javadtifusi-eng/Tifusi-Panel-Source
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          ref: ${{ github.event.inputs.ref || main }}
+          path: src
+      - id: ref
+        run: echo "sha=$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   # The same checks as the source repository's own Tests workflow, run on the
   # exact source about to be published: no image is built, and nothing reaches
   # :latest, unless the backend suite and the dashboard build pass.
   test:
+    needs: resolve
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +74,7 @@ jobs:
           npm run build
 
   build:
-    needs: test
+    needs: [resolve, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -115,17 +130,24 @@ jobs:
   # reach GitHub, ghcr.io or apt, built from the node image just published and
   # kept on the fixed "node-bundle" release, so its download URL never changes.
   node-bundle:
-    needs: build
+    needs: [resolve, build]
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: javadtifusi-eng/Tifusi-Panel-Source
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          ref: ${{ needs.resolve.outputs.source_ref }}
+          path: src
 
       - name: Build the offline node bundle
+        working-directory: src
         env:
-          BUNDLE_OUT_DIR: dist
+          BUNDLE_OUT_DIR: ${{ github.workspace }}/dist
+          NODE_IMAGE: ghcr.io/javadtifusi-eng/tifusi-node-agent:${{ needs.resolve.outputs.source_ref }}
           NO_COLOR: "1"
         run: bash scripts/build-node-bundle.sh
 
