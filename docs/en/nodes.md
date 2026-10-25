@@ -6,19 +6,22 @@ A node is a server that carries user traffic. The panel renders each node's conf
 
 ## Two cores on one node
 
-Every node has two independent core slots and runs both at the same time:
+The default deployment runs Xray and IKEv2 side by side:
 
 | Slot | Core type | Serves |
 | --- | --- | --- |
-| Xray | `xray` | VLESS, VMess, Trojan, Shadowsocks |
-| IPsec | `ikev2` or `l2tp` | Native IKEv2/IPsec or L2TP/IPsec clients |
-| L2TP | `l2tp` | L2TP/IPsec clients beside an IKEv2 core in the IPsec slot |
+| Xray | `xray` | VLESS, VMess, Trojan, Shadowsocks, including REALITY-configured inbounds |
+| IPsec | `ikev2` | Native IKEv2/IPsec clients |
 
-With IKEv2 in the IPsec slot and an L2TP core in the L2TP slot, one server serves both at once: strongSwan loads the two connections side by side and xl2tpd runs next to it. That covers new Android phones, which dropped L2TP in Android 12 and only have IKEv2, and older phones, iPhones and Windows on L2TP. On the **Cores** page, tick the node on the L2TP core's card. One server therefore serves proxy clients and native-VPN clients together. Panels that bind a single core to each node need a second server for the same result. Either slot may be left empty.
+Either slot may be left empty. Additional slots for older protocols remain in the code, but L2TP, PPTP, Hysteria2 and WireGuard are outside the default supported-protocol list. Existing legacy references later in this guide are not instructions to enable them on the current deployment; see [Deployment](deployment.md).
+
+## Reaping child processes
+
+Node installs and updates use Docker `--init` to collect orphaned child processes. To migrate an existing host-network node, run `python3 ops/enable-node-init.py --apply` on its host from a clean source checkout. It briefly restarts the node, retains the previous container for rollback and preserves its configuration and certificate. The resulting local snapshot contains customer configuration and must never be published.
 
 ## Adding a node
 
-1. On the **Nodes** page, create the node with its address, agent port and the cores for its two slots. The panel generates an API key bound to the node.
+1. On the **Nodes** page, create the node with its address and agent port; assign its core from the Cores page. The panel generates an API key bound to the node.
 2. Run the install command shown for the node on the node server. It downloads `install-node.sh` from the release tag matching the panel's own version (for example `v1.5.6`, never `main`) to a temporary file and runs it with the node's API key and port only if its SHA-256 matches the checksum built into the panel; a changed or tampered script stops the command before anything runs.
    `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules, turns on BBR congestion control with larger network buffers (`/etc/sysctl.d/99-tifusi-network.conf`) for better throughput on long, lossy links, and starts the `tifusi-node` container on the host network.
 3. Select **Sync** in the panel to push the initial configuration. After the first successful sync, health checks and traffic collection run continuously.
@@ -78,7 +81,7 @@ The per-user device limit is enforced on the node as simultaneous connections fo
 ## Transport security
 
 - The agent serves HTTPS with a self-signed certificate generated on first start (`backend/node_agent/tls.py`), which encrypts credentials and pushed secrets in transit.
-- Every request carries the per-node key in the `X-Node-Api-Key` header. The panel does not verify the agent certificate, so the API key is the effective credential; mutual TLS is not yet implemented.
+- Every request carries the per-node key in the `X-Node-Api-Key` header. The panel pins the agent certificate and checks proof tied to the node API key before accepting a replacement certificate; mutual TLS is not used.
 - The node container uses `--network host` so that Xray can bind ports defined after the container starts, and so that UDP 500, 4500 and 1701 reach charon and xl2tpd on the public address.
 
 ---

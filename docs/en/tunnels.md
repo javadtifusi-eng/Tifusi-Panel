@@ -13,6 +13,16 @@ flowchart LR
 
 The relay runs as its own agent on both servers. The panel stores the tunnel's configuration and generates the install command for each side, so the token and port map are never typed twice; it does not manage the agent after installation.
 
+## Security and upgrade compatibility
+
+Tunnel build 1.1.0 verifies a TLS relay before sending its hello: either a trusted certificate for the configured name (including CDN edges), or the relay public key derived separately from the shared token. Upgrade both ends together when moving from the old random self-signed certificates. Use strong, randomly generated tokens.
+
+The unauthenticated `udp_raw` relay is disabled; remove that flag from older configurations. UDP forwarding uses encrypted KCP, so no auxiliary `tunnel_port + 1` firewall opening is needed. `tcp` and `ws` do not add TLS themselves; use TLS/WSS when the underlying transport must protect credentials.
+
+Mux streams have bounded independent receive queues; an overflowing slow stream closes explicitly while other streams continue. Full UDP datagrams fit within the frame budget. Automatic carrier selection commits a route only after packet authentication.
+
+When matching binaries are packaged with the panel, SSH installation and updates use that build over SFTP. Use the panel's offline bundle for this build until the matching public release is available; old public download commands do not provide these fixes. These checks do not establish performance on an Iranian mobile network.
+
 ## Creating a tunnel
 
 | Setting | Purpose |

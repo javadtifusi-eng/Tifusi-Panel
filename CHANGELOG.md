@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.5.10 — 2026-10-25
+
+- Optional local VPN node during panel installation; No installs only the panel, with remote nodes added later.
+- First-service readiness checklist and warnings before creating accounts without an available endpoint.
+- Fix installer port conflicts, online agent firewall setup and localhost API instructions.
+- Show only served Xray/IKEv2 core choices and count IKEv2 node assignments correctly.
+- Publish the current tested source as coordinated backend, dashboard and node images.
+
 ## v1.5.9 — 2026-10-16
 
 ### Users

@@ -50,7 +50,7 @@ Run it as root on Ubuntu or Debian. Append `-- --pro` for the Pro edition with M
 
 <CardGrid>
   <Card title="Two cores on one node" icon="rocket">
-    Each node runs Xray (VLESS, VMess, Trojan, Shadowsocks) and IPsec (IKEv2 or L2TP) side by side, so one server serves proxy and native VPN users.
+    The default deployment runs Xray (VLESS, VMess, Trojan, Shadowsocks) and IKEv2 side by side, so one server serves proxy and native VPN users.
   </Card>
   <Card title="Iran-to-abroad tunnels" icon="random">
     Multiplexed TCP, multiplexed WSS, UDP over KCP and a spoof tunnel. The foreign server dials out, so it needs no open inbound port.
@@ -62,7 +62,7 @@ Run it as root on Ubuntu or Debian. Append `-- --pro` for the Pro edition with M
     When an Iran relay gets blocked from abroad, users move to a standby relay in about two minutes, with no app update.
   </Card>
   <Card title="Device limits on the node" icon="setting">
-    Concurrent Xray, IKEv2 and L2TP sessions are enforced on the node itself, not just counted in the panel.
+    Concurrent Xray and IKEv2 EAP sessions are enforced on the node itself, not just counted in the panel.
   </Card>
   <Card title="Telegram bot and Android app" icon="telegram">
     Sell subscriptions automatically with Tifusi Bot and connect with one tap in Tifusi VPN.

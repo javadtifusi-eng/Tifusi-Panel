@@ -20,6 +20,18 @@ Every port above is chosen during installation and changeable afterwards with `t
 
 SQLite data is stored in `./data`. `TIFUSI_PUBLIC_URL` defines the base URL used in subscription links; without it, links are derived from the request `Host` header, which is not reachable from clients when the panel runs behind a proxy. The value can later be changed from **Settings** at runtime.
 
+## Served protocols
+
+The default `TIFUSI_SUPPORTED_PROTOCOLS` list is `vless`, `vmess`, `trojan`, `shadowsocks`, `ikev2`. Hosts of other protocols are omitted from subscriptions and app configuration, and creating unsupported hosts or cores is refused. REALITY is configured on an Xray inbound, not added as a separate protocol name.
+
+This is startup configuration, not a Settings switch. A custom list uses JSON array syntax in `.env`, for example:
+
+```dotenv
+TIFUSI_SUPPORTED_PROTOCOLS='["vless","vmess","trojan","shadowsocks","ikev2"]'
+```
+
+Changing the backend list alone does not guarantee matching UI choices or a working node service; the dashboard also has a supported-protocol list. Keep the production list unless the full path has been tested.
+
 ## TLS on the dashboard
 
 The dashboard container terminates TLS on port 443 and proxies `/api/`, `/sub/`, `/code/` and `/app/` to the panel. It reads `fullchain.pem` and `privkey.pem` from `./certs`, which is watched continuously; certificate changes take effect without a restart. Certificates can be supplied by the installer, uploaded under **Settings → SSL Certificate**, or placed in `./certs` manually.

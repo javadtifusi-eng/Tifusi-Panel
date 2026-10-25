@@ -2,6 +2,11 @@
 
 # Domain rotation
 
+> Current status: the legacy backup-domain section has been removed from Settings and its automatic checking/failover job is no longer scheduled. Backup-domain instructions below are retained as historical reference. Xray host domain pools are a separate feature and are unchanged.
+
+Settings separates the panel management address from the customer subscription link address. An empty subscription address falls back to the management address. Editing these fields does not configure DNS or HTTPS certificates, or change the IKEv2 server in an already installed profile.
+
+
 A domain can be filtered in Iran at any moment. Store clients — v2rayNG, V2Box, Streisand — keep the one subscription address they were given and have no standard way to learn another, so once a name is filtered, nothing the panel changes afterwards reaches them. Domain rotation works around that in two layers, both carried **inside the subscription the user already has**:
 
 | Layer | What it does | Works in |

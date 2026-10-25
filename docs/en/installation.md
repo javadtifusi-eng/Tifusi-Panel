@@ -18,14 +18,14 @@ Measured on a running installation: the panel container uses about 100 MB of RAM
 ### Platform
 
 - OS: Ubuntu 22.04/24.04 or Debian 11/12 (the installers use `apt-get`). Other Linux distributions work with Docker installed manually.
-- Architecture: x86_64 (amd64). Prebuilt images are published for amd64 only; other architectures build locally, which takes considerably longer.
+- Architecture: x86_64 (amd64). Prebuilt images are amd64-only; the installer rejects other architectures before installation.
 - Root access and a public IPv4 address.
 
 ### Network
 
 - Panel: a DNS record pointing to the server is recommended for TLS. Port 80 must be reachable to issue a free Let's Encrypt certificate.
 - Node: IKEv2 requires UDP 500 and 4500; L2TP additionally requires UDP 1701 and the `l2tp_ppp` and `ppp_generic` kernel modules on the host.
-- Building images locally requires outbound access to GitHub releases for Xray-core and to the strongSwan source archive.
+- Installation needs access to GitHub and ghcr.io. The public installer does not build private source locally.
 
 ## Panel — standard edition (SQLite)
 
@@ -56,3 +56,11 @@ The same panel with every record (users, nodes, hosts, groups, cores and setting
 ---
 
 <sub>[← README](../../README.md) · [Nodes →](nodes.md)</sub>
+
+## Optional node on the panel server
+
+The installer asks **Install a VPN node on this same server? [y/N]**. The default **No** installs only the panel. Later, open **Nodes → New node** and enter another server’s IP address; install its agent using SSH or the provided command. A panel does not need a VPN node on its own machine.
+
+Choosing **Yes** installs and registers a local node after the panel is healthy. Its address and agent port are configurable. An existing `tifusi-node` container is kept unchanged. After creating your owner account, choose an Xray or IKEv2 core on **Cores** and assign the node there; no VPN core or customer is created without your choice.
+
+The dashboard’s first-service checklist follows node registration, successful sync, core assignment, connection host and first user. Configuration readiness still needs a real phone connection test. API access from another device uses the dashboard URL plus `/api`; the backend port itself listens on localhost only.

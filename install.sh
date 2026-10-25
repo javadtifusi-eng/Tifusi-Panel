@@ -363,6 +363,12 @@ banner() {
 }
 
 banner
+[ "$(id -u)" -eq 0 ] || fail "Run this installer as root."
+case "$(uname -m)" in x86_64|amd64) ;; *) fail "Prebuilt images currently support amd64 only." ;; esac
+if ! command -v git >/dev/null 2>&1; then
+  command -v apt-get >/dev/null 2>&1 || fail "Install git first, then run the installer again."
+  run_spinner "Installing git..." sh -c 'apt-get update -qq && apt-get install -y -qq git' || fail "Could not install git."
+fi
 
 step "Docker"
 if command -v docker >/dev/null 2>&1; then
@@ -446,7 +452,7 @@ next_free_port() {
   local p="$1"
   # Bounded: a broken port check used to walk ports forever here, with the
   # installer sitting silent at the prompt and no way to tell what happened.
-  while [ "$p" -le 65535 ] && port_in_use "$p"; do p=$((p + 1)); done
+  while [ "$p" -le 65535 ] && { port_reserved "$p" || port_taken_here "$p" || port_in_use "$p"; }; do p=$((p + 1)); done
   [ "$p" -le 65535 ] || fail "Couldn't find a free port at or above $1."
   echo "$p"
 }
@@ -530,7 +536,7 @@ PANEL_URL="http://localhost:${panel_port}"
 info "Panel API on port $panel_port, dashboard on $dashboard_port (HTTP) and $dashboard_https_port (HTTPS)."
 
 step "SSL / domain"
-read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain
+read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain || has_domain=N
 has_domain=${has_domain:-N}
 if [[ "$has_domain" =~ ^[Yy]$ ]]; then
   read -r -p "Domain (e.g. panel.example.com): " domain
@@ -622,7 +628,29 @@ run_spinner "Waiting for the panel to come up..." wait_for_panel \
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 [ -n "$HOST_IP" ] || HOST_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)"
 HOST_IP="${HOST_IP:-<server-ip>}"
-SUMMARY=()
+read -r -p "Install a VPN node on this same server? / نود روی همین سرور نصب شود؟ [y/N] " install_local_node || install_local_node=N
+LOCAL_NODE_NOTE="Panel only. Add remote nodes from Dashboard > Nodes."
+if [[ "$install_local_node" =~ ^[Yy]$ ]]; then
+  if docker container inspect tifusi-node >/dev/null 2>&1; then
+    warn "A tifusi-node container already exists; it was kept unchanged. Manage it from Nodes."
+    LOCAL_NODE_NOTE="Existing node kept unchanged."
+  else
+    read -r -p "This server's address reachable from the panel [$HOST_IP]: " node_address || node_address=""
+    node_address=${node_address:-$HOST_IP}
+    ask_port "Local node agent port" 62050 node_port
+    node_json="$(docker exec tifusi-panel tifusi-cli register-local-node "$node_address" "$node_port")" || fail "Could not register local node. Add it later from Nodes."
+    node_key="$(printf '%s' "$node_json" | docker exec -i tifusi-panel python -c 'import json,sys; print(json.load(sys.stdin)["api_key"])')"
+    node_port="$(printf '%s' "$node_json" | docker exec -i tifusi-panel python -c 'import json,sys; print(json.load(sys.stdin)["port"])')"
+    if TIFUSI_NODE_API_KEY="$node_key" bash "$INSTALL_DIR/install-node.sh" "" "$node_port"; then
+      LOCAL_NODE_NOTE="Local node installed and registered. Choose its core from Dashboard > Cores."
+    else
+      warn "Panel is running, but local node installation failed. Retry from Dashboard > Nodes."
+      LOCAL_NODE_NOTE="Local node registered; installation needs retry from Nodes."
+    fi
+    unset node_key node_json
+  fi
+fi
+SUMMARY=("Node      :  $LOCAL_NODE_NOTE")
 if [ "$EDITION" = "pro" ]; then
   SUMMARY+=("Edition   :  professional (MySQL 8.4, data in ${INSTALL_DIR}/mysql-data)")
 else
@@ -635,7 +663,7 @@ if [ -n "$PANEL_PUBLIC_URL" ]; then
 else
   SUMMARY+=("Dashboard :  http://${HOST_IP}:${dashboard_port}")
 fi
-SUMMARY+=("Panel API :  http://${HOST_IP}:${panel_port}")
+SUMMARY+=("Panel API :  dashboard URL + /api (local backend: http://127.0.0.1:${panel_port})")
 print_block "Panel Access Info" "$C_GREEN" "${SUMMARY[@]}"
 printf '\n'
 info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"

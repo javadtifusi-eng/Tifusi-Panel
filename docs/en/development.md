@@ -2,6 +2,20 @@
 
 # Development
 
+## Editing documentation
+
+Edit the matching pages in `docs/en/` and `docs/fa/` together; keep `README.md` and `README.fa.md` aligned. `website/scripts/sync-docs.mjs` generates the website guide pages from those Markdown files. Do not edit the generated `website/src/content/docs/*/guides/` folders. The website home pages and guide cards are maintained separately under `website/src/`.
+
+Use Node.js 22.12 or newer and npm 10.8.2 or newer for the locked website dependencies:
+
+```bash
+cd website
+npm ci
+npm run build
+```
+
+The build synchronizes both languages, renders the documentation and creates the search index. It does not publish the site. Review the output and internal links before committing; publishing is a separate action.
+
 ## Backend
 
 ```bash
@@ -55,7 +69,7 @@ The test suite fails while the manifest's version differs from `backend/VERSION`
 
 ## Production deploy
 
-`ops/deploy.sh` (on the production server) backs up the database and files, tags the running images `:rollback`, fast-forwards `/opt/tifusi-panel` to `origin/main`, builds and starts the panel and dashboard, then checks for up to two minutes that the API and dashboard answer, nothing raised at startup and every node is still connected. If not, it starts the previous images again (data kept, as migrations only add), and restores the database backup too only if that still doesn't come up. `--dry-run` lists what would be deployed. The other `ops/` scripts run from cron: an encrypted daily off-site backup, a weekly restore test, and a 5-minute watchdog that reports to Telegram.
+`ops/deploy.sh` (on the production server) backs up the database and files, tags the running images `:rollback`, fast-forwards `/opt/tifusi-panel` to `origin/main`, builds and starts the panel and dashboard, then checks for up to two minutes that the API and dashboard answer, nothing raised at startup and every node is still connected. If not, it starts the previous images again (current data kept when the migrated schema remains compatible), and restores the database backup too only if that still doesn't come up. `--dry-run` lists what would be deployed. The other `ops/` scripts run from cron: an encrypted daily off-site backup, a weekly restore test, and a 5-minute watchdog that reports to Telegram.
 
 ## Node agent image
 

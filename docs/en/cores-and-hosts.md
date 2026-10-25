@@ -2,6 +2,8 @@
 
 # Cores, hosts and groups
 
+> **Current default:** Xray protocols and IKEv2. L2TP, PPTP, Hysteria2 and WireGuard references below describe retained code, not services offered by the default deployment. See [Deployment](deployment.md).
+
 ## Configuration model
 
 ```mermaid
@@ -12,7 +14,7 @@ flowchart TD
     Host["Host<br/>public address · port · SNI · fingerprint · remark"]
     Group["Group<br/>access boundary"]
     User["User<br/>quota · expiry · device limit · status"]
-    Sub["Subscription<br/>/sub/{secret} · /code/{code}"]
+    Sub["Subscription<br/>/sub/{secret} · /app/s/{code}"]
     Out["Share links · Clash · sing-box<br/>app.json: ikev2 · l2tp · vless"]
 
     Core -->|"assigned to"| Node
@@ -28,13 +30,12 @@ flowchart TD
 
 ## Cores
 
-A core is the server-side technology a node runs. It is one of three types:
+A core is the server-side technology a node runs. The default deployment uses these types:
 
 | Type | Content |
 | --- | --- |
 | `xray` | A complete Xray JSON configuration, exactly what `xray run -c` accepts, with structured editors for routing, outbounds and DNS. Its inbounds are parsed out and become selectable by hosts and groups. |
 | `ikev2` | The server parameters of an IKEv2/IPsec deployment: authentication mode (EAP-MSCHAPv2 or PSK), remote ID and server certificate. |
-| `l2tp` | The server parameters of an L2TP/IPsec deployment, including the shared PSK. |
 
 Each core can be assigned to one or more nodes. A node holds one Xray core and one IPsec core at the same time; see [Nodes](nodes.md#two-cores-on-one-node).
 
@@ -47,7 +48,7 @@ A host is the public endpoint a client receives: address, port and display name,
 - **Xray protocols** reference an inbound parsed from the core configuration and inherit transport, security and REALITY parameters from it. SNI, ALPN, fingerprint, path and security may be overridden for clients.
 - **L2TP** hosts bind to an `l2tp` core and use its shared PSK.
 - **IKEv2** hosts bind to an `ikev2` core. The server authenticates with an X.509 certificate (self-signed by default, or an imported CA-issued chain) and each user with EAP-MSCHAPv2.
-- **Hysteria2** hosts carry their own parameters, since Hysteria2 runs outside the nodes.
+- **Hysteria2 (legacy)** runs as a separate node-agent process; see the [historical reference](hysteria2.md).
 - **Domain pool** (VLESS, VMess, Trojan, Shadowsocks and Hysteria2): the host goes out once per healthy domain of the pool, and filtered domains are replaced on their own — see [Domain rotation](domain-rotation.md).
 
 Several hosts on the same Xray inbound are link variants of one server-side inbound, so the **Hosts** page folds them into a single card — the same size, signal, ping and sparkline as any host card — titled with the inbound tag and a link count. Opening the card lists each host with its usual actions.
@@ -68,24 +69,11 @@ A round `{ }` button inside the host name field opens a menu of variables; a cli
 
 Remarks written with the earlier names (`{expire_date}`, `{expire_jalali}`, `{data_limit_gb}`, `{data_left_gb}`, `{data_used_gb}`) still render as before.
 
-### REALITY target scanner
+### REALITY configuration
 
-**Find Best Target (SNI)** in the REALITY section of the Xray core form opens the scanner. It runs on a node you pick, because the node is what forwards handshakes to the target.
+Set REALITY parameters in the Xray core JSON, including `serverNames`, `dest`, keys and client-facing settings. Hosts inherit the inbound's values, with the supported client overrides described above.
 
-There is no built-in list of names: a target published in a panel's source is the first one a censor blocks, and a name that is excellent on one server's network is ordinary on another's. Every scan discovers its own names live, and every scan walks one ring further out, so pressing the button again turns up sites the last round never showed.
-
-1. **Find** — the node reads the names off the certificates of every address in a /24 near it. Round 1 is its own /24, round 2 the /24s either side of it, and so on; names found in earlier rounds are skipped.
-2. **Check** — each name must answer with TLS 1.3 and HTTP/2 and a certificate valid for that name, and its own DNS must point back at the address it was found on. Neighbours are reached by their address, which becomes the `dest` (`IP:443`). Each survivor is then timed from the node, by IP and with no DNS in the timing, one at a time once the checks are over: **ping** is the median of five TCP connects and **TLS** the median of three full handshakes.
-3. **Iran** — probe servers inside Iran (Tehran, Isfahan, Shiraz, Qom, via check-host.net) are asked to open each survivor, and to reach the node's own address. Only the name or the node address is sent. This is a gate, not a label: a name that is not open from *every* city that answered is dropped, because it cannot be used whatever else it scores. Each city also reports how long it took, and the median of those is the scan's speed signal — many names are open from Iran yet slow, and a slow target makes a slow tunnel.
-4. **Prove** — the handful that are open from Iran, fastest first, get a real REALITY server and client started on the node, which load a page through them once per fingerprint (chrome, firefox, safari, ios, android, edge, 360, qq, random, randomized). ✓ means that fingerprint really connected; the fingerprints are listed fastest first, each with its own measured time.
-5. **Load** — the same handful are then load-tested the way REALITY really uses a target: it relays a full handshake to the target for every new connection a user opens, so the node knocks on that door all day. Most neighbours are small machines (a phone system, a company ERP) behind a rate limiter, which will start refusing the node long before Iran blocks anything — and then every new connection breaks while every other check still shows green. The node sends 20 handshakes at once, then 3 a second for 15 seconds, then pauses and tries 3 more. Only whether each handshake got through is kept, shown as *Holds under load 100%* — timing concurrent handshakes from the node would measure the node's own CPU, not the target; a target that stops answering after the pause is marked as having shut the node out and sinks to the bottom. The rates are deliberately far below real use: enough to expose a limiter, not to be one.
-6. **Test from this device** — check-host.net's probes are all in datacenters, so a name they find open can still be blocked on a mobile operator. With the VPN off, the scanner can connect to each finalist from the browser you are using, on whatever network it is on; the panel recognises the operator from your IP (MCI, Irancell, TCI…) and labels each result with it, or warns when the IP is not an Iranian operator's. Switch networks and run it again to see another operator's result next to the first. A browser reaches the site itself, not your node with a chosen SNI, so this tells you whether your operator lets the name through, not how fast the tunnel is.
-7. **Test from Iran** — the definitive speed measurement, started automatically when a scan finishes. Iranian DPI throttles names it does not block, so no test outside Iran can rank targets by the speed a user will see. The node opens one throwaway REALITY inbound per target for 30 minutes; import the subscription on a phone on Iranian internet, run a speed test on each config, and the real download and upload rate of each target appears in the panel, fastest first. Each result is labelled with the operator the phone's connections came from.
-8. **Find the operator's pattern** — for "fine on one operator, poor on another". The panel builds one subscription whose configs each differ from another in one thing only: the best SNI on a random port and on standard HTTPS ports (2053, 8443), your own domain as SNI — used when one of your hosts' names resolves to the node and serves TLS 1.3 there, so it is the one SNI without an IP/SNI mismatch — and the second-best SNI. Test it on a phone on that operator and the panel compares the results and names the pattern: the port, the IP/SNI mismatch, or the address or route itself, where no SNI helps and a relay inside Iran or a CDN is the fix.
-
-Results are ordered by how well a target will work while it is open, not by whether it connects: working with chrome first, then holding up under load, then how fast Iran answers, then the node→target handshake.
-
-**Use** writes the name into `serverNames` and the `dest` into the core's JSON. The scanner needs a node updated to v1.4.2 or later, which also runs Xray 26: on Xray 1.8 the chrome, firefox and safari fingerprints fail against REALITY.
+The target scanner and its **Find Best Target (SNI)** button have been removed. The panel no longer mounts `/api/reality` scan routes. REALITY connections and manual configuration remain available; no scanner or probe download is required to use them.
 
 ## Groups
 

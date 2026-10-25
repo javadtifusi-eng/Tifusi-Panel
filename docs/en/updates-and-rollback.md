@@ -75,7 +75,7 @@ A node's users drop for a few seconds while its container is replaced and reconn
 1. **Snapshot first.** The images the panel is running now are tagged `tifusi-panel-{backend,frontend}:rollback` (before the pull overwrites `:latest`), and the data (the database, `.env` and `certs/`) is saved under `<install>/.rollback/`.
 2. **Update.** The latest install files are pulled, the prebuilt images fetched, and the panel restarted; migrations run on start.
 3. **Health check.** The update waits up to 90 seconds for the backend container to be running and the API to answer. If it does, the update is kept and the snapshot is left in place until the next update.
-4. **Roll back on failure.** If it doesn't, the previous images are put back. Because migrations only ever add tables and columns, the old code runs against the already-migrated schema, so this keeps every write made since the snapshot. Only if the old code still can't come up — a rare destructive migration — is the data snapshot restored too, and the panel brought up on it.
+4. **Roll back on failure.** If it doesn't, the previous images are put back. The updater first tries the old code against the current database, preserving writes when the schema is still compatible. Migrations can also remove or change schema, so compatibility is not guaranteed. If the old code still cannot start, the data snapshot is restored too; writes made after that snapshot are then lost.
 
 The database and `certs/` are never changed by a rollback unless the first layer fails, so a normal failed update loses nothing.
 

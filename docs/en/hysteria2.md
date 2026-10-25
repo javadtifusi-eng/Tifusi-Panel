@@ -2,6 +2,8 @@
 
 # Hysteria2
 
+> **Historical reference:** Hysteria2 is not served by the default deployment. This page retains implementation notes and past measurements; it does not describe the currently enabled protocols. Start with [Cores and hosts](cores-and-hosts.md) for Xray and IKEv2.
+
 Hysteria2 runs beside Xray on a node as its own small server, over UDP. It exists for one case: a network where TCP-based protocols (REALITY, XHTTP over TCP) are poor and UDP is not.
 
 Every user of the panel can use it with the subscription they already have: their subscription secret is their Hysteria2 password.

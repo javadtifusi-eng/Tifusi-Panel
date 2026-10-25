@@ -521,7 +521,7 @@ if [ -d /opt/tifusi-panel/certs ]; then
 fi
 
 run_spinner "Starting the node agent..." \
-  docker run -d --name tifusi-node --restart unless-stopped \
+  docker run -d --name tifusi-node --restart unless-stopped --init \
   --network host "${EXTRA_DOCKER_ARGS[@]}" \
   -e "TIFUSI_NODE_API_KEY=${API_KEY}" -e "AGENT_PORT=${PORT}" tifusi-node-agent || exit 1
 
@@ -542,7 +542,7 @@ fi
 
 # The agent's port has to be reachable from the panel; only touched when ufw
 # is already enforcing, so a server without a firewall is left as it was.
-if [ -n "$OFFLINE_DIR" ] && command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow "$PORT/tcp" comment 'Tifusi node agent' >/dev/null 2>&1 || true
 fi
 

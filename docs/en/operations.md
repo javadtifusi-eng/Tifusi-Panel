@@ -49,6 +49,15 @@ User and node state changes, [Connection Shield](connection-shield.md) events an
 
 The public URL, administrator password, TLS certificate (upload or Let's Encrypt issuance) and database backup and restore are all changed from **Settings** and take effect without redeployment. The Settings backup covers the standard edition; for the professional edition use `tifusi panel backup`, which includes a MySQL dump.
 
+## Choosing a backup method
+
+| Edition | Settings backup and restore | Server command |
+| --- | --- | --- |
+| Standard / SQLite | Available to the owner; exports or replaces the SQLite database. | `tifusi panel backup` / `tifusi panel restore` |
+| Professional / MySQL | Unavailable; the API returns `400` with the CLI instruction. | `tifusi panel backup` / `tifusi panel restore`; the archive includes a MySQL dump. |
+
+Run the management command on the panel server. The CLI archive also contains installation data such as `.env` and certificates, so keep it private and copy it off the server. The Settings database file is not a full installation archive. Take a fresh backup before restoring; CLI restore restarts the stack.
+
 ---
 
 <sub>[← Network health](network-health.md) · [Safe updates →](updates-and-rollback.md)</sub>

@@ -32,15 +32,27 @@
 
 | | |
 | --- | --- |
-| 🌐 **Every protocol on one node** | Xray (VLESS, VMess, Trojan, Shadowsocks, REALITY), IKEv2, L2TP, PPTP, Hysteria2 and WireGuard side by side; the panel renders and pushes each node's config |
+| 🌐 **Xray and IKEv2 on one node** | Xray (VLESS, VMess, Trojan, Shadowsocks, REALITY) and IKEv2 side by side; the panel renders and pushes each node's config. L2TP, PPTP, Hysteria2 and WireGuard code remains but is not served: `TIFUSI_SUPPORTED_PROTOCOLS` (default `vless,vmess,trojan,shadowsocks,ikev2`) keeps their hosts out of subscriptions and refuses new ones |
 | 🚇 **Tunnels for hard networks** | Iran ↔ abroad relays over TCP/TLS/WebSocket/mux, a stealth transport, UDP (KCP), IP-spoofed carriers and CDN fronting; relays answer active probes with a decoy website, and multi-hop chains route through several relays with a different transport per hop, with a link test and live throughput |
 | 🔑 **Install from the panel** | Nodes and both tunnel sides installed over SSH with the panel's own key — online, or from an offline bundle over SFTP for servers with no outside internet |
 | 🛡️ **Updates that roll themselves back** | Config pushes validated (`xray -test`) with the last good config kept; tunnel binaries and node agents updated with automatic rollback, nodes one at a time with a canary; `tifusi panel update` snapshots images and data first and rolls itself back if the new version doesn't come up; a short Telegram report after each update |
 | 🔒 **Guard rails** | Reserved ports (agent, SSH, internal APIs) can't be taken by an inbound; a refused config is shown on the node while it keeps serving |
 | 👤 **Users & subscriptions** | One link for every client (plain, Clash, sing-box, HTML page), dynamic remark variables, groups per inbound or per host, on-hold, device limits, periodic resets, resellers with quotas |
-| 📶 **Staying reachable** | Connection Shield failover, network health from inside Iran, backup subscription domains, REALITY target scanner |
+| 📶 **Staying reachable** | Connection Shield failover, network health from inside Iran, backup subscription domains |
 | 🔀 **Domain rotation** | Pooled hosts go out on several healthy domains inside one subscription, so v2rayNG and V2Box users already hold working configs when a name is filtered; domains are checked from Iran and burnt ones replaced on their own. Backup subscription addresses can ride inside the subscription (Clash proxy-providers), and Clash and sing-box `auto` groups move off a filtered domain by themselves |
 | 🧪 **Tested** | A pytest suite (links, subscriptions, traffic, migrations, rollback paths) runs on every push; images are only published when it passes |
+
+
+## Documentation map
+
+| Task | Guide |
+| --- | --- |
+| Start here | [Installation](docs/en/installation.md) · [Nodes](docs/en/nodes.md) · [Cores, hosts and groups](docs/en/cores-and-hosts.md) |
+| Customers | [Users, renewal and share links](docs/en/users-and-subscriptions.md) · [Resellers](docs/en/resellers.md) · [Telegram bot](docs/en/telegram-bot.md) |
+| Connectivity | [Tunnels](docs/en/tunnels.md) · [Connection Shield](docs/en/connection-shield.md) · [Domain rotation](docs/en/domain-rotation.md) · [Network health](docs/en/network-health.md) |
+| Operations | [Settings and backups](docs/en/operations.md) · [Updates and rollback](docs/en/updates-and-rollback.md) · [Deployment](docs/en/deployment.md) |
+| Development | [Architecture](docs/en/architecture.md) · [Development](docs/en/development.md) |
+| Historical reference | [Hysteria2 — not served by default](docs/en/hysteria2.md) |
 
 <p align="center">
   <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><img src="https://img.shields.io/badge/Documentation-F97316?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation" height="38" /></a>
