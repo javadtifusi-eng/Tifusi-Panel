@@ -130,7 +130,7 @@ action_update() {
 
   info "Restarting the node agent on the new version (connected users reconnect on their own)..."
   docker rm -f "$CONTAINER" >/dev/null
-  docker run -d --name "$CONTAINER" --restart unless-stopped \
+  docker run -d --name "$CONTAINER" --restart unless-stopped --init \
     --network host --cap-add=NET_ADMIN --cap-add=NET_RAW --ulimit nofile=1048576:1048576 "${extra[@]}" \
     -e "TIFUSI_NODE_API_KEY=${key}" -e "AGENT_PORT=${port}" "$IMAGE_LOCAL" >/dev/null
   info "Updated. The panel re-sends this node's settings on its next check (within a minute)."
