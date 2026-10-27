@@ -115,3 +115,16 @@ a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid
   .hero .sl-link-button { font-size: 0.82rem; padding-inline: 0.8rem; }
 }
 @media (prefers-reduced-motion: reduce) { .guide-card { transition: none; } }
+
+.preview-section { margin-block: 0.5rem 2rem; }
+.preview-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
+.preview-heading h2 { font-size: 1.2rem; margin: 0; }
+.preview-heading > span { font-size: 0.78rem; color: #adbdcc; }
+.preview-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+.preview-grid figure { margin: 0; overflow: hidden; background: #14212d; border: 1px solid #293d4d; border-radius: 12px; }
+.preview-grid a { display: block; }
+.preview-grid img { display: block; width: 100%; height: auto; max-height: none; border: 0; border-radius: 0; }
+.preview-grid figcaption { padding: 0.75rem 1rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 1rem; }
+.preview-grid figcaption b { font-size: 0.9rem; }
+.preview-grid figcaption span { font-size: 0.78rem; color: #adbdcc; }
+@media(max-width: 49.99rem) { .preview-grid { grid-template-columns: 1fr; } .preview-heading { flex-wrap: wrap; gap: 0.25rem; } }

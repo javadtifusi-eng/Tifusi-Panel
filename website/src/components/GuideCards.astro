@@ -4,22 +4,40 @@ const { lang = 'fa' } = Astro.props
 const fa = lang === 'fa'
 const base = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/${lang}/guides/`
 const guides = [
-  ['📥', 'installation', 'Installation', 'Install the panel on your server in a few minutes.', 'نصب', 'نصب پنل روی سرور در چند دقیقه.'],
-  ['🖥️', 'nodes', 'Nodes', 'Add servers and manage them from one place.', 'نودها', 'افزودن و مدیریت سرورها از یک جا.'],
-  ['🧩', 'cores-and-hosts', 'Cores, hosts and groups', 'Xray cores, host addresses and user groups.', 'هسته‌ها، هاست‌ها و گروه‌ها', 'هسته‌های Xray، آدرس هاست‌ها و گروه‌بندی کاربران.'],
-  ['👨‍💼', 'users-and-subscriptions', 'Users and subscriptions', 'Create users, set traffic, expiry and device limits.', 'کاربران و اشتراک‌ها', 'ساخت کاربر، حجم، تاریخ انقضا و محدودیت دستگاه.'],
+  ['📥', 'installation', 'Installation', 'Install the panel on your server in a few minutes.', 'نصب', 'نصب پنل و ساخت حساب مدیر'],
+  ['🖥️', 'nodes', 'Nodes', 'Add servers and manage them from one place.', 'نودها', 'ثبت، نصب و اتصال سرورها'],
+  ['🧩', 'cores-and-hosts', 'Cores, hosts and groups', 'Xray cores, host addresses and user groups.', 'هسته‌ها، هاست‌ها و گروه‌ها', 'تنظیم پروتکل و مسیر دسترسی'],
+  ['👨‍💼', 'users-and-subscriptions', 'Users and subscriptions', 'Create users, set traffic, expiry and device limits.', 'کاربران و اشتراک‌ها', 'حساب، حجم و مدت اشتراک'],
   ['🤝', 'resellers', 'Resellers', 'Give resellers their own balance and users.', 'نمایندگان', 'اعتبار و کاربران جدا برای هر نماینده.'],
-  ['🌉', 'tunnels', 'Tunnels', 'Iran relay to foreign server, direct or through a CDN.', 'تانل‌ها', 'رله‌ی ایران به سرور خارج، مستقیم یا از طریق CDN.'],
-  ['🛡️', 'connection-shield', 'Connection Shield', 'Move users to a standby relay when one gets blocked.', 'سپر اتصال', 'جابه‌جایی خودکار کاربران به رله‌ی یدک وقتی یکی مسدود شد.'],
-  ['🔀', 'domain-rotation', 'Domain rotation', 'Manage healthy domains and backup subscription addresses.', 'چرخش دامنه', 'مدیریت دامنه‌های سالم و آدرس‌های پشتیبان اشتراک.'],
-  ['🤖', 'telegram-bot', 'Tifusi Bot', 'Telegram bot that sells and renews subscriptions.', 'ربات تیفوسی', 'ربات تلگرام برای فروش و تمدید اشتراک.'],
-  ['🛜', 'network-health', 'Network health', 'Live checks for nodes, relays and tunnels.', 'سلامت شبکه', 'بررسی زنده‌ی نودها، رله‌ها و تانل‌ها.'],
+  ['🌉', 'tunnels', 'Tunnels', 'Iran relay to foreign server, direct or through a CDN.', 'تانل‌ها', 'اتصال ایران و خارج، مستقیم یا CDN'],
+  ['🛡️', 'connection-shield', 'Connection Shield', 'Move users to a standby relay when one gets blocked.', 'سپر اتصال', 'انتقال خودکار به رلهٔ جایگزین'],
+  ['🔀', 'domain-rotation', 'Domain rotation', 'Manage healthy domains and backup subscription addresses.', 'چرخش دامنه', 'دامنه‌ها و لینک‌های پشتیبان'],
+  ['🤖', 'telegram-bot', 'Tifusi Bot', 'Telegram bot that sells and renews subscriptions.', 'ربات تیفوسی', 'فروش و تمدید از تلگرام'],
+  ['🛜', 'network-health', 'Network health', 'Live checks for nodes, relays and tunnels.', 'سلامت شبکه', 'بررسی نودها و مسیرها'],
   ['⚙️', 'operations', 'Operations', 'Backups, updates and day-to-day tasks.', 'عملیات', 'بک‌آپ، به‌روزرسانی و کارهای روزمره.'],
-  ['🔁', 'updates-and-rollback', 'Updates and rollback', 'Update the panel and nodes with a recovery plan.', 'آپدیت و برگشت', 'به‌روزرسانی پنل و نودها با مسیر برگشت.'],
+  ['🔁', 'updates-and-rollback', 'Updates and rollback', 'Update the panel and nodes with a recovery plan.', 'آپدیت و برگشت', 'نسخهٔ جدید و بازیابی نسخهٔ قبل'],
   ['📦', 'deployment', 'Deployment reference', 'Ports, environment variables and containers.', 'مرجع استقرار', 'پورت‌ها، متغیرهای محیطی و کانتینرها.'],
-  ['🏗️', 'architecture', 'Architecture', 'How the panel, nodes and relays fit together.', 'معماری', 'ارتباط پنل، نودها و رله‌ها با هم.'],
+  ['🏗️', 'architecture', 'Architecture', 'How the panel, nodes and relays fit together.', 'معماری', 'ساختار پنل و سرویس‌ها'],
   ['🛠️', 'development', 'Development', 'Build from source and contribute.', 'توسعه', 'ساخت از سورس و مشارکت در پروژه.'],
-  ['📚', 'hysteria2', 'Hysteria2 — historical', 'Legacy implementation notes; not served by default.', 'Hysteria2 — تاریخی', 'یادداشت‌های پیاده‌سازی قدیمی؛ خارج از سرویس‌های پیش‌فرض.'],
+  ['📚', 'hysteria2', 'Hysteria2 — historical', 'Legacy implementation notes; not served by default.', 'Hysteria2 — تاریخی', 'مستندات نسخهٔ قدیمی'],
+]
+const icons = [
+ 'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5',
+ 'M4 3h16v7H4zM4 14h16v7H4zM7 6h1m-1 11h1',
+ 'M8 8h8v8H8zM8 3v5m8-5v5M8 16v5m8-5v5M3 8h5m8 0h5M3 16h5m8 0h5',
+ 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m7-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-7a4 4 0 0 1 0 8m2 3a4 4 0 0 1 3 4v2',
+ 'M3 7h18v14H3zM8 7V3h8v4m-13 6h18m-12-2v4h6v-4',
+ 'M3 6h6v6H3zM15 12h6v6h-6zM9 9h6v6m-6 0h6',
+ 'M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7zM8 12l3 3 5-6',
+ 'M4 8h13l-4-4m7 12H7l4 4M4 8v5m16 3v-5',
+ 'm3 11 18-8-6 18-4-7zM11 14l10-11',
+ 'M2 12h4l3-8 6 16 3-8h4',
+ 'M4 7h16M4 17h16M8 4v6m8 4v6',
+ 'M3 10a9 9 0 1 1 0 5m0-12v7h7',
+ 'M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10',
+ 'M9 3h6v5H9zM2 16h6v5H2zM16 16h6v5h-6zM12 8v4M5 16v-4h14v4',
+ 'm8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16',
+ 'M5 3h14v18H5zM8 7h8M8 11h8M8 15h5',
 ]
 const groups = [
   { title: fa ? 'شروع و راه‌اندازی' : 'Getting started', note: fa ? 'از نصب تا اولین اشتراک' : 'From installation to your first subscription', ids: [0, 1, 2, 3], path: 'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5' },
@@ -37,7 +55,7 @@ const groups = [
         {group.ids.map((id) => {
           const [, slug, en, enDesc, faName, faDesc] = guides[id]
           return <a class="guide-card" href={`${base}${slug}/`}>
-            <span class="guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d={group.path} /></svg></span>
+            <span class="guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d={icons[id]} /></svg></span>
             <span class="txt"><b>{fa ? faName : en}</b><span>{fa ? faDesc : enDesc}</span></span>
             <span class="arrow" aria-hidden="true">↗</span>
           </a>

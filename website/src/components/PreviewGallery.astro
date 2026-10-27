@@ -1,0 +1,22 @@
+---
+import overviewFa from '../assets/shots/overview-fa.webp'
+import overviewEn from '../assets/shots/overview-en.webp'
+import tunnelsFa from '../assets/shots/tunnels-fa.webp'
+import tunnelsEn from '../assets/shots/tunnels-en.webp'
+const fa = Astro.props.lang !== 'en'
+const previews = [
+  { image: fa ? overviewFa : overviewEn, title: fa ? 'داشبورد' : 'Dashboard', description: fa ? 'کاربران، مصرف و وضعیت سرورها' : 'Users, traffic and server status' },
+  { image: fa ? tunnelsFa : tunnelsEn, title: fa ? 'تانل‌ها' : 'Tunnels', description: fa ? 'مسیر اتصال و ترافیک تانل‌ها' : 'Connections and tunnel traffic' },
+]
+---
+<section class="preview-section not-content" aria-label={fa ? 'نمای پنل' : 'Panel preview'}>
+  <div class="preview-heading"><h2>{fa ? 'داخل پنل' : 'Inside the panel'}</h2><span>{fa ? 'برای بزرگ‌نمایی، روی تصویر بزنید' : 'Select an image to enlarge'}</span></div>
+  <div class="preview-grid">
+    {previews.map(({image, title, description}) => (
+      <figure>
+        <a href={image.src} aria-label={fa ? `نمای بزرگ ${title}` : `Enlarge ${title}`}><img src={image.src} width={image.width} height={image.height} alt={description} loading="eager" decoding="async" /></a>
+        <figcaption><b>{title}</b><span>{description}</span></figcaption>
+      </figure>
+    ))}
+  </div>
+</section>
