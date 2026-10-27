@@ -4,7 +4,7 @@
 
 <h1 align="center">TIFUSI PANEL</h1>
 
-<p align="center"><b>Manage VPN servers, users and subscriptions with Xray and IKEv2.</b></p>
+<p align="center"><b>Self-hosted control plane for proxy and VPN infrastructure</b></p>
 
 <p align="center">
   <a href="https://github.com/javadtifusi-eng/Tifusi-Panel/stargazers"><img src="https://img.shields.io/github/stars/javadtifusi-eng/Tifusi-Panel?style=flat-square&label=stars&color=F97316" alt="GitHub stars" /></a>
@@ -14,39 +14,46 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-source--available-DC2626?style=flat-square" alt="license" /></a>
 </p>
 
-
+<p align="center">
+  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><img src="https://img.shields.io/badge/Documentation-F97316?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation" height="38" /></a>
+  <br />
+  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><b>📖 Full documentation on the website</b></a>
+</p>
 
 <p align="center"><img src="docs/brand/gb.png" height="14" alt="" /> <b>English</b> &nbsp;·&nbsp; <img src="docs/brand/ir.png" height="14" alt="" /> <a href="README.fa.md">فارسی</a> &nbsp;·&nbsp; <img src="docs/brand/ru.png" height="14" alt="" /> <a href="README.ru.md">Русский</a></p>
 
 <p align="center">
-  <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="Tifusi Panel dashboard and hosts" />
+  <img src="docs/screenshots/live-dashboard-hosts.svg" width="100%" alt="Tifusi Panel dashboard and hosts, live" />
   <br /><br />
-  <img src="docs/screenshots/live-tunnels-en.webp" width="100%" alt="Tifusi Panel tunnels" />
+  <img src="docs/screenshots/live-tunnels-en.webp" width="100%" alt="Tunnels page, live" />
 </p>
 
-### About the panel
+## Highlights
 
-Tifusi Panel manages VPN servers, users and subscriptions, with Xray and IKEv2 across one or multiple nodes.
+| | |
+| --- | --- |
+| 🌐 **Xray and IKEv2 on one node** | Xray (VLESS, VMess, Trojan, Shadowsocks, REALITY) and IKEv2 side by side; the panel renders and pushes each node's config. L2TP, PPTP, Hysteria2 and WireGuard code remains but is not served: `TIFUSI_SUPPORTED_PROTOCOLS` (default `vless,vmess,trojan,shadowsocks,ikev2`) keeps their hosts out of subscriptions and refuses new ones |
+| 🚇 **Tunnels for hard networks** | Iran ↔ abroad relays over TCP/TLS/WebSocket/mux, a stealth transport, UDP (KCP), IP-spoofed carriers and CDN fronting; relays answer active probes with a decoy website, and multi-hop chains route through several relays with a different transport per hop, with a link test and live throughput |
+| 🔑 **Install from the panel** | Nodes and both tunnel sides installed over SSH with the panel's own key — online, or from an offline bundle over SFTP for servers with no outside internet |
+| 🛡️ **Updates that roll themselves back** | Config pushes validated (`xray -test`) with the last good config kept; tunnel binaries and node agents updated with automatic rollback, nodes one at a time with a canary; `tifusi panel update` snapshots images and data first and rolls itself back if the new version doesn't come up; a short Telegram report after each update |
+| 🔒 **Guard rails** | Reserved ports (agent, SSH, internal APIs) can't be taken by an inbound; a refused config is shown on the node while it keeps serving |
+| 👤 **Users & subscriptions** | One link for every client (plain, Clash, sing-box, HTML page), dynamic remark variables, groups per inbound or per host, on-hold, device limits, periodic resets, resellers with quotas |
+| 📶 **Staying reachable** | Connection Shield failover, network health from inside Iran, backup subscription domains |
+| 🔀 **Domain rotation** | Pooled hosts go out on several healthy domains inside one subscription, so v2rayNG and V2Box users already hold working configs when a name is filtered; domains are checked from Iran and burnt ones replaced on their own. Backup subscription addresses can ride inside the subscription (Clash proxy-providers), and Clash and sing-box `auto` groups move off a filtered domain by themselves |
+| 🧪 **Tested** | A pytest suite (links, subscriptions, traffic, migrations, rollback paths) runs on every push; images are only published when it passes |
 
-- **Users and sales:** Traffic quotas, expiry dates, device limits, personal subscription links and reseller accounts.
-- **Servers and connectivity:** Node installation from the panel, tunnels, CDN routes, Connection Shield and backup domains.
-- **Daily operations:** Traffic monitoring, backups, updates with rollback and Telegram bot integration.
+
+## Documentation map
+
+| Task | Guide |
+| --- | --- |
+| Start here | [Installation](docs/en/installation.md) · [Nodes](docs/en/nodes.md) · [Cores, hosts and groups](docs/en/cores-and-hosts.md) |
+| Customers | [Users, renewal and share links](docs/en/users-and-subscriptions.md) · [Resellers](docs/en/resellers.md) · [Telegram bot](docs/en/telegram-bot.md) |
+| Connectivity | [Tunnels](docs/en/tunnels.md) · [Connection Shield](docs/en/connection-shield.md) · [Domain rotation](docs/en/domain-rotation.md) · [Network health](docs/en/network-health.md) |
+| Operations | [Settings and backups](docs/en/operations.md) · [Updates and rollback](docs/en/updates-and-rollback.md) · [Deployment](docs/en/deployment.md) |
+| Development | [Architecture](docs/en/architecture.md) · [Development](docs/en/development.md) |
+| Historical reference | [Hysteria2 — not served by default](docs/en/hysteria2.md) |
 
 <p align="center">
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><img src="https://img.shields.io/badge/Documentation-F97316?style=for-the-badge&amp;logo=readthedocs&amp;logoColor=white" alt="Documentation" height="38" /></a>
-</p>
-
-<p align="center">
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/installation/"><img src="https://img.shields.io/badge/VPN-2563EB?style=flat-square" alt="VPN" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/cores-and-hosts/"><img src="https://img.shields.io/badge/Xray-2563EB?style=flat-square" alt="Xray" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/cores-and-hosts/"><img src="https://img.shields.io/badge/IKEv2-2563EB?style=flat-square" alt="IKEv2" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/cores-and-hosts/"><img src="https://img.shields.io/badge/VLESS-2563EB?style=flat-square" alt="VLESS" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/cores-and-hosts/"><img src="https://img.shields.io/badge/VMess-2563EB?style=flat-square" alt="VMess" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/cores-and-hosts/"><img src="https://img.shields.io/badge/Trojan-2563EB?style=flat-square" alt="Trojan" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/cores-and-hosts/"><img src="https://img.shields.io/badge/Shadowsocks-2563EB?style=flat-square" alt="Shadowsocks" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/nodes/"><img src="https://img.shields.io/badge/Multi--Node-2563EB?style=flat-square" alt="Multi-Node" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/tunnels/"><img src="https://img.shields.io/badge/Tunnels-2563EB?style=flat-square" alt="Tunnels" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/tunnels/"><img src="https://img.shields.io/badge/CDN-2563EB?style=flat-square" alt="CDN" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/telegram-bot/"><img src="https://img.shields.io/badge/Telegram-2563EB?style=flat-square" alt="Telegram" /></a>
-  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/guides/deployment/"><img src="https://img.shields.io/badge/Docker-2563EB?style=flat-square" alt="Docker" /></a>
+  <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><img src="https://img.shields.io/badge/Documentation-F97316?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation" height="38" /></a>
 </p>
