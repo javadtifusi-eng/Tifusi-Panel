@@ -57,7 +57,10 @@ function convert(src, lang, slug) {
     body = `${body.slice(0, i)}\n\n${inserts[slug](lang)}${body.slice(i)}`
   }
   if (slug === 'tunnels') body = body.replace(/(\n## [^\n]*CDN[^\n]*\n)/, `$1\n${cdnShot(lang)}\n`)
-  return `---\ntitle: ${JSON.stringify(title)}\ntemplate: splash\n---\n\n${body}\n`
+  const description = lang === 'fa'
+    ? `راهنمای ${title} در تیفوسی پنل (Tifusi Panel)؛ آموزش تنظیمات و نکات استفاده از این بخش.`
+    : `Explore ${title.toLowerCase()} in Tifusi Panel, with configuration instructions and practical usage notes.`
+  return `---\ntitle: ${JSON.stringify(title)}\ndescription: ${JSON.stringify(description)}\ntemplate: splash\n---\n\n${body}\n`
 }
 
 for (const lang of ['fa', 'en']) {
