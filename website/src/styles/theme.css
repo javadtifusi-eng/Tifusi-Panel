@@ -60,9 +60,9 @@ pre.mermaid { background: transparent; border: 0; display: flex; justify-content
 
 /* Compact documentation home and shared reading controls. */
 :root, :root[data-theme='dark'] {
-  --sl-color-accent-low: #123332;
-  --sl-color-accent: #54d5ba;
-  --sl-color-accent-high: #b9f2e6;
+  --sl-color-accent-low: #3b2517;
+  --sl-color-accent: #fb923c;
+  --sl-color-accent-high: #fed7aa;
   --sl-color-black: #0c131b;
   --sl-color-gray-6: #131e29;
   --sl-color-gray-5: #293a49;
@@ -81,8 +81,8 @@ header.header { background: #101923; border-bottom-color: #263442; }
 .hero .tagline { max-width: 38rem; color: #b6c6d5; line-height: 1.95; }
 .hero .actions { gap: 0.65rem; margin-top: 1.4rem; }
 .hero .sl-link-button { border-radius: 10px; min-height: 44px; padding: 0.55rem 1rem; font-size: 0.9rem; font-weight: 600; }
-.hero .sl-link-button.primary { background: #64dfc3; color: #09231e; border-color: #64dfc3; }
-.hero .sl-link-button.primary:hover { background: #92edd8; }
+.hero .sl-link-button.primary { background: #fb923c; color: #241306; border-color: #fb923c; }
+.hero .sl-link-button.primary:hover { background: #fdba74; }
 .hero .sl-link-button.secondary { border-color: #3b5266; background: #172634; color: #e2edf6; }
 .hero .sl-link-button.minimal { color: #b6c6d5; }
 .guide-directory { display: grid; gap: 1.5rem; }
@@ -91,13 +91,13 @@ header.header { background: #101923; border-bottom-color: #263442; }
 .guide-group-heading p { color: #97aabd; font-size: 0.8rem; margin: 0; }
 .guide-cards { margin-top: 0; gap: 0.65rem; }
 .guide-card { padding: 1rem; border-color: #283b4b; background: #14212d; border-radius: 12px; min-height: 96px; transition: border-color 150ms, background 150ms; }
-.guide-card:hover { background: #1a2d3b; border-color: #54d5ba; }
+.guide-card:hover { background: #1a2d3b; border-color: #fb923c; }
 .guide-card b { font-size: 0.92rem; color: #e8f0f7; }
 .guide-card .txt span { color: #adbdcc; margin-top: 0.2rem; font-size: 0.8rem; }
-.guide-icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border: 1px solid #2b4a50; border-radius: 10px; background: #183436; color: #7de2cb; }
+.guide-icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border: 1px solid #694125; border-radius: 10px; background: #362619; color: #fdba74; }
 .guide-icon svg { width: 20px; height: 20px; }
 .guide-card .arrow { font-size: 1.15rem; color: #7f9bad; }
-a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid #64dfc3; outline-offset: 4px; }
+a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid #fb923c; outline-offset: 4px; }
 .sl-markdown-content > h2 { border-top: 1px solid #263746; padding-top: 1.5rem; }
 .sl-markdown-content img { max-height: 480px; width: 100%; object-fit: contain; background: #101923; border-color: #293d4d; }
 .sl-markdown-content .card { border-color: #293d4d; border-radius: 12px; background: #131e29; padding: 1.25rem; }
@@ -128,3 +128,14 @@ a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid
 .preview-grid figcaption b { font-size: 0.9rem; }
 .preview-grid figcaption span { font-size: 0.78rem; color: #adbdcc; }
 @media(max-width: 49.99rem) { .preview-grid { grid-template-columns: 1fr; } .preview-heading { flex-wrap: wrap; gap: 0.25rem; } }
+
+/* White reading text, warm orange actions. */
+:root, :root[data-theme='dark'] { --sl-color-text: #fff; --sl-color-white: #fff; }
+.hero .tagline, .hero .sl-link-button.minimal,
+.guide-group-heading h3, .guide-group-heading p,
+.guide-card b, .guide-card .txt span,
+.preview-heading h2, .preview-heading > span,
+.preview-grid figcaption b, .preview-grid figcaption span,
+.shot-caption, .sl-markdown-content { color: #fff; }
+.hero .sl-link-button.secondary { color: #fff; border-color: #ad6027; background: #332317; }
+.hero .sl-link-button.secondary:hover { background: #4b2e1a; border-color: #fb923c; }
