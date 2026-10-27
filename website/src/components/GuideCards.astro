@@ -21,14 +21,28 @@ const guides = [
   ['🛠️', 'development', 'Development', 'Build from source and contribute.', 'توسعه', 'ساخت از سورس و مشارکت در پروژه.'],
   ['📚', 'hysteria2', 'Hysteria2 — historical', 'Legacy implementation notes; not served by default.', 'Hysteria2 — تاریخی', 'یادداشت‌های پیاده‌سازی قدیمی؛ خارج از سرویس‌های پیش‌فرض.'],
 ]
+const groups = [
+  { title: fa ? 'شروع و راه‌اندازی' : 'Getting started', note: fa ? 'از نصب تا اولین اشتراک' : 'From installation to your first subscription', ids: [0, 1, 2, 3], path: 'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5' },
+  { title: fa ? 'اتصال و پایداری' : 'Connectivity', note: fa ? 'تانل‌ها و مسیرهای جایگزین' : 'Tunnels and reliable routes', ids: [5, 6, 7, 9], path: 'M8 12h8M8 6H4v12h4m8-12h4v12h-4' },
+  { title: fa ? 'مدیریت روزمره' : 'Everyday management', note: fa ? 'کاربران، فروش و نگهداری' : 'Sales, operations and maintenance', ids: [4, 8, 10, 11], path: 'M4 7h16M4 17h16M8 4v6m8 4v6' },
+  { title: fa ? 'مرجع و توسعه' : 'Reference', note: fa ? 'جزئیات فنی و راهنماهای تکمیلی' : 'Technical details and further reading', ids: [12, 13, 14, 15], path: 'm8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16' },
+]
 ---
 
-<div class="guide-cards not-content">
-  {guides.map(([emoji, slug, en, enDesc, faName, faDesc]) => (
-    <a class="guide-card" href={`${base}${slug}/`}>
-      <span class="emo" aria-hidden="true">{emoji}</span>
-      <span class="txt"><b>{fa ? faName : en}</b><span>{fa ? faDesc : enDesc}</span></span>
-      <span class="arrow" aria-hidden="true">›</span>
-    </a>
+<div class="guide-directory not-content">
+  {groups.map((group) => (
+    <section class="guide-group">
+      <div class="guide-group-heading"><h3>{group.title}</h3><p>{group.note}</p></div>
+      <div class="guide-cards">
+        {group.ids.map((id) => {
+          const [, slug, en, enDesc, faName, faDesc] = guides[id]
+          return <a class="guide-card" href={`${base}${slug}/`}>
+            <span class="guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d={group.path} /></svg></span>
+            <span class="txt"><b>{fa ? faName : en}</b><span>{fa ? faDesc : enDesc}</span></span>
+            <span class="arrow" aria-hidden="true">↗</span>
+          </a>
+        })}
+      </div>
+    </section>
   ))}
 </div>
