@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.12 — 2026-10-28
+
+- Complete restored six-core installation support with a nine-protocol Hosts map; keep WireGuard and adjacent protocol labels separate on mobile.
+
+
 ## v1.5.11 — 2026-10-28
 
 - Restore all six core choices in the default installation: Xray, IKEv2, L2TP, PPTP, Hysteria2 and WireGuard.
