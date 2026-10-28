@@ -34,7 +34,7 @@
 
 | | |
 | --- | --- |
-| 🌐 **Xray و IKEv2 روی یک نود** | Xray (VLESS، VMess، Trojan، Shadowsocks، REALITY) و IKEv2 کنار هم؛ پنل کانفیگ هر نود را می‌سازد و می‌فرستد. پروتکل‌های پیش‌فرض `vless,vmess,trojan,shadowsocks,ikev2` هستند؛ کد L2TP، PPTP، Hysteria2 و WireGuard باقی است اما در این تنظیمات سرویس داده نمی‌شوند |
+| 🌐 **شش نوع هسته روی یک نود** | Xray (VLESS، VMess، Trojan، Shadowsocks، REALITY)، IKEv2، L2TP، PPTP، Hysteria2 و WireGuard پس از نصب در دسترس‌اند؛ هسته‌ها را بسازید و به نود اختصاص دهید تا پنل کانفیگ سرویس را بسازد و ارسال کند |
 | 🚇 **تانل برای شبکه‌های سخت** | رله‌ی ایران ↔ خارج با TCP/TLS/WebSocket/mux، ترنسپورت Stealth، UDP (KCP)، حامل‌های IP Spoof و عبور از CDN؛ رله در برابر اسکن فعال یک سایت طعمه نشان می‌دهد و زنجیره‌ی چندمرحله‌ای ترافیک را از چند رله با ترنسپورت متفاوت برای هر هاپ می‌گذراند، با تست لینک و نمایش زنده‌ی ترافیک |
 | 🔑 **نصب از داخل پنل** | نصب نودها و هر دو سمت تانل با SSH و کلید خود پنل — آنلاین، یا از بسته‌ی آفلاین با SFTP برای سرورهای بدون اینترنت خارج |
 | 🛡️ **آپدیت با برگشت خودکار** | اعتبارسنجی هر کانفیگ (`xray -test`) و نگه‌داشتن آخرین نسخه‌ی سالم؛ آپدیت باینری تانل و ایجنت نود با برگشت خودکار، نودها یکی‌یکی با Canary؛ `tifusi panel update` اول از ایمیج‌ها و دیتا snapshot می‌گیرد و اگر نسخه‌ی جدید بالا نیاید خودش برمی‌گردد؛ بعد از هر آپدیت یک گزارش کوتاه در تلگرام |
@@ -57,7 +57,7 @@
 | اتصال | [تانل‌ها](docs/fa/tunnels.md) · [سپر اتصال](docs/fa/connection-shield.md) · [چرخش دامنه](docs/fa/domain-rotation.md) · [سلامت شبکه](docs/fa/network-health.md) |
 | مدیریت | [تنظیمات و بکاپ](docs/fa/operations.md) · [آپدیت و برگشت](docs/fa/updates-and-rollback.md) · [استقرار](docs/fa/deployment.md) |
 | توسعه | [معماری](docs/fa/architecture.md) · [توسعه](docs/fa/development.md) |
-| مرجع تاریخی | [Hysteria2 — خارج از پروتکل‌های پیش‌فرض](docs/fa/hysteria2.md) |
+| Hysteria2 | [راهنمای Hysteria2](docs/fa/hysteria2.md) |
 
 </div>
 

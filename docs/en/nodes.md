@@ -4,16 +4,20 @@
 
 A node is a server that carries user traffic. The panel renders each node's configuration and pushes it to the node agent over HTTPS; clients connect to the node directly and the panel never proxies their traffic.
 
-## Two cores on one node
+## Six core types on one node
 
-The default deployment runs Xray and IKEv2 side by side:
+The default installation offers six independent core slots:
 
 | Slot | Core type | Serves |
 | --- | --- | --- |
 | Xray | `xray` | VLESS, VMess, Trojan, Shadowsocks, including REALITY-configured inbounds |
 | IPsec | `ikev2` | Native IKEv2/IPsec clients |
+| L2TP | `l2tp` | L2TP/IPsec clients |
+| PPTP | `pptp` | PPTP clients |
+| Hysteria2 | `hysteria2` | QUIC-based Hysteria2 clients |
+| WireGuard | `wireguard` | WireGuard clients, using a separate Xray process |
 
-Either slot may be left empty. Additional slots for older protocols remain in the code, but L2TP, PPTP, Hysteria2 and WireGuard are outside the default supported-protocol list. Existing legacy references later in this guide are not instructions to enable them on the current deployment; see [Deployment](deployment.md).
+Any slot may be left empty. Create a core on the Cores page and assign a node to it. Each service starts after configuration is synced; installing the panel does not activate all services automatically. See [Deployment](deployment.md).
 
 ## Reaping child processes
 

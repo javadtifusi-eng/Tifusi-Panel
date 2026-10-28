@@ -51,7 +51,7 @@ Resetting a user's secret invalidates both the old link and the old access code.
 
 The old `/sub/{secret}/guide` page is disabled and returns `404`, including `?full=1`. Share the short link or the subscription URL instead. Following a short link has the same on-hold activation behavior as opening the subscription directly.
 
-The default deployment serves VLESS, VMess, Trojan, Shadowsocks and IKEv2. Other protocol references describe retained legacy code; see [Deployment](deployment.md).
+The default deployment supports VLESS, VMess, Trojan, Shadowsocks, IKEv2, L2TP, PPTP, Hysteria2 and WireGuard. A matching core must be assigned to a node; see [Deployment](deployment.md).
 
 ### The address customers are given
 

@@ -2,7 +2,7 @@
 
 # Cores, hosts and groups
 
-> **Current default:** Xray protocols and IKEv2. L2TP, PPTP, Hysteria2 and WireGuard references below describe retained code, not services offered by the default deployment. See [Deployment](deployment.md).
+> **Available after installation:** Xray, IKEv2, L2TP, PPTP, Hysteria2 and WireGuard. Create a core and assign it to a node to start its service; installation alone does not create VPN endpoints.
 
 ## Configuration model
 
@@ -48,7 +48,7 @@ A host is the public endpoint a client receives: address, port and display name,
 - **Xray protocols** reference an inbound parsed from the core configuration and inherit transport, security and REALITY parameters from it. SNI, ALPN, fingerprint, path and security may be overridden for clients.
 - **L2TP** hosts bind to an `l2tp` core and use its shared PSK.
 - **IKEv2** hosts bind to an `ikev2` core. The server authenticates with an X.509 certificate (self-signed by default, or an imported CA-issued chain) and each user with EAP-MSCHAPv2.
-- **Hysteria2 (legacy)** runs as a separate node-agent process; see the [historical reference](hysteria2.md).
+- **Hysteria2** runs as a separate node-agent process; see the [Hysteria2 guide](hysteria2.md).
 - **Domain pool** (VLESS, VMess, Trojan, Shadowsocks and Hysteria2): the host goes out once per healthy domain of the pool, and filtered domains are replaced on their own — see [Domain rotation](domain-rotation.md).
 
 Several hosts on the same Xray inbound are link variants of one server-side inbound, so the **Hosts** page folds them into a single card — the same size, signal, ping and sparkline as any host card — titled with the inbound tag and a link count. Opening the card lists each host with its usual actions.

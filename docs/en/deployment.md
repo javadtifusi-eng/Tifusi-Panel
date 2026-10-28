@@ -22,7 +22,7 @@ SQLite data is stored in `./data`. `TIFUSI_PUBLIC_URL` defines the base URL used
 
 ## Served protocols
 
-The default `TIFUSI_SUPPORTED_PROTOCOLS` list is `vless`, `vmess`, `trojan`, `shadowsocks`, `ikev2`. Hosts of other protocols are omitted from subscriptions and app configuration, and creating unsupported hosts or cores is refused. REALITY is configured on an Xray inbound, not added as a separate protocol name.
+The default `TIFUSI_SUPPORTED_PROTOCOLS` list is `vless`, `vmess`, `trojan`, `shadowsocks`, `ikev2`, `l2tp`, `pptp`, `hysteria2`, `wireguard`. Hosts of other protocols are omitted from subscriptions and app configuration, and creating unsupported hosts or cores is refused. REALITY is configured on an Xray inbound, not added as a separate protocol name.
 
 This is startup configuration, not a Settings switch. A custom list uses JSON array syntax in `.env`, for example:
 
@@ -30,7 +30,7 @@ This is startup configuration, not a Settings switch. A custom list uses JSON ar
 TIFUSI_SUPPORTED_PROTOCOLS='["vless","vmess","trojan","shadowsocks","ikev2"]'
 ```
 
-Changing the backend list alone does not guarantee matching UI choices or a working node service; the dashboard also has a supported-protocol list. Keep the production list unless the full path has been tested.
+Changing the backend list alone does not guarantee matching UI choices or a working node service; the dashboard also has a supported-protocol list. All six core types are available in the dashboard. Create and assign only the services you need.
 
 ## TLS on the dashboard
 

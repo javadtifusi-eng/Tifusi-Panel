@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.11 — 2026-10-28
+
+- Restore all six core choices in the default installation: Xray, IKEv2, L2TP, PPTP, Hysteria2 and WireGuard.
+
+
 ## v1.5.10 — 2026-10-25
 
 - Optional local VPN node during panel installation; No installs only the panel, with remote nodes added later.

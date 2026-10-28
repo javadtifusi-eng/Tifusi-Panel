@@ -32,7 +32,7 @@
 
 | | |
 | --- | --- |
-| 🌐 **Xray and IKEv2 on one node** | Xray (VLESS, VMess, Trojan, Shadowsocks, REALITY) and IKEv2 side by side; the panel renders and pushes each node's config. L2TP, PPTP, Hysteria2 and WireGuard code remains but is not served: `TIFUSI_SUPPORTED_PROTOCOLS` (default `vless,vmess,trojan,shadowsocks,ikev2`) keeps their hosts out of subscriptions and refuses new ones |
+| 🌐 **Six core types on one node** | Xray (VLESS, VMess, Trojan, Shadowsocks, REALITY), IKEv2, L2TP, PPTP, Hysteria2 and WireGuard are available after installation. Create cores and assign them to nodes; the panel renders and pushes each service configuration |
 | 🚇 **Tunnels for hard networks** | Iran ↔ abroad relays over TCP/TLS/WebSocket/mux, a stealth transport, UDP (KCP), IP-spoofed carriers and CDN fronting; relays answer active probes with a decoy website, and multi-hop chains route through several relays with a different transport per hop, with a link test and live throughput |
 | 🔑 **Install from the panel** | Nodes and both tunnel sides installed over SSH with the panel's own key — online, or from an offline bundle over SFTP for servers with no outside internet |
 | 🛡️ **Updates that roll themselves back** | Config pushes validated (`xray -test`) with the last good config kept; tunnel binaries and node agents updated with automatic rollback, nodes one at a time with a canary; `tifusi panel update` snapshots images and data first and rolls itself back if the new version doesn't come up; a short Telegram report after each update |
@@ -52,7 +52,7 @@
 | Connectivity | [Tunnels](docs/en/tunnels.md) · [Connection Shield](docs/en/connection-shield.md) · [Domain rotation](docs/en/domain-rotation.md) · [Network health](docs/en/network-health.md) |
 | Operations | [Settings and backups](docs/en/operations.md) · [Updates and rollback](docs/en/updates-and-rollback.md) · [Deployment](docs/en/deployment.md) |
 | Development | [Architecture](docs/en/architecture.md) · [Development](docs/en/development.md) |
-| Historical reference | [Hysteria2 — not served by default](docs/en/hysteria2.md) |
+| Hysteria2 | [Hysteria2 guide](docs/en/hysteria2.md) |
 
 <p align="center">
   <a href="https://javadtifusi-eng.github.io/Tifusi-Panel/en/"><img src="https://img.shields.io/badge/Documentation-F97316?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation" height="38" /></a>
