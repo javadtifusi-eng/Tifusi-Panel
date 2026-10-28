@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.5 — 2026-10-28
+
+- Set the panel version to 1.0.5 at the owner's request. All six existing core types remain available; this is a version-label correction, not a feature removal.
+
+
 ## v1.5.12 — 2026-10-28
 
 - Complete restored six-core installation support with a nine-protocol Hosts map; keep WireGuard and adjacent protocol labels separate on mobile.
