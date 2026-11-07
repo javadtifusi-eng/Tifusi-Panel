@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — 2026-10-29
+
+- Dashboard redesign: the header is a single box with the clock, panel name and notifications (no page title, welcome text or duplicate search on the dashboard); the status card shows a live heartbeat, connected nodes and active users, and opens the attention list in place; the separate system-health card is gone.
+- Server card shows only flag, city, country, provider/datacenter and a copyable IP, lit in the flag's colors; location now comes from the IP when the server is not on Hetzner (any country), and Hetzner Ashburn, Hillsboro and Singapore are recognised.
+- Uptime card with a heartbeat line and the boot time.
+- Latin digits everywhere in the panel, in Persian too (clock, dates, counts).
+
+- Bound failed-attempt rate-limit buckets while preserving recently active limits.
+
+- Keep long group-membership lists inside access-map rows on mobile.
+
+- Bind new administrator/reseller sessions and OAuth hand-offs to a unique account identity, preventing access after a deleted username or database id is reused; preserve existing sessions during migration.
+- Keep the dashboard signed in after a wrong current password, and accept Persian/Arabic decimal digits in authenticator codes without an internal error.
+- Export SQLite Settings backups through the online backup API so committed WAL writes are included in a self-contained snapshot.
+
 ## v1.0.5 — 2026-10-28
 
 - Set the panel version to 1.0.5 at the owner's request. All six existing core types remain available; this is a version-label correction, not a feature removal.
@@ -12,7 +27,7 @@
 
 ## v1.5.11 — 2026-10-28
 
-- Restore all six core choices in the default installation: Xray, IKEv2, L2TP, PPTP, Hysteria2 and WireGuard.
+- Restore L2TP, PPTP, Hysteria2 and WireGuard alongside Xray and IKEv2 in fresh installs: core creation, node assignment and subscription delivery. Explicit supported-protocol restrictions remain available.
 
 
 ## v1.5.10 — 2026-10-25

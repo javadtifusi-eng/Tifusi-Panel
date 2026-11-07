@@ -39,7 +39,9 @@ Besides the password (with optional two-factor codes from an authenticator app),
 - **Remember me** on the login page keeps that browser signed in for 30 days instead of one day; unticked, the session also ends when the browser closes.
 - **Sign out of all devices** ends every session of that administrator at once, remembered ones included. A password change does the same and also unlinks their Google and GitHub accounts (someone who knew the old password could have linked one of their own); link them again afterwards.
 
-The password always keeps working, so losing access to Google or GitHub never locks anyone out.
+The password always keeps working, so losing access to Google or GitHub never locks anyone out. Authenticator codes accept Persian and Arabic decimal digits too. A typo in the current password when changing it keeps the dashboard signed in.
+
+New administrator and reseller accounts have a separate identity for sessions and OAuth hand-offs: deleting an account and recreating its username cannot bring its old sessions or pending provider links back. Existing sessions continue to work across this upgrade.
 
 ## Notifications
 
@@ -57,6 +59,8 @@ The public URL, administrator password, TLS certificate (upload or Let's Encrypt
 | Professional / MySQL | Unavailable; the API returns `400` with the CLI instruction. | `tifusi panel backup` / `tifusi panel restore`; the archive includes a MySQL dump. |
 
 Run the management command on the panel server. The CLI archive also contains installation data such as `.env` and certificates, so keep it private and copy it off the server. The Settings database file is not a full installation archive. Take a fresh backup before restoring; CLI restore restarts the stack.
+
+SQLite downloads from Settings use a consistent online snapshot, including committed writes still in the WAL journal. The downloaded database is self-contained; do not copy only the live `.db` file while the panel is running.
 
 ---
 

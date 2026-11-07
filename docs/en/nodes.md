@@ -91,3 +91,39 @@ The per-user device limit is enforced on the node as simultaneous connections fo
 ---
 
 <sub>[← Installation](installation.md) · [Cores & hosts →](cores-and-hosts.md)</sub>
+
+## Replacement node
+
+Use this when a node's IP is blocked or the server must change. The button
+**Replacement node** on the Nodes page prepares another node that is already
+installed and connected, so users keep the same profiles. Users, passwords,
+groups, Host IDs and profile UUIDs are preserved; you do not edit cores or hosts
+by hand.
+
+1. Add the new server as a node and wait until it is **connected**.
+2. Open **Replacement node** on the node you want to replace, choose the
+   destination and press **Check compatibility**. Read the warnings.
+3. Tick the confirmation and press **Prepare destination**. The destination now
+   serves the same cores and certificate. The current node stays online.
+4. Test a client against the destination address shown.
+5. Change the DNS record of your host name to the destination address yourself.
+   The panel never changes DNS.
+6. Press **Confirm transfer** once clients work.
+
+**Back to previous node** restores the destination to its earlier state, before
+or after confirmation. Put the DNS record back to the previous node's address
+(the panel shows it); keep the previous node online until DNS caches expire.
+
+Xray, IKEv2, L2TP and PPTP are supported. Hysteria2/WireGuard, tunnel dependencies,
+external TLS certificate files, or conflicting web ports currently block this
+action. Upgrade the destination agent first. IP-based profiles do not follow DNS.
+A shared subscription hostname gets TCP pass-through on ports 80/443 to the
+source web server; open these ports on the destination firewall. The source web
+server must stay reachable. This does not recover a lost panel or database:
+restore those separately from backup. Renewal and accounting still need the
+panel; device limits are per node while both run.
+
+The database journal retains pending operations across restart. Preparation
+failure restores the destination; a failed restore is shown explicitly. Manual
+identity or core edits after preparation prevent the restore from silently
+overwriting them.
