@@ -23,6 +23,9 @@ services:
       # Certificate, and (for the separate advanced "direct TLS" option,
       # see the README) where TIFUSI_SSL_CERTFILE/TIFUSI_SSL_KEYFILE point.
       - ./certs:/app/certs
+      # Read-only view of the host's /sys so the dashboard's traffic gauge sees the
+      # server's real network card (the container only has its own virtual one).
+      - /sys:/host/sys:ro
     env_file:
       - .env
 
