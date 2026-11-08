@@ -533,7 +533,9 @@ grep -q '^TIFUSI_DASHBOARD_PORT=' .env.tmp || echo "TIFUSI_DASHBOARD_PORT=$dashb
 grep -q '^TIFUSI_DASHBOARD_HTTPS_PORT=' .env.tmp || echo "TIFUSI_DASHBOARD_HTTPS_PORT=$dashboard_https_port" >> .env.tmp
 mv .env.tmp .env
 PANEL_URL="http://localhost:${panel_port}"
-info "Panel API on port $panel_port, dashboard on $dashboard_port (HTTP) and $dashboard_https_port (HTTPS)."
+# 443 only answers once a certificate exists (frontend/docker-entrypoint-tls.sh);
+# saying "443 (HTTPS)" here sent people to a port that just reset the connection.
+info "Panel API on port $panel_port, dashboard on $dashboard_port (HTTP); port $dashboard_https_port serves HTTPS once a certificate is set up."
 
 step "SSL / domain"
 read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain || has_domain=N

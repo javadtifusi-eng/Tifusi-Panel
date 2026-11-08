@@ -385,7 +385,7 @@ if [ -z "$API_KEY" ]; then
 fi
 [ -n "$API_KEY" ] || fail "Can't continue without an API key."
 
-STEP_TOTAL=5
+STEP_TOTAL=6
 
 step "Docker"
 if command -v docker >/dev/null 2>&1; then
