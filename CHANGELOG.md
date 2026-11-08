@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — 2026-10-29
+## v1.0.7 — 2026-11-08
+
+- IKEv2: stop native iOS profiles from going dead mid-use. Every PPTP/L2TP call (and the thousands of daily scanner hits on pptpd) created and deleted a pppN interface, and strongSwan answered each one by sending a MOBIKE address update to every IKEv2 client; the node now ignores those roam events. DPD is every 30 s instead of 5 min, so carrier NAT mappings stay alive.
+
+## v1.0.6 — 2026-11-07
 
 - Dashboard redesign: the header is a single box with the clock, panel name and notifications (no page title, welcome text or duplicate search on the dashboard); the status card shows a live heartbeat, connected nodes and active users, and opens the attention list in place; the separate system-health card is gone.
 - Server card shows only flag, city, country, provider/datacenter and a copyable IP, lit in the flag's colors; location now comes from the IP when the server is not on Hetzner (any country), and Hetzner Ashburn, Hillsboro and Singapore are recognised.
