@@ -2,6 +2,7 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Certificate renewal: an IKEv2 core that uses the subscription domain's certificate (not only the panel's own) now gets the renewed certificate too, and the nodes are resynced.
 - Installer: download bars fill red, then yellow, then green, with the percentage in the same color.
 - HTTPS without a domain: Let's Encrypt can now certify the server's public IP (six-day "shortlived" certificate, renewed automatically by the panel). Offered by install.sh when there is no domain, by `tifusi panel ssl` (Enter = this server's IP) and by Settings > SSL ("Domain or IP").
 - Secret dashboard path: with `TIFUSI_WEB_PATH` set the dashboard opens only at `https://host/<path>/` and the bare address answers 404. install.sh offers a random one; `tifusi panel path` (menu 14) sets, changes or turns it off. Subscription links, the client app and nodes are unaffected; Google/GitHub sign-in returns to the path.
