@@ -66,13 +66,19 @@ _clock() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }
 _took() { if [ "$1" -ge 60 ]; then printf '%dm %ds' $(($1 / 60)) $(($1 % 60)); else printf '%ds' "$1"; fi; }
 _mb() { printf '%d' $((($1 + 524288) / 1048576)); }
 
+# Color for a progress of `permille`: red below a third, yellow below 70%, then green.
+_pm_color() {
+  if [ "$1" -lt 340 ]; then printf '%s' "$C_RED"; elif [ "$1" -lt 700 ]; then printf '%s' "$C_YELLOW"; else printf '%s' "$C_GREEN"; fi
+}
+
 # A bar `width` cells wide at `permille` (0-1000).
 _bar() {
   local pm=$1 w=$2 full
   full=$((pm * w / 1000))
   if [ -n "$UI_UNICODE" ]; then
-    if [ "$full" -ge "$w" ]; then printf '%s%s%s' "$C_ACCENT" "$(_rep "$w" '━')" "$C_RESET"; return; fi
-    printf '%s%s╸%s%s%s%s' "$C_ACCENT" "$(_rep "$full" '━')" "$C_RESET" "$C_DIM" "$(_rep $((w - full - 1)) '━')" "$C_RESET"
+    # Traffic light (owner's pick, 2026-11-09): red, then yellow, then green as it fills.
+    local col; col=$(_pm_color "$pm")
+    printf '%s%s%s%s%s%s' "$col" "$(_rep "$full" '█')" "$C_RESET" "$C_DIM" "$(_rep $((w - full)) '░')" "$C_RESET"
   else
     if [ "$full" -ge "$w" ]; then printf '[%s]' "$(_rep "$w" '=')"; return; fi
     printf '[%s%s%s]' "$(_rep $((full > 0 ? full - 1 : 0)) '=')" "$([ "$full" -gt 0 ] && echo '>')" "$(_rep $((w - full)) ' ')"
@@ -100,16 +106,19 @@ _sweep() {
 # Draws "message  bar  tail" on the current line, giving the bar whatever
 # width is left; drops the bar entirely on a terminal too narrow for it.
 _draw() {
-  local msg="$1" tail="$2" kind="$3" value="$4" cols w
+  local msg="$1" tail="$2" kind="$3" value="$4" cols w plain
   cols=$(_cols)
-  w=$((cols - ${#msg} - ${#tail} - 6))
+  # A tail may carry its own colors; only the visible characters take up room.
+  plain=$(printf '%s' "$tail" | sed 's/\x1b\[[0-9;]*m//g')
+  w=$((cols - ${#msg} - ${#plain} - 6))
   [ "$w" -gt 34 ] && w=34
   local bar=""
   if [ "$w" -ge 8 ]; then
     if [ "$kind" = sweep ]; then bar=$(_sweep "$value" "$w"); else bar=$(_bar "$value" "$w"); fi
     bar="  $bar"
   fi
-  printf '\r\033[K%s%s  %s%s%s' "$msg" "$bar" "$C_DIM" "$tail" "$C_RESET"
+  if [ "$plain" = "$tail" ]; then tail="$C_DIM$tail$C_RESET"; fi
+  printf '\r\033[K%s%s  %s%s' "$msg" "$bar" "$tail" "$C_RESET"
 }
 
 _finish_line() {
@@ -244,7 +253,7 @@ pull_with_progress() {
       el=$((SECONDS - start))
       if [ "$grand" -gt 0 ]; then
         pm=$(((offset + b) * 1000 / grand)); [ "$pm" -gt 1000 ] && pm=1000
-        tail="$(printf '%3d%%' $((pm / 10)))  $(_mb $((offset + b)))/$(_mb "$grand") MB"
+        tail="$(_pm_color "$pm")$(printf '%3d%%' $((pm / 10)))$C_RESET$C_DIM  $(_mb $((offset + b)))/$(_mb "$grand") MB"
         if [ "$pm" -ge 30 ] && [ "$pm" -lt 1000 ]; then tail+="  eta $(_clock $((el * (1000 - pm) / pm)))"; fi
         _draw "$msg" "$tail" bar "$pm"
       else

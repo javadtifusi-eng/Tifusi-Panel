@@ -2,6 +2,7 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Installer: download bars fill red, then yellow, then green, with the percentage in the same color.
 - HTTPS without a domain: Let's Encrypt can now certify the server's public IP (six-day "shortlived" certificate, renewed automatically by the panel). Offered by install.sh when there is no domain, by `tifusi panel ssl` (Enter = this server's IP) and by Settings > SSL ("Domain or IP").
 - Secret dashboard path: with `TIFUSI_WEB_PATH` set the dashboard opens only at `https://host/<path>/` and the bare address answers 404. install.sh offers a random one; `tifusi panel path` (menu 14) sets, changes or turns it off. Subscription links, the client app and nodes are unaffected; Google/GitHub sign-in returns to the path.
 - Sign-in page redesign: one centered card on desktop and phone with the griffin and its glow on top; no side panel, heading or address line. Google/GitHub are icon buttons, a key button shows how to recover access, "remember me" stays under the password, and one button in the corner switches Persian/English. First-time setup is two short pages: the one-time key, then the username and password.
