@@ -2,6 +2,7 @@
 
 ## v1.0.7 — 2026-11-08
 
+- IKEv2/L2TP/PPTP: a connected client can open the panel (or any site on the node's own address) reliably; the MSS clamp now also covers traffic to the server itself, which used to hang on small-MTU networks while the same page loaded over Xray.
 - IKEv2 nodes: when a renewed certificate arrives, strongSwan drops the old one instead of keeping both loaded; connected clients stay connected.
 - Certificate renewal: an IKEv2 core that uses the subscription domain's certificate (not only the panel's own) now gets the renewed certificate too, and the nodes are resynced.
 - Installer: download bars fill red, then yellow, then green, with the percentage in the same color.
