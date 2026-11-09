@@ -48,5 +48,9 @@ services:
       # port 443. Picked up automatically at container start — no
       # nginx.conf edits or restart-time toggling needed.
       - ./certs:/etc/nginx/certs:ro
+    environment:
+      # Secret path the dashboard answers on (https://host/<path>/); empty = the site root.
+      # Set or change it with `tifusi panel path`. /api, /sub, /code and /app stay where they are.
+      TIFUSI_WEB_PATH: ${TIFUSI_WEB_PATH:-}
     depends_on:
       - panel

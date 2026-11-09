@@ -346,13 +346,32 @@ action_change_port() {
 }
 
 action_get_ssl() {
-  read -r -p "Domain (must already resolve to this server's IP): " domain
-  [ -n "$domain" ] || { err "No domain entered."; return; }
+  local ip_guess target name url
+  # Same public-address test as install.sh: the first interface address that isn't private.
+  ip_guess=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
+    | grep -vE '^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)' | head -n 1)
+  if [ -n "$ip_guess" ]; then
+    read -r -p "Domain or IP to certify (Enter = this server's IP $ip_guess): " target
+    target=${target:-$ip_guess}
+  else
+    read -r -p "Domain (must already resolve to this server's IP): " target
+  fi
+  [ -n "$target" ] || { err "Nothing entered."; return; }
   if ! docker ps --format '{{.Names}}' | grep -qx tifusi-panel; then
     err "The panel container isn't running — start it first with 'tifusi panel restart'."
     return
   fi
-  info "Requesting a Let's Encrypt certificate for $domain (port 80 must reach this server)..."
+  local args=()
+  if [[ "$target" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # IP certificates exist only under Let's Encrypt's six-day "shortlived" profile;
+    # the panel's twice-daily renewal (backend/app/tls_renewal.py) keeps it fresh.
+    name="ip-${target}"
+    args=(--ip-address "$target" --required-profile shortlived --register-unsafely-without-email)
+  else
+    name="$target"
+    args=(-m "admin@${target}" -d "$target")
+  fi
+  info "Requesting a Let's Encrypt certificate for $target (port 80 must reach this server)..."
   mkdir -p certs
   CERT_LOG="$(mktemp)"
   # Run inside the panel container, which is the one publishing host port 80.
@@ -366,23 +385,24 @@ action_get_ssl() {
   if docker exec tifusi-panel certbot certonly --standalone --non-interactive --agree-tos \
     --key-type rsa --rsa-key-size 2048 \
     --config-dir "$acme/config" --work-dir "$acme/work" --logs-dir "$acme/logs" \
-    -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
+    --cert-name "$name" "${args[@]}" > "$CERT_LOG" 2>&1; then
     cat "$CERT_LOG"
     # ./certs is mounted into both containers; the dashboard watches it and
     # starts serving HTTPS without a restart.
     docker exec tifusi-panel sh -c \
-      "cp $acme/config/live/$domain/fullchain.pem /app/certs/fullchain.pem && cp $acme/config/live/$domain/privkey.pem /app/certs/privkey.pem"
+      "cp $acme/config/live/$name/fullchain.pem /app/certs/fullchain.pem && cp $acme/config/live/$name/privkey.pem /app/certs/privkey.pem"
+    url="https://${target}"
     if grep -q '^TIFUSI_PUBLIC_URL=' .env; then
-      sed -i "s#^TIFUSI_PUBLIC_URL=.*#TIFUSI_PUBLIC_URL=https://${domain}#" .env
+      sed -i "s#^TIFUSI_PUBLIC_URL=.*#TIFUSI_PUBLIC_URL=${url}#" .env
     else
-      echo "TIFUSI_PUBLIC_URL=https://${domain}" >> .env
+      echo "TIFUSI_PUBLIC_URL=${url}" >> .env
     fi
     # .env alone doesn't move an already-running panel: the address it builds
     # subscription links from lives in its database.
-    docker exec tifusi-panel tifusi-cli set-public-url "https://${domain}" >/dev/null 2>&1 \
-      || warn "Set the panel's address to https://${domain} under Settings — links still use the old one."
-    info "Certificate installed — the dashboard now serves HTTPS on https://${domain}."
-    warn "Let's Encrypt certs expire every 90 days — re-run this before then, or set up certbot renew yourself."
+    docker exec tifusi-panel tifusi-cli set-public-url "$url" >/dev/null 2>&1 \
+      || warn "Set the panel's address to ${url} under Settings — links still use the old one."
+    info "Certificate installed — the dashboard now serves HTTPS on ${url}."
+    info "The panel renews it on its own before it expires (port 80 has to stay reachable)."
   else
     err "Certificate request failed — full output:"
     cat "$CERT_LOG"
@@ -592,12 +612,47 @@ action_node_bundle() {
   bash scripts/build-node-bundle.sh
 }
 
+# The dashboard's secret path (TIFUSI_WEB_PATH, applied by the dashboard container's
+# nginx): with one set, only https://host/<path>/ opens the dashboard and the bare
+# address answers 404. Subscription links, the app and nodes are unaffected.
+action_web_path() {
+  local cur new choice base
+  cur=$(grep '^TIFUSI_WEB_PATH=' .env 2>/dev/null | cut -d= -f2- || true)
+  base=$(grep '^TIFUSI_PUBLIC_URL=' .env 2>/dev/null | cut -d= -f2- || true)
+  base=${base:-http://<server-ip>:$(grep '^TIFUSI_DASHBOARD_PORT=' .env 2>/dev/null | cut -d= -f2 || echo 8080)}
+  if [ -n "$cur" ]; then info "Current dashboard address: ${base%/}/${cur}/"; else info "No secret path: the dashboard opens at ${base%/}/"; fi
+  printf '  %s1)%s New random path\n  %s2)%s Choose my own\n  %s3)%s Turn it off\n' \
+    "$C_GREEN" "$C_RESET" "$C_GREEN" "$C_RESET" "$C_GREEN" "$C_RESET"
+  read -r -p "Choice [1]: " choice
+  case "${choice:-1}" in
+    1) new=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 12) ;;
+    2) read -r -p "Path (4-64 letters, digits, - or _): " new
+       new=${new//\//}
+       [[ "$new" =~ ^[A-Za-z0-9_-]{4,64}$ ]] || { err "Not a valid path."; return; } ;;
+    3) new="" ;;
+    *) warn "Invalid choice."; return ;;
+  esac
+  if grep -q '^TIFUSI_WEB_PATH=' .env; then
+    sed -i "s#^TIFUSI_WEB_PATH=.*#TIFUSI_WEB_PATH=${new}#" .env
+  else
+    echo "TIFUSI_WEB_PATH=${new}" >> .env
+  fi
+  # Both read it at start: the dashboard's nginx, and the panel for Google/GitHub sign-in returns.
+  docker compose up -d panel dashboard >/dev/null 2>&1 || { err "Couldn't restart the panel — run 'tifusi panel restart'."; return; }
+  if [ -n "$new" ]; then
+    info "Done. The dashboard is now at: ${base%/}/${new}/"
+    warn "Save this address — the bare address no longer opens the panel."
+  else
+    info "Secret path off. The dashboard opens at ${base%/}/ again."
+  fi
+}
+
 menu() {
   banner
   printf '\n%s  What would you like to do?%s\n\n' "$C_CYAN" "$C_RESET"
   printf '  %s 1)%s Update panel to the latest version\n' "$C_GREEN" "$C_RESET"
   printf '  %s 2)%s Change panel / dashboard port\n' "$C_GREEN" "$C_RESET"
-  printf "  %s 3)%s Get a free SSL certificate (Let's Encrypt)\n" "$C_GREEN" "$C_RESET"
+  printf "  %s 3)%s Get a free SSL certificate (domain or IP)\n" "$C_GREEN" "$C_RESET"
   printf '  %s 4)%s Show / generate one-time admin setup key\n' "$C_GREEN" "$C_RESET"
   printf '  %s 5)%s Restart panel and dashboard\n' "$C_GREEN" "$C_RESET"
   printf '  %s 6)%s View live logs\n' "$C_GREEN" "$C_RESET"
@@ -608,6 +663,7 @@ menu() {
   printf '  %s11)%s Edit the settings file (.env)\n' "$C_GREEN" "$C_RESET"
   printf '  %s12)%s Uninstall panel completely\n' "$C_GREEN" "$C_RESET"
   printf '  %s13)%s Build the offline node bundle\n' "$C_GREEN" "$C_RESET"
+  printf '  %s14)%s Secret dashboard path (hide the login page)\n' "$C_GREEN" "$C_RESET"
   printf '  %s 0)%s Exit\n\n' "$C_GRAY" "$C_RESET"
   read -r -p "$(printf '%sEnter your choice: %s' "$C_GREEN" "$C_RESET")" choice
   echo
@@ -625,6 +681,7 @@ menu() {
     11) action_edit_env ;;
     12) action_uninstall ;;
     13) action_node_bundle ;;
+    14) action_web_path ;;
     0) exit 0 ;;
     *) warn "Invalid choice." ;;
   esac
@@ -646,6 +703,7 @@ case "${1:-}" in
   env) action_edit_env ;;
   uninstall) action_uninstall ;;
   node-bundle) action_node_bundle ;;
+  path) action_web_path ;;
   "")
     while true; do
       menu

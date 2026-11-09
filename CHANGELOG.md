@@ -2,6 +2,8 @@
 
 ## v1.0.7 — 2026-11-08
 
+- HTTPS without a domain: Let's Encrypt can now certify the server's public IP (six-day "shortlived" certificate, renewed automatically by the panel). Offered by install.sh when there is no domain, by `tifusi panel ssl` (Enter = this server's IP) and by Settings > SSL ("Domain or IP").
+- Secret dashboard path: with `TIFUSI_WEB_PATH` set the dashboard opens only at `https://host/<path>/` and the bare address answers 404. install.sh offers a random one; `tifusi panel path` (menu 14) sets, changes or turns it off. Subscription links, the client app and nodes are unaffected; Google/GitHub sign-in returns to the path.
 - Sign-in page redesign: one centered card on desktop and phone with the griffin and its glow on top; no side panel, heading or address line. Google/GitHub are icon buttons, a key button shows how to recover access, "remember me" stays under the password, and one button in the corner switches Persian/English. First-time setup is two short pages: the one-time key, then the username and password.
 - IKEv2: stop native iOS profiles from going dead mid-use. Every PPTP/L2TP call (and the thousands of daily scanner hits on pptpd) created and deleted a pppN interface, and strongSwan answered each one by sending a MOBIKE address update to every IKEv2 client; the node now ignores those roam events. DPD is every 30 s instead of 5 min, so carrier NAT mappings stay alive.
 - Tunnels: after installing a side over SSH, the health test retries for a short while instead of once, so a tunnel that connects a few seconds later is no longer left marked "error" until someone presses Test.

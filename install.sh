@@ -537,7 +537,29 @@ PANEL_URL="http://localhost:${panel_port}"
 # saying "443 (HTTPS)" here sent people to a port that just reset the connection.
 info "Panel API on port $panel_port, dashboard on $dashboard_port (HTTP); port $dashboard_https_port serves HTTPS once a certificate is set up."
 
+step "Dashboard path"
+# Like other panels' "web base path": the dashboard opens only at /<random>/ and the bare
+# address answers 404, so scanners sweeping IPs don't land on a login page. It hides the
+# page; the password (and two-factor login) is still what protects it.
+WEB_PATH=""
+read -r -p "Hide the dashboard behind a random path (recommended)? [Y/n] " hide_path || hide_path=Y
+if [[ "${hide_path:-Y}" =~ ^[Yy]$ ]]; then
+  WEB_PATH="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 12 || true)"
+  grep -q '^TIFUSI_WEB_PATH=' .env && sed -i "s#^TIFUSI_WEB_PATH=.*#TIFUSI_WEB_PATH=${WEB_PATH}#" .env \
+    || echo "TIFUSI_WEB_PATH=${WEB_PATH}" >> .env
+  info "Dashboard path: /${WEB_PATH}/ (change or turn off later with 'tifusi panel path')."
+fi
+WEB_SUFFIX="/${WEB_PATH:+${WEB_PATH}/}"
+
 step "SSL / domain"
+# This server's own public IPv4 (the first interface address that isn't private),
+# for a certificate on the bare IP when there is no domain. Behind NAT there is none.
+public_ipv4() {
+  hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
+    | grep -vE '^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)' \
+    | head -n 1
+}
+cert_name=""; cert_host=""; cert_args=()
 read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain || has_domain=N
 has_domain=${has_domain:-N}
 if [[ "$has_domain" =~ ^[Yy]$ ]]; then
@@ -546,48 +568,65 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
     read -r -p "Get a free Let's Encrypt certificate for it now? [Y/n] " get_cert
     get_cert=${get_cert:-Y}
     if [[ "$get_cert" =~ ^[Yy]$ ]]; then
-      info "Requesting a Let's Encrypt certificate for $domain (needs port 80 free, and $domain must already resolve to this server)..."
-      # Issued straight into the panel's own ACME directory, at the paths the
-      # panel container sees (./data is its /app/data), so the panel's
-      # automatic renewal (backend/app/tls_renewal.py) picks it up as is.
-      mkdir -p certs data/letsencrypt
-      CERT_LOG="$(mktemp)"
-      # --key-type rsa: not certbot's own ECDSA default — this cert can end
-      # up reused as an IKEv2 Core's certificate (Cores > "Use panel's
-      # domain certificate"), and strongSwan on a node has no EC plugin
-      # compiled in, so an ECDSA cert there fails outright ("parsing X509
-      # certificate failed", confirmed live). RSA works identically for
-      # the dashboard's own HTTPS.
-      if docker run --rm -p 80:80 -v "$(pwd)/data/letsencrypt:/app/data/letsencrypt" \
-        certbot/certbot certonly --standalone --non-interactive --agree-tos \
-        --key-type rsa --rsa-key-size 2048 \
-        --config-dir /app/data/letsencrypt/config --work-dir /app/data/letsencrypt/work \
-        --logs-dir /app/data/letsencrypt/logs \
-        -m "admin@${domain}" -d "$domain" > "$CERT_LOG" 2>&1; then
-        # Certbot's own "Congratulations" box already states exactly where
-        # the cert and key ended up — show it instead of just our one-line
-        # paraphrase of it, the way every other panel's installer does.
-        cat "$CERT_LOG"
-        cp "data/letsencrypt/config/live/${domain}/fullchain.pem" certs/fullchain.pem
-        cp "data/letsencrypt/config/live/${domain}/privkey.pem" certs/privkey.pem
-        # Only 443 is implied by "https://host" — on any other port the
-        # subscription links the panel hands to clients have to name it.
-        if [ "$dashboard_https_port" = 443 ]; then
-          PANEL_PUBLIC_URL="https://${domain}"
-        else
-          PANEL_PUBLIC_URL="https://${domain}:${dashboard_https_port}"
-        fi
-        echo "TIFUSI_PUBLIC_URL=${PANEL_PUBLIC_URL}" >> .env
-        show_ssl_summary "$(pwd)/certs/fullchain.pem" "$(pwd)/certs/privkey.pem" "$PANEL_PUBLIC_URL" "$dashboard_https_port"
-        info "The panel renews this certificate on its own before it expires (port 80 has to stay reachable)."
-      else
-        warn "Certificate request failed — full output:"
-        cat "$CERT_LOG"
-        warn "Continuing without TLS (check that port 80 is free and $domain really resolves to this server's IP)."
-      fi
-      rm -f "$CERT_LOG"
+      cert_name="$domain"; cert_host="$domain"
+      cert_args=(-m "admin@${domain}" -d "$domain")
     fi
   fi
+else
+  server_ip="$(public_ipv4)"
+  if [ -n "$server_ip" ]; then
+    info "No domain? Let's Encrypt can also certify the server's IP ($server_ip): HTTPS with a real padlock."
+    info "Such a certificate lasts 6 days; the panel renews it on its own (port 80 has to stay reachable)."
+    read -r -p "Get a free certificate for $server_ip now? [Y/n] " get_cert
+    get_cert=${get_cert:-Y}
+    if [[ "$get_cert" =~ ^[Yy]$ ]]; then
+      domain="$server_ip"; cert_name="ip-${server_ip}"; cert_host="$server_ip"
+      # IP certificates exist only under the six-day "shortlived" profile, and an IP has no mailbox.
+      cert_args=(--ip-address "$server_ip" --required-profile shortlived --register-unsafely-without-email)
+    fi
+  fi
+fi
+if [ -n "$cert_name" ]; then
+  info "Requesting a Let's Encrypt certificate for $cert_host (needs port 80 free and reachable from the internet)..."
+  # Issued straight into the panel's own ACME directory, at the paths the
+  # panel container sees (./data is its /app/data), so the panel's
+  # automatic renewal (backend/app/tls_renewal.py) picks it up as is.
+  mkdir -p certs data/letsencrypt
+  CERT_LOG="$(mktemp)"
+  # --key-type rsa: not certbot's own ECDSA default — this cert can end
+  # up reused as an IKEv2 Core's certificate (Cores > "Use panel's
+  # domain certificate"), and strongSwan on a node has no EC plugin
+  # compiled in, so an ECDSA cert there fails outright ("parsing X509
+  # certificate failed", confirmed live). RSA works identically for
+  # the dashboard's own HTTPS.
+  if docker run --rm -p 80:80 -v "$(pwd)/data/letsencrypt:/app/data/letsencrypt" \
+    certbot/certbot certonly --standalone --non-interactive --agree-tos \
+    --key-type rsa --rsa-key-size 2048 \
+    --config-dir /app/data/letsencrypt/config --work-dir /app/data/letsencrypt/work \
+    --logs-dir /app/data/letsencrypt/logs \
+    --cert-name "$cert_name" "${cert_args[@]}" > "$CERT_LOG" 2>&1; then
+    # Certbot's own "Congratulations" box already states exactly where
+    # the cert and key ended up — show it instead of just our one-line
+    # paraphrase of it, the way every other panel's installer does.
+    cat "$CERT_LOG"
+    cp "data/letsencrypt/config/live/${cert_name}/fullchain.pem" certs/fullchain.pem
+    cp "data/letsencrypt/config/live/${cert_name}/privkey.pem" certs/privkey.pem
+    # Only 443 is implied by "https://host" — on any other port the
+    # subscription links the panel hands to clients have to name it.
+    if [ "$dashboard_https_port" = 443 ]; then
+      PANEL_PUBLIC_URL="https://${cert_host}"
+    else
+      PANEL_PUBLIC_URL="https://${cert_host}:${dashboard_https_port}"
+    fi
+    echo "TIFUSI_PUBLIC_URL=${PANEL_PUBLIC_URL}" >> .env
+    show_ssl_summary "$(pwd)/certs/fullchain.pem" "$(pwd)/certs/privkey.pem" "$PANEL_PUBLIC_URL" "$dashboard_https_port"
+    info "The panel renews this certificate on its own before it expires (port 80 has to stay reachable)."
+  else
+    warn "Certificate request failed — full output:"
+    cat "$CERT_LOG"
+    warn "Continuing without TLS (check that port 80 is free and $cert_host really reaches this server)."
+  fi
+  rm -f "$CERT_LOG"
 fi
 PANEL_PUBLIC_URL="${PANEL_PUBLIC_URL:-}"
 
@@ -661,9 +700,9 @@ fi
 if [ -n "$PANEL_PUBLIC_URL" ]; then
   SUMMARY+=("SSL       :  enabled (Let's Encrypt, ${domain:-})")
   SUMMARY+=("Certs     :  ${INSTALL_DIR}/certs/fullchain.pem + privkey.pem")
-  SUMMARY+=("Dashboard :  $PANEL_PUBLIC_URL")
+  SUMMARY+=("Dashboard :  ${PANEL_PUBLIC_URL}${WEB_SUFFIX}")
 else
-  SUMMARY+=("Dashboard :  http://${HOST_IP}:${dashboard_port}")
+  SUMMARY+=("Dashboard :  http://${HOST_IP}:${dashboard_port}${WEB_SUFFIX}")
 fi
 SUMMARY+=("Panel API :  dashboard URL + /api (local backend: http://127.0.0.1:${panel_port})")
 print_block "Panel Access Info" "$C_GREEN" "${SUMMARY[@]}"
