@@ -641,6 +641,11 @@ if [ -n "$cert_name" ]; then
 fi
 PANEL_PUBLIC_URL="${PANEL_PUBLIC_URL:-}"
 
+# Root only: .env carries the signing key (and the MySQL passwords), data/ the
+# database with every user's secrets. A re-run tightens an older install too.
+chmod 600 .env
+mkdir -p data && chmod 700 data
+
 step "Panel images"
 # Same image names docker-compose.yml resolves (an .env override included).
 env_value() { { grep -E "^$1=" .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2-; }
