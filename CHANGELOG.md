@@ -2,6 +2,7 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Installer: no longer stops silently at the SSL step on a server whose addresses are all private (cloud NAT); `tifusi panel ssl` had the same exit. Step counter reads 9/9.
 - IKEv2/L2TP/PPTP: a connected client can open the panel (or any site on the node's own address) reliably; the MSS clamp now also covers traffic to the server itself, which used to hang on small-MTU networks while the same page loaded over Xray.
 - IKEv2 nodes: when a renewed certificate arrives, strongSwan drops the old one instead of keeping both loaded; connected clients stay connected.
 - Certificate renewal: an IKEv2 core that uses the subscription domain's certificate (not only the panel's own) now gets the renewed certificate too, and the nodes are resynced.

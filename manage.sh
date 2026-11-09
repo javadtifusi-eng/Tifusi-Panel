@@ -138,7 +138,8 @@ tag_rollback_images() {
 snapshot_data() {
   mkdir -p "$ROLLBACK_DIR"
   if is_pro; then
-    docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers tifusi' > "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null       || { err "Couldn't snapshot the database — aborting the update before anything changed."; return 1; }
+    docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers tifusi' > "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null \
+      || { err "Couldn't snapshot the database — aborting the update before anything changed."; return 1; }
   fi
   tar czf "$ROLLBACK_DIR/data.tgz" data certs .env 2>/dev/null || tar czf "$ROLLBACK_DIR/data.tgz" data .env || true
   return 0
@@ -151,8 +152,7 @@ restore_data_snapshot() {
   tar xzf "$ROLLBACK_DIR/data.tgz"
   if [ -n "$keep_mysql" ]; then
     grep -vE '^(TIFUSI_MYSQL_PASSWORD|TIFUSI_MYSQL_ROOT_PASSWORD|TIFUSI_DATABASE_URL)=' .env > .env.rb-tmp
-    printf '%s
-' "$keep_mysql" >> .env.rb-tmp; mv .env.rb-tmp .env; chmod 600 .env
+    printf '%s\n' "$keep_mysql" >> .env.rb-tmp; mv .env.rb-tmp .env; chmod 600 .env
   fi
   if is_pro && [ -f "$ROLLBACK_DIR/mysql-dump.sql" ]; then
     docker compose up -d mysql >/dev/null 2>&1
@@ -161,7 +161,8 @@ restore_data_snapshot() {
       docker compose exec -T mysql sh -c 'mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent' >/dev/null 2>&1 && break
       sleep 2
     done
-    docker compose exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" tifusi' < "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null       || warn "Re-importing the database dump reported an error."
+    docker compose exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" tifusi' < "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null \
+      || warn "Re-importing the database dump reported an error."
   fi
 }
 
@@ -192,6 +193,7 @@ rollback_update() {
   err "Restore it by hand with: tifusi panel restore  (or inspect: tifusi panel logs)."
   return 1
 }
+
 action_update() {
   info "Checking for local changes..."
   if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
@@ -199,21 +201,20 @@ action_update() {
     warn "Resolve or commit them yourself, then run this again. Skipping update."
     return
   fi
+
   info "Taking a safety snapshot before updating..."
   tag_rollback_images
   snapshot_data || return
 
-  info "Pulling latest install files..."
-  # fetch + reset: the public repository's history was restarted when the source went private,
-  # so an older copy can't fast-forward. .env, data/ and certs/ are untracked and kept.
-  git fetch --depth 1 origin main && git reset --hard FETCH_HEAD
+  info "Pulling latest code..."
+  git pull --ff-only
   # A pull alone leaves tifusi-panel and the shared launcher at the previously installed version.
   source scripts/install-commands.sh
   install_panel_commands
   info "Pulling prebuilt images..."
   if ! docker compose pull; then
-    warn "Couldn't download the images from ghcr.io — check this server's internet access and run the update again."
-    return
+    warn "Prebuilt images unavailable — building locally instead (can take a few minutes on a small server)."
+    docker compose build
   fi
   info "Restarting with the new version..."
   docker compose up -d
@@ -349,7 +350,7 @@ action_get_ssl() {
   local ip_guess target name url
   # Same public-address test as install.sh: the first interface address that isn't private.
   ip_guess=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
-    | grep -vE '^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)' | head -n 1)
+    | grep -vE '^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)' | head -n 1 || true)
   if [ -n "$ip_guess" ]; then
     read -r -p "Domain or IP to certify (Enter = this server's IP $ip_guess): " target
     target=${target:-$ip_guess}

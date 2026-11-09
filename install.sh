@@ -351,7 +351,7 @@ show_ssl_summary() {
 # apt-get update used to be a step of its own, but nothing here installs an
 # apt package, so it only added a minute or more of waiting before anything
 # happened.
-STEP_TOTAL=8
+STEP_TOTAL=9
 
 # Same big block-letter "TIFUSI" (figlet -f big) as backend/cli/main.py's
 # generate-admin-key banner, so the two feel like one product — but in
@@ -582,7 +582,9 @@ if [[ "$has_domain" =~ ^[Yy]$ ]]; then
     fi
   fi
 else
-  server_ip="$(public_ipv4)"
+  # `|| true`: behind NAT every address is private, grep finds nothing, and with
+  # `set -e -o pipefail` that empty answer used to end the installer right here.
+  server_ip="$(public_ipv4 || true)"
   if [ -n "$server_ip" ]; then
     info "No domain? Let's Encrypt can also certify the server's IP ($server_ip): HTTPS with a real padlock."
     info "Such a certificate lasts 6 days; the panel renews it on its own (port 80 has to stay reachable)."
