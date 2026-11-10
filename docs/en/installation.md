@@ -61,6 +61,17 @@ Choosing **Yes** installs and registers a local node after the panel is healthy.
 
 The dashboard’s first-service checklist follows node registration, successful sync, core assignment, connection host and first user. Configuration readiness still needs a real phone connection test. API access from another device uses the dashboard URL plus `/api`; the backend port itself listens on localhost only.
 
+## Moving to another server
+
+**Settings → Move to another server** (owner only) takes the panel, or one node, to a new server over SSH. One thing goes to one server at a time; to move both, move the node first, then the panel.
+
+- **The panel.** Enter the new server's IP and SSH login. Docker and the images are prepared there first while this panel keeps working. Then this panel is frozen (it can still be read and still serves subscriptions, but nothing can be changed), its data, certificates and settings are copied, and the panel comes up on the new server with the same admins, users and nodes. The wizard shows which nodes the new panel reached, then a DNS step: each domain with where it points now and where it has to point, and a Test button that only turns green once the A record is right. **Finish** leaves the old panel frozen for good (remove it later with `tifusi panel uninstall`); **Undo** stops the new panel and puts the old one back in charge.
+- **A node.** The agent is installed on the new server with the same key and port, the panel switches to the new address and sends the node everything (inbounds, users, the IKEv2 certificate). Hosts that named the old server's bare IP are switched to the new one; links or IKEv2 profiles handed out by hand with the old IP have to be handed out again, so prefer a domain in host addresses. The old server is left running; **Undo** points the panel back at it.
+
+Customers stay connected throughout. The professional edition (MySQL) is moved by hand with `tifusi panel backup` and `tifusi panel restore`. A shop bot or mini app on the same server is a separate service: the wizard checks its domain in the DNS step and reminds you to move it, but does not carry it over.
+
+A bundle made by hand can be restored onto an empty server the same way the wizard does it: `TIFUSI_RESTORE_BUNDLE=/path/to/bundle.tar.gz bash install.sh` (the bundle holds `.env`, `data/` and `certs/`).
+
 ---
 
 <sub>[← README](../../README.md) · [Nodes →](nodes.md)</sub>

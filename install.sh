@@ -407,6 +407,25 @@ fi
 
 cd "$INSTALL_DIR"
 
+# A panel moved here from another server (Settings > Move to another server, or by hand with
+# TIFUSI_RESTORE_BUNDLE=/path/to/bundle.tar.gz): the bundle carries data/, certs/ and .env, so
+# every question below is already answered and none is asked.
+RESTORE_BUNDLE="${TIFUSI_RESTORE_BUNDLE:-}"
+env_value() { { grep -E "^$1=" .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2-; }
+if [ -n "$RESTORE_BUNDLE" ]; then
+  [ -f "$RESTORE_BUNDLE" ] || fail "Bundle not found: $RESTORE_BUNDLE"
+  if [ -f .env ] || [ -e data/tifusi.db ]; then
+    fail "A panel is already installed in $INSTALL_DIR — a moved panel needs an empty server (or remove this one first: tifusi panel uninstall)."
+  fi
+  tar -tzf "$RESTORE_BUNDLE" >/dev/null 2>&1 || fail "The bundle is not a readable .tar.gz."
+  # Only the three things a bundle may hold, whatever else an archive might name.
+  tar -xzf "$RESTORE_BUNDLE" --no-same-owner .env data certs 2>/dev/null \
+    || tar -xzf "$RESTORE_BUNDLE" --no-same-owner .env data \
+    || fail "The bundle has no .env and data/ in it."
+  [ -f .env ] && [ -d data ] || fail "The bundle has no .env and data/ in it."
+  info "Unpacked the moved panel's data, certificates and settings."
+fi
+
 step "Configuration (.env)"
 random_hex() { openssl rand -hex "$1" 2>/dev/null || head -c"$1" /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 if [ ! -f .env ]; then
@@ -497,6 +516,14 @@ random_free_port() {
 
 ask_port() {
   local label=$1 default=$2 target=$3 value
+  if [ -n "${RESTORE_BUNDLE:-}" ] && [ -n "${4:-}" ]; then
+    # A moved panel keeps its ports (links and bookmarks name them); they have to be free here.
+    value="$(env_value "$4")"; value="${value:-$default}"
+    port_in_use "$value" && fail "Port $value is already in use on this server; the moved panel needs it."
+    CHOSEN_PORTS+=("$value")
+    printf -v "$target" '%s' "$value"
+    return 0
+  fi
   while true; do
     # A non-interactive stdin makes read fail rather than block; fall back to
     # the auto-pick instead of spinning on EOF forever.
@@ -525,12 +552,15 @@ ask_port() {
   printf -v "$target" '%s' "$value"
 }
 
-ask_port "Panel API port" 8000 panel_port
-ask_port "Dashboard HTTP port" 8080 dashboard_port
+ask_port "Panel API port" 8000 panel_port TIFUSI_PANEL_PORT
+ask_port "Dashboard HTTP port" 8080 dashboard_port TIFUSI_DASHBOARD_PORT
 # Its own prompt because a server behind Cloudflare's proxy can only be
 # reached on 443/2053/2083/2087/2096/8443 — pinning HTTPS to 443 left those
 # installs with no way to serve the dashboard on a port Cloudflare would talk to.
-ask_port "Dashboard HTTPS port" 443 dashboard_https_port
+ask_port "Dashboard HTTPS port" 443 dashboard_https_port TIFUSI_DASHBOARD_HTTPS_PORT
+if [ -n "$RESTORE_BUNDLE" ] && port_in_use 80; then
+  fail "Port 80 is already in use on this server; the moved panel needs it."
+fi
 awk -v p="$panel_port" -v d="$dashboard_port" -v s="$dashboard_https_port" '
   /^#? *TIFUSI_PANEL_PORT=/ { print "TIFUSI_PANEL_PORT=" p; next }
   /^#? *TIFUSI_DASHBOARD_PORT=/ { print "TIFUSI_DASHBOARD_PORT=" d; next }
@@ -551,7 +581,11 @@ step "Dashboard path"
 # address answers 404, so scanners sweeping IPs don't land on a login page. It hides the
 # page; the password (and two-factor login) is still what protects it.
 WEB_PATH=""
-read -r -p "Hide the dashboard behind a random path (recommended)? [Y/n] " hide_path || hide_path=Y
+if [ -n "$RESTORE_BUNDLE" ]; then
+  WEB_PATH="$(env_value TIFUSI_WEB_PATH)"; hide_path=N
+else
+  read -r -p "Hide the dashboard behind a random path (recommended)? [Y/n] " hide_path || hide_path=Y
+fi
 if [[ "${hide_path:-Y}" =~ ^[Yy]$ ]]; then
   WEB_PATH="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 12 || true)"
   grep -q '^TIFUSI_WEB_PATH=' .env && sed -i "s#^TIFUSI_WEB_PATH=.*#TIFUSI_WEB_PATH=${WEB_PATH}#" .env \
@@ -569,9 +603,17 @@ public_ipv4() {
     | head -n 1
 }
 cert_name=""; cert_host=""; cert_args=()
-read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain || has_domain=N
+if [ -n "$RESTORE_BUNDLE" ]; then
+  # Certificates came in the bundle; the panel renews them once the domain points here.
+  has_domain=moved
+  PANEL_PUBLIC_URL="$(env_value TIFUSI_PUBLIC_URL)"
+else
+  read -r -p "Do you have a domain name pointing at this server? [y/N] " has_domain || has_domain=N
+fi
 has_domain=${has_domain:-N}
-if [[ "$has_domain" =~ ^[Yy]$ ]]; then
+if [ "$has_domain" = moved ]; then
+  :
+elif [[ "$has_domain" =~ ^[Yy]$ ]]; then
   read -r -p "Domain (e.g. panel.example.com): " domain
   if [ -n "$domain" ]; then
     read -r -p "Get a free Let's Encrypt certificate for it now? [Y/n] " get_cert
@@ -648,7 +690,6 @@ mkdir -p data && chmod 700 data
 
 step "Panel images"
 # Same image names docker-compose.yml resolves (an .env override included).
-env_value() { { grep -E "^$1=" .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2-; }
 PANEL_IMAGE="$(env_value TIFUSI_PANEL_IMAGE)"; PANEL_IMAGE="${PANEL_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-backend:latest}"
 DASHBOARD_IMAGE="$(env_value TIFUSI_DASHBOARD_IMAGE)"; DASHBOARD_IMAGE="${DASHBOARD_IMAGE:-ghcr.io/javadtifusi-eng/tifusi-panel-frontend:latest}"
 if pull_with_progress "Downloading panel images..." "$PANEL_IMAGE" "$DASHBOARD_IMAGE"; then
@@ -685,8 +726,11 @@ run_spinner "Waiting for the panel to come up..." wait_for_panel \
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 [ -n "$HOST_IP" ] || HOST_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)"
 HOST_IP="${HOST_IP:-<server-ip>}"
+# A moved panel has its nodes already: with no input to read, the question below answers itself "no".
+if [ -n "$RESTORE_BUNDLE" ]; then exec 0</dev/null; fi
 read -r -p "Install a VPN node on this same server? / نود روی همین سرور نصب شود؟ [y/N] " install_local_node || install_local_node=N
 LOCAL_NODE_NOTE="Panel only. Add remote nodes from Dashboard > Nodes."
+[ -z "${RESTORE_BUNDLE:-}" ] || LOCAL_NODE_NOTE="Moved panel: its nodes are the ones it already had."
 if [[ "$install_local_node" =~ ^[Yy]$ ]]; then
   if docker container inspect tifusi-node >/dev/null 2>&1; then
     warn "A tifusi-node container already exists; it was kept unchanged. Manage it from Nodes."
@@ -723,9 +767,13 @@ fi
 SUMMARY+=("Panel API :  dashboard URL + /api (local backend: http://127.0.0.1:${panel_port})")
 print_block "Panel Access Info" "$C_GREEN" "${SUMMARY[@]}"
 printf '\n'
-info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
-info "  tifusi panel key"
-info "Paste that key into the login page along with the username/password you want, and you're in."
+if [ -n "$RESTORE_BUNDLE" ]; then
+  info "The moved panel is running with the same admins, users and nodes; sign in as before."
+else
+  info "To create the admin account, open the dashboard in your browser, then run this to get a one-time setup key:"
+  info "  tifusi panel key"
+  info "Paste that key into the login page along with the username/password you want, and you're in."
+fi
 info ""
 info "Run 'tifusi panel' any time (updates, ports, SSL, backups, uninstall) — with no arguments it opens a menu."
 info "Done."
