@@ -16,3 +16,4 @@ letsencrypt-work*/
 tifusi-backup-*.tar.gz
 mysql-data/
 .pytest_cache/
+.rollback/

@@ -137,6 +137,8 @@ tag_rollback_images() {
 # which the admin keeps.
 snapshot_data() {
   mkdir -p "$ROLLBACK_DIR"
+  # The snapshot holds the database and .env: for root only.
+  chmod 700 "$ROLLBACK_DIR"
   if is_pro; then
     docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers tifusi' > "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null \
       || { err "Couldn't snapshot the database — aborting the update before anything changed."; return 1; }
@@ -196,7 +198,9 @@ rollback_update() {
 
 action_update() {
   info "Checking for local changes..."
-  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+  # .rollback/ is this command's own snapshot from the last update. Counted as a local change,
+  # it made every update after the first one refuse to run.
+  if [ -n "$(git status --porcelain 2>/dev/null | grep -v '^?? \.rollback/$' || true)" ]; then
     warn "This install has local changes (git status isn't clean) — not overwriting them."
     warn "Resolve or commit them yourself, then run this again. Skipping update."
     return
