@@ -2,6 +2,7 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Settings: a menu like the main one, with four parents (Sign-in & security, Address & certificate, Alerts & bot, Maintenance) that open into their sections; one section shows at a time beside the menu. On a phone the menu comes first and a section opens with a back link. Search still shows every match.
 - `tifusi panel update`: the second and every later update no longer stops with "local changes" (its own rollback snapshot was being counted as one). On a panel already stuck there, run once: `rm -rf /opt/tifusi-panel/.rollback`, then update. The snapshot folder is readable by root only.
 - Settings → Move to another server (owner only): takes the panel, or one node, to a new server over SSH. The new server is prepared first; the old panel is frozen only for the final copy and stays readable (and keeps serving subscriptions) until you finish or undo. A DNS step lists every domain with where it points now and a Test button; moving a node switches its address and the hosts that named the old IP, and can be undone. `install.sh` can restore a bundle onto an empty server (`TIFUSI_RESTORE_BUNDLE`).
 - Install without a domain (dashboard on a port such as 8080): links inside the subscription page (app download, IKEv2 profile) keep the port instead of pointing at port 80.
