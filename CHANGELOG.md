@@ -2,6 +2,7 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Cores: the Traffic Map card and its "Show traffic map" button are gone from the cores section.
 - Cores: each core in the Xray/IKEv2/… panel shows two small tiles — live panel-to-node ping with a 30-second sparkline (new `GET /api/cores/{id}/ping`, a plain TCP connect to the node agent; nothing changes on the node), and what it listens on (Xray: inbounds split into Reality / TLS / no TLS; the others: their port), in the core's own colour. The panel and core card lost their glows and the inner frame.
 - Overview: "Seen" (or opening an item) on a Needs-attention line now sticks. A line comes back only for something new — another user about to expire, a bigger limited/expired count, a node that recovered and went down again — not because its wording or the order of names changed.
 - Settings: the configuration-health card shows only while something is left to set up. The search box no longer overlaps its "/" hint on phones (no hint on touch screens, shorter placeholder).
