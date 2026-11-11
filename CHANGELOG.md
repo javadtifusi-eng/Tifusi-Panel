@@ -2,6 +2,14 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Tunnels (agent 1.2.0), mux transports (tcpmux, tcpstealth, wsmux, wssmux, spoof): a download to a user slower than the tunnel link is no longer cut after a few megabytes. Streams now have flow control, so a slow user slows only their own stream. Both sides must run the new agent: reinstall/update the tunnel on the Iran and the foreign server. A new side still connects to an old one, but keeps the old behaviour until both are updated.
+- Tunnels: a UDP forward (IKEv2, WireGuard) over a mux transport loses a datagram when its queue is full instead of dropping the whole flow, and reaches a service on the foreign server's own address the way the plain transports already did (IKEv2/L2TP could connect but pass no traffic).
+- Tunnels: opening one UDP flow no longer holds up every other user of the same forwarded port while the tunnel side is busy or down.
+- Tunnels, spoof: the firewall rules the ICMP/TCP carriers add are removed when the tunnel is stopped, not only on the next start. The panel refuses an IPv6 address for a spoof tunnel (it is IPv4 only) and the foreign side aims at the Iran link address when one is set.
+- Tunnels, TCP + Stealth: when the two servers' clocks differ by more than two minutes the Iran side now says so in its log instead of failing silently.
+- Tunnels: with a certificate domain on tls/wss/wssmux, that domain is the TLS name on both sides; a different SNI typed beside it used to break every connection. The SNI field is locked while a domain is set.
+- Tunnels: a WebSocket path without a leading slash is fixed on save; one with a space, `?` or `#` is refused.
+- Tunnel chains: a segment on the udp transport starts again (it asked the agent for a mode that no longer exists); a certificate domain is used as the TLS name; an IPv6 hop address is dialed correctly.
 - Users → links: one iPhone install row per IKEv2 server the user can reach (named after its host), instead of only the first. A new IKEv2 host shows up there by itself; a removed one goes away.
 - Cores: the Traffic Map card and its "Show traffic map" button are gone from the cores section.
 - Cores: each core in the Xray/IKEv2/… panel shows two small tiles — live panel-to-node ping with a 30-second sparkline (new `GET /api/cores/{id}/ping`, a plain TCP connect to the node agent; nothing changes on the node), and what it listens on (Xray: inbounds split into Reality / TLS / no TLS; the others: their port), in the core's own colour. The panel and core card lost their glows and the inner frame.
