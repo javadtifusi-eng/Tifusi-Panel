@@ -45,11 +45,11 @@ Resetting a user's secret invalidates both the old link and the old access code.
 | --- | --- |
 | `/app/s/{code}` | Short share link; a `302` redirect to `/sub/{secret}`. |
 | `/sub/{secret}` | HTML account page when the browser requests `text/html`; otherwise a plain, Clash or sing-box subscription. |
-| `/sub/{secret}/install/ikev2` | iPhone/macOS profile installation page. |
+| `/sub/{secret}/install/ikev2` | iPhone/macOS profile installation page (`?host=<id>` picks one IKEv2 server). In Safari it downloads the profile and says where to finish; inside Telegram it moves to Safari by itself, and only shows a manual button if that did not happen. |
 | `/sub/{secret}/ikev2.mobileconfig` | Downloadable IKEv2 profile. |
 | `/code/{code}/app.json` | App configuration by short code; `/code/{code}` alone is not a web page. |
 
-The old `/sub/{secret}/guide` page is disabled and returns `404`, including `?full=1`. Share the short link or the subscription URL instead. Following a short link has the same on-hold activation behavior as opening the subscription directly.
+The old `/sub/{secret}/guide` page has been removed and answers `404`. Share the short link or the subscription URL instead. Following a short link has the same on-hold activation behavior as opening the subscription directly.
 
 The default deployment supports VLESS, VMess, Trojan, Shadowsocks, IKEv2, L2TP, PPTP, Hysteria2 and WireGuard. A matching core must be assigned to a node; see [Deployment](deployment.md).
 

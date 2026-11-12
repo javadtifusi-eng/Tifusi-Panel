@@ -19,7 +19,7 @@ Tunnel build 1.1.0 verifies a TLS relay before sending its hello: either a trust
 
 The unauthenticated `udp_raw` relay is disabled; remove that flag from older configurations. UDP forwarding uses encrypted KCP, so no auxiliary `tunnel_port + 1` firewall opening is needed. `tcp` and `ws` do not add TLS themselves; use TLS/WSS when the underlying transport must protect credentials.
 
-Mux streams have bounded independent receive queues; an overflowing slow stream closes explicitly while other streams continue. Full UDP datagrams fit within the frame budget. Automatic carrier selection commits a route only after packet authentication.
+From tunnel 1.2.0 each mux stream (`tcpmux`, `tcpstealth`, `wsmux`, `wssmux`, `spoof`) has flow control: a user slower than the tunnel link slows only their own stream, and a large download is no longer cut part-way. Both ends have to run 1.2.0 for this; a new end still connects to an older one, but that link keeps the old behaviour (a slow stream that fills its queue is closed) until both are updated. A UDP forward over mux never loses the flow: when its queue is full one datagram is dropped, as UDP does. Full UDP datagrams fit within the frame budget. Automatic carrier selection commits a route only after packet authentication.
 
 When matching binaries are packaged with the panel, SSH installation and updates use that build over SFTP. Use the panel's offline bundle for this build until the matching public release is available; old public download commands do not provide these fixes. These checks do not establish performance on an Iranian mobile network.
 
@@ -30,8 +30,8 @@ When matching binaries are packaged with the panel, SSH installation and updates
 | Relay address and port | The public listener clients connect to. The port defaults to `8443`. |
 | Foreign side | A node already registered in the panel, whose address is reused, or any other server by address. |
 | Transport | How the foreign side connects to the relay (see below). |
-| SNI and domain | For `tls`, `wss` and `wssmux`. A domain can be issued a Let's Encrypt certificate during installation. |
-| Path | For `ws`, `wss`, `wsmux` and `wssmux`. |
+| SNI and domain | For `tls`, `wss` and `wssmux`. A domain can be issued a Let's Encrypt certificate during installation. With a domain set, both sides use that domain as the TLS name and the SNI field is locked: the relay only answers a handshake that names its certificate. |
+| Path | For `ws`, `wss`, `wsmux` and `wssmux`. A missing leading `/` is added on save; a space, `?` or `#` is refused. |
 | Connection count | How many physical connections the foreign side keeps open. Defaults to `8`. |
 | Forwarded ports | Named port mappings, each TCP or UDP, from a relay port to a port on the foreign server. |
 
@@ -157,9 +157,11 @@ A spoof tunnel stamps a forged source address on every packet, so it passes a fi
 | Return carrier | Optional. The carrier for foreign → Iran when it should differ from the one above, which then covers Iran → foreign only — for example TCP out and ICMPv6 back, since a filter often treats the two directions differently. The panel sets each side as the mirror of the other. Not available with **Auto**. |
 | Advanced stealth | Randomises TTL, DSCP and source port and accepts only the configured forged source. |
 
+Spoof is IPv4 only on every carrier (ICMPv6 included: it is protocol 58 inside IPv4), so the panel refuses an IPv6 relay, link or foreign address for it. When "Address the foreign server dials" is set, the foreign side aims its packets at that address.
+
 ICMPv6 is worth trying when ICMP is blocked: a firewall that shuts IPv6 down often leaves ICMPv6 alone, and a rule written for ICMP doesn't match it.
 
-The TCP, ICMP and ICMPv6 carriers add their own iptables rules while the tunnel is up and remove them when it stops. The server's firewall would otherwise call an Echo Reply that answers no request, or a TCP segment with no handshake, INVALID and drop it (ufw does by default), so these packets skip connection tracking and are accepted. The TCP carrier also drops the kernel's reset replies to the forged sources, only bare resets, so a real TCP service on the same port keeps its own.
+The TCP, ICMP and ICMPv6 carriers add their own iptables rules while the tunnel is up and remove them when it stops (from 1.2.0 also on a normal service stop, not only at the next start). The server's firewall would otherwise call an Echo Reply that answers no request, or a TCP segment with no handshake, INVALID and drop it (ufw does by default), so these packets skip connection tracking and are accepted. The TCP carrier also drops the kernel's reset replies to the forged sources, only bare resets, so a real TCP service on the same port keeps its own.
 
 ## Tunnels and IKEv2 or L2TP
 
@@ -196,5 +198,7 @@ Go in order and stop at the step that fixes it.
 5. **Some users can't connect and the log says "no tunnel connection available":** raise the warm connection count.
 6. **The foreign server slows down or services restart by themselves:** it is out of memory. Set the KCP window to 256 and add swap. If the CPU is full too, the server needs to be bigger; no tunnel setting replaces that.
 7. **One country is bad and the rest are fine:** the problem is that country's server, not the tunnel.
+8. **Large downloads or videos stop part-way on a mux transport:** one side still runs a tunnel older than 1.2.0. Press Install/Update for both servers.
+9. **TCP + Stealth never connects and shows no error:** the two servers' clocks differ by more than two minutes. The Iran side's log says so (`journalctl -u tifusi`); set the correct time on both.
 
 To undo a change: empty the field (or put the old value back), save, Install/Update.
