@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 **تانل‌ها** · 🛡️ [سپر اتصال](connection-shield.md) · 🔀 [چرخش دامنه](domain-rotation.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 **تانل‌ها** · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -184,7 +184,7 @@ Spoof روی همه‌ی حامل‌ها فقط IPv4 است (ICMPv6 هم: پرو
 
 ---
 
-<div dir="rtl"><sub>[→ نمایندگان](resellers.md) · [سپر اتصال ←](connection-shield.md)</sub></div>
+<div dir="rtl"><sub>[→ نمایندگان](resellers.md) · [ربات تلگرام ←](telegram-bot.md)</sub></div>
 
 ## تنظیمات پیشرفته
 

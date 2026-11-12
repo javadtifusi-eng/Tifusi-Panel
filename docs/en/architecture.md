@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · 🔀 [Domain rotation](domain-rotation.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ [Operations](operations.md) · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 **Architecture** · 💻 [Development](development.md)</sub>
 
 # Architecture
 
@@ -82,7 +82,7 @@ sequenceDiagram
 
 | Path | Contents |
 | --- | --- |
-| `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, Connection Shield failover (`shield/`), network health (`network_health/`) |
+| `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, network health (`network_health/`) |
 | `backend/alembic` | Database migrations |
 | `backend/cli` | `tifusi-cli`, including first-run admin key generation |
 | `backend/node_agent` | Node agent service, strongSwan/xl2tpd integration, config validation and rollback (`safe_apply.py`), node Dockerfile |

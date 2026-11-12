@@ -2,6 +2,7 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Removed domain rotation (domain pools and backup subscription domains) and Connection Shield: their pages, settings, background checks, API routes, tables and docs are gone. The subscription domain's own certificate is untouched. The Tifusi app's `app.json` no longer has `backup_domains`; Clash subscriptions no longer carry backup proxy-providers.
 - Removed the old `/sub/{secret}/guide` page for good (it had been switched off): its route, template, fonts and logo are gone. The address still answers `404`.
 - iPhone profile install page: no orange "Open in Safari" button any more. In Safari the page only says where to finish the install; inside Telegram it still moves to Safari by itself, and the manual button and steps appear only if that did not happen after a moment.
 - Tunnels (agent 1.2.0), mux transports (tcpmux, tcpstealth, wsmux, wssmux, spoof): a download to a user slower than the tunnel link is no longer cut after a few megabytes. Streams now have flow control, so a slow user slows only their own stream. Both sides must run the new agent: reinstall/update the tunnel on the Iran and the foreign server. A new side still connects to an old one, but keeps the old behaviour until both are updated.

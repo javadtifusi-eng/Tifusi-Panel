@@ -38,8 +38,7 @@
 | 🛡️ **Updates that roll themselves back** | Config pushes validated (`xray -test`) with the last good config kept; tunnel binaries and node agents updated with automatic rollback, nodes one at a time with a canary; `tifusi panel update` snapshots images and data first and rolls itself back if the new version doesn't come up; a short Telegram report after each update |
 | 🔒 **Guard rails** | Reserved ports (agent, SSH, internal APIs) can't be taken by an inbound; a refused config is shown on the node while it keeps serving |
 | 👤 **Users & subscriptions** | One link for every client (plain, Clash, sing-box, HTML page), dynamic remark variables, groups per inbound or per host, on-hold, device limits, periodic resets, resellers with quotas |
-| 📶 **Staying reachable** | Connection Shield failover, network health from inside Iran, backup subscription domains |
-| 🔀 **Domain rotation** | Pooled hosts go out on several healthy domains inside one subscription, so v2rayNG and V2Box users already hold working configs when a name is filtered; domains are checked from Iran and burnt ones replaced on their own. Backup subscription addresses can ride inside the subscription (Clash proxy-providers), and Clash and sing-box `auto` groups move off a filtered domain by themselves |
+| 📶 **Staying reachable** | Network health from inside Iran, replacement node (move a node's users to a new server without new profiles) |
 | 🧪 **Tested** | A pytest suite (links, subscriptions, traffic, migrations, rollback paths) runs on every push; images are only published when it passes |
 
 
@@ -49,7 +48,7 @@
 | --- | --- |
 | Start here | [Installation](docs/en/installation.md) · [Nodes](docs/en/nodes.md) · [Cores, hosts and groups](docs/en/cores-and-hosts.md) |
 | Customers | [Users, renewal and share links](docs/en/users-and-subscriptions.md) · [Resellers](docs/en/resellers.md) · [Telegram bot](docs/en/telegram-bot.md) |
-| Connectivity | [Tunnels](docs/en/tunnels.md) · [Connection Shield](docs/en/connection-shield.md) · [Domain rotation](docs/en/domain-rotation.md) · [Network health](docs/en/network-health.md) |
+| Connectivity | [Tunnels](docs/en/tunnels.md) · [Network health](docs/en/network-health.md) |
 | Operations | [Settings and backups](docs/en/operations.md) · [Updates and rollback](docs/en/updates-and-rollback.md) · [Deployment](docs/en/deployment.md) |
 | Development | [Architecture](docs/en/architecture.md) · [Development](docs/en/development.md) |
 | Hysteria2 | [Hysteria2 guide](docs/en/hysteria2.md) |

@@ -1,4 +1,4 @@
-<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · 🛡️ [Connection Shield](connection-shield.md) · 🔀 [Domain rotation](domain-rotation.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ **Operations** · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
+<sub>[← README](../../README.md) · 📦 [Installation](installation.md) · 🌐 [Nodes](nodes.md) · ⚛️ [Cores & hosts](cores-and-hosts.md) · 👤 [Users](users-and-subscriptions.md) · 💼 [Resellers](resellers.md) · 🚇 [Tunnels](tunnels.md) · ✈️ [Telegram bot](telegram-bot.md) · 📶 [Network health](network-health.md) · 🎛️ **Operations** · 🔁 [Safe updates](updates-and-rollback.md) · 🚢 [Deployment](deployment.md) · 📐 [Architecture](architecture.md) · 💻 [Development](development.md)</sub>
 
 # Operations
 
@@ -45,7 +45,7 @@ New administrator and reseller accounts have a separate identity for sessions an
 
 ## Notifications
 
-User and node state changes, [Connection Shield](connection-shield.md) events and [domain rotation](domain-rotation.md) burns and recoveries can be sent to Telegram, Discord or a generic webhook. Shield events arrive at the webhook as `shield_burnt`, `shield_switched`, `shield_no_spare`, `shield_recovered` and `shield_error`. After every panel, node or tunnel update, Telegram also gets a [short update report](updates-and-rollback.md#update-report-on-telegram).
+User and node state changes can be sent to Telegram, Discord or a generic webhook. After every panel, node or tunnel update, Telegram also gets a [short update report](updates-and-rollback.md#update-report-on-telegram).
 
 ## Settings
 

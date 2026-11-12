@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ **هسته‌ها و هاست‌ها** · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · 🔀 [چرخش دامنه](domain-rotation.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ **هسته‌ها و هاست‌ها** · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 [معماری](architecture.md) · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -55,7 +55,6 @@ flowchart TD
 - هاست‌های **L2TP** به یک هسته‌ی `l2tp` متصل می‌شوند و از PSK مشترک آن استفاده می‌کنند.
 - هاست‌های **IKEv2** به یک هسته‌ی `ikev2` متصل می‌شوند. سرور با گواهی X.509 (به‌طور پیش‌فرض خودامضا، یا زنجیره‌ی صادرشده توسط CA) و هر کاربر با EAP-MSCHAPv2 احراز هویت می‌شود.
 - **Hysteria2** پردازش جداگانه‌ای در ایجنت نود دارد؛ [راهنمای Hysteria2](hysteria2.md) را ببینید.
-- **استخر دامنه** (VLESS، VMess، Trojan، Shadowsocks و Hysteria2): هاست به ازای هر دامنه‌ی سالم استخر یک بار در اشتراک می‌رود و دامنه‌های فیلترشده خودکار جایگزین می‌شوند — [چرخش دامنه](domain-rotation.md).
 
 چند هاست روی یک inbound از Xray در واقع نسخه‌های مختلف لینک برای همان یک inbound سمت سرور هستند، برای همین صفحه‌ی **هاست‌ها** آن‌ها را در یک کارت جمع می‌کند — هم‌اندازه‌ی بقیه‌ی کارت‌ها، با همان سیگنال، پینگ و نمودار کوچک — که عنوانش تگ inbound و تعداد لینک‌هاست. با باز کردن کارت، هر هاست با همان دکمه‌های همیشگی‌اش دیده می‌شود.
 

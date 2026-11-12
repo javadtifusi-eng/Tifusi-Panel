@@ -1,4 +1,4 @@
-<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · 🛡️ [سپر اتصال](connection-shield.md) · 🔀 [چرخش دامنه](domain-rotation.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 **معماری** · 💻 [توسعه](development.md)</sub></div>
+<div dir="rtl"><sub>[→ صفحه‌ی اصلی](../../README.fa.md) · 📦 [نصب](installation.md) · 🌐 [نودها](nodes.md) · ⚛️ [هسته‌ها و هاست‌ها](cores-and-hosts.md) · 👤 [کاربران](users-and-subscriptions.md) · 💼 [نمایندگان](resellers.md) · 🚇 [تانل‌ها](tunnels.md) · ✈️ [ربات تلگرام](telegram-bot.md) · 📶 [سلامت شبکه](network-health.md) · 🎛️ [مدیریت](operations.md) · 🔁 [به‌روزرسانی امن](updates-and-rollback.md) · 🚢 [مرجع استقرار](deployment.md) · 📐 **معماری** · 💻 [توسعه](development.md)</sub></div>
 
 <div dir="rtl">
 
@@ -94,7 +94,7 @@ sequenceDiagram
 
 | Path | Contents |
 | --- | --- |
-| `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, Connection Shield failover (`shield/`), network health (`network_health/`) |
+| `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, network health (`network_health/`) |
 | `backend/alembic` | Database migrations |
 | `backend/cli` | `tifusi-cli`, including first-run admin key generation |
 | `backend/node_agent` | سرویس ایجنت نود، یکپارچگی strongSwan/xl2tpd، اعتبارسنجی و برگشت کانفیگ (`safe_apply.py`)، Dockerfile نود |
