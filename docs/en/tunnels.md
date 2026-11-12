@@ -39,7 +39,7 @@ A token is generated automatically for each tunnel.
 
 ### Transports
 
-The form offers four:
+The form offers five:
 
 | Transport | Use |
 | --- | --- |
@@ -47,6 +47,7 @@ The form offers four:
 | **TCP + Stealth** (`tcpstealth`) | TCP Mux with every byte encrypted and randomly padded, so the link has no clear-text handshake or fixed packet sizes for DPI to match. The relay stays silent to anything that isn't the tunnel, so a probe learns nothing. |
 | **WSS Mux** (`wssmux`) | WebSocket over TLS. The most filter-resistant, and the only one a CDN carries. |
 | **UDP (KCP)** (`udp`) | For links where TCP is disrupted. |
+| **Spoof (forged source)** (`spoof`) | For a national-internet (allow-list) shutdown: packets carry a forged source address. Both datacenters must allow it; see [Spoof test](#spoof-test) and [Spoof tunnels](#spoof-tunnels). |
 
 Tunnels created earlier with `tcp`, `tls`, `ws`, `wss` or `wsmux` keep working; editing one shows its transport as a legacy card.
 
@@ -115,6 +116,8 @@ The Iran side of a tunnel is the only part of Tifusi that runs on an Iranian ser
 - **By hand, offline**: in the tunnel's config view, download **Offline install file — Iran server**, copy it to the server over the domestic network (`scp`), unpack it and run `sh install.sh` inside its folder. Nothing is downloaded from GitHub or the panel.
 
 Download the Iran file (or install over SSH once) while the internet is still open: the bundle stays on the server, ready for a reinstall during a shutdown.
+
+For a national-internet shutdown, run the [spoof test](#spoof-test) now to see whether the Iran server's datacenter lets forged packets out; if it does, a [spoof tunnel](#spoof-tunnels) gets past the allow-list.
 
 **🔄 Update tunnel** in the same sheet moves an installed side to the newest tunnel binary with automatic rollback: the new binary is checked on the server against the current config before anything changes, the old one is kept as `tifusi-tunnel.prev`, and it comes back by itself if the service doesn't stay up or the tunnel's live links don't return within 45 seconds. The config is never changed. See [Safe updates](updates-and-rollback.md#updating-a-tunnel).
 
