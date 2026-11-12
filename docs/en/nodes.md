@@ -25,6 +25,8 @@ Node installs and updates use Docker `--init` to collect orphaned child processe
 
 ## Adding a node
 
+> A node always runs on a server **outside Iran**. Never install a node on an Iranian server: the only thing installed in Iran is the Iran side of a [tunnel](tunnels.md#servers-in-iran).
+
 1. On the **Nodes** page, create the node with its address and agent port; assign its core from the Cores page. The panel generates an API key bound to the node.
 2. Run the install command shown for the node on the node server. It downloads `install-node.sh` from the release tag matching the panel's own version (for example `v1.5.6`, never `main`) to a temporary file and runs it with the node's API key and port only if its SHA-256 matches the checksum built into the panel; a changed or tampered script stops the command before anything runs.
    `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules, turns on BBR congestion control with larger network buffers (`/etc/sysctl.d/99-tifusi-network.conf`) for better throughput on long, lossy links, and starts the `tifusi-node` container on the host network.
@@ -46,7 +48,7 @@ A node's **SSH** sheet has an **Update** tab, and the Nodes page a **🔄 Rollin
 
 ## Offline install bundle
 
-For a server that can reach neither GitHub, ghcr.io, Docker Hub nor an apt mirror (an Iranian server during an international shutdown), build the offline bundle on the panel server, which still has open internet:
+A node's server is outside Iran and reaches GitHub, so the online install is the usual way. The offline bundle is a convenience: the panel sends everything, so nothing is downloaded on the node (handy when GitHub, ghcr.io or Docker Hub are slow from that server). Build it on the panel server:
 
 ```bash
 tifusi panel node-bundle
@@ -61,7 +63,7 @@ scp tifusi-node-offline.tar root@NODE:/root/
 ssh root@NODE 'cd /root && tar xf tifusi-node-offline.tar && cd tifusi-node-offline && bash install-node.sh <API_KEY> [PORT]'
 ```
 
-`install-node.sh` switches to offline mode only when it runs from an unpacked bundle (or `TIFUSI_OFFLINE_DIR` points at one); the usual `curl` one-liner is unchanged. In offline mode it also opens the agent port when ufw is active. Keep a copy of the bundle on the Iranian server before a shutdown begins.
+`install-node.sh` switches to offline mode only when it runs from an unpacked bundle (or `TIFUSI_OFFLINE_DIR` points at one); the usual `curl` one-liner is unchanged. In offline mode it also opens the agent port when ufw is active.
 
 ## Managing a node server
 

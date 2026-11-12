@@ -106,6 +106,16 @@ The tunnel's **🔑 Install over SSH** button does the install for you, one side
 2. **Automatic** runs the usual online installer when the server can reach GitHub, and otherwise sends that side's offline bundle over SFTP and installs it (also the fallback when the online install fails midway). Online and offline can be forced.
 3. The installer's output streams into the sheet; if it fails, the last lines of the tunnel's service log are shown. Every install ends with the tunnel's health test. The offline bundle stays on the server (0600) for a reinstall during a shutdown.
 
+### Servers in Iran
+
+The Iran side of a tunnel is the only part of Tifusi that runs on an Iranian server; nodes always run abroad ([Nodes](nodes.md#adding-a-node)). The Iran side can be installed three ways:
+
+- **Online**: the relay's one-line command, when the server reaches GitHub.
+- **Over SSH** (above): **Automatic** tries online and falls back to sending the offline bundle over SFTP, so it also works while the international internet is cut.
+- **By hand, offline**: in the tunnel's config view, download **Offline install file — Iran server**, copy it to the server over the domestic network (`scp`), unpack it and run `sh install.sh` inside its folder. Nothing is downloaded from GitHub or the panel.
+
+Download the Iran file (or install over SSH once) while the internet is still open: the bundle stays on the server, ready for a reinstall during a shutdown.
+
 **🔄 Update tunnel** in the same sheet moves an installed side to the newest tunnel binary with automatic rollback: the new binary is checked on the server against the current config before anything changes, the old one is kept as `tifusi-tunnel.prev`, and it comes back by itself if the service doesn't stay up or the tunnel's live links don't return within 45 seconds. The config is never changed. See [Safe updates](updates-and-rollback.md#updating-a-tunnel).
 
 SSH install and update are open to the panel owner only.
