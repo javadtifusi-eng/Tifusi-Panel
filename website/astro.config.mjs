@@ -14,7 +14,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: { fa: 'مستندات تیفوسی پنل', en: 'Tifusi Panel Docs' },
-      logo: { src: './src/assets/logo.png', alt: 'Tifusi Panel' },
+      logo: { src: './src/assets/emblem.png', alt: 'Tifusi Panel' },
       favicon: '/favicon.png',
       defaultLocale: 'fa',
       locales: {
@@ -28,8 +28,10 @@ export default defineConfig({
         ThemeProvider: './src/components/DarkTheme.astro',
         ThemeSelect: './src/components/Empty.astro',
         PageTitle: './src/components/PageTitle.astro',
+        Sidebar: './src/components/Sidebar.astro',
       },
       head: [
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
         { tag: 'script', attrs: { type: 'module' }, content: "if (document.querySelector('pre.mermaid')) { const m = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default; m.initialize({ startOnLoad: false, theme: document.documentElement.dataset.theme === 'light' ? 'default' : 'dark' }); await m.run({ querySelector: 'pre.mermaid' }) }" },
       ],
       sidebar: [

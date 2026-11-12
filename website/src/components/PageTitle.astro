@@ -1,7 +1,9 @@
 ---
+// The home page draws its own banner, so its title is kept for readers and
+// search engines only.
 import Default from '@astrojs/starlight/components/PageTitle.astro'
-import BackToGuides from './BackToGuides.astro'
+const id = Astro.locals.starlightRoute.id
+const isHome = id === 'fa' || id === 'en' || id === 'fa/index' || id === 'en/index' || id === ''
 ---
 
-<BackToGuides />
-<Default />
+{isHome ? <div class="sr-only"><Default /></div> : <Default />}

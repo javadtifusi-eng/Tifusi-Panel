@@ -1,23 +1,20 @@
 ---
-// Starlight's header, but the language picker stays visible on phones since
-// the site has no sidebar menu to hold it.
+// Starlight's header. The side menu carries the brand on wide screens, so the
+// title only shows on phones; the language picker stays visible everywhere.
 import LanguageSelect from 'virtual:starlight/components/LanguageSelect'
 import Search from 'virtual:starlight/components/Search'
 import SiteTitle from 'virtual:starlight/components/SiteTitle'
-import SocialIcons from 'virtual:starlight/components/SocialIcons'
 ---
 
 <div class="header">
-	<div class="title-wrapper sl-flex"><SiteTitle /></div>
-	<div class="sl-flex print:hidden"><Search /></div>
-	<div class="sl-flex print:hidden right-group">
-		<div class="sl-hidden md:sl-flex social-icons"><SocialIcons /></div>
-		<LanguageSelect />
-	</div>
+	<div class="title-wrapper sl-flex md:sl-hidden"><SiteTitle /></div>
+	<div class="sl-flex print:hidden search-wrap"><Search /></div>
+	<div class="sl-flex print:hidden right-group"><LanguageSelect /></div>
 </div>
 
 <style>
 	.header { display: flex; gap: var(--sl-nav-gap); justify-content: space-between; align-items: center; height: 100%; }
 	.title-wrapper { overflow: clip; padding: 0.25rem; margin: -0.25rem; min-width: 0; }
-	.right-group, .social-icons { gap: 1rem; align-items: center; }
+	.search-wrap { flex: 1; justify-content: flex-start; }
+	.right-group { gap: 1rem; align-items: center; }
 </style>

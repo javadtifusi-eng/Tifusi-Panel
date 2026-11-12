@@ -1,0 +1,100 @@
+---
+// The docs home, laid out like the panel's dashboard.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import emblem from '../assets/emblem.png'
+import { guides, cssColors } from '../data/guides.mjs'
+
+const { lang = 'fa' } = Astro.props
+const fa = lang === 'fa'
+const base = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/${lang}/guides/`
+const CMD = 'bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"'
+let version = ''
+try {
+  version = readFileSync(join(process.cwd(), '..', 'CHANGELOG.md'), 'utf8').match(/^## v?(\d+\.\d+\.\d+)/m)?.[1] ?? ''
+} catch {}
+const by = Object.fromEntries(guides.map((g) => [g.slug, g]))
+const ico = (p) => `<svg class="tf-li" viewBox="0 0 24 24" aria-hidden="true"><path d="${p}"/></svg>`
+const stats = [
+  [fa ? 'راهنما' : 'Guides', String(guides.length), fa ? 'فارسی و انگلیسی' : 'Persian and English', 'var(--tf-accent)', 'M5 4h11l3 3v13H5zM9 9h6M9 13h6M9 17h3'],
+  [fa ? 'هسته روی هر نود' : 'Cores per node', '6', fa ? 'جایگاه مستقل' : 'independent slots', 'var(--tf-ok)', by['cores-and-hosts'].icon],
+  [fa ? 'ترنسپورت تانل' : 'Tunnel transports', '5', fa ? 'به‌همراه Spoof' : 'including Spoof', 'var(--tf-info)', by.tunnels.icon],
+  [fa ? 'نسخهٔ پنل' : 'Panel version', version || '—', fa ? 'آخرین انتشار' : 'latest release', 'var(--tf-purple)', by['updates-and-rollback'].icon],
+]
+const quick = ['installation', 'nodes', 'tunnels']
+const t = fa
+  ? { install: 'نصب سریع', note: 'با کاربر root اجرا شود. برای MySQL گزینهٔ ‎-- --pro افزوده شود.', copy: 'کپی دستور', copied: 'کپی شد', ig: 'راهنمای نصب', tun: 'تانل ایران به خارج', tg: 'راهنمای تانل', user: 'کاربر', iran: 'سرور ایران', abroad: 'سرور خارج', sec: 'بخش‌ها', secNote: 'با انتخاب هر کارت، همان بخش باز می‌شود', scene: 'کاربر، تانل از سرور ایران، سرور خارج' }
+  : { install: 'Quick install', note: 'Run as root. For MySQL, add -- --pro.', copy: 'Copy command', copied: 'Copied', ig: 'Installation guide', tun: 'Iran-to-abroad tunnel', tg: 'Tunnels guide', user: 'User', iran: 'Iran server', abroad: 'Server abroad', sec: 'Sections', secNote: 'Each card opens its guide', scene: 'User, tunnel through the Iran server, server abroad' }
+---
+
+<div class="tf-dash not-content">
+  <section class="tf-card tf-hero">
+    <div class="tf-hero-brand"><img src={emblem.src} width="92" height="53" alt="" /><h2>Tifusi Panel Docs</h2></div>
+    <div class="tf-acts">
+      {quick.map((s) => <a class="tf-chip" href={`${base}${s}/`}><Fragment set:html={ico(by[s].icon)} />{by[s][lang][0]}</a>)}
+    </div>
+  </section>
+
+  <div class="tf-stats">
+    {stats.map(([label, num, cap, col, icon]) => (
+      <div class="tf-card tf-stat">
+        <div><small>{label}</small><b>{num}</b><em style={`color:${col}`}>{cap}</em></div>
+        <span class="tf-tile" style={`color:${col}`}><Fragment set:html={ico(icon)} /></span>
+      </div>
+    ))}
+  </div>
+
+  <div class="tf-row">
+    <section class="tf-card">
+      <div class="tf-ch"><h2>{t.install}</h2><small dir="ltr">Ubuntu · Debian</small></div>
+      <p class="tf-note">{t.note}</p>
+      <div class="tf-cmd" dir="ltr"><i>$ </i>{CMD}</div>
+      <div class="tf-acts">
+        <button class="tf-chip tf-go" type="button" data-copy={CMD} data-done={t.copied}>{t.copy}</button>
+        <a class="tf-chip" href={`${base}installation/`}>{t.ig}</a>
+      </div>
+    </section>
+    <section class="tf-card tf-tun" tabindex="0">
+      <div class="tf-ch"><h2>{t.tun}</h2><a class="tf-chip" href={`${base}tunnels/`}>{t.tg}</a></div>
+      <svg class="tf-scene" viewBox="0 0 560 200" role="img" aria-label={t.scene}>
+        <Fragment set:html={cssColors(`<path d="M0 150H560" stroke="rgba(255,255,255,.14)" stroke-width="2"/><path d="M70 150H490" stroke="rgba(255,255,255,.22)" stroke-width="2" stroke-dasharray="8 10"/><rect x="52" y="92" width="36" height="58" rx="8" fill="var(--tf-raised)" stroke="var(--tf-accent)" stroke-width="2"/><rect x="58" y="100" width="24" height="36" rx="3" fill="var(--tf-soft)"/><circle cx="70" cy="143" r="2.5" fill="var(--tf-accent)"/><path d="M170 150 L240 52 L270 84 L300 44 L390 150Z" fill="var(--tf-raised)" stroke="rgba(255,255,255,.16)" stroke-width="2" stroke-linejoin="round"/><path d="M240 52 L252 68 L262 60 L270 84 L282 70 L300 44" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2" stroke-linejoin="round"/><path d="M246 150V124a34 34 0 0 1 68 0v26Z" fill="var(--tf-accent)"/><path d="M256 150V126a24 24 0 0 1 48 0v24Z" fill="var(--tf-ground)"/><path d="M280 150v-8M280 136v-6" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"/><rect x="462" y="86" width="56" height="64" rx="8" fill="var(--tf-raised)" stroke="var(--tf-accent)" stroke-width="2"/><path d="M462 108H518M462 129H518" stroke="var(--tf-accent)" stroke-width="2"/><circle cx="474" cy="97" r="3" fill="#22c55e"/><circle cx="474" cy="118" r="3" fill="#22c55e"/><circle cx="474" cy="140" r="3" fill="#22c55e"/><path d="M486 97h22M486 118h22M486 140h22" stroke="rgba(255,255,255,.3)" stroke-width="2" stroke-linecap="round"/><circle class="tf-pkt" cx="80" cy="150" r="6" fill="#f59e0b"/>`)} />
+        <text x="70" y="184" text-anchor="middle">{t.user}</text><text x="280" y="184" text-anchor="middle">{t.iran}</text><text x="490" y="184" text-anchor="middle">{t.abroad}</text>
+        <text class="tf-s" x="280" y="26" text-anchor="middle">TCP · WSS · KCP · Spoof</text>
+      </svg>
+      <div class="tf-tags" dir="ltr"><span>TCP Mux</span><span>TCP + Stealth</span><span>WSS Mux</span><span>UDP (KCP)</span><span class="on">Spoof</span></div>
+    </section>
+  </div>
+
+  <section class="tf-card">
+    <div class="tf-ch"><h2>{t.sec}</h2><small>{t.secNote}</small></div>
+    <div class="tf-grid">
+      {guides.filter((g) => g.card).map((g) => (
+        <a class="tf-g" href={`${base}${g.slug}/`}>
+          <svg viewBox="0 0 48 48" aria-hidden="true"><Fragment set:html={cssColors(g.art)} /></svg>
+          <b>{g[lang][0]}</b><span>{g[lang][1]}</span>
+        </a>
+      ))}
+    </div>
+  </section>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) => {
+    const label = b.textContent
+    b.addEventListener('click', () => {
+      navigator.clipboard?.writeText(b.dataset.copy ?? '').then(() => {
+        b.textContent = b.dataset.done ?? label
+        setTimeout(() => { b.textContent = label }, 1600)
+      }, () => {})
+    })
+  })
+  // The tunnel packet and each card drawing move once per tap.
+  const replay = (el: Element) => { el.classList.remove('go'); void (el as HTMLElement).offsetWidth; el.classList.add('go') }
+  document.querySelectorAll('.tf-tun').forEach((el) => el.addEventListener('click', (e) => {
+    if (!(e.target as Element).closest('a')) replay(el)
+  }))
+  document.querySelectorAll<HTMLAnchorElement>('.tf-g').forEach((a) => a.addEventListener('click', (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    e.preventDefault(); replay(a); setTimeout(() => { location.href = a.href }, 520)
+  }))
+</script>

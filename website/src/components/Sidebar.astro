@@ -1,0 +1,50 @@
+---
+// The side menu, drawn like the panel's own: brand, dashboard, the guides,
+// then the technical reference. On phones Starlight shows it as the drawer.
+import MobileMenuFooter from 'virtual:starlight/components/MobileMenuFooter'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import emblem from '../assets/emblem.png'
+import { guides, homeIcon } from '../data/guides.mjs'
+
+const lang = Astro.locals.starlightRoute.locale ?? 'fa'
+const fa = lang === 'fa'
+const base = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/${lang}/`
+const id = Astro.locals.starlightRoute.id
+const current = id.includes('/guides/') ? id.split('/guides/')[1].replace(/\/$/, '') : 'home'
+let version = ''
+try {
+  version = readFileSync(join(process.cwd(), '..', 'CHANGELOG.md'), 'utf8').match(/^## v?(\d+\.\d+\.\d+)/m)?.[1] ?? ''
+} catch {}
+const items = (group) => guides.filter((g) => g.group === group)
+---
+
+<nav class="tf-side" aria-label={fa ? 'منوی مستندات' : 'Docs menu'}>
+  <a class="tf-brand" href={base}>
+    <img src={emblem.src} width="62" height="36" alt="" />
+    <span><b>Tifusi Panel</b><small>{fa ? 'مستندات' : 'Docs'} {version && <span dir="ltr">v{version}</span>}</small></span>
+  </a>
+  <a class="tf-mi" href={base} aria-current={current === 'home' ? 'page' : undefined}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d={homeIcon} /></svg><span>{fa ? 'داشبورد' : 'Dashboard'}</span>
+  </a>
+  <div class="tf-sep"></div>
+  {items('main').map((g) => (
+    <a class="tf-mi" href={`${base}guides/${g.slug}/`} aria-current={current === g.slug ? 'page' : undefined}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d={g.icon} /></svg><span>{g[lang][0]}</span>
+    </a>
+  ))}
+  <div class="tf-sep"><span>{fa ? 'مرجع فنی' : 'Reference'}</span></div>
+  {items('ref').map((g) => (
+    <a class="tf-mi" href={`${base}guides/${g.slug}/`} aria-current={current === g.slug ? 'page' : undefined}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d={g.icon} /></svg><span>{g[lang][0]}</span>
+    </a>
+  ))}
+  <a class="tf-gh" href="https://github.com/javadtifusi-eng/Tifusi-Panel" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1.5-4-2-6-2.5M15 21v-3.5a3 3 0 0 0-.8-2.3c2.7-.3 5.5-1.3 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.3 1.3a11.4 11.4 0 0 0-6 0C6.7 2.5 5.7 2.8 5.7 2.8a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.3 9.2c0 4.6 2.8 5.7 5.5 6a3 3 0 0 0-.8 2.3V21" /></svg>
+    <span><b>GitHub</b><small>{fa ? 'مخزن پروژه' : 'Source repository'}</small></span>
+  </a>
+</nav>
+
+<div class="md:sl-hidden">
+  <MobileMenuFooter />
+</div>
