@@ -50,7 +50,7 @@ starlight-lang-select select { min-height: 44px; }
 /* side menu */
 .sidebar-pane { background: var(--tf-side); border-inline-end: 1px solid var(--tf-hair); }
 .sidebar-content { padding: 1rem 0.75rem; }
-.tf-side { display: flex; flex-direction: column; gap: 3px; min-height: 100%; }
+.tf-side { display: flex; flex-direction: column; gap: 3px; flex: none; }
 .tf-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 16px; text-decoration: none; }
 .tf-brand img { width: 62px; height: 36px; object-fit: contain; flex: none; }
 .tf-brand b { display: block; font-family: var(--tf-en); font-weight: 600; font-size: 16px; color: var(--tf-text); }
@@ -117,7 +117,7 @@ mobile-starlight-toc nav { background: var(--tf-ground); }
 .tf-stat small { display: block; color: var(--tf-muted); font-size: 12.5px; }
 .tf-stat b { display: block; font-family: var(--tf-en); font-size: 28px; font-weight: 700; color: var(--tf-text); line-height: 1.3; }
 .tf-stat em { display: block; font-style: normal; font-size: 12px; margin-top: 2px; }
-.tf-tile { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none; background: color-mix(in srgb, currentColor 14%, transparent); }
+.tf-tile { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none; background: rgba(255, 255, 255, 0.05); background: color-mix(in srgb, currentColor 14%, transparent); }
 .tf-row { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
 .tf-note { color: var(--tf-muted); font-size: 13px; line-height: 1.9; margin: 4px 0 0; }
 .tf-cmd { text-align: left; margin-top: 12px; padding: 13px; border-radius: 12px; background: #080808; border: 1px solid #1d1d1d; font-family: var(--sl-font-mono); font-size: 12.5px; line-height: 1.9; overflow-x: auto; white-space: nowrap; color: var(--tf-body); }
@@ -175,4 +175,15 @@ mobile-starlight-toc nav { background: var(--tf-ground); }
 }
 @media (prefers-reduced-motion: reduce) {
   .tf-dash *, .tf-dash *::before, .tf-dash *::after { animation: none !important; transition: none !important; }
+}
+
+/* Phone menu on browsers without the popover API (older iPhones). */
+@media (max-width: 49.99rem) {
+  .no-popover .sidebar-pane { display: none; }
+  .no-popover.menu-open .sidebar-pane { display: block; }
+  .no-popover.menu-open body { overflow: hidden; }
+  .no-popover .sl-menu-button .close-menu { display: none; }
+  .no-popover.menu-open .sl-menu-button .open-menu { display: none; }
+  .no-popover.menu-open .sl-menu-button .close-menu { display: block; }
+  .no-popover.menu-open .sl-menu-button { background-color: var(--sl-color-gray-2); box-shadow: none; }
 }

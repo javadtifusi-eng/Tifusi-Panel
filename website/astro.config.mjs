@@ -32,6 +32,8 @@ export default defineConfig({
       },
       head: [
         { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
+        // Older Safari has no popover API, which Starlight's phone menu needs: open and close it by class instead.
+        { tag: 'script', content: `(function(){if('popover' in HTMLElement.prototype)return;var d=document.documentElement;d.classList.add('no-popover');document.addEventListener('DOMContentLoaded',function(){var pane=document.getElementById('starlight__sidebar'),btn=document.querySelector('.sl-menu-button');if(!pane||!btn)return;btn.addEventListener('click',function(e){e.preventDefault();var o=!d.classList.contains('menu-open');d.classList.toggle('menu-open',o);btn.setAttribute('aria-expanded',o)});pane.addEventListener('click',function(e){if(e.target.closest('a'))d.classList.remove('menu-open')});})})();` },
         { tag: 'script', attrs: { type: 'module' }, content: "if (document.querySelector('pre.mermaid')) { const m = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default; m.initialize({ startOnLoad: false, theme: document.documentElement.dataset.theme === 'light' ? 'default' : 'dark' }); await m.run({ querySelector: 'pre.mermaid' }) }" },
       ],
       sidebar: [
