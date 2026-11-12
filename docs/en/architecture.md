@@ -78,6 +78,14 @@ sequenceDiagram
     end
 ```
 
+## Nodes
+
+- **Install:** the command fetches `install-node.sh` from the release tag matching the panel and runs it only with the right SHA-256; it enables BBR and larger network buffers and runs the `tifusi-node` container with `--network host` and `--init`.
+- **Transport:** HTTPS with a pinned self-signed certificate and the `X-Node-Api-Key` header. The panel's SSH key is `data/ssh/id_ed25519`; the host key is recorded on first connect.
+- **Sync:** the Xray config goes to `POST /config` and IPsec to `POST /ipsec-config`; `GET /health` and `GET /stats` are read every 30 seconds. A new config is checked with `xray run -test` and reverted on failure.
+- **Offline bundle:** `data/node-bundle/tifusi-node-offline.tar` holds the node image, static Docker, system packages, tunnel binaries and `SHA256SUMS`; rebuild it after every panel update.
+- **Replacement node:** a profile with a fixed IP does not follow DNS; ports 80 and 443 on the target must stay open. It does not replace panel backups.
+
 ## Tunnels
 
 - **Version compatibility:** from 1.1.0 the relay's identity is verified before connecting, and from 1.2.0 every stream has flow control; update both sides together. `udp_raw` is removed.

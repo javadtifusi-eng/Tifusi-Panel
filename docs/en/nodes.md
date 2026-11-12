@@ -2,130 +2,55 @@
 
 # Nodes
 
-A node is a server that carries user traffic. The panel renders each node's configuration and pushes it to the node agent over HTTPS; clients connect to the node directly and the panel never proxies their traffic.
+A node is a server abroad that users connect to directly. The panel only sends the node its configuration; user traffic never passes through the panel.
 
-## Six core types on one node
-
-The default installation offers six independent core slots:
-
-| Slot | Core type | Serves |
-| --- | --- | --- |
-| Xray | `xray` | VLESS, VMess, Trojan, Shadowsocks, including REALITY-configured inbounds |
-| IPsec | `ikev2` | Native IKEv2/IPsec clients |
-| L2TP | `l2tp` | L2TP/IPsec clients |
-| PPTP | `pptp` | PPTP clients |
-| Hysteria2 | `hysteria2` | QUIC-based Hysteria2 clients |
-| WireGuard | `wireguard` | WireGuard clients, using a separate Xray process |
-
-Any slot may be left empty. Create a core on the Cores page and assign a node to it. Each service starts after configuration is synced; installing the panel does not activate all services automatically. See [Deployment](deployment.md).
-
-## Reaping child processes
-
-Node installs and updates use Docker `--init` to collect orphaned child processes. To migrate an existing host-network node, run `python3 ops/enable-node-init.py --apply` on its host from a clean source checkout. It briefly restarts the node, retains the previous container for rollback and preserves its configuration and certificate. The resulting local snapshot contains customer configuration and must never be published.
+> Nodes are always installed **outside Iran**. Only the Iran side of a [tunnel](tunnels.md) runs on an Iran server.
 
 ## Adding a node
 
-> A node always runs on a server **outside Iran**. Never install a node on an Iranian server: the only thing installed in Iran is the Iran side of a [tunnel](tunnels.md#servers-in-iran).
+1. **Nodes → New node:** server address and agent port (default `62050`).
+2. Run the install command the panel shows on the node, or press **SSH** to let the panel install it (the password is needed only for the first connection and is not stored).
+3. Press **Sync**. A green node is ready.
+4. On the [Cores](cores-and-hosts.md) page, attach a core to this node.
 
-1. On the **Nodes** page, create the node with its address and agent port; assign its core from the Cores page. The panel generates an API key bound to the node.
-2. Run the install command shown for the node on the node server. It downloads `install-node.sh` from the release tag matching the panel's own version (for example `v1.5.6`, never `main`) to a temporary file and runs it with the node's API key and port only if its SHA-256 matches the checksum built into the panel; a changed or tampered script stops the command before anything runs.
-   `PORT` defaults to `62050`. The script pulls the prebuilt node image (or builds it locally if unavailable), loads the required kernel modules, turns on BBR congestion control with larger network buffers (`/etc/sysctl.d/99-tifusi-network.conf`) for better throughput on long, lossy links, and starts the `tifusi-node` container on the host network.
-3. Select **Sync** in the panel to push the initial configuration. After the first successful sync, health checks and traffic collection run continuously.
+## Cores on each node
 
-## Install over SSH (from the panel)
+Each node has six independent slots, and any can stay empty:
 
-Next to the copy-paste command, the node's **SSH** button lets the panel do the install itself. It is an extra option: the manual command above keeps working exactly as before.
+| Slot | Service |
+| --- | --- |
+| Xray | VLESS, VMess, Trojan, Shadowsocks and REALITY |
+| IKEv2 | Native phone and Windows clients |
+| L2TP and PPTP | Legacy clients |
+| Hysteria2 | UDP, for weak networks |
+| WireGuard | WireGuard clients |
 
-1. Enter the server's SSH user and port and, for the first connection only, its password or a private key. Leave **Install the panel's key** ticked: the panel adds its own key (`data/ssh/id_ed25519`, created on first use) to the server's `authorized_keys`, and every later connection uses that key. Your password or key is never stored.
-2. Choose **Offline (bundle)** or **Online (GitHub)** and press **Start install**. Online runs the same one-line installer on the server. Offline uploads the bundle described below over SFTP (skipped when the same file is already there, checked by SHA-256) and runs it. The installer's output streams into the sheet, and the panel syncs the node when it finishes.
-3. The server's host key is pinned on the first connection and checked before any credential is sent on later ones. If the server is reinstalled, use **Forget** next to the fingerprint.
+## Managing and updating
 
-The **Terminal** tab runs any command on the node's server (as root, or through passwordless `sudo` for another user), with output and exit code, plus ready-made buttons for node status, logs, restart, disk and memory, firewall and ports. SSH on nodes is open to the panel owner only, and every command is logged with the admin who ran it.
+- **Terminal:** the **SSH** sheet runs any command on the node, with ready buttons for logs, restart, disk and firewall.
+- **Update:** the **Update** tab for one node, or **🔄 Rolling node update** for all. If the new version does not come up, it rolls back automatically. [Safe updates](updates-and-rollback.md)
+- **On the server itself:** `tifusi node status|logs|restart|update|uninstall`
+- **Removing a node:** first `tifusi node uninstall` on the server, then delete it on the Nodes page.
+- **Offline install:** build the bundle with `tifusi panel node-bundle` on the panel server and choose **Offline** in the SSH sheet.
 
-## Updating the node agent
+## Replacement node
 
-A node's **SSH** sheet has an **Update** tab, and the Nodes page a **🔄 Rolling node update** for several nodes at once, canary first. The node self-tests the new image, keeps the running one as `tifusi-node-agent:rollback`, and puts it back by itself if the new agent doesn't answer; the panel then pushes the config again, checks every service that was healthy is still healthy, and watches the node for a soak period before moving to the next one. Details in [Safe updates](updates-and-rollback.md#updating-node-agents-canary-rollout). `tifusi node update` on the node server still works as before.
+When a node's IP is blocked or the server changes, users move to the new server without changing their profiles:
 
-## Offline install bundle
+1. Add the new server as a node and wait until it is **Connected**.
+2. On the old node, open **Replacement node**, choose the target and run **Compatibility check**.
+3. Press **Prepare target** and test one user on the new address.
+4. Point the DNS record to the new address yourself, then **Confirm move**.
 
-A node's server is outside Iran and reaches GitHub, so the online install is the usual way. The offline bundle is a convenience: the panel sends everything, so nothing is downloaded on the node (handy when GitHub, ghcr.io or Docker Hub are slow from that server). Build it on the panel server:
+**Revert to previous node** works at any stage. Xray, IKEv2, L2TP and PPTP move; Hysteria2, WireGuard and nodes behind a tunnel do not yet.
 
-```bash
-tifusi panel node-bundle
-```
+## Notes
 
-It writes `data/node-bundle/tifusi-node-offline.tar` with the node image (`docker save`), Docker's static binaries (installed with their own systemd unit on a server without Docker, any distro), `iptables`/`kmod`/`iproute2` packages for Ubuntu 22.04/24.04 and Debian 12 (used only when the server lacks them), both tunnel binaries, the `tifusi node` command and a `SHA256SUMS` file the installer checks first. Rebuild it after updating the panel so nodes get the new image.
+- **Device limits** are enforced on the node: an extra device waits until a slot frees up.
+- **A broken config** is not applied: the node keeps the previous one and the reason shows on the node page.
 
-Use it from the node's **SSH** sheet (offline method), or download it there and copy it over the domestic network yourself:
-
-```bash
-scp tifusi-node-offline.tar root@NODE:/root/
-ssh root@NODE 'cd /root && tar xf tifusi-node-offline.tar && cd tifusi-node-offline && bash install-node.sh <API_KEY> [PORT]'
-```
-
-`install-node.sh` switches to offline mode only when it runs from an unpacked bundle (or `TIFUSI_OFFLINE_DIR` points at one); the usual `curl` one-liner is unchanged. In offline mode it also opens the agent port when ufw is active.
-
-## Managing a node server
-
-The installer adds `tifusi node`, the node server's own menu, with `status`, `logs`, `restart` and `uninstall`, either interactively or as `tifusi node <action>`.
-
-Removing a node takes two steps, because the panel never reaches into a node server to stop anything:
-
-1. `tifusi node uninstall` on the node removes the agent.
-2. **Remove a node from this panel** in `tifusi panel`, or the **Nodes** page, makes the panel forget it.
-
-## Synchronisation
-
-Any change that affects a node (a user created, renewed, limited or deleted, a core edited, a group changed) is resolved into the node's effective user set and pushed as two payloads: the rendered Xray JSON to `POST /config` and the IPsec connections, EAP secrets, PSK and address pools to `POST /ipsec-config`. Every `TIFUSI_TRAFFIC_SYNC_INTERVAL_SECONDS` (30 by default) the panel polls `GET /health` and `GET /stats`, accumulates per-user traffic, moves users to `expired` or `limited` when due, and resyncs nodes whose user set changed. The full sequence is drawn in [Architecture](architecture.md#node-synchronisation-lifecycle).
-
-Each push is applied safely: the agent checks a new Xray config with `xray run -test` before touching the running process, keeps the last config that ran, and puts it back if a service dies on a new one (Xray, WireGuard, Hysteria2, strongSwan, xl2tpd, pptpd). A refused config is shown on the node with the reason, and the node stays connected on its previous config. See [Safe updates](updates-and-rollback.md#config-pushes-on-a-node).
-
-## Device limits on the node
-
-The per-user device limit is enforced on the node as simultaneous connections for Xray, IKEv2 (EAP) and L2TP. Devices already connected stay connected and one more waits until a place frees up. For Xray a device is a client IP, and the check matches the user as well as the IP, so customers sharing a carrier IP do not affect each other.
-
-## Transport security
-
-- The agent serves HTTPS with a self-signed certificate generated on first start (`backend/node_agent/tls.py`), which encrypts credentials and pushed secrets in transit.
-- Every request carries the per-node key in the `X-Node-Api-Key` header. The panel pins the agent certificate and checks proof tied to the node API key before accepting a replacement certificate; mutual TLS is not used.
-- The node container uses `--network host` so that Xray can bind ports defined after the container starts, and so that UDP 500, 4500 and 1701 reach charon and xl2tpd on the public address.
+Technical details: [Architecture](architecture.md#nodes).
 
 ---
 
 <sub>[← Installation](installation.md) · [Cores & hosts →](cores-and-hosts.md)</sub>
-
-## Replacement node
-
-Use this when a node's IP is blocked or the server must change. The button
-**Replacement node** on the Nodes page prepares another node that is already
-installed and connected, so users keep the same profiles. Users, passwords,
-groups, Host IDs and profile UUIDs are preserved; you do not edit cores or hosts
-by hand.
-
-1. Add the new server as a node and wait until it is **connected**.
-2. Open **Replacement node** on the node you want to replace, choose the
-   destination and press **Check compatibility**. Read the warnings.
-3. Tick the confirmation and press **Prepare destination**. The destination now
-   serves the same cores and certificate. The current node stays online.
-4. Test a client against the destination address shown.
-5. Change the DNS record of your host name to the destination address yourself.
-   The panel never changes DNS.
-6. Press **Confirm transfer** once clients work.
-
-**Back to previous node** restores the destination to its earlier state, before
-or after confirmation. Put the DNS record back to the previous node's address
-(the panel shows it); keep the previous node online until DNS caches expire.
-
-Xray, IKEv2, L2TP and PPTP are supported. Hysteria2/WireGuard, tunnel dependencies,
-external TLS certificate files, or conflicting web ports currently block this
-action. Upgrade the destination agent first. IP-based profiles do not follow DNS.
-A shared subscription hostname gets TCP pass-through on ports 80/443 to the
-source web server; open these ports on the destination firewall. The source web
-server must stay reachable. This does not recover a lost panel or database:
-restore those separately from backup. Renewal and accounting still need the
-panel; device limits are per node while both run.
-
-The database journal retains pending operations across restart. Preparation
-failure restores the destination; a failed restore is shown explicitly. Manual
-identity or core edits after preparation prevent the restore from silently
-overwriting them.
