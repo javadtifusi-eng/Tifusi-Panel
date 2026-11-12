@@ -50,8 +50,9 @@ function convert(src, lang, slug) {
   const title = body.match(/^# (.+)$/m)?.[1]?.trim() ?? slug
   body = body.replace(/^# .+\n+/m, '')
   body = body.replace(/```mermaid\n([\s\S]*?)```/g, (_, g) => `<pre class="mermaid">\n${g.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`)
-  body = body.replace(/\]\(([a-z0-9-]+)\.md(#[^)]*)?\)/g, (_, name, hash = '') => `](../${name}/${hash})`)
+  // Repo paths first, then guide-to-guide links, so the second rewrite cannot catch the first.
   body = body.replace(/\]\((?:\.\.\/)+([^)]+)\)/g, (_, p) => (p.startsWith('screenshots/') ? `](${REPO}docs/${p})` : `](${REPO}${p})`))
+  body = body.replace(/\]\(([a-z0-9-]+)\.md(#[^)]*)?\)/g, (_, name, hash = '') => `](../${name}/${hash})`)
   if (inserts[slug]) {
     const i = body.indexOf('\n\n')
     body = `${body.slice(0, i)}\n\n${inserts[slug](lang)}${body.slice(i)}`

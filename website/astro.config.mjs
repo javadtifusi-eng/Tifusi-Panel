@@ -2,7 +2,7 @@ import starlight from '@astrojs/starlight'
 import { defineConfig, passthroughImageService } from 'astro/config'
 
 const guides = [
-  'installation', 'nodes', 'hysteria2', 'cores-and-hosts', 'users-and-subscriptions', 'resellers',
+  'installation', 'nodes', 'cores-and-hosts', 'users-and-subscriptions', 'resellers',
   'tunnels', 'telegram-bot', 'network-health', 'operations', 'updates-and-rollback',
   'deployment', 'architecture', 'development',
 ]
@@ -10,6 +10,11 @@ const guides = [
 export default defineConfig({
   site: 'https://javadtifusi-eng.github.io',
   base: '/Tifusi-Panel',
+  // Hysteria2 now lives inside the cores guide.
+  redirects: {
+    '/fa/guides/hysteria2': '/Tifusi-Panel/fa/guides/cores-and-hosts/#hysteria2',
+    '/en/guides/hysteria2': '/Tifusi-Panel/en/guides/cores-and-hosts/#hysteria2',
+  },
   image: { service: passthroughImageService() },
   integrations: [
     starlight({

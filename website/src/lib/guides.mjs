@@ -29,11 +29,6 @@ export const guides = [
     art: `<path d="M17 4v7M24 4v7M31 4v7M17 37v7M24 37v7M31 37v7M4 17h7M4 24h7M4 31h7M37 17h7M37 24h7M37 31h7" stroke="${A}" stroke-width="2" stroke-linecap="round"/><rect x="11" y="11" width="26" height="26" rx="5" fill="${D}" stroke="${A}" stroke-width="2"/><rect class="m pulse" x="18" y="18" width="12" height="12" rx="2.5" fill="${A}"/>`,
   },
   {
-    slug: 'hysteria2', group: 'main',
-    fa: ['Hysteria2', 'ساخت هسته، تنظیم TLS و اتصال نود.'], en: ['Hysteria2', 'Create the core, set up TLS and assign a node.'],
-    icon: 'M13 3 4 14h7l-1 7 9-11h-7z',
-  },
-  {
     slug: 'users-and-subscriptions', group: 'main', card: true,
     fa: ['کاربران', 'حجم، مدت، محدودیت دستگاه و اشتراک‌ها.'], en: ['Users', 'Traffic, expiry, device limits and subscriptions.'],
     icon: 'M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6m11.5 9v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8',

@@ -48,7 +48,7 @@ A host is the public endpoint a client receives: address, port and display name,
 - **Xray protocols** reference an inbound parsed from the core configuration and inherit transport, security and REALITY parameters from it. SNI, ALPN, fingerprint, path and security may be overridden for clients.
 - **L2TP** hosts bind to an `l2tp` core and use its shared PSK.
 - **IKEv2** hosts bind to an `ikev2` core. The server authenticates with an X.509 certificate (self-signed by default, or an imported CA-issued chain) and each user with EAP-MSCHAPv2.
-- **Hysteria2** runs as a separate node-agent process; see the [Hysteria2 guide](hysteria2.md).
+- **Hysteria2**: see [Hysteria2](#hysteria2) below.
 
 Several hosts on the same Xray inbound are link variants of one server-side inbound, so the **Hosts** page folds them into a single card — the same size, signal, ping and sparkline as any host card — titled with the inbound tag and a link count. Opening the card lists each host with its usual actions.
 
@@ -73,6 +73,34 @@ Remarks written with the earlier names (`{expire_date}`, `{expire_jalali}`, `{da
 Set REALITY parameters in the Xray core JSON, including `serverNames`, `dest`, keys and client-facing settings. Hosts inherit the inbound's values, with the supported client overrides described above.
 
 The target scanner and its **Find Best Target (SNI)** button have been removed. The panel no longer mounts `/api/reality` scan routes. REALITY connections and manual configuration remain available; no scanner or probe download is required to use them.
+
+## Hysteria2
+
+A UDP core that runs beside Xray, for networks where TCP protocols perform poorly. Each user's password is their subscription secret.
+
+**Setup**
+
+1. **Cores → Hysteria2 → New core:** UDP port, obfuscation password (salamander) and rate cap (empty means none; 15 Mbps worked best on MCI).
+2. On the core card, pick the node. The node agent runs the Hysteria2 server itself.
+3. **Hosts → New host** with the Hysteria2 protocol on that core. Address and SNI must match the node's TLS certificate.
+
+**Choosing the port** (measured on MCI mobile; only the port changed)
+
+| UDP port | Result |
+| --- | --- |
+| 443 | fully blocked |
+| 53 | about 3 Mbps down |
+| 1194, 51820 | good volume, poor latency |
+| **8801** (Zoom) | **40 Mbps down, 3.5 Mbps up** |
+
+If 8801 is throttled, try 3478 and 19302 next.
+
+**Limits**
+
+- One Hysteria2 core per node.
+- For now only on the node on the panel's own machine, since it uses the panel certificate (`/opt/tifusi-panel/certs`).
+- Without obfuscation it does not connect from Iran.
+- Usage is counted, and expired or disabled users are disconnected.
 
 ## Groups
 
