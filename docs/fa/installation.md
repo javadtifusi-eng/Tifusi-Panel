@@ -18,6 +18,8 @@
 
 ## نصب پنل
 
+**نسخه‌ی عادی:**
+
 </div>
 
 ```bash
@@ -26,7 +28,17 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-P
 
 <div dir="rtl">
 
-برای نسخه‌ی حرفه‌ای با MySQL (کاربر زیاد) آخر دستور `-- --pro` اضافه کنید. نصب‌کننده Docker، گواهی و دستور مدیریتی `tifusi panel` را آماده می‌کند.
+**نسخه‌ی حرفه‌ای (MySQL)،** برای تعداد کاربر زیاد:
+
+</div>
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)" -- --pro
+```
+
+<div dir="rtl">
+
+نصب‌کننده Docker، گواهی و دستور مدیریتی `tifusi panel` را آماده می‌کند.
 
 نصب‌کننده می‌پرسد نود روی همین سرور نصب شود یا نه؛ پیش‌فرض **نه** است.
 

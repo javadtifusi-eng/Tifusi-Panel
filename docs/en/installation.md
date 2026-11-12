@@ -16,11 +16,19 @@
 
 ## Installing the panel
 
+**Standard edition:**
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
 
-For the Pro edition with MySQL (many users), add `-- --pro` to the end. The installer sets up Docker, the certificate and the `tifusi panel` management command.
+**Pro edition (MySQL),** for many users:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)" -- --pro
+```
+
+The installer sets up Docker, the certificate and the `tifusi panel` management command.
 
 The installer asks whether to install a node on the same server; the default is **no**.
 
