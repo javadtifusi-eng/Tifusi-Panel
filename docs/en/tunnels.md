@@ -2,216 +2,74 @@
 
 # Tunnels
 
-A tunnel publishes a server abroad through a relay server inside a restricted network. Clients connect to the relay; the foreign server dials out to the relay, so it needs no open inbound port of its own.
-
-```mermaid
-flowchart LR
-    Client(["Client"]) -->|"public port"| Relay["Relay server<br/>inside the restricted network"]
-    Foreign["Foreign server<br/>node or any server"] -->|"outbound connection<br/>chosen transport"| Relay
-    Relay -.->|"forwarded ports"| Foreign
-```
-
-The relay runs as its own agent on both servers. The panel stores the tunnel's configuration and generates the install command for each side, so the token and port map are never typed twice; it does not manage the agent after installation.
-
-## Security and upgrade compatibility
-
-Tunnel build 1.1.0 verifies a TLS relay before sending its hello: either a trusted certificate for the configured name (including CDN edges), or the relay public key derived separately from the shared token. Upgrade both ends together when moving from the old random self-signed certificates. Use strong, randomly generated tokens.
-
-The unauthenticated `udp_raw` relay is disabled; remove that flag from older configurations. UDP forwarding uses encrypted KCP, so no auxiliary `tunnel_port + 1` firewall opening is needed. `tcp` and `ws` do not add TLS themselves; use TLS/WSS when the underlying transport must protect credentials.
-
-From tunnel 1.2.0 each mux stream (`tcpmux`, `tcpstealth`, `wsmux`, `wssmux`, `spoof`) has flow control: a user slower than the tunnel link slows only their own stream, and a large download is no longer cut part-way. Both ends have to run 1.2.0 for this; a new end still connects to an older one, but that link keeps the old behaviour (a slow stream that fills its queue is closed) until both are updated. A UDP forward over mux never loses the flow: when its queue is full one datagram is dropped, as UDP does. Full UDP datagrams fit within the frame budget. Automatic carrier selection commits a route only after packet authentication.
-
-When matching binaries are packaged with the panel, SSH installation and updates use that build over SFTP. Use the panel's offline bundle for this build until the matching public release is available; old public download commands do not provide these fixes. These checks do not establish performance on an Iranian mobile network.
+The user connects to the Iran server and traffic travels through the tunnel to the server abroad. The server abroad opens the connection, so it needs no open inbound port.
 
 ## Creating a tunnel
 
-| Setting | Purpose |
+1. **Tunnels → New tunnel:** Iran server address and port (default `8443`), server abroad (a panel node or any server), transport, and forwarded ports (TCP or UDP).
+2. **Save.** The panel generates an install command for each side.
+3. **Install:** run each command on its server, or use **🔑 Install over SSH** to let the panel install it (it sends the offline bundle when the server cannot reach GitHub).
+4. Press **Test connection**. A green card means the tunnel is up.
+
+Download the **offline install file for the Iran server** now, for the day international access is cut.
+
+## Transport
+
+| Transport | When |
 | --- | --- |
-| Relay address and port | The public listener clients connect to. The port defaults to `8443`. |
-| Foreign side | A node already registered in the panel, whose address is reused, or any other server by address. |
-| Transport | How the foreign side connects to the relay (see below). |
-| SNI and domain | For `tls`, `wss` and `wssmux`. A domain can be issued a Let's Encrypt certificate during installation. With a domain set, both sides use that domain as the TLS name and the SNI field is locked: the relay only answers a handshake that names its certificate. |
-| Path | For `ws`, `wss`, `wsmux` and `wssmux`. A missing leading `/` is added on save; a space, `?` or `#` is refused. |
-| Connection count | How many physical connections the foreign side keeps open. Defaults to `8`. |
-| Forwarded ports | Named port mappings, each TCP or UDP, from a relay port to a port on the foreign server. |
+| **TCP Mux** | Default; fastest. |
+| **TCP + Stealth** | Plain TCP is detected and cut. |
+| **WSS Mux** | The Iran server's IP is filtered; the only option through a CDN. |
+| **UDP (KCP)** | Unstable line or high packet loss. |
+| **Spoof** | National internet (whitelist). |
 
-A token is generated automatically for each tunnel.
-
-### Transports
-
-The form offers five:
-
-| Transport | Use |
-| --- | --- |
-| **TCP Mux** (`tcpmux`) | Fastest; the foreign server connects straight to the relay. |
-| **TCP + Stealth** (`tcpstealth`) | TCP Mux with every byte encrypted and randomly padded, so the link has no clear-text handshake or fixed packet sizes for DPI to match. The relay stays silent to anything that isn't the tunnel, so a probe learns nothing. |
-| **WSS Mux** (`wssmux`) | WebSocket over TLS. The most filter-resistant, and the only one a CDN carries. |
-| **UDP (KCP)** (`udp`) | For links where TCP is disrupted. |
-| **Spoof (forged source)** (`spoof`) | For a national-internet (allow-list) shutdown: packets carry a forged source address. Both datacenters must allow it; see [Spoof test](#spoof-test) and [Spoof tunnels](#spoof-tunnels). |
-
-Tunnels created earlier with `tcp`, `tls`, `ws`, `wss` or `wsmux` keep working; editing one shows its transport as a legacy card.
+**Suggest the best transport** in the form measures both servers and ranks the transports. Confirm the result with a real test after installing.
 
 ## Through a CDN
 
-With **WSS Mux** selected, **Route through a CDN** makes the foreign server dial a CDN name instead of the relay's IP, so the tunnel survives if that IP is filtered. ArvanCloud is the recommended provider inside Iran; Cloudflare also works.
+With **WSS Mux**, tick **Route through CDN**, choose ArvanCloud or Cloudflare, and enter a domain that points to the Iran server. Complete the checklist under the form (proxied A record, HTTPS to the origin, WebSocket on).
 
-1. Tick **Route through a CDN**, choose ArvanCloud or Cloudflare and enter the domain you will point at the relay.
-2. The panel sets the SNI to that domain, picks a random WebSocket path and fixes the port: ArvanCloud keeps the relay's port as the origin port; Cloudflare only proxies 443, 2053, 2083, 2087, 2096 and 8443, and reaches the relay on the same port, so the relay port follows your choice.
-3. Follow the checklist under the form: an A record to the relay with the CDN proxy on, HTTPS to the origin on the tunnel port (Full SSL on Cloudflare), and WebSocket on.
-4. **Test connection** adds a **CDN path** step: the panel opens a real WebSocket upgrade through the CDN to the relay and turns green only on a `101` answer.
+**⚡ ArvanCloud quality** finds the best edge IPs and SNI and measures real speed. ArvanCloud bills the traffic.
 
-ArvanCloud bills traffic that passes through it, so everything the tunnel carries counts.
+## Spoof tunnel
 
-### CDN quality
+For the national internet: packets cross the whitelist with a spoofed source address.
 
-**⚡ ArvanCloud quality** on a CDN tunnel's card opens three real checks. They run on the foreign server when it is a panel node (the machine that actually dials the CDN), otherwise on the panel server, and the sheet says which.
+1. First run the **IP Spoofing test** card in both directions. If the data centre does not let spoofed packets out, this tunnel will not work.
+2. Create the tunnel with the **Spoof** transport: spoofed source (one address, a list or a range) and carrier (UDP, ICMP, ICMPv6 or TCP).
+3. If ICMP is blocked, try ICMPv6. Spoof is IPv4 only.
 
-- **Clean IPs.** About 128 edge addresses spread across the provider's published ranges are each tried with a real WebSocket upgrade through to your relay; the ten fastest are re-tried three times and listed with their median time, spread and how many of the three succeeded. The best three are ticked. Saved edges go into the foreign config as `servers`: the tunnel spreads its connections across them and skips one that stops answering.
-- **Front SNI (domain fronting).** Well-known Iranian sites are resolved to see which really sit on the same CDN, then each is tried as the TLS name while the WebSocket `Host` stays your domain. Only the ones that actually carried the connection to your relay are offered. With one chosen, the foreign side's TLS names that site and the CDN routes on `Host`.
-- **Real speed test.** Downloads 8 MB from the relay through the CDN over the tunnel's own protocol, using the saved edge and SNI, and reports Mbps and ping. Run it before and after a change.
+## Other options
 
-After **Save**, the sheet shows the foreign install command; run it once on the foreign server to apply the new edges and SNI. The speed test needs the updated tunnel program on the Iran server too, so re-run the relay's install command once as well.
+- **IKEv2 and L2TP:** forward UDP 500 and 4500 (and 1701 for L2TP). The host must point to the Iran server.
+- **Real client IP:** tick **Real IP (PROXY)** on a TCP forward, and set `acceptProxyProtocol: true` on a separate Xray inbound.
+- **Chains:** **Tunnels → 🔗 Chains**, to pass through several servers in a row; each hop has its own transport.
+- **Update:** **🔄 Update tunnel**; if the tunnel does not come back up, it rolls back automatically.
 
-With the CDN option ticked the form also raises the connection count from 8 to 16, since a CDN limits each connection's speed.
+Technical details: [Architecture](architecture.md#tunnels).
 
+## Advanced settings
 
-## Stealth relay (decoy for active probing)
+**Balanced** mode suits most servers. After any change, press **Install/Update** (users drop for a few seconds).
 
-A WebSocket relay used to answer any request that wasn't the tunnel's with a bare `404`. A server on 443 that holds a real certificate and then only ever 404s is itself a tell: an active probe — a monitoring system that connects and looks at what comes back — marks the address as "not a real website" and it gets burned.
+| Setting | Default | When to change |
+| --- | --- | --- |
+| Connection count | 8 | "no tunnel connection available": 32 to 128 |
+| Address to reach Iran | empty | Iran's IPv4 is unreachable from abroad: Iran's IPv6 |
+| KCP window | 1024 | RAM on the server abroad fills up: 256 |
+| FEC | 10 and 3 | Unstable line: parity 4 or 5 |
 
-With **Stealth relay** on (the default for new `ws`/`wss`/`wsmux`/`wssmux` tunnels), any request that isn't a genuine tunnel WebSocket upgrade — a browser, a scanner, a wrong path — gets an ordinary static web page with a `200`, served over the relay's real certificate. The probe sees an unremarkable website instead of a silent relay. A real tunnel client (the exact path with the WebSocket upgrade) is unaffected and connects as before.
+## Troubleshooting
 
-- It applies only to the WebSocket-handshake transports, the ones that terminate a real HTTP request a probe can send. `TCP + Stealth` already answers a probe with silence by design and is left as it is.
-- It is a per-tunnel toggle and is set on the **server (Iran) side** only.
-- Existing tunnels are never changed: the toggle defaults off for tunnels created before this, and takes effect only when a tunnel is created with it on or re-installed (run the Iran side's install command again, or **🔄 Update tunnel**).
-
-## Choosing a transport
-
-Before the tunnel exists, **Recommend best transport** probes both servers and reports reachability and latency to each, then ranks the transports. The ranking reflects what can honestly be measured from outside the restricted network; it cannot predict how a particular filter will treat each transport, so test the chosen one after installation.
-
-### Link test
-
-**Recommend best transport** probes each server from outside. To measure the path the tunnel itself will use, run the link test between the two servers: `tifusi-tunnel linktest serve --port 8443` on the Iran server, then `tifusi-tunnel linktest run --to <iran-ip> --port 8443` on the foreign one. It sends timestamped UDP probes and times TCP handshakes, then prints UDP loss, round-trip time (min/avg/p95/max) and jitter, how many TCP handshakes succeeded, and a suggested transport: `tcpmux` on a clean path, `udp` (KCP with FEC) when UDP loss or jitter is high or TCP handshakes fail. Use a port that is open on the Iran server and not already in use.
-
-## Installing and testing
-
-1. Open the tunnel and copy the install command for each side. Like the node command, it fetches `backend/tunnel_agent/install.sh` from the panel's own release tag and runs it only after its SHA-256 matches the checksum built into the panel.
-2. Run the relay command on the relay server and the foreign command on the foreign server.
-3. Select **Test connection**. The panel checks that it can reach the relay server, the foreign server and the tunnel's public port, and records the tunnel as `connected` or `error` with the latency and time of the check. A `udp` tunnel cannot be checked from outside; its service log is read on the relay server with `journalctl -u tifusi`.
-
-## Install and update over SSH
-
-The tunnel's **🔑 Install over SSH** button does the install for you, one side at a time. It is an extra option; the one-line commands and the offline bundle download keep working as before.
-
-1. The SSH address defaults to the tunnel's own address for that side (the Iran address, or the foreign node or address); change it only if SSH lives elsewhere. Enter the password or a private key for the first connection only — the panel installs its own key (the same one used for nodes) and later connections need nothing typed. Credentials are never stored; the host key is pinned on first contact.
-2. **Automatic** runs the usual online installer when the server can reach GitHub, and otherwise sends that side's offline bundle over SFTP and installs it (also the fallback when the online install fails midway). Online and offline can be forced.
-3. The installer's output streams into the sheet; if it fails, the last lines of the tunnel's service log are shown. Every install ends with the tunnel's health test. The offline bundle stays on the server (0600) for a reinstall during a shutdown.
-
-### Servers in Iran
-
-The Iran side of a tunnel is the only part of Tifusi that runs on an Iranian server; nodes always run abroad ([Nodes](nodes.md#adding-a-node)). The Iran side can be installed three ways:
-
-- **Online**: the relay's one-line command, when the server reaches GitHub.
-- **Over SSH** (above): **Automatic** tries online and falls back to sending the offline bundle over SFTP, so it also works while the international internet is cut.
-- **By hand, offline**: in the tunnel's config view, download **Offline install file — Iran server**, copy it to the server over the domestic network (`scp`), unpack it and run `sh install.sh` inside its folder. Nothing is downloaded from GitHub or the panel.
-
-Download the Iran file (or install over SSH once) while the internet is still open: the bundle stays on the server, ready for a reinstall during a shutdown.
-
-For a national-internet shutdown, run the [spoof test](#spoof-test) now to see whether the Iran server's datacenter lets forged packets out; if it does, a [spoof tunnel](#spoof-tunnels) gets past the allow-list.
-
-**🔄 Update tunnel** in the same sheet moves an installed side to the newest tunnel binary with automatic rollback: the new binary is checked on the server against the current config before anything changes, the old one is kept as `tifusi-tunnel.prev`, and it comes back by itself if the service doesn't stay up or the tunnel's live links don't return within 45 seconds. The config is never changed. See [Safe updates](updates-and-rollback.md#updating-a-tunnel).
-
-SSH install and update are open to the panel owner only.
-
-
-## Chains (multi-hop routes)
-
-A **chain** carries traffic through an ordered list of hops instead of one relay: user → entry (Iran, public) → middle → … → exit (the real server). It is built entirely from the ordinary reverse tunnel, so nothing about the tunnel program changes: N hops make N−1 segments, each one a normal tunnel with **its own transport** — for example `TCP + Stealth` inside Iran and `WSS Mux` behind a CDN abroad.
-
-Open **Tunnels → 🔗 Chains**.
-
-- **Hops.** The first is the entry (the public address users connect to), the last the exit, anything between is a middle. Each hop but the exit owns the segment down to the next hop: its transport, tunnel port, SNI/path and connection count. The next hop dials that port, so only the entry and the middles need an inbound tunnel port, each on its own port.
-- **Forwarded ports.** Users connect to a **public port** on the entry; the exit delivers to the **target** (default `127.0.0.1`). The **service port** is the internal port carried from hop to hop.
-- **A middle runs two services** on its server — the client of the segment above and the server of the segment below — and hands traffic from one to the other over `127.0.0.1`, never over the network. So a middle's forward ports open no firewall hole; only each segment's tunnel port and the entry's public ports do.
-- **Subscription protocols only.** A chain carries what a subscription delivers (VLESS, VMess, Trojan, Shadowsocks, Hysteria2 over TCP). IKEv2 and L2TP are set up by hand on the phone and are not routed this way.
-
-### Install and test
-
-Each hop is installed on its own with its own SSH credentials, the same way each tunnel side is ([Install and update over SSH](#install-and-update-over-ssh)): **Install this hop** asks for that server's password once, adds the panel's key, sends the tunnel binary over SFTP, and writes each service's own config (0600) and `tifusi-<name>.service`. A live log follows. **Test chain** then opens the entry's public ports from the panel — which only answers if every hop relayed the connection through to the exit.
-
-Every 5 minutes the panel also probes each segment's tunnel port and the entry's public TCP ports and shows the result on the chain, naming what isn't reachable. UDP segments and forwards can't be checked with a TCP connection and are left out, so a UDP-only chain stays "ready to install" rather than being marked broken.
-
-Chains are owner-only, and a chain never changes an existing tunnel.
-
-## Real client IP (PROXY protocol)
-
-Behind a tunnel every connection reaches the foreign service from the tunnel itself, so a device limit that tells devices apart by address sees one device for all of a user's phones. Tick **Real IP (PROXY)** on a TCP forward and the foreign side opens each connection to the target with a PROXY protocol v2 header carrying the user's real address and port.
-
-The target must expect the header: in Xray, set `"acceptProxyProtocol": true` in the inbound's `streamSettings.sockopt` (or `tcpSettings`/`wsSettings`). A service that isn't expecting it reads the header as garbage and the connection fails, so give the tunnel its own inbound on a separate port rather than turning it on for an inbound direct users also reach. UDP forwards can't carry it; IKEv2 and L2TP limits count sessions per user and don't need it.
-
-## Spoof test
-
-Some tunnel types depend on the relay's datacenter allowing packets with a forged source address to leave its network. The **IP Spoofing** card in the transport picker generates two commands, one for each server, that check this before any such tunnel is built. Nothing runs on the servers until the commands are executed there.
-
-- **Protocol.** The probes can ride UDP, ICMP, ICMPv6 or TCP. A datacenter or filter can drop forged UDP yet pass another protocol, so test each one you might use. All but UDP need root on the receiving server too.
-- **Direction.** The tunnel forges a source both ways, so run the test in both directions: Iran → foreign and foreign → Iran.
-- **Loss per source.** The receiver lists every forged source that arrived with how many of its probes got through, for example `5/5 packets  loss 0%`. With **Max acceptable packet loss** set, a source over it is marked `x` and not counted as usable.
-
-On the command line the same test is `tifusi-tunnel spooftest recv|send --proto udp|icmp|icmpv6|tcp`; `recv --max-loss N --out file` writes the usable sources to a file, one per line, ready to use as the spoof source list on the **other** side.
-
-## Spoof tunnels
-
-A spoof tunnel stamps a forged source address on every packet, so it passes a filter that allow-lists source and destination addresses. Both datacenters must let forged packets out — check with the spoof test first.
-
-| Setting | Purpose |
+| Symptom | Fix |
 | --- | --- |
-| Spoof source | The forged address, or a list, range (`a-b`) or CIDR to rotate across per packet. |
-| Carrier | What the forged packets look like on the wire: UDP, ICMP (Echo Reply), ICMPv6 (Echo Reply inside IPv4, protocol 58) or TCP (PSH\|ACK segments). **Auto** tries each and settles on one that works. |
-| Return carrier | Optional. The carrier for foreign → Iran when it should differ from the one above, which then covers Iran → foreign only — for example TCP out and ICMPv6 back, since a filter often treats the two directions differently. The panel sets each side as the mirror of the other. Not available with **Auto**. |
-| Advanced stealth | Randomises TTL, DSCP and source port and accepts only the configured forged source. |
-
-Spoof is IPv4 only on every carrier (ICMPv6 included: it is protocol 58 inside IPv4), so the panel refuses an IPv6 relay, link or foreign address for it. When "Address the foreign server dials" is set, the foreign side aims its packets at that address.
-
-ICMPv6 is worth trying when ICMP is blocked: a firewall that shuts IPv6 down often leaves ICMPv6 alone, and a rule written for ICMP doesn't match it.
-
-The TCP, ICMP and ICMPv6 carriers add their own iptables rules while the tunnel is up and remove them when it stops (from 1.2.0 also on a normal service stop, not only at the next start). The server's firewall would otherwise call an Echo Reply that answers no request, or a TCP segment with no handshake, INVALID and drop it (ufw does by default), so these packets skip connection tracking and are accepted. The TCP carrier also drops the kernel's reset replies to the forged sources, only bare resets, so a real TCP service on the same port keeps its own.
-
-## Tunnels and IKEv2 or L2TP
-
-For native IKEv2 or L2TP through a tunnel, forward UDP 500 and 4500 from the relay to the foreign server, and UDP 1701 as well for L2TP clients without IPsec. The host published to users then points at the relay's address.
-
-The relay delivers IKEv2 (UDP 500 and 4500) to the foreign server's own address rather than `127.0.0.1`, so the tunnel needs its foreign side set (a node or an address). Delivered to loopback, the server would see every phone as `127.0.0.2` and could never send it the encrypted replies: the phone connects but gets no traffic. A tunnel installed before this change keeps the old target until its relay install command is run again.
+| Repeated drops | Switch to TCP Mux, then UDP. |
+| Connected but slow | Run **Link test**; with packet loss, use UDP (KCP). |
+| Abroad cannot reach Iran | Iran's IPv6 in "Address to reach Iran". |
+| Large downloads stop midway | Update both sides. |
+| Stealth never connects | Sync the two servers' clocks. |
+| Only one country is bad | The problem is that country's server. |
 
 ---
 
 <sub>[← Resellers](resellers.md) · [Telegram bot →](telegram-bot.md)</sub>
-
-## Advanced settings
-
-**Speed preset:** three buttons above this section fill the numbers in at once: Light for a foreign server with little memory or many users, Balanced for most servers, Maximum speed for a strong server on a good line.
-
-In the tunnel form, under "Advanced settings". Leave a field empty to keep the default. After saving, press Install/Update so both servers get it (users drop for a few seconds).
-
-| Setting | Default | When to change |
-|---|---|---|
-| Warm connection count | 8 | The log says "no tunnel connection available": raise it (32, 64, 128). Larger uses more memory. |
-| Address the foreign server dials | empty | The foreign server cannot reach the Iran server's main IP (for example its international IPv4 is blocked): put the Iran server's IPv6 here. |
-| KCP window | 1024 | The foreign server runs out of memory: 256 or 512. `udp` and `spoof` only. |
-| UDP socket buffer | 8192 KB | Memory is short: 2048. |
-| FEC (data and parity) | 10 and 3 | Lossy line: parity 4 or 5. Clean line: 20 and 2 (uses less traffic). |
-
-## When a tunnel doesn't work well
-
-Go in order and stop at the step that fixes it.
-
-1. **Look at the tunnel card.** Is it green and connected? If not, press Test and read the error.
-2. **It reconnects every few tens of seconds:** the line cuts this transport. Change it: `tcp` to `tcpmux`, then `udp`.
-3. **Connected but slow:** run the link test to see whether the line loses packets. If it does, `udp` (KCP) does far better than `tcp`.
-4. **The foreign server can't connect though the Iran server pings:** the Iran server's international IPv4 is closed. Put its IPv6 in "Address the foreign server dials".
-5. **Some users can't connect and the log says "no tunnel connection available":** raise the warm connection count.
-6. **The foreign server slows down or services restart by themselves:** it is out of memory. Set the KCP window to 256 and add swap. If the CPU is full too, the server needs to be bigger; no tunnel setting replaces that.
-7. **One country is bad and the rest are fine:** the problem is that country's server, not the tunnel.
-8. **Large downloads or videos stop part-way on a mux transport:** one side still runs a tunnel older than 1.2.0. Press Install/Update for both servers.
-9. **TCP + Stealth never connects and shows no error:** the two servers' clocks differ by more than two minutes. The Iran side's log says so (`journalctl -u tifusi`); set the correct time on both.
-
-To undo a change: empty the field (or put the old value back), save, Install/Update.

@@ -78,6 +78,17 @@ sequenceDiagram
     end
 ```
 
+## Tunnels
+
+- **Version compatibility:** from 1.1.0 the relay's identity is verified before connecting, and from 1.2.0 every stream has flow control; update both sides together. `udp_raw` is removed.
+- **Hidden relay:** on WebSocket transports, any request that is not the tunnel gets an ordinary web page with status `200`, so scanners do not detect the relay.
+- **TCP + Stealth:** does not answer non-tunnel connections and needs the two clocks within two minutes.
+- **Link test:** on Iran `tifusi-tunnel linktest serve --port 8443`, abroad `tifusi-tunnel linktest run --to <iran-ip> --port 8443`; prints loss, latency and a suggested transport.
+- **Spoof:** TCP and ICMP carriers add their iptables rules while running and remove them on stop. Command-line test: `tifusi-tunnel spooftest recv|send --proto udp|icmp|icmpv6|tcp`.
+- **Chains:** N hops build N−1 ordinary tunnels; a middle hop passes traffic over `127.0.0.1`, and only subscription protocols travel through.
+- **IKEv2 behind a tunnel:** the Iran server delivers to the server abroad's own address, not `127.0.0.1`, so the far side must be set.
+- **Updates:** the previous binary stays as `tifusi-tunnel.prev` and is restored if links do not return within 45 seconds. Logs: `journalctl -u tifusi`.
+
 ## Repository layout
 
 | Path | Contents |
