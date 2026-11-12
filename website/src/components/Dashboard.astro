@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import emblem from '../assets/emblem.png'
-import { guides, cssColors } from '../data/guides.mjs'
+import { guides, cssColors } from '../lib/guides.mjs'
 
 const { lang = 'fa' } = Astro.props
 const fa = lang === 'fa'

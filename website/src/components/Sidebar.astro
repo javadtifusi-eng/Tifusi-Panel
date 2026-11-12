@@ -5,7 +5,7 @@ import MobileMenuFooter from 'virtual:starlight/components/MobileMenuFooter'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import emblem from '../assets/emblem.png'
-import { guides, homeIcon } from '../data/guides.mjs'
+import { guides, homeIcon } from '../lib/guides.mjs'
 
 const lang = Astro.locals.starlightRoute.locale ?? 'fa'
 const fa = lang === 'fa'
