@@ -12,17 +12,19 @@
 | Panel | 1 CPU, 1 GB RAM, 10 GB disk | 2 CPU, 2 GB RAM, 20 GB disk |
 | Node | 1 CPU, 512 MB RAM, 10 GB disk | 1 CPU, 1 GB RAM, 20 GB disk |
 | Panel and node on one server | 1 CPU, 2 GB RAM, 15 GB disk | 2 CPU, 2 GB RAM, 25 GB disk |
-| Pro panel (MySQL) | 2 CPU, 2 GB RAM, 20 GB disk | 2 CPU, 4 GB RAM, 40 GB disk |
+| Panel with MySQL | 2 CPU, 2 GB RAM, 20 GB disk | 2 CPU, 4 GB RAM, 40 GB disk |
 
 ## Installing the panel
 
-**Standard edition:**
+Choose MySQL for many users.
+
+Install with SQLite:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
 
-**Pro edition (MySQL),** for many users:
+Install with MySQL:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)" -- --pro

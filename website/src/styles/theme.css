@@ -188,8 +188,22 @@ mobile-starlight-toc nav { background: var(--tf-ground); }
   .no-popover.menu-open .sl-menu-button { background-color: var(--sl-color-gray-2); box-shadow: none; }
 }
 
-/* Command boxes in guides: left to right from the start, like the dashboard's quick install. */
-.sl-markdown-content .expressive-code pre { direction: ltr; text-align: left; border-radius: 12px; background: #080808 !important; border: 1px solid #1d1d1d; }
-.sl-markdown-content .tf-copyrow { margin-top: 0.6rem; display: flex; }
-.tf-copy { width: 100%; justify-content: center; font-size: 14px; }
-@media (min-width: 50rem) { .tf-copy { width: auto; } }
+/* Command boxes: label, reveal and copy (public/copy.js). The command itself is plain grey. */
+.tf-cbox { margin-top: 1rem; }
+.tf-cbar { display: flex; align-items: center; gap: 8px; padding: 7px 7px 7px 12px; border-radius: 12px; background: var(--tf-card); border: 1px solid var(--tf-edge2); }
+[dir='rtl'] .tf-cbar { padding: 7px 12px 7px 7px; }
+.tf-clbl { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--tf-text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tf-clbl i { font-style: normal; font-family: var(--sl-font-mono); color: #737373; }
+.tf-eye, .tf-cp { height: 34px; border-radius: 9px; border: 1px solid; font: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; flex: none; transition: background 0.15s, transform 0.15s; }
+.tf-eye { width: 34px; padding: 0; background: transparent; border-color: var(--tf-edge2); color: #a3a3a3; }
+.tf-eye[aria-expanded='true'] { color: #4ade80; border-color: rgba(34, 197, 94, 0.6); }
+.tf-cp { width: 34px; padding: 0; background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.45); color: #4ade80; }
+.tf-cp:hover { background: rgba(34, 197, 94, 0.2); }
+.tf-cp.ok { background: #22c55e; border-color: #22c55e; color: #052e14; }
+.tf-eye:active, .tf-cp:active { transform: scale(0.96); }
+.tf-eye svg, .tf-cp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tf-cfull { margin-top: 6px; }
+.tf-cfull .expressive-code { margin: 0; }
+.tf-cfull pre, .tf-cfull .tf-cplain { direction: ltr; text-align: left; border-radius: 10px; background: #080808 !important; border: 1px solid #1d1d1d; }
+.tf-cfull pre code span { color: #a3a3a3 !important; }
+.tf-cplain { font-family: var(--sl-font-mono); font-size: 12px; color: #a3a3a3; padding: 10px 12px; overflow-x: auto; white-space: nowrap; }

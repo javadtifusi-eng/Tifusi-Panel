@@ -23,8 +23,8 @@ const stats = [
 ]
 const quick = ['installation', 'nodes', 'tunnels']
 const t = fa
-  ? { install: 'نصب سریع', note: 'با کاربر root اجرا شود. دستور نسخهٔ MySQL در راهنمای نصب آمده است.', copy: 'کپی دستور', copied: 'کپی شد', ig: 'راهنمای نصب', tun: 'تانل ایران به خارج', tg: 'راهنمای تانل', user: 'کاربر', iran: 'سرور ایران', abroad: 'سرور خارج', sec: 'بخش‌ها', secNote: 'با انتخاب هر کارت، همان بخش باز می‌شود', scene: 'کاربر، تانل از سرور ایران، سرور خارج' }
-  : { install: 'Quick install', note: 'Run as root. The MySQL edition command is in the installation guide.', copy: 'Copy command', copied: 'Copied', ig: 'Installation guide', tun: 'Iran-to-abroad tunnel', tg: 'Tunnels guide', user: 'User', iran: 'Iran server', abroad: 'Server abroad', sec: 'Sections', secNote: 'Each card opens its guide', scene: 'User, tunnel through the Iran server, server abroad' }
+  ? { install: 'نصب سریع', note: 'با کاربر root اجرا شود. دستور MySQL در راهنمای نصب آمده است.', copy: 'کپی', cmdLabel: 'نصب با SQLite', show: 'نمایش دستور', ig: 'راهنمای نصب', tun: 'تانل ایران به خارج', tg: 'راهنمای تانل', user: 'کاربر', iran: 'سرور ایران', abroad: 'سرور خارج', sec: 'بخش‌ها', secNote: 'با انتخاب هر کارت، همان بخش باز می‌شود', scene: 'کاربر، تانل از سرور ایران، سرور خارج' }
+  : { install: 'Quick install', note: 'Run as root. The MySQL command is in the installation guide.', copy: 'Copy', cmdLabel: 'Install with SQLite', show: 'Show command', ig: 'Installation guide', tun: 'Iran-to-abroad tunnel', tg: 'Tunnels guide', user: 'User', iran: 'Iran server', abroad: 'Server abroad', sec: 'Sections', secNote: 'Each card opens its guide', scene: 'User, tunnel through the Iran server, server abroad' }
 ---
 
 <div class="tf-dash not-content">
@@ -48,9 +48,15 @@ const t = fa
     <section class="tf-card">
       <div class="tf-ch"><h2>{t.install}</h2><small dir="ltr">Ubuntu · Debian</small></div>
       <p class="tf-note">{t.note}</p>
-      <div class="tf-cmd" dir="ltr"><i>$ </i>{CMD}</div>
+      <div class="tf-cbox" data-cmd={CMD}>
+        <div class="tf-cbar">
+          <span class="tf-clbl"><i>$_</i><span>{t.cmdLabel}</span></span>
+          <button type="button" class="tf-eye" aria-expanded="false" aria-label={t.show}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button type="button" class="tf-cp" aria-label={t.copy}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+        </div>
+        <div class="tf-cfull" hidden><div class="tf-cplain">{CMD}</div></div>
+      </div>
       <div class="tf-acts">
-        <button class="tf-chip tf-go" type="button" data-copy={CMD} data-done={t.copied}>{t.copy}</button>
         <a class="tf-chip" href={`${base}installation/`}>{t.ig}</a>
       </div>
     </section>
@@ -79,16 +85,6 @@ const t = fa
 </div>
 
 <script>
-  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) => {
-    const label = b.textContent
-    b.addEventListener('click', () => {
-      (window as any).tfCopy(b.dataset.copy ?? '').then((ok: boolean) => {
-        if (!ok) return
-        b.textContent = b.dataset.done ?? label
-        setTimeout(() => { b.textContent = label }, 1600)
-      })
-    })
-  })
   // The tunnel packet and each card drawing move once per tap.
   const replay = (el: Element) => { el.classList.remove('go'); void (el as HTMLElement).offsetWidth; el.classList.add('go') }
   document.querySelectorAll('.tf-tun').forEach((el) => el.addEventListener('click', (e) => {
