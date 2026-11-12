@@ -82,10 +82,11 @@ const t = fa
   document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) => {
     const label = b.textContent
     b.addEventListener('click', () => {
-      navigator.clipboard?.writeText(b.dataset.copy ?? '').then(() => {
+      (window as any).tfCopy(b.dataset.copy ?? '').then((ok: boolean) => {
+        if (!ok) return
         b.textContent = b.dataset.done ?? label
         setTimeout(() => { b.textContent = label }, 1600)
-      }, () => {})
+      })
     })
   })
   // The tunnel packet and each card drawing move once per tap.

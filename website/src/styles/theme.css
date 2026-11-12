@@ -187,3 +187,9 @@ mobile-starlight-toc nav { background: var(--tf-ground); }
   .no-popover.menu-open .sl-menu-button .close-menu { display: block; }
   .no-popover.menu-open .sl-menu-button { background-color: var(--sl-color-gray-2); box-shadow: none; }
 }
+
+/* Command boxes in guides: left to right from the start, like the dashboard's quick install. */
+.sl-markdown-content .expressive-code pre { direction: ltr; text-align: left; border-radius: 12px; background: #080808 !important; border: 1px solid #1d1d1d; }
+.sl-markdown-content .tf-copyrow { margin-top: 0.6rem; display: flex; }
+.tf-copy { width: 100%; justify-content: center; font-size: 14px; }
+@media (min-width: 50rem) { .tf-copy { width: auto; } }
