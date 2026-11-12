@@ -4,63 +4,43 @@
 
 ## Management command
 
-`tifusi panel` runs an interactive menu, or a single action when given an argument:
+`tifusi panel` with no argument opens a menu:
 
 | Command | Action |
 | --- | --- |
-| `tifusi panel update` | Update to the latest release and recreate the containers |
-| `tifusi panel status` | Show container state |
-| `tifusi panel logs` | Follow container logs |
-| `tifusi panel restart` | Restart the stack |
-| `tifusi panel port` | Change the panel API and dashboard ports |
-| `tifusi panel ssl` | Issue a Let's Encrypt certificate |
-| `tifusi panel key` | Generate a new administrator setup key |
-| `tifusi panel backup` / `tifusi panel restore` | Export or restore the database |
-| `tifusi panel uninstall` | Remove the installation |
+| `update` | Update with automatic rollback |
+| `status` / `logs` / `restart` | Status, logs and restart |
+| `port` / `ssl` | Change ports, Let's Encrypt certificate |
+| `key` | New sign-in key for an admin |
+| `backup` / `restore` | Backup and restore |
+| `uninstall` | Uninstall |
 
-`tifusi` is a launcher shared with [Tifusi Bot](telegram-bot.md): `tifusi bot` opens the bot installer menu. When only one of the panel and the bot is installed on a server, `tifusi` without a subcommand opens that component, so `tifusi update` continues to work.
+`tifusi bot` opens the [bot](telegram-bot.md) menu and `tifusi node` the [node](nodes.md) menu.
 
-Node servers have their own `tifusi node` menu; see [Nodes](nodes.md#managing-a-node-server).
+## Backups
 
-## Updates without downtime surprises
+```bash
+tifusi panel backup
+```
 
-Node agents and tunnel binaries can be updated from the panel with automatic rollback — node agents one at a time with a canary, tunnels side by side — and every config push to a node is validated before it replaces the running one. How each layer checks and rolls back is described in [Safe updates](updates-and-rollback.md).
+The archive holds the database (and MySQL), `.env` and certificates. Keep it private and keep a copy off the server. In the standard edition, **Settings** also has database backup and restore buttons. Take a fresh backup before restoring.
 
-## Administrators
+## Admins
 
-The panel has one owner account and any number of additional administrators with scoped permissions over users, hosts, nodes, cores, groups, tunnels and settings. A scoped administrator sees only the users it created. Every administrator can issue API keys for automation; a key always carries its owner's current permissions. Changing your password revokes all your API keys unless you untick **Revoke all my API keys** (API clients: send `"revoke_api_keys": false`). [Resellers](resellers.md) are a separate, more restricted kind of account.
+- The **owner** can do everything. A **limited admin** sees only the sections they are allowed, and only users they created.
+- Every admin can create **API keys**; changing the password revokes them.
+- [Resellers](resellers.md) are a separate, more limited account type.
 
-## Signing in
+## Sign-in
 
-Besides the password (with optional two-factor codes from an authenticator app), an administrator can sign in with **Google** or **GitHub**:
+- **Password** with optional **two-factor code**.
+- **Google or GitHub:** the owner enters the Client ID and Secret once in **Settings → Sign in with Google and GitHub**; each admin then links their own account.
+- **Remember me** keeps the session for up to 30 days. **Sign out everywhere** revokes every session.
 
-- **Owner, once:** register an OAuth app with the provider for this panel's own address and enter its Client ID and Client Secret under **Settings → Sign in with Google and GitHub**. The section shows the exact callback address to register (`https://<panel>/api/auth/oauth/google/callback`, or `/github/callback`). The secret stays on the server and is never shown again; leaving both providers empty keeps the login page as it was.
-- **Each administrator:** links their own account from the same section, confirming with the current panel password. From then on the button on the login page signs them in. Only linked accounts get in: a Google or GitHub account nobody linked is refused, and one account opens at most one administrator. Two-factor login, when on, is still asked for after the provider.
-- **Remember me** on the login page keeps that browser signed in for 30 days instead of one day; unticked, the session also ends when the browser closes.
-- **Sign out of all devices** ends every session of that administrator at once, remembered ones included. A password change does the same and also unlinks their Google and GitHub accounts (someone who knew the old password could have linked one of their own); link them again afterwards.
+## Notifications and settings
 
-The password always keeps working, so losing access to Google or GitHub never locks anyone out. Authenticator codes accept Persian and Arabic decimal digits too. A typo in the current password when changing it keeps the dashboard signed in.
-
-New administrator and reseller accounts have a separate identity for sessions and OAuth hand-offs: deleting an account and recreating its username cannot bring its old sessions or pending provider links back. Existing sessions continue to work across this upgrade.
-
-## Notifications
-
-User and node state changes can be sent to Telegram, Discord or a generic webhook. After every panel, node or tunnel update, Telegram also gets a [short update report](updates-and-rollback.md#update-report-on-telegram).
-
-## Settings
-
-The public URL, administrator password, TLS certificate (upload or Let's Encrypt issuance) and database backup and restore are all changed from **Settings** and take effect without redeployment. The Settings backup covers the standard edition; for the professional edition use `tifusi panel backup`, which includes a MySQL dump.
-
-## Choosing a backup method
-
-| Edition | Settings backup and restore | Server command |
-| --- | --- | --- |
-| Standard / SQLite | Available to the owner; exports or replaces the SQLite database. | `tifusi panel backup` / `tifusi panel restore` |
-| Professional / MySQL | Unavailable; the API returns `400` with the CLI instruction. | `tifusi panel backup` / `tifusi panel restore`; the archive includes a MySQL dump. |
-
-Run the management command on the panel server. The CLI archive also contains installation data such as `.env` and certificates, so keep it private and copy it off the server. The Settings database file is not a full installation archive. Take a fresh backup before restoring; CLI restore restarts the stack.
-
-SQLite downloads from Settings use a consistent online snapshot, including committed writes still in the WAL journal. The downloaded database is self-contained; do not copy only the live `.db` file while the panel is running.
+- User and node state changes, and the end of every update, go to Telegram, Discord or a webhook.
+- Public address, password, TLS certificate and backups change from **Settings** without reinstalling.
 
 ---
 

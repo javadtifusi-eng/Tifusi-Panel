@@ -4,73 +4,52 @@
 
 ## Requirements
 
-### Server sizing
+- **OS:** Ubuntu 22.04/24.04 or Debian 11/12, x86_64, root access and a public IPv4 address.
+- **Domain:** recommended for TLS; port 80 must be reachable for Let's Encrypt.
 
 | Role | Minimum | Recommended |
 | --- | --- | --- |
-| Panel | 1 vCPU, 1 GB RAM, 10 GB disk | 2 vCPU, 2 GB RAM, 20 GB disk |
-| Node | 1 vCPU, 512 MB RAM, 10 GB disk | 1 vCPU, 1 GB RAM, 20 GB disk |
-| Panel and node on one server | 1 vCPU, 2 GB RAM, 15 GB disk | 2 vCPU, 2 GB RAM, 25 GB disk |
-| Panel, professional edition (MySQL) | 2 vCPU, 2 GB RAM, 20 GB disk | 2 vCPU, 4 GB RAM, 40 GB disk |
+| Panel | 1 CPU, 1 GB RAM, 10 GB disk | 2 CPU, 2 GB RAM, 20 GB disk |
+| Node | 1 CPU, 512 MB RAM, 10 GB disk | 1 CPU, 1 GB RAM, 20 GB disk |
+| Panel and node on one server | 1 CPU, 2 GB RAM, 15 GB disk | 2 CPU, 2 GB RAM, 25 GB disk |
+| Pro panel (MySQL) | 2 CPU, 2 GB RAM, 20 GB disk | 2 CPU, 4 GB RAM, 40 GB disk |
 
-Measured on a running installation: the panel container uses about 100 MB of RAM, the dashboard about 6 MB and a node about 50 MB; the images take about 1 GB of disk. The larger recommended disk leaves room for image updates, logs and backups. Traffic volume, not user count, is what drives node CPU and bandwidth needs.
-
-### Platform
-
-- OS: Ubuntu 22.04/24.04 or Debian 11/12 (the installers use `apt-get`). Other Linux distributions work with Docker installed manually.
-- Architecture: x86_64 (amd64). Prebuilt images are amd64-only; the installer rejects other architectures before installation.
-- Root access and a public IPv4 address.
-
-### Network
-
-- Panel: a DNS record pointing to the server is recommended for TLS. Port 80 must be reachable to issue a free Let's Encrypt certificate.
-- Node: IKEv2 requires UDP 500 and 4500; L2TP additionally requires UDP 1701 and the `l2tp_ppp` and `ppp_generic` kernel modules on the host.
-- Installation needs access to GitHub and ghcr.io. The public installer does not build private source locally.
-
-## Panel — standard edition (SQLite)
+## Installing the panel
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)"
 ```
 
-The installer provisions Docker, clones the repository, generates `TIFUSI_SECRET_KEY`, optionally issues a Let's Encrypt certificate for a domain that resolves to the server, and starts the stack with Docker Compose. It also installs the `tifusi panel` management command.
+For the Pro edition with MySQL (many users), add `-- --pro` to the end. The installer sets up Docker, the certificate and the `tifusi panel` management command.
 
-## Panel — professional edition (MySQL)
+The installer asks whether to install a node on the same server; the default is **no**.
+
+## Creating the owner account
+
+1. Open the dashboard; the login page shows the setup flow.
+2. Get a one-time key on the panel server:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/javadtifusi-eng/Tifusi-Panel/main/install.sh)" -- --pro
+tifusi panel key
 ```
 
-The same panel with every record (users, nodes, hosts, groups, cores and settings) stored in a bundled MySQL 8.4 container instead of the built-in SQLite file. The installer generates the MySQL passwords, keeps MySQL reachable only on the internal Docker network and stores its data in `mysql-data/`. Choose it for large user bases or when you want a standard database server to manage and back up; `tifusi panel backup` and `tifusi panel restore` include a MySQL dump. Nodes are installed the same way for both editions.
+3. Enter the key and create the owner's username and password.
 
-## First-run setup
+## Next steps
 
-1. Open the dashboard. When no administrator exists, the sign-in screen offers the setup procedure.
-2. Generate a one-time setup key on the panel server:
-   ```bash
-   docker exec -it tifusi-panel tifusi-cli generate-admin-key
-   ```
-   `tifusi panel key` does the same from the management menu.
-3. Enter the key, then choose the owner username and password.
+1. [Add a node](nodes.md).
+2. [Create a core and a host](cores-and-hosts.md).
+3. [Create the first user](users-and-subscriptions.md) and test the connection on a phone.
 
-## Optional node on the panel server
-
-The installer asks **Install a VPN node on this same server? [y/N]**. The default **No** installs only the panel. Later, open **Nodes → New node** and enter another server’s IP address; install its agent using SSH or the provided command. A panel does not need a VPN node on its own machine.
-
-Choosing **Yes** installs and registers a local node after the panel is healthy. Its address and agent port are configurable. An existing `tifusi-node` container is kept unchanged. After creating your owner account, choose an Xray, IKEv2, L2TP, PPTP, Hysteria2 or WireGuard core on **Cores** and assign the node there; no VPN core or customer is created without your choice.
-
-The dashboard’s first-service checklist follows node registration, successful sync, core assignment, connection host and first user. Configuration readiness still needs a real phone connection test. API access from another device uses the dashboard URL plus `/api`; the backend port itself listens on localhost only.
+The dashboard checklist shows these same steps.
 
 ## Moving to another server
 
-**Settings → Move to another server** (owner only) takes the panel, or one node, to a new server over SSH. One thing goes to one server at a time; to move both, move the node first, then the panel.
+**Settings → Move to another server** (owner only) moves the panel or a node to a new server over SSH, and customers stay connected throughout.
 
-- **The panel.** Enter the new server's IP and SSH login. Docker and the images are prepared there first while this panel keeps working. Then this panel is frozen (it can still be read and still serves subscriptions, but nothing can be changed), its data, certificates and settings are copied, and the panel comes up on the new server with the same admins, users and nodes. The wizard shows which nodes the new panel reached, then a DNS step: each domain with where it points now and where it has to point, and a Test button that only turns green once the A record is right. **Finish** leaves the old panel frozen for good (remove it later with `tifusi panel uninstall`); **Undo** stops the new panel and puts the old one back in charge.
-- **A node.** The agent is installed on the new server with the same key and port, the panel switches to the new address and sends the node everything (inbounds, users, the IKEv2 certificate). Hosts that named the old server's bare IP are switched to the new one; links or IKEv2 profiles handed out by hand with the old IP have to be handed out again, so prefer a domain in host addresses. The old server is left running; **Undo** points the panel back at it.
-
-Customers stay connected throughout. The professional edition (MySQL) is moved by hand with `tifusi panel backup` and `tifusi panel restore`. A shop bot or mini app on the same server is a separate service: the wizard checks its domain in the DNS step and reminds you to move it, but does not carry it over.
-
-A bundle made by hand can be restored onto an empty server the same way the wizard does it: `TIFUSI_RESTORE_BUNDLE=/path/to/bundle.tar.gz bash install.sh` (the bundle holds `.env`, `data/` and `certs/`).
+- **Panel:** data, certificates and settings are copied. Then update the DNS record, and do not press **Finish** until the test turns green. **Revert** brings the previous panel back.
+- **Node:** the agent is installed on the new server with the same key. Links handed out with the old IP must be handed out again, so use domains in hosts.
+- **The MySQL edition** moves with `tifusi panel backup` and `tifusi panel restore`.
 
 ---
 
