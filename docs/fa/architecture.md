@@ -88,6 +88,13 @@ sequenceDiagram
 
 <div dir="rtl">
 
+## اشتراک و API
+
+- مسیرها: `/sub/{secret}` (ساده، Clash یا sing-box بر اساس User-Agent؛ HTML برای مرورگر)، `/app/s/{code}` (‏302 به اشتراک)، `/sub/{secret}/ikev2.mobileconfig`، و `GET /sub/{secret}/app.json` و `/code/{code}/app.json` برای اپ اندروید (`subscription_url` برای دامنه‌ی جدید).
+- ویرایش تکی `PUT /api/users/{id}` و گروهی `POST /api/users/bulk-update` قواعد وضعیت یکسان دارند؛ `status` صریح اولویت دارد.
+- درخواست روی نشانی پنل با 301 به نشانی اشتراک می‌رود. Remote ID در پروفایل IKEv2 پین است.
+- متغیرهای قدیمی نام هاست (`{expire_date}`، `{expire_jalali}`، `{data_left_gb}` و…) هنوز کار می‌کنند.
+
 ## به‌روزرسانی امن
 
 | چه چیزی | بررسی قبل از اعمال | نسخه‌ی برگشت |

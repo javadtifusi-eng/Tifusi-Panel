@@ -78,6 +78,13 @@ sequenceDiagram
     end
 ```
 
+## Subscriptions and API
+
+- Paths: `/sub/{secret}` (plain, Clash or sing-box by User-Agent; HTML for browsers), `/app/s/{code}` (302 to the subscription), `/sub/{secret}/ikev2.mobileconfig`, and `GET /sub/{secret}/app.json` and `/code/{code}/app.json` for the Android app (`subscription_url` for a new domain).
+- Single edits `PUT /api/users/{id}` and bulk `POST /api/users/bulk-update` follow the same status rules; an explicit `status` wins.
+- Requests on the panel address get a 301 to the subscription address. The Remote ID is pinned in IKEv2 profiles.
+- Old host-name variables (`{expire_date}`, `{expire_jalali}`, `{data_left_gb}` and so on) still work.
+
 ## Safe updates
 
 | What | Checked before applying | Rollback copy |
