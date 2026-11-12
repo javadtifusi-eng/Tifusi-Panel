@@ -78,6 +78,20 @@ sequenceDiagram
     end
 ```
 
+## Safe updates
+
+| What | Checked before applying | Rollback copy |
+| --- | --- | --- |
+| Xray config | `xray run -test` | `<config>.good` |
+| strongSwan config | `swanctl --load-all` | previous file |
+| Tunnel binary | `-version`, `-check` and SHA-256 | `tifusi-tunnel.prev` |
+| Node agent image | throwaway container | `tifusi-node-agent:rollback` |
+| Panel | 90-second health check | `tifusi-panel-*:rollback` and `<install>/.rollback/` |
+
+- Node configs are written atomically (`backend/node_agent/safe_apply.py`); a service that crashes within 1.5 seconds returns to the good copy, and a rejection reaches the panel as HTTP 422.
+- Rolling update: the canary is watched 180 seconds, the rest 60; it connects with the panel's SSH key.
+- A panel rollback first tries the old code on the current database; if that fails, data returns from the snapshot and writes made after it are lost.
+
 ## Nodes
 
 - **Install:** the command fetches `install-node.sh` from the release tag matching the panel and runs it only with the right SHA-256; it enables BBR and larger network buffers and runs the `tifusi-node` container with `--network host` and `--init`.
