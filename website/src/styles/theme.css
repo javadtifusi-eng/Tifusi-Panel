@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* The docs site wears the panel's own palette (frontend/src/index.css). Dark only. */
 :root, :root[data-theme='dark'] {
@@ -207,3 +207,6 @@ mobile-starlight-toc nav { background: var(--tf-ground); }
 .tf-cfull pre, .tf-cfull .tf-cplain { direction: ltr; text-align: left; border-radius: 10px; background: #080808 !important; border: 1px solid #1d1d1d; }
 .tf-cfull pre code span { color: #a3a3a3 !important; }
 .tf-cplain { font-family: var(--sl-font-mono); font-size: 12px; color: #a3a3a3; padding: 10px 12px; overflow-x: auto; white-space: nowrap; }
+
+/* English pages read in Inter; Persian pages stay in Vazirmatn. */
+:root[lang='en'] { --sl-font: 'Inter', 'Vazirmatn', system-ui, sans-serif; }
