@@ -423,6 +423,9 @@ if [ -n "$RESTORE_BUNDLE" ]; then
     || tar -xzf "$RESTORE_BUNDLE" --no-same-owner .env data \
     || fail "The bundle has no .env and data/ in it."
   [ -f .env ] && [ -d data ] || fail "The bundle has no .env and data/ in it."
+  # It holds every secret the panel has; once unpacked it isn't needed, and the old panel may
+  # not get the chance to delete it (the SSH session can drop before its cleanup runs).
+  rm -f "$RESTORE_BUNDLE"
   info "Unpacked the moved panel's data, certificates and settings."
 fi
 
