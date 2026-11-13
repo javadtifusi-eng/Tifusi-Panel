@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.3 — 2026-11-13
+
+- Xray core form in tabs: inbounds, outbounds, routing, balancers, JSON.
+- WireGuard outbounds, imported from a WireGuard client file.
+- WARP: a free Cloudflare WARP account as an outbound in one click (IPv6, IPv4 or both).
+- Routing rules as blocks: site, IP, inbound, user, port and network conditions.
+- IKEv2 and L2TP routing: chosen destinations (IP ranges or an AS number) leave through a WireGuard outbound. Needs the node update in this release.
+- The inbound builder's quick-start presets are removed.
+
 ## v1.0.2 — 2026-11-13
 
 - Smaller downloads: the node image is about 93 MB smaller and the panel image about 59 MB smaller.
