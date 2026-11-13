@@ -13,6 +13,10 @@
 | `port` / `ssl` | Change ports, Let's Encrypt certificate |
 | `key` | New sign-in key for an admin |
 | `backup` / `restore` | Backup and restore |
+| `node-bundle` | Build the offline node bundle |
+| `remove-node` | Remove a node from this panel |
+| `path` | Secret dashboard path |
+| `env` | Edit the settings file (`.env`) |
 | `uninstall` | Uninstall |
 
 `tifusi bot` opens the [bot](telegram-bot.md) menu and `tifusi node` the [node](nodes.md) menu.

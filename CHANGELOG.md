@@ -2,6 +2,11 @@
 
 ## v1.0.7 — 2026-11-08
 
+- Removed "exit through VLESS": the per-node L2TP chained-egress link and the IKEv2 core's "Route IKEv2 through VLESS". Their fields, the "VLESS" hop on the core's path card and the columns are gone (reversible migrations). The node agent no longer starts a second Xray for it and removes any TPROXY rules an older agent left on the server.
+- Node and tunnel updates over SSH finish (or roll back) on the server even when the SSH session drops or is cancelled half way; before, the update script could die between swapping the image and checking it.
+- SSH jobs: slow steps (unpacking the offline bundle, checksums, the tunnel binary download) get more than 60 seconds, a lost connection is reported as such, and a command killed on the server no longer counts as success. A node in a running rollout can't get an install or a command at the same time. The SSH sheet opens on the password form when the panel's key isn't on the server, and the update tab keeps its own online/offline choice.
+- Node replacement: a failed preparation logs why and keeps a short reason in the transfer's error.
+- Docs: the operations guide lists `node-bundle`, `remove-node`, `path` and `env`. Docs site: build dependencies updated (npm audit clean).
 - Removed domain rotation (domain pools and backup subscription domains) and Connection Shield: their pages, settings, background checks, API routes, tables and docs are gone. The subscription domain's own certificate is untouched. The Tifusi app's `app.json` no longer has `backup_domains`; Clash subscriptions no longer carry backup proxy-providers.
 - Removed the old `/sub/{secret}/guide` page for good (it had been switched off): its route, template, fonts and logo are gone. The address still answers `404`.
 - iPhone profile install page: no orange "Open in Safari" button any more. In Safari the page only says where to finish the install; inside Telegram it still moves to Safari by itself, and the manual button and steps appear only if that did not happen after a moment.

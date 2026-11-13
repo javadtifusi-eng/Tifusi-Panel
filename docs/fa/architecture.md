@@ -135,17 +135,17 @@ sequenceDiagram
 | Path | Contents |
 | --- | --- |
 | `backend/app` | FastAPI application: routers, SQLAlchemy models, Xray config builder, subscription renderers, node sync, traffic accounting, network health (`network_health/`) |
-| `backend/alembic` | Database migrations |
-| `backend/cli` | `tifusi-cli`, including first-run admin key generation |
+| `backend/alembic` | مهاجرت‌های دیتابیس |
+| `backend/cli` | ابزار `tifusi-cli`، از جمله ساخت کلید مدیر در اولین اجرا |
 | `backend/node_agent` | سرویس ایجنت نود، یکپارچگی strongSwan/xl2tpd، اعتبارسنجی و برگشت کانفیگ (`safe_apply.py`)، Dockerfile نود |
 | `backend/app/node_ssh` | نصب، ترمینال و آپدیت Canary نودها با SSH |
 | `backend/app/tunnels` | کانفیگ تانل، بسته‌ی آفلاین، نصب و آپدیت با SSH |
 | `backend/tests` | تست‌های pytest ([توسعه](development.md)) |
-| `backend/tunnel_agent` | Relay agent for the Tunnels feature (Go) |
-| `frontend` | React dashboard and nginx image |
-| `install.sh`, `install-node.sh` | Panel and node installers |
-| `manage.sh` | Operations menu, installed as `/usr/local/bin/tifusi-panel` and run as `tifusi panel` |
-| `scripts/tifusi` | Shared `tifusi` launcher for Tifusi Panel, the node and Tifusi Bot |
+| `backend/tunnel_agent` | ایجنت تانل (Go) |
+| `frontend` | داشبورد React و ایمیج nginx |
+| `install.sh`, `install-node.sh` | نصب‌کننده‌ی پنل و نود |
+| `manage.sh` | منوی مدیریت؛ در `/usr/local/bin/tifusi-panel` نصب می‌شود و با `tifusi panel` اجرا می‌شود |
+| `scripts/tifusi` | فرمان مشترک `tifusi` برای پنل، نود و ربات |
 | `.github/workflows/tests.yml` | اجرای تست‌ها و بیلد داشبورد با هر push |
 | `build-images.yml` (ریپوی عمومی) | اول تست‌ها، بعد ساخت و انتشار ایمیج‌های پنل، داشبورد و نود در GHCR |
 

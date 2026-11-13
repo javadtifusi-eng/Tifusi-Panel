@@ -15,6 +15,10 @@
 | `port` / `ssl` | تغییر پورت، گواهی Let's Encrypt |
 | `key` | کلید ورود جدید برای مدیر |
 | `backup` / `restore` | بکاپ و بازیابی |
+| `node-bundle` | ساخت بسته‌ی نصب آفلاین نود |
+| `remove-node` | حذف یک نود از این پنل |
+| `path` | مسیر مخفی داشبورد |
+| `env` | ویرایش فایل تنظیمات (`.env`) |
 | `uninstall` | حذف نصب |
 
 `tifusi bot` منوی [ربات](telegram-bot.md) و `tifusi node` منوی [نود](nodes.md) را باز می‌کند.
