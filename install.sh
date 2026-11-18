@@ -666,7 +666,7 @@ if [ -n "$cert_name" ]; then
     # paraphrase of it, the way every other panel's installer does.
     cat "$CERT_LOG"
     cp "data/letsencrypt/config/live/${cert_name}/fullchain.pem" certs/fullchain.pem
-    cp "data/letsencrypt/config/live/${cert_name}/privkey.pem" certs/privkey.pem
+    install -m 600 "data/letsencrypt/config/live/${cert_name}/privkey.pem" certs/privkey.pem
     # Only 443 is implied by "https://host" — on any other port the
     # subscription links the panel hands to clients have to name it.
     if [ "$dashboard_https_port" = 443 ]; then

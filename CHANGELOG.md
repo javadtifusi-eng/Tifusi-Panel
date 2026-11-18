@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.4 — 2026-11-18
+
+- Security: TLS private keys are written readable by root only, on install, on renewal and for subscription domains; the update also tightens keys left by older versions.
+- Safer updates: the database snapshot is verified before anything changes, and a failed update rolls back. The health check now covers the dashboard too.
+- Nodes: the services card shows one row per core (WireGuard and Hysteria included; PPTP no longer under IPsec).
+- Settings: the bot token and webhook secret are hidden by default, with a show button.
+- Cores: inbound, outbound, routing and balancer editors on par with the reference panels; DNS and API tabs; JSON diff against the last save; outbound latency test from the nodes.
+- Look: one glass button system with icons, Inter for Latin text, a Cores sub-menu in the sidebar, simpler nodes page, new logo.
+- Moving the panel onto one of its own nodes.
+
 ## v1.0.3 — 2026-11-13
 
 - Xray core form in tabs: inbounds, outbounds, routing, balancers, JSON.

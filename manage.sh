@@ -105,7 +105,20 @@ panel_healthy() {
   state=$(docker inspect -f '{{.State.Status}}' tifusi-panel 2>/dev/null || echo missing)
   [ "$state" = "running" ] || return 1
   port=$(panel_api_port)
-  curl -fsS -m 5 -o /dev/null "http://127.0.0.1:${port}/api/setup/status" 2>/dev/null
+  curl -fsS -m 5 -o /dev/null "http://127.0.0.1:${port}/api/setup/status" 2>/dev/null || return 1
+  dashboard_healthy
+}
+
+# The dashboard (nginx) container running and answering on its HTTP port.
+# Any HTTP answer below 500 counts: the root may redirect to HTTPS or 404
+# behind a secret web path; 000 (no answer) or 5xx does not.
+dashboard_healthy() {
+  local state port code
+  state=$(docker inspect -f '{{.State.Status}}' tifusi-dashboard 2>/dev/null || echo missing)
+  [ "$state" = "running" ] || return 1
+  port=$(grep '^TIFUSI_DASHBOARD_PORT=' .env 2>/dev/null | cut -d= -f2)
+  code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port:-8080}/" 2>/dev/null || true)
+  [ -n "$code" ] && [ "$code" != 000 ] && [ "$code" -lt 500 ]
 }
 
 wait_healthy() {
@@ -143,7 +156,33 @@ snapshot_data() {
     docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers tifusi' > "$ROLLBACK_DIR/mysql-dump.sql" 2>/dev/null \
       || { err "Couldn't snapshot the database — aborting the update before anything changed."; return 1; }
   fi
-  tar czf "$ROLLBACK_DIR/data.tgz" data certs .env 2>/dev/null || tar czf "$ROLLBACK_DIR/data.tgz" data .env || true
+  # SQLite in WAL mode: copying the live files can catch a half-written
+  # state, so take an online backup through the running panel and check it.
+  rm -f "$ROLLBACK_DIR/tifusi.db"
+  if ! is_pro && [ -f data/tifusi.db ]; then
+    if [ "$(docker inspect -f '{{.State.Status}}' tifusi-panel 2>/dev/null || true)" = running ]; then
+      docker exec tifusi-panel python3 -c '
+import sqlite3, sys
+src = sqlite3.connect("/app/data/tifusi.db")
+dst = sqlite3.connect("/app/data/.update-snapshot.db")
+src.backup(dst)
+ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
+dst.close(); src.close()
+sys.exit(0 if ok == "ok" else 1)' \
+        && mv data/.update-snapshot.db "$ROLLBACK_DIR/tifusi.db" \
+        || { rm -f data/.update-snapshot.db; err "Couldn't take a verified database snapshot — aborting the update before anything changed."; return 1; }
+    fi
+  fi
+  local items=(data .env)
+  [ -d certs ] && items+=(certs)
+  tar czf "$ROLLBACK_DIR/data.tgz" --exclude=data/.update-snapshot.db "${items[@]}" \
+    || { err "Couldn't write the data snapshot — aborting the update before anything changed."; return 1; }
+  tar tzf "$ROLLBACK_DIR/data.tgz" >/dev/null 2>&1 \
+    || { err "The data snapshot didn't verify — aborting the update before anything changed."; return 1; }
+  if is_pro && ! tail -n 1 "$ROLLBACK_DIR/mysql-dump.sql" | grep -q 'Dump completed'; then
+    err "The database dump is incomplete — aborting the update before anything changed."; return 1
+  fi
+  chmod 600 "$ROLLBACK_DIR"/* 2>/dev/null || true
   return 0
 }
 
@@ -152,6 +191,11 @@ restore_data_snapshot() {
   local keep_mysql=""
   is_pro && keep_mysql="$(grep -E '^(TIFUSI_MYSQL_PASSWORD|TIFUSI_MYSQL_ROOT_PASSWORD|TIFUSI_DATABASE_URL)=' .env 2>/dev/null)"
   tar xzf "$ROLLBACK_DIR/data.tgz"
+  # The verified online copy beats the raw files caught mid-write.
+  if [ -f "$ROLLBACK_DIR/tifusi.db" ]; then
+    rm -f data/tifusi.db-wal data/tifusi.db-shm
+    cp "$ROLLBACK_DIR/tifusi.db" data/tifusi.db
+  fi
   if [ -n "$keep_mysql" ]; then
     grep -vE '^(TIFUSI_MYSQL_PASSWORD|TIFUSI_MYSQL_ROOT_PASSWORD|TIFUSI_DATABASE_URL)=' .env > .env.rb-tmp
     printf '%s\n' "$keep_mysql" >> .env.rb-tmp; mv .env.rb-tmp .env; chmod 600 .env
@@ -211,7 +255,7 @@ action_update() {
   snapshot_data || return
 
   info "Pulling latest code..."
-  git pull --ff-only
+  git pull --ff-only || { err "git pull failed — nothing was changed."; return 1; }
   # A pull alone leaves tifusi-panel and the shared launcher at the previously installed version.
   source scripts/install-commands.sh
   install_panel_commands
@@ -220,11 +264,15 @@ action_update() {
     warn "Prebuilt images unavailable — building locally instead (can take a few minutes on a small server)."
     docker compose build
   fi
+  # Keys copied by older versions may still be world-readable.
+  find certs -name 'privkey*.pem' -exec chmod 600 {} + 2>/dev/null || true
   info "Restarting with the new version..."
-  docker compose up -d
+  # Under `set -e` a failed `up` would end the script with no rollback.
+  local up_ok=1
+  docker compose up -d || up_ok=0
 
   info "Waiting for the new version to come up..."
-  if wait_healthy 90; then
+  if [ "$up_ok" = 1 ] && wait_healthy 90; then
     info "Updated to $(cat backend/VERSION 2>/dev/null || echo '?') — healthy."
     info "The rollback snapshot is kept at $ROLLBACK_DIR until the next update."
     send_update_report ok
@@ -395,7 +443,7 @@ action_get_ssl() {
     # ./certs is mounted into both containers; the dashboard watches it and
     # starts serving HTTPS without a restart.
     docker exec tifusi-panel sh -c \
-      "cp $acme/config/live/$name/fullchain.pem /app/certs/fullchain.pem && cp $acme/config/live/$name/privkey.pem /app/certs/privkey.pem"
+      "cp $acme/config/live/$name/fullchain.pem /app/certs/fullchain.pem && install -m 600 $acme/config/live/$name/privkey.pem /app/certs/privkey.pem"
     url="https://${target}"
     if grep -q '^TIFUSI_PUBLIC_URL=' .env; then
       sed -i "s#^TIFUSI_PUBLIC_URL=.*#TIFUSI_PUBLIC_URL=${url}#" .env
