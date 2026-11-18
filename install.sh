@@ -715,7 +715,7 @@ wait_for_panel() {
   local _
   # The pro edition waits for MySQL's first-time initialisation before the panel starts.
   for _ in $(seq 1 $([ "$EDITION" = "pro" ] && echo 150 || echo 60)); do
-    curl -fsSk "$PANEL_URL/api/setup/status" >/dev/null 2>&1 && return 0
+    curl -fsSk --connect-timeout 2 --max-time 4 "$PANEL_URL/api/setup/status" >/dev/null 2>&1 && return 0
     sleep 2
   done
   return 1
